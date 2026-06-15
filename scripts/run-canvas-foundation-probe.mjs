@@ -237,6 +237,15 @@ function assertProbe(result, browserEvents) {
   assert(result.advancedEditing.multiDelete.delta === 1, 'multi delete did not emit exactly once');
   assert(result.advancedEditing.multiDelete.change?.nodeIds?.length === 2, 'multi delete did not include both selected nodes');
   assert(result.advancedEditing.multiDelete.selectionCount === 0, 'multi delete did not clear selection');
+  assert(result.advancedEditing.pointerGroupDrag.delta === 1, 'pointer group drag did not emit exactly once');
+  assert(result.advancedEditing.pointerGroupDrag.change?.nodeIds?.length === 2, 'pointer group drag did not include both selected node ids');
+  assert(result.advancedEditing.pointerGroupDrag.sourceDelta.x !== 0 && result.advancedEditing.pointerGroupDrag.plannerDelta.x !== 0, 'pointer group drag did not move both selected nodes');
+  assert(
+    result.advancedEditing.pointerGroupDrag.sourceDelta.x === result.advancedEditing.pointerGroupDrag.plannerDelta.x &&
+      result.advancedEditing.pointerGroupDrag.sourceDelta.y === result.advancedEditing.pointerGroupDrag.plannerDelta.y,
+    'pointer group drag moved selected nodes by different deltas',
+  );
+  assert(result.advancedEditing.pointerGroupDrag.selectionCount === 2, 'pointer group drag collapsed multi-selection');
 
   assert(result.commandExecutor.selectReturned === true, 'AI command selection failed');
   assert(result.commandExecutor.moveReturned === true, 'AI command move failed');
@@ -257,7 +266,16 @@ function assertProbe(result, browserEvents) {
   assert(result.snapContract.pointerResize.snapped, 'pointer resize final size is not grid-snapped');
   assert(result.snapContract.pointerPreviewReturn.delta === 0, 'pointer return-to-origin preview committed a model change');
   assert(result.snapContract.pointerPreviewReturn.movedPreview.x === 32 && result.snapContract.pointerPreviewReturn.movedPreview.y === 32, 'pointer preview did not move to snapped cell');
-  assert(result.snapContract.pointerPreviewReturn.returnedPreview.x === 0 && result.snapContract.pointerPreviewReturn.returnedPreview.y === 0, 'pointer preview did not return to original cell');
+  assert(
+    result.snapContract.pointerPreviewReturn.modelDuringMovedPreview.x === 0 && result.snapContract.pointerPreviewReturn.modelDuringMovedPreview.y === 0,
+    'pointer preview mutated committed model during move',
+  );
+  assert(result.snapContract.pointerPreviewReturn.returnedPreview === null, 'pointer no-op preview did not clear render-only geometry');
+  assert(
+    result.snapContract.pointerPreviewReturn.modelDuringReturnedPreview.x === 0 && result.snapContract.pointerPreviewReturn.modelDuringReturnedPreview.y === 0,
+    'pointer return preview mutated committed model',
+  );
+  assert(result.snapContract.pointerPreviewReturn.previewSizeAfterCommit === 0, 'pointer preview geometry was not cleared after commit');
   assert(
     result.snapContract.pointerPreviewReturn.renderCountAfterReturn > result.snapContract.pointerPreviewReturn.renderCountAfterMove,
     'pointer no-op preview after rollback did not schedule a repaint',

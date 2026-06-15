@@ -51,7 +51,7 @@ Selection behavior:
 - primary plus multi-selection is represented inside `CanvasEngine`;
 - normal pointer click replaces selection;
 - Shift/Cmd/Ctrl pointer click toggles selection;
-- dragging a selected node moves the selected group;
+- dragging a selected node preserves multi-selection and moves the selected group;
 - keyboard movement applies to all selected nodes;
 - resize applies to the primary selected node.
 
@@ -71,9 +71,9 @@ Snap-to-grid behavior:
 - the visible grid is the editing grid: `32` world units;
 - keyboard, nonvisual commands, and paste always snap edited coordinates or dimensions;
 - pointer drag and resize snap to the nearest grid coordinate or size;
-- pointer drag and resize preview through the same command planner used for commit;
+- pointer drag and resize preview through render-only geometry from the same command planner used for commit;
 - zero-delta pointer drag/resize keeps existing geometry instead of forcing legacy unsnapped nodes onto the grid.
-- drag-out-then-back preview returns to the original snapped cell, schedules a repaint, and commits no model change.
+- drag-out-then-back preview clears render-only geometry, schedules a repaint, leaves the committed model unchanged, and commits no model change.
 
 Clipboard contract:
 
@@ -103,8 +103,8 @@ Automated evidence from `npm run probe:canvas`:
 - direct `executeCommand` calls with `source: "ai"` share selection, move, resize, snap, metadata, and no-op behavior;
 - pointer snap probe moves a node from `0,0` to `32,32` for a `45,45` raw drag;
 - pointer snap probe resizes a `160x96` node to `192x128` for a raw `183x119` resize;
-- pointer preview and pointer commit use the same command planner and operation application path.
-- pointer preview return probe moves to `32,32`, returns to `0,0`, schedules another render, and emits no model change on pointer-up.
+- pointer preview and pointer commit use the same command planner; preview stores render-only geometry while commit applies operations through `executeCommand`.
+- pointer preview return probe records render-only geometry at `32,32`, clears it on return to origin, schedules another render, leaves committed model at `0,0`, and emits no model change on pointer-up.
 
 ## Real-Device Touch Status
 

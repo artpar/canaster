@@ -2,7 +2,7 @@
 
 Date: 2026-06-14
 
-Current status note, 2026-06-15: drag/resize internals in this historical audit have been superseded by `executeCommand` command planning and concrete `CanvasOperation` application. The current checked-in regression harness is `npm run probe:canvas`.
+Current status note, 2026-06-15: drag/resize internals in this historical audit have been superseded by `executeCommand` command planning and concrete `CanvasOperation` application. Pointer preview is now render-only geometry derived from the same command plan; committed model mutation remains inside `executeCommand`. The current checked-in regression harness is `npm run probe:canvas`.
 
 ## Summary Verdict
 
@@ -59,8 +59,8 @@ DOM/canvas owns:
 Commit and rollback boundaries:
 
 - `setModel` clones React-owned model into the engine and can preserve valid selection/hover across committed model updates: `src/engine/CanvasEngine.ts:115`.
-- Drag/resize previews now apply command-planned operations to the private cloned model; pointer-up rolls back the preview and commits through `executeCommand`.
-- Pointer cancel, lost capture, and window blur all route through rollback: `src/engine/CanvasEngine.ts:360`, `src/engine/CanvasEngine.ts:364`, `src/engine/CanvasEngine.ts:368`, `src/engine/CanvasEngine.ts:487`.
+- Drag/resize previews store render-only geometry derived from the command plan; pointer-up clears preview geometry and commits through `executeCommand`.
+- Pointer cancel, lost capture, and window blur clear render-only preview geometry or roll back pan camera state.
 
 ## Render Invariants
 
@@ -117,7 +117,7 @@ Console/network:
 
 - The interruption checks are now covered by the checked-in Chrome/CDP probe run through `npm run probe:canvas`; keep extending that harness as interaction complexity grows.
 - Culling was verified with the sample model and a far pan to `0/4`; very large graphs may need separate stress/performance profiling.
-- Pointer drag/resize now previews through command planning and concrete operations before pointer-up commit. Future undo/redo or collaboration work should extend the operation model rather than reintroducing direct geometry mutation paths.
+- Pointer drag/resize now previews through render-only geometry from command planning before pointer-up commit. Future undo/redo or collaboration work should extend the operation model rather than reintroducing direct geometry mutation paths.
 
 ## Completion Criteria Audit
 

@@ -279,7 +279,7 @@ export async function runCanwayFoundationProbe() {
     };
   });
 
-  const advancedEditing = await withEngine(sampleModel, async ({ engine, changes, statuses }) => {
+  const advancedEditing = await withEngine(sampleModel, async ({ canvas, engine, changes, statuses }) => {
     const result = {};
     const beforeNoop = changes.length;
     result.noSelectionDelete = engine.executeCommand({ type: 'delete-selection', source: 'keyboard' }) === false;
@@ -376,6 +376,33 @@ export async function runCanwayFoundationProbe() {
       selectionCount: statuses.at(-1)?.selectionCount,
     };
 
+    engine.setModel(cloneModel(sampleModel));
+    await raf(2);
+    engine.executeCommand({ type: 'select-node', nodeId: 'source', source: 'nonvisual' });
+    engine.executeCommand({ type: 'select-node', nodeId: 'planner', mode: 'toggle', source: 'nonvisual' });
+    await raf(2);
+    const beforePointerGroupDrag = changes.length;
+    const groupBeforeSource = { ...engine.model.nodes.find((node) => node.id === 'source') };
+    const groupBeforePlanner = { ...engine.model.nodes.find((node) => node.id === 'planner') };
+    const groupPoint = {
+      x: engine.camera.x + (groupBeforeSource.x + groupBeforeSource.w / 2) * engine.camera.scale,
+      y: engine.camera.y + (groupBeforeSource.y + groupBeforeSource.h / 2) * engine.camera.scale,
+    };
+    dispatchPointer(canvas, 'pointerdown', groupPoint.x, groupPoint.y, 650);
+    dispatchPointer(window, 'pointermove', groupPoint.x + 80, groupPoint.y + 30, 650);
+    dispatchPointer(window, 'pointerup', groupPoint.x + 80, groupPoint.y + 30, 650);
+    await raf(3);
+    const groupAfterSource = engine.model.nodes.find((node) => node.id === 'source');
+    const groupAfterPlanner = engine.model.nodes.find((node) => node.id === 'planner');
+    result.pointerGroupDrag = {
+      delta: changes.length - beforePointerGroupDrag,
+      change: changes.at(-1)?.change,
+      sourceDelta: { x: groupAfterSource.x - groupBeforeSource.x, y: groupAfterSource.y - groupBeforeSource.y },
+      plannerDelta: { x: groupAfterPlanner.x - groupBeforePlanner.x, y: groupAfterPlanner.y - groupBeforePlanner.y },
+      selectionCount: statuses.at(-1)?.selectionCount,
+      selectedNodeIds: statuses.at(-1)?.selectedNodeIds ?? [],
+    };
+
     return result;
   });
 
@@ -460,18 +487,23 @@ export async function runCanwayFoundationProbe() {
       dispatchPointer(canvas, 'pointerdown', point.x, point.y, 703);
       dispatchPointer(window, 'pointermove', point.x + 45, point.y + 45, 703);
       await raf(3);
-      const movedPreview = { x: engine.model.nodes[0].x, y: engine.model.nodes[0].y };
+      const movedPreview = engine.previewGeometries.get('snap') ?? null;
+      const modelDuringMovedPreview = { x: engine.model.nodes[0].x, y: engine.model.nodes[0].y };
       const renderCountAfterMove = renderCount;
       dispatchPointer(window, 'pointermove', point.x + 5, point.y + 5, 703);
       await raf(3);
-      const returnedPreview = { x: engine.model.nodes[0].x, y: engine.model.nodes[0].y };
+      const returnedPreview = engine.previewGeometries.get('snap') ?? null;
+      const modelDuringReturnedPreview = { x: engine.model.nodes[0].x, y: engine.model.nodes[0].y };
       const renderCountAfterReturn = renderCount;
       dispatchPointer(window, 'pointerup', point.x + 5, point.y + 5, 703);
       await raf(3);
       result.pointerPreviewReturn = {
         delta: changes.length - beforeReturnPreview,
         movedPreview,
+        modelDuringMovedPreview,
         returnedPreview,
+        modelDuringReturnedPreview,
+        previewSizeAfterCommit: engine.previewGeometries.size,
         renderCountAfterMove,
         renderCountAfterReturn,
       };

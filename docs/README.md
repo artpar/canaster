@@ -4,7 +4,7 @@ Current status: **reliable enough at the canvas-foundation layer, not product-co
 
 Read these first:
 
-1. `nonvisual-touch-editing-completion-report.md` - latest closure report for nonvisual node access and advanced editing, with real-device touch verification blocked/checklisted.
+1. `nonvisual-touch-editing-completion-report.md` - latest closure report for nonvisual node access, advanced editing, pointer group-drag, render-only pointer preview, and real-device touch verification blocked/checklisted.
 2. `canvas-keyboard-touch-performance-completion-report.md` - closure report for keyboard editing, two-touch gestures, and 1k/2k node performance.
 3. `product-complete-remaining-dents-report.md` - product-completeness and residual-risk audit that identified the remaining dents.
 4. `canway-technical-dents-audit-report.md` - latest full technical-dents audit before the product-complete pass.

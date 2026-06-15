@@ -40,7 +40,6 @@ type DragState =
       moved: boolean;
       original: NodeGeometry;
       command: CanvasCommand | null;
-      group: Array<{ node: CanvasNode; original: NodeGeometry }>;
     }
   | { mode: 'resize'; pointerId: number; node: CanvasNode; ox: number; oy: number; moved: boolean; original: NodeGeometry; command: CanvasCommand | null }
   | null;
@@ -96,6 +95,7 @@ export class CanvasEngine {
   private hoverNodeId: string | null = null;
   private cursorWorld: WorldPoint | null = null;
   private drag: DragState = null;
+  private previewGeometries = new Map<string, NodeGeometry>();
   private touchPoints = new Map<number, ScreenPoint>();
   private gesture: TouchGestureState | null = null;
   private dpr = 1;
@@ -197,17 +197,13 @@ export class CanvasEngine {
   }
 
   executeCommand(command: CanvasCommand) {
+    this.clearPreview();
     return this.applyCommandPlan(this.planCommand(command), true).operations.length > 0;
   }
 
-  private applyPreviewCommand(command: CanvasCommand, forceRender = false) {
-    return this.applyCommandPlan(this.planCommand(command), false, forceRender);
-  }
-
-  private applyCommandPlan(plan: CommandPlan, emitChange: boolean, forceRender = false) {
+  private applyCommandPlan(plan: CommandPlan, emitChange: boolean) {
     this.interaction = plan.interaction;
     if (!plan.operations.length) {
-      if (forceRender) this.markDirty();
       this.emitStatus();
       return plan;
     }
@@ -216,6 +212,20 @@ export class CanvasEngine {
     if (emitChange && plan.change) this.emitModelChange(plan.change);
     this.emitStatus();
     return plan;
+  }
+
+  private applyPreviewPlan(plan: CommandPlan) {
+    this.interaction = plan.interaction;
+    this.previewGeometries = previewGeometriesFrom(plan.operations);
+    this.markDirty();
+    this.emitStatus();
+    return plan;
+  }
+
+  private clearPreview() {
+    if (!this.previewGeometries.size) return;
+    this.previewGeometries.clear();
+    this.markDirty();
   }
 
   private planCommand(command: CanvasCommand): CommandPlan {
@@ -395,8 +405,9 @@ export class CanvasEngine {
     const cullBounds = this.visibleWorldBounds();
     const visibleNodes: CanvasNode[] = [];
     for (const node of this.model.nodes) {
-      if (!intersectsNode(node, cullBounds)) continue;
-      visibleNodes.push(node);
+      const renderNode = this.renderNode(node);
+      if (!intersectsNode(renderNode, cullBounds)) continue;
+      visibleNodes.push(renderNode);
     }
     const compact = this.shouldUseCompactNodes(visibleNodes.length);
     for (const node of visibleNodes) this.drawNode(node, compact);
@@ -532,7 +543,14 @@ export class CanvasEngine {
     const node = this.nodeAt(world);
 
     if (node) {
-      this.executeCommand({ type: 'select-node', nodeId: node.id, mode: event.shiftKey || event.metaKey || event.ctrlKey ? 'toggle' : 'replace', source: 'pointer' });
+      const mode = event.shiftKey || event.metaKey || event.ctrlKey ? 'toggle' : this.selectedNodeIds.has(node.id) ? 'add' : 'replace';
+      this.executeCommand({ type: 'select-node', nodeId: node.id, mode, source: 'pointer' });
+      if (!this.selectedNodeIds.has(node.id)) {
+        this.interaction = 'Pointer selection';
+        this.markDirty();
+        this.emitStatus();
+        return;
+      }
       this.drag = {
         mode: 'node',
         pointerId: event.pointerId,
@@ -542,7 +560,6 @@ export class CanvasEngine {
         moved: false,
         original: nodeGeometry(node),
         command: null,
-        group: this.selectedNodeIds.has(node.id) ? this.selectedNodes().map((selected) => ({ node: selected, original: nodeGeometry(selected) })) : [],
       };
       this.interaction = 'Drag node';
       this.capturePointer(event.pointerId);
@@ -586,16 +603,14 @@ export class CanvasEngine {
       const rawX = world.x - this.drag.dx;
       const rawY = world.y - this.drag.dy;
       const command: CanvasCommand = { type: 'move-selection', dx: rawX - this.drag.original.x, dy: rawY - this.drag.original.y, source: 'pointer' };
-      this.rollbackInteraction(this.drag);
-      const plan = this.applyPreviewCommand(command, true);
+      const plan = this.applyPreviewPlan(this.planCommand(command));
       this.drag.command = plan.operations.length ? command : null;
       this.drag.moved = plan.operations.length > 0;
     } else if (this.drag?.mode === 'resize') {
       const rawW = Math.max(MIN_NODE_W, world.x - this.drag.ox - this.drag.node.x);
       const rawH = Math.max(MIN_NODE_H, world.y - this.drag.oy - this.drag.node.y);
       const command: CanvasCommand = { type: 'resize-primary', dw: rawW - this.drag.original.w, dh: rawH - this.drag.original.h, source: 'pointer' };
-      this.rollbackInteraction(this.drag);
-      const plan = this.applyPreviewCommand(command, true);
+      const plan = this.applyPreviewPlan(this.planCommand(command));
       this.drag.command = plan.operations.length ? command : null;
       this.drag.moved = plan.operations.length > 0;
     } else if (this.drag?.mode === 'pan') {
@@ -745,6 +760,11 @@ export class CanvasEngine {
     return this.camera.scale < COMPACT_NODE_SCALE || visibleCount > COMPACT_NODE_COUNT;
   }
 
+  private renderNode(node: CanvasNode): CanvasNode {
+    const preview = this.previewGeometries.get(node.id);
+    return preview ? { ...node, ...preview } : node;
+  }
+
   private screenToWorld(screenX: number, screenY: number): WorldPoint {
     return {
       x: (screenX - this.camera.x) / this.camera.scale,
@@ -883,16 +903,17 @@ export class CanvasEngine {
     let commandCommitted = false;
     if (commit) {
       if (drag.mode === 'node' && drag.moved) {
-        this.rollbackInteraction(drag);
+        this.clearPreview();
         commandCommitted = drag.command ? this.executeCommand(drag.command) : false;
       } else if (drag.mode === 'resize' && drag.moved) {
-        this.rollbackInteraction(drag);
+        this.clearPreview();
         commandCommitted = drag.command ? this.executeCommand(drag.command) : false;
       } else if (drag.mode === 'pan' && drag.moved) {
         this.interaction = 'Pointer pan';
       }
     } else {
-      this.rollbackInteraction(drag);
+      if (drag.mode === 'pan') this.rollbackPan(drag);
+      else this.clearPreview();
       this.interaction = 'Interaction canceled';
     }
 
@@ -903,19 +924,9 @@ export class CanvasEngine {
     }
   }
 
-  private rollbackInteraction(drag: NonNullable<DragState>) {
-    if (drag.mode === 'pan') {
-      this.camera.x = drag.camX;
-      this.camera.y = drag.camY;
-      return;
-    }
-
-    if (drag.mode === 'node' && drag.group.length > 1) {
-      for (const entry of drag.group) restoreNodeGeometry(entry.node, entry.original);
-      return;
-    }
-
-    restoreNodeGeometry(drag.node, drag.original);
+  private rollbackPan(drag: Extract<NonNullable<DragState>, { mode: 'pan' }>) {
+    this.camera.x = drag.camX;
+    this.camera.y = drag.camY;
   }
 
   private startTouchGesture() {
@@ -1027,6 +1038,14 @@ function restoreNodeGeometry(node: CanvasNode, geometry: NodeGeometry) {
   node.y = geometry.y;
   node.w = geometry.w;
   node.h = geometry.h;
+}
+
+function previewGeometriesFrom(operations: CanvasOperation[]) {
+  const geometries = new Map<string, NodeGeometry>();
+  for (const operation of operations) {
+    if (operation.type === 'set-node-geometry') geometries.set(operation.nodeId, operation.to);
+  }
+  return geometries;
 }
 
 function operationAffectsRender(operation: CanvasOperation) {
