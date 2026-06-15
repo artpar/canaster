@@ -19,6 +19,7 @@ import {
   selectNodeInCanvas,
   selectionForCanvas,
   setCameraForCanvas,
+  setPaneLayoutForCanvas,
   setSelectionForCanvas,
   updateCanvasModel,
 } from '../documentModel';
@@ -33,10 +34,20 @@ import { BuiltInNodeTypes, type Camera, type CanvasCommand, type CanvasModel, ty
 import type {
   CanvasDocumentCollection,
   CanvasDocumentId,
+  CanvasWorkspaceHistory,
   DocumentCommand,
   DocumentModelChange,
   ParentContextFieldShape,
 } from '../documentTypes';
+import {
+  createWorkspaceHistory,
+  createWorkspaceSnapshot,
+  pushWorkspaceHistory,
+  redoWorkspaceHistory,
+  replaceWorkspacePresent,
+  undoWorkspaceHistory,
+} from '../workspaceHistory';
+import { DEFAULT_WORKSPACE_STORAGE_ID, loadWorkspaceSnapshot, saveWorkspaceSnapshot } from '../workspaceStorage';
 import { ACTIVE_ENGINE_FRAME_BUDGET_MS, livePortalSlotsFor, MAX_LIVE_PORTAL_PREVIEWS, MAX_TOTAL_ENGINES } from './engineSlots';
 import {
   DEFAULT_PARENT_CONTEXT_PANE_LAYOUT,
@@ -57,6 +68,7 @@ export type NestedCanvasWorkspaceProps = {
   initialCollection: CanvasDocumentCollection;
   theme: ThemeName;
   animationEnabled?: boolean;
+  storageKey?: string;
   onCollectionChange?: (collection: CanvasDocumentCollection, changes: DocumentModelChange[]) => void;
   onChromeStateChange?: (state: NestedCanvasWorkspaceChromeState) => void;
 };
@@ -65,12 +77,16 @@ export type NestedCanvasWorkspaceChromeState = {
   collection: CanvasDocumentCollection;
   status: ViewportStatus;
   lastModelChange: DocumentModelChange | null;
+  canUndo: boolean;
+  canRedo: boolean;
 };
 
 export type NestedCanvasWorkspaceHandle = {
   fitActiveCanvas(): void;
   resetActiveZoom(): void;
   zoomActiveBy(factor: number): void;
+  undoWorkspace(): boolean;
+  redoWorkspace(): boolean;
   executeActiveCanvasCommand(command: CanvasCommand): boolean;
   executeDocumentCommand(command: DocumentCommand): void;
   collection(): CanvasDocumentCollection;
@@ -100,15 +116,21 @@ const EMBEDDED_PARENT_CONTEXT_CONSTRAINTS = {
 };
 
 export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, NestedCanvasWorkspaceProps>(function NestedCanvasWorkspace(
-  { initialCollection, theme, animationEnabled = true, onCollectionChange, onChromeStateChange },
+  { initialCollection, theme, animationEnabled = true, storageKey = DEFAULT_WORKSPACE_STORAGE_ID, onCollectionChange, onChromeStateChange },
   ref,
 ) {
-  const [collection, setCollection] = useState(() => {
+  const [history, setHistory] = useState<CanvasWorkspaceHistory>(() => {
     const next = cloneDocumentCollection(initialCollection);
     next.view.animationEnabled = animationEnabled;
-    return next;
+    return createWorkspaceHistory(next);
   });
+  const collection = history.present;
+  const historyRef = useRef(history);
   const collectionRef = useRef(collection);
+  const lastModelChangeRef = useRef<DocumentModelChange | null>(null);
+  const storageReadyRef = useRef(false);
+  const changedBeforeStorageLoadRef = useRef(false);
+  const saveChainRef = useRef<Promise<void>>(Promise.resolve());
   const activeEngineRef = useRef<CanvasEngine | null>(null);
   const [status, setStatus] = useState<ViewportStatus>(initialViewportStatus);
   const [lastModelChange, setLastModelChange] = useState<DocumentModelChange | null>(null);
@@ -117,18 +139,69 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
   const activeFrameOverBudgetCount = useRef(0);
   const [stageRect, setStageRect] = useState<DOMRect>(() => new DOMRect(0, 0, 1, 1));
   const [activeStageRect, setActiveStageRect] = useState<DOMRect>(() => new DOMRect(0, 0, 1, 1));
-  const [paneLayout, setPaneLayout] = useState<ParentContextPaneLayout>(DEFAULT_PARENT_CONTEXT_PANE_LAYOUT);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const activeStageRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    collectionRef.current = collection;
-    exposeDebugApi();
-  }, [collection]);
+  const persistWorkspaceSnapshot = useCallback((snapshot: ReturnType<typeof createWorkspaceSnapshot>) => {
+    saveChainRef.current = saveChainRef.current
+      .catch(() => undefined)
+      .then(() => saveWorkspaceSnapshot(snapshot, storageKey))
+      .catch((error) => {
+        console.warn('Failed to save Canway workspace snapshot', error);
+      });
+    return saveChainRef.current;
+  }, [storageKey]);
 
   useEffect(() => {
-    onChromeStateChange?.({ collection, status, lastModelChange });
-  }, [collection, lastModelChange, onChromeStateChange, status]);
+    historyRef.current = history;
+    collectionRef.current = collection;
+    exposeDebugApi();
+  }, [collection, history]);
+
+  useEffect(() => {
+    lastModelChangeRef.current = lastModelChange;
+    onChromeStateChange?.({
+      collection,
+      status,
+      lastModelChange,
+      canUndo: history.undoStack.length > 0,
+      canRedo: history.redoStack.length > 0,
+    });
+  }, [collection, history.redoStack.length, history.undoStack.length, lastModelChange, onChromeStateChange, status]);
+
+  useEffect(() => {
+    let canceled = false;
+    loadWorkspaceSnapshot(storageKey)
+      .then((snapshot) => {
+        if (canceled || !snapshot || changedBeforeStorageLoadRef.current) return;
+        historyRef.current = snapshot.history;
+        collectionRef.current = snapshot.history.present;
+        lastModelChangeRef.current = snapshot.lastModelChange;
+        setHistory(snapshot.history);
+        setLastModelChange(snapshot.lastModelChange);
+        setStatus((current) => ({ ...current, interaction: 'Workspace restored' }));
+      })
+      .catch((error) => {
+        console.warn('Failed to load Canway workspace snapshot', error);
+      })
+      .finally(() => {
+        storageReadyRef.current = true;
+        if (changedBeforeStorageLoadRef.current) {
+          persistWorkspaceSnapshot(createWorkspaceSnapshot(historyRef.current, lastModelChangeRef.current));
+        }
+      });
+    return () => {
+      canceled = true;
+    };
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (!storageReadyRef.current) return;
+    const timeout = window.setTimeout(() => {
+      persistWorkspaceSnapshot(createWorkspaceSnapshot(history, lastModelChange));
+    }, 180);
+    return () => window.clearTimeout(timeout);
+  }, [history, lastModelChange, persistWorkspaceSnapshot]);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -151,6 +224,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
   }, []);
 
   const activeDocument = collection.documents[collection.activeCanvasId];
+  const paneLayout = collection.view.paneLayouts[collection.activeCanvasId] ?? DEFAULT_PARENT_CONTEXT_PANE_LAYOUT;
   const parentContext = useMemo(() => buildParentContextField(collection, stageRect, collection.activeCanvasId, paneLayout), [collection, stageRect, paneLayout]);
   const hasParentContext = parentContext.shapes.length > 0;
   const normalizedPaneLayout = hasParentContext
@@ -169,11 +243,25 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     activeEngineRef.current?.setLivePortalNodeIds(livePortalNodeIds);
   }, [livePortalNodeIds]);
 
-  const commitCollection = useCallback((next: CanvasDocumentCollection, changes: DocumentModelChange[]) => {
-    collectionRef.current = next;
-    setCollection(next);
+  const commitCollection = useCallback((next: CanvasDocumentCollection, changes: DocumentModelChange[], options: { recordHistory?: boolean } = {}) => {
+    const nextHistory = (options.recordHistory ?? changes.length > 0)
+      ? pushWorkspaceHistory(historyRef.current, next)
+      : replaceWorkspacePresent(historyRef.current, next);
+    changedBeforeStorageLoadRef.current = true;
+    historyRef.current = nextHistory;
+    collectionRef.current = nextHistory.present;
+    setHistory(nextHistory);
     if (changes.length) setLastModelChange(changes[changes.length - 1]);
-    onCollectionChange?.(next, changes);
+    onCollectionChange?.(nextHistory.present, changes);
+  }, [onCollectionChange]);
+
+  const commitWorkspaceHistory = useCallback((nextHistory: CanvasWorkspaceHistory, interaction: string) => {
+    changedBeforeStorageLoadRef.current = true;
+    historyRef.current = nextHistory;
+    collectionRef.current = nextHistory.present;
+    setHistory(nextHistory);
+    setStatus((current) => ({ ...current, interaction }));
+    onCollectionChange?.(nextHistory.present, []);
   }, [onCollectionChange]);
 
   const saveActiveViewport = useCallback((base: CanvasDocumentCollection) => {
@@ -192,6 +280,26 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
 
   const executeActiveCanvasCommand = useCallback((command: CanvasCommand) => activeEngineRef.current?.executeCommand(command) ?? false, []);
 
+  const undoWorkspace = useCallback(() => {
+    const current = replaceWorkspacePresent(historyRef.current, saveActiveViewport(collectionRef.current));
+    if (!current.undoStack.length) return false;
+    commitWorkspaceHistory(undoWorkspaceHistory(current), 'Undo');
+    return true;
+  }, [commitWorkspaceHistory, saveActiveViewport]);
+
+  const redoWorkspace = useCallback(() => {
+    const current = replaceWorkspacePresent(historyRef.current, saveActiveViewport(collectionRef.current));
+    if (!current.redoStack.length) return false;
+    commitWorkspaceHistory(redoWorkspaceHistory(current), 'Redo');
+    return true;
+  }, [commitWorkspaceHistory, saveActiveViewport]);
+
+  const handlePaneLayoutChange = useCallback((canvasId: CanvasDocumentId, nextLayout: ParentContextPaneLayout) => {
+    const base = collectionRef.current;
+    if (!base.documents[canvasId]) return;
+    commitCollection(setPaneLayoutForCanvas(base, canvasId, nextLayout), [], { recordHistory: false });
+  }, [commitCollection]);
+
   const handleWorkspaceKeyDownCapture = useCallback((event: React.KeyboardEvent) => {
     if (event.key !== 'Escape' || collectionRef.current.view.deleteConfirmation) return;
     const active = collectionRef.current.documents[collectionRef.current.activeCanvasId];
@@ -205,10 +313,12 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     fitActiveCanvas: () => activeEngineRef.current?.fit(),
     resetActiveZoom: () => activeEngineRef.current?.resetZoom(),
     zoomActiveBy: (factor: number) => activeEngineRef.current?.zoomBy(factor),
+    undoWorkspace,
+    redoWorkspace,
     executeActiveCanvasCommand,
     executeDocumentCommand,
     collection: () => cloneDocumentCollection(collectionRef.current),
-  }), [executeActiveCanvasCommand, executeDocumentCommand]);
+  }), [executeActiveCanvasCommand, executeDocumentCommand, redoWorkspace, undoWorkspace]);
 
   const handleActiveStatus = useCallback((canvasId: CanvasDocumentId, nextStatus: ViewportStatus) => {
     if (collectionRef.current.activeCanvasId !== canvasId) return;
@@ -218,31 +328,29 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     const base = collectionRef.current;
     const withCamera = setCameraForCanvas(base, base.activeCanvasId, engine.getCamera());
     const withSelection = setSelectionForCanvas(withCamera, base.activeCanvasId, engine.getSelectionState());
-    collectionRef.current = withSelection;
-    setCollection(withSelection);
-  }, []);
+    commitCollection(withSelection, [], { recordHistory: false });
+  }, [commitCollection]);
 
   const handleEmbeddedStatus = useCallback((canvasId: CanvasDocumentId, _status: ViewportStatus, engine: CanvasEngine) => {
     const base = collectionRef.current;
     if (!base.documents[canvasId]) return;
     const withCamera = setCameraForCanvas(base, canvasId, engine.getCamera());
     const withSelection = setSelectionForCanvas(withCamera, canvasId, engine.getSelectionState());
-    collectionRef.current = withSelection;
-    setCollection(withSelection);
-  }, []);
+    commitCollection(withSelection, [], { recordHistory: false });
+  }, [commitCollection]);
 
   const handleActiveModelChange = useCallback((canvasId: CanvasDocumentId, model: CanvasModel) => {
     const base = collectionRef.current;
     if (base.activeCanvasId !== canvasId) return;
     const next = updateCanvasModel(base, base.activeCanvasId, model);
-    commitCollection(next, []);
+    commitCollection(next, [], { recordHistory: true });
   }, [commitCollection, activeDocument.model]);
 
   const handleEmbeddedModelChange = useCallback((canvasId: CanvasDocumentId, model: CanvasModel) => {
     const base = collectionRef.current;
     if (!base.documents[canvasId]) return;
     const next = updateCanvasModel(base, canvasId, model);
-    commitCollection(next, []);
+    commitCollection(next, [], { recordHistory: true });
   }, [commitCollection]);
 
   const handleEmbeddedEnter = useCallback((canvasId: CanvasDocumentId) => {
@@ -260,7 +368,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
       nodes: parent.model.nodes.map((node) => node.id === shape.node.id ? replacement : node),
     };
     const next = updateCanvasModel(base, shape.parentCanvasId, nextParentModel);
-    commitCollection(next, []);
+    commitCollection(next, [], { recordHistory: true });
   }, [commitCollection]);
 
   const handleNodeAction = useCallback((nodeId: string, actionId: string, source: 'pointer' | 'keyboard' | 'nonvisual' | 'ai') => {
@@ -298,9 +406,13 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
   function exposeDebugApi() {
     (window as Window & { __canwayNested?: unknown }).__canwayNested = {
       getCollection: () => cloneDocumentCollection(collectionRef.current),
+      getWorkspaceSnapshot: () => createWorkspaceSnapshot(historyRef.current, lastModelChangeRef.current),
+      flushWorkspaceSnapshot: () => persistWorkspaceSnapshot(createWorkspaceSnapshot(historyRef.current, lastModelChangeRef.current)),
       executeDocumentCommand,
       executeActiveCanvasCommand,
       replaceCollection: (next: CanvasDocumentCollection) => commitCollection(cloneDocumentCollection(next), []),
+      undoWorkspace,
+      redoWorkspace,
       activeCanvasId: () => collectionRef.current.activeCanvasId,
       engineCount: () => document.querySelectorAll('canvas[data-engine-mode]').length,
     };
@@ -397,6 +509,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
                     onModelChange={handleEmbeddedModelChange}
                     onEnterCanvas={handleEmbeddedEnter}
                     onSnippetModelChange={handleContextSnippetModelChange}
+                    onPaneLayoutChange={handlePaneLayoutChange}
                   />
                 </div>
               );
@@ -422,12 +535,17 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
           theme={theme}
           stageRect={stageRect}
           paneLayout={paneLayout}
-          onPaneLayoutChange={setPaneLayout}
+          onPaneLayoutChange={(nextLayout) => {
+            const current = collectionRef.current.view.paneLayouts[collectionRef.current.activeCanvasId] ?? DEFAULT_PARENT_CONTEXT_PANE_LAYOUT;
+            const resolved = typeof nextLayout === 'function' ? nextLayout(current) : nextLayout;
+            handlePaneLayoutChange(collectionRef.current.activeCanvasId, resolved);
+          }}
           liveCanvasCapacity={parentContextCanvasCapacity}
           onStatus={handleEmbeddedStatus}
           onModelChange={handleEmbeddedModelChange}
           onEnterCanvas={handleEmbeddedEnter}
           onSnippetModelChange={handleContextSnippetModelChange}
+          onChildPaneLayoutChange={handlePaneLayoutChange}
           onActivate={(shape) => {
             if (shape.portal) {
               executeDocumentCommand({ type: 'activate-neighbor-portal', parentCanvasId: shape.parentCanvasId, portalNodeId: shape.node.id, source: 'nonvisual' });
@@ -510,7 +628,6 @@ function ActiveEngineCanvas({
     engine.setTheme(theme);
     engine.setCamera(camera);
     if (selection) engine.setSelectionState(selection);
-    engine.fit();
     refEngine.current = engine;
     return () => {
       engine.dispose();
@@ -620,6 +737,7 @@ type EmbeddedNestedViewportProps = {
   onModelChange: (canvasId: CanvasDocumentId, model: CanvasModel) => void;
   onEnterCanvas: (canvasId: CanvasDocumentId) => boolean;
   onSnippetModelChange: (shape: ParentContextFieldShape, model: CanvasModel) => void;
+  onPaneLayoutChange: (canvasId: CanvasDocumentId, paneLayout: ParentContextPaneLayout) => void;
 };
 
 function EmbeddedNestedViewport({
@@ -633,10 +751,10 @@ function EmbeddedNestedViewport({
   onModelChange,
   onEnterCanvas,
   onSnippetModelChange,
+  onPaneLayoutChange,
 }: EmbeddedNestedViewportProps) {
   const document = collection.documents[canvasId];
   const [stageRect, setStageRect] = useState<DOMRect>(() => new DOMRect(0, 0, 1, 1));
-  const [paneLayoutOverride, setPaneLayoutOverride] = useState<ParentContextPaneLayout | null>(null);
   const [portalLayouts, setPortalLayouts] = useState<PortalLayout[]>([]);
   const viewportRef = useRef<HTMLDivElement | null>(null);
 
@@ -655,14 +773,12 @@ function EmbeddedNestedViewport({
     () => paneLayoutForCenterRatio(stageRect, EMBEDDED_FIELD_CENTER_RATIO, EMBEDDED_PARENT_CONTEXT_CONSTRAINTS),
     [stageRect],
   );
-  const paneLayout = paneLayoutOverride ?? defaultPaneLayout;
+  const paneLayout = collection.view.paneLayouts[canvasId] ?? defaultPaneLayout;
   const setEmbeddedPaneLayout: Dispatch<SetStateAction<ParentContextPaneLayout>> = useCallback((next) => {
-    setPaneLayoutOverride((current) => {
-      const base = current ?? defaultPaneLayout;
-      const resolved = typeof next === 'function' ? next(base) : next;
-      return normalizeParentContextPaneLayout(stageRect, resolved, EMBEDDED_PARENT_CONTEXT_CONSTRAINTS);
-    });
-  }, [defaultPaneLayout, stageRect]);
+    const base = collection.view.paneLayouts[canvasId] ?? defaultPaneLayout;
+    const resolved = typeof next === 'function' ? next(base) : next;
+    onPaneLayoutChange(canvasId, normalizeParentContextPaneLayout(stageRect, resolved, EMBEDDED_PARENT_CONTEXT_CONSTRAINTS));
+  }, [canvasId, collection.view.paneLayouts, defaultPaneLayout, onPaneLayoutChange, stageRect]);
   const contextField = useMemo(
     () => buildParentContextField(collection, stageRect, canvasId, paneLayout, EMBEDDED_PARENT_CONTEXT_CONSTRAINTS),
     [collection, stageRect, canvasId, paneLayout],
@@ -719,6 +835,7 @@ function EmbeddedNestedViewport({
                     onModelChange={onModelChange}
                     onEnterCanvas={onEnterCanvas}
                     onSnippetModelChange={onSnippetModelChange}
+                    onPaneLayoutChange={onPaneLayoutChange}
                   />
                 </div>
               );
@@ -740,6 +857,7 @@ function EmbeddedNestedViewport({
           onModelChange={onModelChange}
           onEnterCanvas={onEnterCanvas}
           onSnippetModelChange={onSnippetModelChange}
+          onChildPaneLayoutChange={onPaneLayoutChange}
           onActivate={(shape) => {
             if (shape.childCanvasId && collection.documents[shape.childCanvasId]) onEnterCanvas(shape.childCanvasId);
           }}
@@ -877,6 +995,7 @@ function ParentContextField({
   onEnterCanvas,
   onSnippetModelChange,
   onActivate,
+  onChildPaneLayoutChange,
   paneLayoutConstraints = {},
 }: {
   field: ReturnType<typeof buildParentContextField>;
@@ -892,6 +1011,7 @@ function ParentContextField({
   onEnterCanvas: (canvasId: CanvasDocumentId) => boolean;
   onSnippetModelChange: (shape: ParentContextFieldShape, model: CanvasModel) => void;
   onActivate: (shape: ParentContextFieldShape) => void;
+  onChildPaneLayoutChange: (canvasId: CanvasDocumentId, paneLayout: ParentContextPaneLayout) => void;
 }) {
   if (!field.shapes.length) return null;
   const normalizedPaneLayout = normalizeParentContextPaneLayout(stageRect, paneLayout, paneLayoutConstraints);
@@ -926,6 +1046,7 @@ function ParentContextField({
                   onModelChange={onModelChange}
                   onEnterCanvas={onEnterCanvas}
                   onSnippetModelChange={onSnippetModelChange}
+                  onPaneLayoutChange={onChildPaneLayoutChange}
                 />
               ) : (
                 <EngineCanvas

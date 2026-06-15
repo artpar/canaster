@@ -18,6 +18,18 @@ export type CanvasDocumentCollection = {
   view: NestedCanvasViewState;
 };
 
+export type CanvasWorkspaceSnapshot = {
+  schemaVersion: 1;
+  history: CanvasWorkspaceHistory;
+  lastModelChange: DocumentModelChange | null;
+};
+
+export type CanvasWorkspaceHistory = {
+  present: CanvasDocumentCollection;
+  undoStack: CanvasDocumentCollection[];
+  redoStack: CanvasDocumentCollection[];
+};
+
 export type CanvasDocument = {
   id: CanvasDocumentId;
   title: string;
@@ -29,6 +41,7 @@ export type CanvasDocument = {
 export type NestedCanvasViewState = {
   cameras: Record<CanvasDocumentId, Camera>;
   selections: Record<CanvasDocumentId, CanvasSelectionState>;
+  paneLayouts: Record<CanvasDocumentId, ParentContextPaneLayout>;
   activeCanvasId: CanvasDocumentId;
   focusedEngineId: EngineSlotId;
   previewFocus: PortalPreviewFocus | null;
@@ -36,6 +49,13 @@ export type NestedCanvasViewState = {
   parentContext: ParentContextFieldState;
   animationEnabled: boolean;
   deleteConfirmation: DeleteConfirmationState | null;
+};
+
+export type ParentContextPaneLayout = {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
 };
 
 export type EngineSlotId = string;

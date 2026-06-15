@@ -463,6 +463,16 @@ button {
   background: rgba(90, 167, 255, 0.16);
 }
 
+.icon-button:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.icon-button:disabled:hover {
+  color: #c6ced8;
+  background: transparent;
+}
+
 .icon-button:focus-visible {
   outline: 2px solid #5aa7ff;
   outline-offset: 2px;

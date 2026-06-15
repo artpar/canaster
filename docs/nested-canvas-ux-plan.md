@@ -39,6 +39,8 @@ Create these files:
 src/engine/documentTypes.ts
 src/engine/documentModel.ts
 src/engine/documentCommands.ts
+src/engine/workspaceHistory.ts
+src/engine/workspaceStorage.ts
 src/engine/nested/engineSlots.ts
 src/engine/nested/portalLayout.ts
 src/engine/nested/stackLayout.ts
@@ -69,6 +71,8 @@ Ownership:
 - `CanvasEngine` owns one canvas model's rendering and interaction.
 - `NestedCanvasWorkspace` owns document collection state, active canvas id, engine slots, overlay placement, stack state, and parent-context field state.
 - `documentCommands.ts` owns document-level commands and model mutation across canvases.
+- `workspaceHistory.ts` owns pure workspace history operations: create, replace present, push, undo, redo, and snapshot hydration. It does not import React, Dexie, DOM APIs, or `CanvasEngine`.
+- `workspaceStorage.ts` owns IndexedDB persistence through Dexie. It only loads, saves, and clears hydrated `CanvasWorkspaceSnapshot` values. It does not know how commands, undo, redo, or React state work.
 - `canvasNodeDefinition` owns portal content chrome and action metadata only.
 - `portalLayout.ts` owns conversion from engine-reported portal world rects to screen overlay rects.
 - `parentContextField.ts` owns parent-space neighbor projection, fisheye compression, region assignment, and hit-map metadata.
@@ -668,6 +672,7 @@ Props:
 export type NestedCanvasWorkspaceProps = {
   initialCollection: CanvasDocumentCollection;
   theme: ThemeName;
+  storageKey?: string;
   onCollectionChange?: (collection: CanvasDocumentCollection, changes: DocumentModelChange[]) => void;
   onChromeStateChange?: (state: NestedCanvasWorkspaceChromeState) => void;
 };
@@ -676,12 +681,14 @@ export type NestedCanvasWorkspaceChromeState = {
   collection: CanvasDocumentCollection;
   status: ViewportStatus;
   lastModelChange: DocumentModelChange | null;
+  canUndo: boolean;
+  canRedo: boolean;
 };
 ```
 
 Responsibilities:
 
-- own `CanvasDocumentCollection` React state;
+- own `CanvasWorkspaceHistory` React state, where `history.present` is the active `CanvasDocumentCollection`;
 - mount the active engine canvas;
 - mount context engine canvases for visible ancestors;
 - mount portal preview canvases for selected live portal layouts;
@@ -692,6 +699,20 @@ Responsibilities:
 - render parent-context border field;
 - render compact breadcrumb fallback inside the active center cell;
 - render delete confirmation modal.
+- load and save `CanvasWorkspaceSnapshot` values through `workspaceStorage.ts`;
+- use `workspaceHistory.ts` for undo/redo stack movement instead of mutating history inline.
+
+Persistence and history rules:
+
+- Persist `CanvasWorkspaceSnapshot` to IndexedDB through Dexie.
+- Snapshot schema is `1` and contains `history.present`, `history.undoStack`, `history.redoStack`, and `lastModelChange`.
+- `history.present.view` is the durable view position source: cameras, selections, active canvas, preview focus, delete confirmation, and parent-context pane layouts.
+- Stage rects, portal overlay rects, hover state, frame timings, DOM measurements, and rendered-node counters are derived runtime state and must not be persisted.
+- Model/document changes push undo history.
+- Camera, selection, and pane-layout changes update `history.present` and are persisted, but do not create undo steps.
+- Undo and redo restore full `CanvasDocumentCollection` snapshots, including active canvas, cameras, selections, and pane layouts.
+- Top-level and recursive parent-context divider layouts must be written to `collection.view.paneLayouts[canvasId]`, not component-local state.
+- `NestedCanvasWorkspace` may debounce normal saves, but explicit flushes and future unload handling must use the same `workspaceStorage.ts` adapter.
 
 App shell responsibilities:
 
@@ -745,6 +766,8 @@ App integration:
   - `fitActiveCanvas()`;
   - `resetActiveZoom()`;
   - `zoomActiveBy(factor)`;
+  - `undoWorkspace()`;
+  - `redoWorkspace()`;
   - `executeActiveCanvasCommand(command)`;
   - `executeDocumentCommand(command)`.
 

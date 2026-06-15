@@ -9,7 +9,7 @@ import {
   type CanvasSelectionState,
   type NodeData,
 } from './types';
-import type { CanvasDocument, CanvasDocumentCollection, CanvasDocumentId, PortalNode, StackFrame } from './documentTypes';
+import type { CanvasDocument, CanvasDocumentCollection, CanvasDocumentId, ParentContextPaneLayout, PortalNode, StackFrame } from './documentTypes';
 
 const DEFAULT_CAMERA: Camera = { x: 0, y: 0, scale: 1 };
 const EMPTY_SELECTION: CanvasSelectionState = { selectedNodeIds: [], primarySelectedNodeId: null, resizeMode: false };
@@ -32,6 +32,7 @@ export function createInitialDocumentCollection(rootModel: CanvasModel, rootTitl
     view: {
       cameras: { [rootCanvasId]: { ...DEFAULT_CAMERA } },
       selections: { [rootCanvasId]: { ...EMPTY_SELECTION, selectedNodeIds: [] } },
+      paneLayouts: {},
       activeCanvasId: rootCanvasId,
       focusedEngineId: rootCanvasId,
       previewFocus: null,
@@ -59,6 +60,7 @@ export function cloneDocumentCollection(collection: CanvasDocumentCollection): C
       ...collection.view,
       cameras: cloneRecord(collection.view.cameras),
       selections: cloneSelectionRecord(collection.view.selections),
+      paneLayouts: clonePaneLayoutRecord(collection.view.paneLayouts ?? {}),
       previewFocus: collection.view.previewFocus ? { ...collection.view.previewFocus } : null,
       stackPath: collection.view.stackPath.map((frame) => ({ ...frame })),
       parentContext: {
@@ -70,6 +72,10 @@ export function cloneDocumentCollection(collection: CanvasDocumentCollection): C
         : null,
     },
   };
+}
+
+export function hydrateDocumentCollection(collection: CanvasDocumentCollection): CanvasDocumentCollection {
+  return syncPortalSummaries(syncDerivedView(cloneDocumentCollection(collection)));
 }
 
 export function canvasDocumentFor(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId): CanvasDocument {
@@ -242,6 +248,13 @@ export function setSelectionForCanvas(collection: CanvasDocumentCollection, canv
   return syncDerivedView(next);
 }
 
+export function setPaneLayoutForCanvas(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId, paneLayout: ParentContextPaneLayout): CanvasDocumentCollection {
+  const next = cloneDocumentCollection(collection);
+  canvasDocumentFor(next, canvasId);
+  next.view.paneLayouts[canvasId] = { ...paneLayout };
+  return syncDerivedView(next);
+}
+
 export function selectNodeInCanvas(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId, nodeId: string): CanvasDocumentCollection {
   return setSelectionForCanvas(collection, canvasId, { selectedNodeIds: [nodeId], primarySelectedNodeId: nodeId, resizeMode: false });
 }
@@ -265,6 +278,7 @@ export function deleteNodesAndDescendants(collection: CanvasDocumentCollection, 
     delete next.documents[childId];
     delete next.view.cameras[childId];
     delete next.view.selections[childId];
+    delete next.view.paneLayouts[childId];
   }
   next.view.deleteConfirmation = null;
   next.view.selections[canvasId] = { ...EMPTY_SELECTION, selectedNodeIds: [] };
@@ -292,6 +306,7 @@ function syncDerivedView(collection: CanvasDocumentCollection): CanvasDocumentCo
     activeCanvasId,
     view: {
       ...collection.view,
+      paneLayouts: collection.view.paneLayouts ?? {},
       activeCanvasId,
       focusedEngineId: activeCanvasId,
       stackPath: stackPathFor(collection, activeCanvasId),
@@ -339,4 +354,8 @@ function cloneSelectionRecord(record: Record<string, CanvasSelectionState>): Rec
       { selectedNodeIds: [...value.selectedNodeIds], primarySelectedNodeId: value.primarySelectedNodeId, resizeMode: value.resizeMode },
     ]),
   );
+}
+
+function clonePaneLayoutRecord(record: Record<string, ParentContextPaneLayout>): Record<string, ParentContextPaneLayout> {
+  return Object.fromEntries(Object.entries(record).map(([key, value]) => [key, { ...value }]));
 }

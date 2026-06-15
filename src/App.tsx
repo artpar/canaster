@@ -1,4 +1,4 @@
-import { ListTree, Maximize2, Minus, Moon, Plus, RotateCcw, Sun, X } from 'lucide-react';
+import { ListTree, Maximize2, Minus, Moon, Plus, Redo2, RotateCcw, Sun, Undo2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createChildCanvasForNode, createInitialDocumentCollection, updateCanvasModel } from './engine/documentModel';
 import {
@@ -22,6 +22,8 @@ export function App() {
     collection: initialCollection,
     status: initialViewportStatus,
     lastModelChange: null,
+    canUndo: false,
+    canRedo: false,
   }));
 
   const handleChromeStateChange = useCallback((next: NestedCanvasWorkspaceChromeState) => {
@@ -50,6 +52,12 @@ export function App() {
             <span>Canway</span>
           </div>
           <div className="toolbar-group">
+            <IconButton label="Undo" disabled={!chromeState.canUndo} onClick={() => workspaceRef.current?.undoWorkspace()}>
+              <Undo2 size={17} />
+            </IconButton>
+            <IconButton label="Redo" disabled={!chromeState.canRedo} onClick={() => workspaceRef.current?.redoWorkspace()}>
+              <Redo2 size={17} />
+            </IconButton>
             <IconButton label="Fit view" onClick={() => workspaceRef.current?.fitActiveCanvas()}>
               <Maximize2 size={17} />
             </IconButton>
@@ -141,13 +149,14 @@ function createSampleDocumentCollection() {
 
 type IconButtonProps = {
   label: string;
+  disabled?: boolean;
   onClick: () => void;
   children: React.ReactNode;
 };
 
-function IconButton({ label, onClick, children }: IconButtonProps) {
+function IconButton({ label, disabled = false, onClick, children }: IconButtonProps) {
   return (
-    <button className="icon-button" type="button" aria-label={label} title={label} onClick={onClick}>
+    <button className="icon-button" type="button" aria-label={label} title={label} disabled={disabled} onClick={onClick}>
       {children}
     </button>
   );

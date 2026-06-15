@@ -151,6 +151,10 @@ function assertProbe(result, browserEvents) {
   assert(result.isolation.parentStableAfterChildMove, 'child edit mutated parent portal geometry');
   assert(result.isolation.parentMoved, 'parent portal did not move after returning');
   assert(result.isolation.childStableAfterParentMove, 'parent edit mutated child model');
+  assert(result.history.undoAvailableBeforeUndo && result.history.redoEmptyBeforeUndo, 'workspace history stacks were not populated after edits');
+  assert(result.history.undoRestoredParentPortal, 'workspace undo did not restore the previous collection snapshot');
+  assert(result.history.redoAvailableAfterUndo && result.history.redoRestoredParentPortal && result.history.redoClearedAfterRedo, 'workspace redo did not restore and clear redo state');
+  assert(result.history.persistedChildMove && result.history.persistedActiveCanvas === 'root', `workspace snapshot was not persisted to IndexedDB: ${JSON.stringify(result.history)}`);
   assert(result.parentContext.regions.length === 8, `parent context field did not render all eight regions: ${result.parentContext.regions.join(',')}`);
   assert(result.parentContext.shapeCount === 8, `parent context field must render one nearest shape per pane: ${result.parentContext.shapeCount}`);
   assert(!result.parentContext.nodeIds.includes('neighbor-top-far') && !result.parentContext.nodeIds.includes('portal-right-far'), `parent context did not choose nearest candidates per pane: ${result.parentContext.nodeIds.join(',')}`);

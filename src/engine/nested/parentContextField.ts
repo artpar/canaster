@@ -2,6 +2,7 @@ import { cloneNode } from '../documentModel';
 import { BuiltInNodeTypes, type CanvasPortalNodeData } from '../types';
 import type {
   CanvasDocumentCollection,
+  ParentContextPaneLayout,
   ParentContextFieldShape,
   ParentContextFieldState,
   ParentContextRegion,
@@ -16,12 +17,7 @@ export const EMBEDDED_FIELD_MIN_CENTER_BAND = 32;
 
 const REGION_ORDER: ParentContextRegion[] = ['top', 'top-right', 'right', 'bottom-right', 'bottom', 'bottom-left', 'left', 'top-left'];
 
-export type ParentContextPaneLayout = {
-  left: number;
-  right: number;
-  top: number;
-  bottom: number;
-};
+export type { ParentContextPaneLayout } from '../documentTypes';
 
 export type ParentContextPaneLayoutConstraints = {
   minPaneBand?: number;

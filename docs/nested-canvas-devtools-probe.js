@@ -2,6 +2,7 @@ export async function runCanwayNestedProbe() {
   const { createInitialDocumentCollection, cloneDocumentCollection } = await import('/src/engine/documentModel.ts');
   const { planDocumentCommand, stripPortalChildReferenceOnPaste } = await import('/src/engine/documentCommands.ts');
   const { regionForContextVector } = await import('/src/engine/nested/parentContextField.ts');
+  const { loadWorkspaceSnapshot } = await import('/src/engine/workspaceStorage.ts');
 
   const raf = async (count = 1) => {
     for (let i = 0; i < count; i++) await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -165,6 +166,22 @@ export async function runCanwayNestedProbe() {
   const afterParentMove = api.getCollection();
   const parentPortalAfterParentMove = afterParentMove.documents.root.model.nodes.find((node) => node.id === 'planning-canvas');
   const childAfterParentMove = afterParentMove.documents[childCanvasId].model.nodes.find((node) => node.id === 'child-card');
+  const historyBeforeUndo = api.getWorkspaceSnapshot();
+  api.undoWorkspace();
+  await raf(8);
+  const afterUndo = api.getCollection();
+  const parentPortalAfterUndo = afterUndo.documents.root.model.nodes.find((node) => node.id === 'planning-canvas');
+  const historyAfterUndo = api.getWorkspaceSnapshot();
+  api.redoWorkspace();
+  await raf(8);
+  const afterRedo = api.getCollection();
+  const parentPortalAfterRedo = afterRedo.documents.root.model.nodes.find((node) => node.id === 'planning-canvas');
+  const childAfterRedo = afterRedo.documents[childCanvasId].model.nodes.find((node) => node.id === 'child-card');
+  const historyAfterRedo = api.getWorkspaceSnapshot();
+  await api.flushWorkspaceSnapshot();
+  await raf(2);
+  const persistedSnapshot = await loadWorkspaceSnapshot();
+  const persistedChild = persistedSnapshot?.history.present.documents[childCanvasId]?.model.nodes.find((node) => node.id === 'child-card');
 
   const contextFixture = makeContextFixture(createInitialDocumentCollection, planDocumentCommand, card, portal);
   api.replaceCollection(contextFixture);
@@ -341,6 +358,19 @@ export async function runCanwayNestedProbe() {
       parentStableAfterChildMove: parentPortalAfterChildMove?.x === appPortal?.x,
       parentMoved: parentPortalAfterParentMove?.x === appPortal?.x + 32,
       childStableAfterParentMove: childAfterParentMove?.x === movedChild?.x,
+    },
+    history: {
+      undoAvailableBeforeUndo: historyBeforeUndo.history.undoStack.length > 0,
+      redoEmptyBeforeUndo: historyBeforeUndo.history.redoStack.length === 0,
+      undoRestoredParentPortal: parentPortalAfterUndo?.x === parentPortalAfterChildMove?.x,
+      redoAvailableAfterUndo: historyAfterUndo.history.redoStack.length > 0,
+      redoRestoredParentPortal: parentPortalAfterRedo?.x === parentPortalAfterParentMove?.x,
+      redoClearedAfterRedo: historyAfterRedo.history.redoStack.length === 0,
+      persistedChildMove: persistedChild?.x === movedChild?.x,
+      movedChildX: movedChild?.x ?? null,
+      afterRedoChildX: childAfterRedo?.x ?? null,
+      persistedChildX: persistedChild?.x ?? null,
+      persistedActiveCanvas: persistedSnapshot?.history.present.activeCanvasId ?? null,
     },
     parentContext: {
       regions: contextUniqueRegions,
