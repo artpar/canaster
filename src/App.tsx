@@ -1,4 +1,4 @@
-import { Clipboard, Copy, Maximize2, Minus, Moon, MoveRight, Plus, RotateCcw, Sun, Trash2 } from 'lucide-react';
+import { Clipboard, Copy, ListTree, Maximize2, Minus, Moon, MoveRight, Plus, RotateCcw, Sun, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { CanvasEngine } from './engine/CanvasEngine';
 import { sampleModel } from './engine/sampleModel';
@@ -26,6 +26,7 @@ export function App() {
   const [lastModelChange, setLastModelChange] = useState<CanvasModelChange | null>(null);
   const [theme, setTheme] = useState<ThemeName>('dark');
   const [status, setStatus] = useState<ViewportStatus>(initialStatus);
+  const [nodesOpen, setNodesOpen] = useState(false);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -87,12 +88,15 @@ export function App() {
             >
               {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
             </IconButton>
+            <IconButton label={nodesOpen ? 'Close node panel' : 'Open node panel'} onClick={() => setNodesOpen((open) => !open)}>
+              {nodesOpen ? <X size={17} /> : <ListTree size={17} />}
+            </IconButton>
           </div>
         </div>
 
         <canvas ref={canvasRef} className="canvas-surface" aria-label="Canway canvas" />
 
-        <aside className="node-access-panel" aria-label="Canvas nodes">
+        {nodesOpen ? <aside className="node-access-panel" aria-label="Canvas nodes">
           <div className="node-access-header">
             <span>Nodes</span>
             <span>{status.selectionCount ? `${status.selectionCount} selected` : 'No selection'}</span>
@@ -147,7 +151,7 @@ export function App() {
               );
             })}
           </ul>
-        </aside>
+        </aside> : null}
 
         <div className="statusbar" role="status" aria-live="polite">
           <span>

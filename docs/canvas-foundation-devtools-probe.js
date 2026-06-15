@@ -93,6 +93,8 @@ export async function runCanwayFoundationProbe() {
 
   const appCanvas = document.querySelector('canvas[aria-label="Canway canvas"]');
   await raf(3);
+  document.querySelector('button[aria-label="Open node panel"]')?.click();
+  await raf(3);
   const appRect = appCanvas?.getBoundingClientRect();
   const app = appCanvas
     ? {

@@ -321,17 +321,25 @@ button {
   left: 14px;
   bottom: 14px;
   z-index: 2;
-  display: flex;
+  display: grid;
+  grid-template-columns: 92px 92px 70px 112px minmax(0, 1fr);
   align-items: center;
   gap: 14px;
-  min-height: 34px;
-  max-width: min(520px, calc(100% - 28px));
+  width: min(520px, calc(100% - 28px));
+  height: 34px;
   padding: 0 12px;
   border-radius: 8px;
   color: #8b96a5;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   pointer-events: none;
+}
+
+.statusbar span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 :root[data-theme='light'] .statusbar {
@@ -372,8 +380,11 @@ button {
   }
 
   .statusbar {
-    flex-wrap: wrap;
-    gap: 6px 12px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: 14px;
+    gap: 4px 12px;
+    height: 64px;
     padding: 8px 10px;
+    font-size: 11px;
   }
 }
