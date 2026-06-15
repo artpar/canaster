@@ -67,6 +67,7 @@ button {
 
 .nested-stage {
   background: #101217;
+  display: grid;
 }
 
 :root[data-theme='light'] .nested-stage {
@@ -81,6 +82,16 @@ button {
   position: absolute;
   inset: 0;
   pointer-events: none;
+}
+
+.nested-center-cell {
+  position: relative;
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  z-index: 2;
 }
 
 .stack-plane-button {
@@ -141,15 +152,17 @@ button {
   inset: 0;
 }
 
-.portal-activation {
-  border: 0;
-  background: transparent;
-  cursor: zoom-in;
+.embedded-nested-viewport {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  overflow: hidden;
+  pointer-events: auto;
 }
 
-.portal-activation:focus-visible {
-  outline: 2px solid #5aa7ff;
-  outline-offset: -2px;
+.embedded-plane {
+  position: absolute;
+  inset: 0;
 }
 
 .parent-context-layer {
@@ -157,7 +170,8 @@ button {
 }
 
 .parent-context-field,
-.parent-context-canvas-layer {
+.parent-context-canvas-layer,
+.parent-context-resizers {
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -168,12 +182,18 @@ button {
   overflow: hidden;
 }
 
+.parent-context-canvas-layer {
+  display: grid;
+}
+
 .parent-context-canvas-clip {
-  position: absolute;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
   border-radius: 0;
   box-shadow: inset 0 0 0 1px rgba(90, 167, 255, 0.38);
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .parent-context-canvas {
@@ -183,18 +203,44 @@ button {
   height: 100%;
 }
 
-.parent-context-vignette {
-  fill: currentColor;
-  opacity: 0.04;
+.parent-context-resizers {
+  z-index: 3;
 }
 
-.parent-context-vignette.top,
-.parent-context-vignette.bottom {
-  opacity: 0.05;
+.parent-context-resizer {
+  position: absolute;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: rgba(90, 167, 255, 0.22);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.parent-context-resizer.vertical {
+  cursor: ew-resize;
+}
+
+.parent-context-resizer.horizontal {
+  cursor: ns-resize;
+}
+
+.parent-context-resizer.corner {
+  width: 14px;
+  height: 14px;
+  border: 1px solid rgba(238, 242, 246, 0.42);
+  background: rgba(90, 167, 255, 0.42);
+  cursor: move;
+}
+
+.parent-context-resizer:hover,
+.parent-context-resizer:focus-visible {
+  background: rgba(90, 167, 255, 0.68);
+  outline: none;
 }
 
 .parent-context-shape-hit {
-  pointer-events: auto;
+  pointer-events: none;
   cursor: pointer;
 }
 
@@ -220,7 +266,7 @@ button {
 .parent-context-hit-rect {
   fill: transparent;
   stroke: transparent;
-  pointer-events: all;
+  pointer-events: none;
 }
 
 .parent-context-shape-hit:hover .parent-context-shape,

@@ -98,6 +98,7 @@ export class CanvasEngine {
   private readonly canvasId: string;
   private readonly beforeCommand?: (command: CanvasCommand) => CanvasCommand | false;
   private readonly onNodeAction?: (nodeId: string, actionId: string, source: CanvasEditSource) => boolean;
+  private readonly onCanvasDoubleClick?: (canvasId: string, event: MouseEvent) => boolean;
   private readonly onStatus?: (status: ViewportStatus) => void;
   private readonly onModelChange?: (model: CanvasModel, change: CanvasModelChange) => void;
   private readonly onPortalLayout?: (layouts: PortalLayout[]) => void;
@@ -146,6 +147,7 @@ export class CanvasEngine {
     this.interactionMode = options.interactionMode ?? 'active';
     this.beforeCommand = options.beforeCommand;
     this.onNodeAction = options.onNodeAction;
+    this.onCanvasDoubleClick = options.onCanvasDoubleClick;
     this.onStatus = options.onStatus;
     this.onModelChange = options.onModelChange;
     this.onPortalLayout = options.onPortalLayout;
@@ -156,7 +158,7 @@ export class CanvasEngine {
     this.highlightNodeIds = new Set(options.highlightNodeIds ?? []);
     this.resizeObserver = new ResizeObserver(() => this.resize());
 
-    this.canvas.tabIndex = this.interactionMode === 'active' ? 0 : -1;
+    this.canvas.tabIndex = this.acceptsInput() ? 0 : -1;
     this.attachInputListenersForMode();
     this.resizeObserver.observe(this.canvas);
     this.resize();
@@ -192,7 +194,7 @@ export class CanvasEngine {
   setInteractionMode(mode: EngineInteractionMode) {
     if (this.interactionMode === mode) return;
     this.interactionMode = mode;
-    this.canvas.tabIndex = mode === 'active' ? 0 : -1;
+    this.canvas.tabIndex = this.acceptsInput() ? 0 : -1;
     this.finishPointerInteraction(null, false);
     this.finishTouchGesture();
     this.touchPoints.clear();
@@ -236,7 +238,7 @@ export class CanvasEngine {
   }
 
   focusCanvas() {
-    if (this.interactionMode === 'active') this.canvas.focus({ preventScroll: true });
+    if (this.acceptsInput()) this.canvas.focus({ preventScroll: true });
   }
 
   fit(padding = 72) {
@@ -264,7 +266,7 @@ export class CanvasEngine {
   }
 
   executeCommand(command: CanvasCommand) {
-    if (this.interactionMode !== 'active') {
+    if (!this.acceptsInput()) {
       this.interaction = 'Inactive canvas';
       this.emitStatus();
       return false;
@@ -634,7 +636,7 @@ export class CanvasEngine {
   }
 
   private onPointerDown = (event: PointerEvent) => {
-    if (this.interactionMode !== 'active') return;
+    if (!this.acceptsInput()) return;
     event.preventDefault();
     this.canvas.focus({ preventScroll: true });
     const point = this.eventPoint(event);
@@ -669,13 +671,6 @@ export class CanvasEngine {
     const node = this.nodeAt(world);
 
     if (node) {
-      const hit = this.nodeInternalHit(node, world);
-      if (hit?.type === 'activate' && this.routeNodeAction(node.id, hit.action, 'pointer')) {
-        this.interaction = 'Node action';
-        this.markDirty();
-        this.emitStatus();
-        return;
-      }
       const mode = event.shiftKey || event.metaKey || event.ctrlKey ? 'toggle' : this.selectedNodeIds.has(node.id) ? 'add' : 'replace';
       this.executeCommand({ type: 'select-node', nodeId: node.id, mode, source: 'pointer' });
       if (!this.selectedNodeIds.has(node.id)) {
@@ -718,7 +713,7 @@ export class CanvasEngine {
   };
 
   private onPointerMove = (event: PointerEvent) => {
-    if (this.interactionMode !== 'active') return;
+    if (!this.acceptsInput()) return;
     const point = this.eventPoint(event);
     if (event.pointerType === 'touch' && this.touchPoints.has(event.pointerId)) {
       this.touchPoints.set(event.pointerId, point);
@@ -768,21 +763,21 @@ export class CanvasEngine {
   };
 
   private onPointerUp = (event: PointerEvent) => {
-    if (this.interactionMode !== 'active') return;
+    if (!this.acceptsInput()) return;
     if (this.gesture && this.finishTouchPointer(event.pointerId)) return;
     if (event.pointerType === 'touch') this.touchPoints.delete(event.pointerId);
     this.finishPointerInteraction(event.pointerId, true);
   };
 
   private onPointerCancel = (event: PointerEvent) => {
-    if (this.interactionMode !== 'active') return;
+    if (!this.acceptsInput()) return;
     if (this.gesture && this.finishTouchPointer(event.pointerId)) return;
     if (event.pointerType === 'touch') this.touchPoints.delete(event.pointerId);
     this.finishPointerInteraction(event.pointerId, false);
   };
 
   private onLostPointerCapture = (event: PointerEvent) => {
-    if (this.interactionMode !== 'active') return;
+    if (!this.acceptsInput()) return;
     if (this.gesture && this.finishTouchPointer(event.pointerId)) return;
     if (event.pointerType === 'touch') this.touchPoints.delete(event.pointerId);
     this.finishPointerInteraction(event.pointerId, false);
@@ -805,7 +800,7 @@ export class CanvasEngine {
   };
 
   private onKeyDown = (event: KeyboardEvent) => {
-    if (this.interactionMode !== 'active') return;
+    if (!this.acceptsInput()) return;
     const step = event.shiftKey ? KEYBOARD_FAST_STEP : KEYBOARD_STEP;
     const movement = keyMovement(event.key, step);
 
@@ -880,7 +875,7 @@ export class CanvasEngine {
   };
 
   private onWheel = (event: WheelEvent) => {
-    if (this.interactionMode !== 'active') return;
+    if (!this.acceptsInput()) return;
     event.preventDefault();
     const point = this.eventPoint(event);
     if (event.ctrlKey || event.metaKey) {
@@ -903,8 +898,21 @@ export class CanvasEngine {
   };
 
   private onDoubleClick = (event: MouseEvent) => {
-    if (this.interactionMode !== 'active') return;
+    if (!this.acceptsInput()) return;
+    if (this.onCanvasDoubleClick?.(this.canvasId, event)) {
+      this.interaction = 'Entered canvas';
+      this.emitStatus();
+      return;
+    }
     const point = this.eventPoint(event);
+    const node = this.nodeAt(this.screenToWorld(point.x, point.y));
+    const action = node ? describeNode(node).actions.find((candidate) => candidate.available && candidate.id === 'enter-child-canvas') : null;
+    if (node && action && this.routeNodeAction(node.id, action.id, 'pointer')) {
+      this.interaction = 'Pointer node action';
+      this.markDirty();
+      this.emitStatus();
+      return;
+    }
     this.zoomAt(point.x, point.y, 1.55);
   };
 
@@ -1199,7 +1207,7 @@ export class CanvasEngine {
   }
 
   private attachInputListenersForMode() {
-    if (this.interactionMode === 'active') {
+    if (this.acceptsInput()) {
       if (this.inputListenersAttached) return;
       this.canvas.addEventListener('pointerdown', this.onPointerDown);
       this.canvas.addEventListener('pointercancel', this.onPointerCancel);
@@ -1235,9 +1243,14 @@ export class CanvasEngine {
   }
 
   private frameIntervalMs() {
+    if (this.interactionMode === 'embedded-live') return PREVIEW_FRAME_INTERVAL_MS;
     if (this.interactionMode === 'preview-live') return PREVIEW_FRAME_INTERVAL_MS;
     if (this.interactionMode === 'context-live') return CONTEXT_FRAME_INTERVAL_MS;
     return 0;
+  }
+
+  private acceptsInput() {
+    return this.interactionMode === 'active' || this.interactionMode === 'embedded-live';
   }
 
   private portalLayoutsFor(visibleNodes: CanvasNode[]): PortalLayout[] {

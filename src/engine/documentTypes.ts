@@ -40,7 +40,7 @@ export type NestedCanvasViewState = {
 
 export type EngineSlotId = string;
 
-export type EngineMode = 'active' | 'preview-live' | 'context-live' | 'dormant';
+export type EngineMode = 'active' | 'embedded-live' | 'preview-live' | 'context-live' | 'dormant';
 
 export type PortalPreviewFocus = {
   parentCanvasId: CanvasDocumentId;

@@ -8,11 +8,41 @@ import type {
 } from '../documentTypes';
 
 export const FIELD_BORDER_BAND = 112;
+export const FIELD_MIN_BORDER_BAND = 24;
+export const FIELD_MIN_CENTER_BAND = 72;
+export const EMBEDDED_FIELD_CENTER_RATIO = 0.8;
+export const EMBEDDED_FIELD_MIN_BORDER_BAND = 8;
+export const EMBEDDED_FIELD_MIN_CENTER_BAND = 32;
 
 const REGION_ORDER: ParentContextRegion[] = ['top', 'top-right', 'right', 'bottom-right', 'bottom', 'bottom-left', 'left', 'top-left'];
 
-export function buildParentContextField(collection: CanvasDocumentCollection, stageRect: DOMRect): ParentContextFieldState {
-  const active = collection.documents[collection.activeCanvasId];
+export type ParentContextPaneLayout = {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+};
+
+export type ParentContextPaneLayoutConstraints = {
+  minPaneBand?: number;
+  minCenterBand?: number;
+};
+
+export const DEFAULT_PARENT_CONTEXT_PANE_LAYOUT: ParentContextPaneLayout = {
+  left: FIELD_BORDER_BAND,
+  right: FIELD_BORDER_BAND,
+  top: FIELD_BORDER_BAND,
+  bottom: FIELD_BORDER_BAND,
+};
+
+export function buildParentContextField(
+  collection: CanvasDocumentCollection,
+  stageRect: DOMRect,
+  canvasId = collection.activeCanvasId,
+  paneLayout: ParentContextPaneLayout = DEFAULT_PARENT_CONTEXT_PANE_LAYOUT,
+  paneLayoutConstraints: ParentContextPaneLayoutConstraints = {},
+): ParentContextFieldState {
+  const active = collection.documents[canvasId];
   if (!active?.parentCanvasId || !active.parentNodeId) return { sourceCanvasId: null, sourcePortalNodeId: null, shapes: [] };
 
   const parent = collection.documents[active.parentCanvasId];
@@ -36,7 +66,7 @@ export function buildParentContextField(collection: CanvasDocumentCollection, st
         parentCanvasId: parent.id,
         node: cloneNode(node),
         distance,
-        projectedRect: paneRectForRegion(region, stageRect),
+        projectedRect: paneRectForRegion(region, stageRect, paneLayout, paneLayoutConstraints),
         childCanvasId: portalData?.childCanvasId ?? null,
         opacity: 0.22 + detail * 0.58,
         detail,
@@ -50,6 +80,46 @@ export function buildParentContextField(collection: CanvasDocumentCollection, st
     .sort((a, b) => REGION_ORDER.indexOf(a.region) - REGION_ORDER.indexOf(b.region) || b.detail - a.detail);
 
   return { sourceCanvasId: parent.id, sourcePortalNodeId: source.id, shapes };
+}
+
+export function normalizeParentContextPaneLayout(
+  stageRect: DOMRect,
+  layout: ParentContextPaneLayout,
+  constraints: ParentContextPaneLayoutConstraints = {},
+): ParentContextPaneLayout {
+  const width = Math.max(1, stageRect.width);
+  const height = Math.max(1, stageRect.height);
+  const minPaneBand = constraints.minPaneBand ?? FIELD_MIN_BORDER_BAND;
+  const minCenterBand = constraints.minCenterBand ?? FIELD_MIN_CENTER_BAND;
+  const minPaneX = Math.min(minPaneBand, Math.max(1, width / 4));
+  const minPaneY = Math.min(minPaneBand, Math.max(1, height / 4));
+  const minCenterX = Math.min(minCenterBand, Math.max(1, width - minPaneX * 2));
+  const minCenterY = Math.min(minCenterBand, Math.max(1, height - minPaneY * 2));
+  const left = clamp(layout.left, minPaneX, Math.max(minPaneX, width - minPaneX - minCenterX));
+  const right = clamp(layout.right, minPaneX, Math.max(minPaneX, width - left - minCenterX));
+  const top = clamp(layout.top, minPaneY, Math.max(minPaneY, height - minPaneY - minCenterY));
+  const bottom = clamp(layout.bottom, minPaneY, Math.max(minPaneY, height - top - minCenterY));
+  return { left, right, top, bottom };
+}
+
+export function paneLayoutForCenterRatio(
+  stageRect: DOMRect,
+  centerRatio: number,
+  constraints: ParentContextPaneLayoutConstraints = {},
+): ParentContextPaneLayout {
+  const width = Math.max(1, stageRect.width);
+  const height = Math.max(1, stageRect.height);
+  const outerRatio = (1 - clamp(centerRatio, 0.1, 0.98)) / 2;
+  return normalizeParentContextPaneLayout(
+    stageRect,
+    {
+      left: width * outerRatio,
+      right: width * outerRatio,
+      top: height * outerRatio,
+      bottom: height * outerRatio,
+    },
+    constraints,
+  );
 }
 
 export function regionForContextVector(dx: number, dy: number): ParentContextRegion {
@@ -68,21 +138,28 @@ export function parentContextRegionLabel(region: ParentContextRegion): string {
   return region.split('-').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
 }
 
-function paneRectForRegion(region: ParentContextRegion, stageRect: DOMRect) {
+function paneRectForRegion(
+  region: ParentContextRegion,
+  stageRect: DOMRect,
+  paneLayout: ParentContextPaneLayout,
+  paneLayoutConstraints: ParentContextPaneLayoutConstraints,
+) {
   const width = Math.max(1, stageRect.width);
   const height = Math.max(1, stageRect.height);
-  const band = Math.min(FIELD_BORDER_BAND, Math.max(64, Math.min(width, height) * 0.2), width / 3, height / 3);
-  const centerW = Math.max(1, width - band * 2);
-  const centerH = Math.max(1, height - band * 2);
+  const layout = normalizeParentContextPaneLayout(stageRect, paneLayout, paneLayoutConstraints);
+  const centerW = Math.max(1, width - layout.left - layout.right);
+  const centerH = Math.max(1, height - layout.top - layout.bottom);
+  const rightX = width - layout.right;
+  const bottomY = height - layout.bottom;
 
-  if (region === 'top') return { x: band, y: 0, w: centerW, h: band };
-  if (region === 'right') return { x: width - band, y: band, w: band, h: centerH };
-  if (region === 'bottom') return { x: band, y: height - band, w: centerW, h: band };
-  if (region === 'left') return { x: 0, y: band, w: band, h: centerH };
-  if (region === 'top-right') return { x: width - band, y: 0, w: band, h: band };
-  if (region === 'bottom-right') return { x: width - band, y: height - band, w: band, h: band };
-  if (region === 'bottom-left') return { x: 0, y: height - band, w: band, h: band };
-  return { x: 0, y: 0, w: band, h: band };
+  if (region === 'top') return { x: layout.left, y: 0, w: centerW, h: layout.top };
+  if (region === 'right') return { x: rightX, y: layout.top, w: layout.right, h: centerH };
+  if (region === 'bottom') return { x: layout.left, y: bottomY, w: centerW, h: layout.bottom };
+  if (region === 'left') return { x: 0, y: layout.top, w: layout.left, h: centerH };
+  if (region === 'top-right') return { x: rightX, y: 0, w: layout.right, h: layout.top };
+  if (region === 'bottom-right') return { x: rightX, y: bottomY, w: layout.right, h: layout.bottom };
+  if (region === 'bottom-left') return { x: 0, y: bottomY, w: layout.left, h: layout.bottom };
+  return { x: 0, y: 0, w: layout.left, h: layout.top };
 }
 
 function detailForDistance(distance: number) {

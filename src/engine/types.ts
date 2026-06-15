@@ -116,7 +116,7 @@ export type ViewportStatus = {
   interaction: string;
 };
 
-export type EngineInteractionMode = 'active' | 'preview-live' | 'context-live' | 'dormant';
+export type EngineInteractionMode = 'active' | 'embedded-live' | 'preview-live' | 'context-live' | 'dormant';
 
 export type ScreenRect = {
   x: number;
@@ -147,6 +147,7 @@ export type EngineOptions = {
   interactionMode?: EngineInteractionMode;
   beforeCommand?: (command: CanvasCommand) => CanvasCommand | false;
   onNodeAction?: (nodeId: string, actionId: string, source: CanvasEditSource) => boolean;
+  onCanvasDoubleClick?: (canvasId: string, event: MouseEvent) => boolean;
   onStatus?: (status: ViewportStatus) => void;
   onModelChange?: (model: CanvasModel, change: CanvasModelChange) => void;
   onPortalLayout?: (layouts: PortalLayout[]) => void;

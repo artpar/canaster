@@ -39,9 +39,50 @@ export async function runCanwayNestedProbe() {
     }
     throw new Error(message);
   };
+  const centerOf = (element) => {
+    const rect = element.getBoundingClientRect();
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  };
+  const dispatchWheel = async (element, init = {}) => {
+    const point = centerOf(element);
+    element.dispatchEvent(new WheelEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+      clientX: point.x,
+      clientY: point.y,
+      deltaY: -140,
+      ctrlKey: true,
+      ...init,
+    }));
+    await raf(8);
+  };
+  const dragCanvas = async (element, dx, dy) => {
+    const point = centerOf(element);
+    element.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, clientX: point.x, clientY: point.y, pointerId: 801, pointerType: 'mouse', buttons: 1 }));
+    window.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, cancelable: true, clientX: point.x + dx, clientY: point.y + dy, pointerId: 801, pointerType: 'mouse', buttons: 1 }));
+    window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, clientX: point.x + dx, clientY: point.y + dy, pointerId: 801, pointerType: 'mouse', buttons: 0 }));
+    await raf(10);
+  };
+  const dragElement = async (element, dx, dy, pointerId = 901) => {
+    const point = centerOf(element);
+    element.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, clientX: point.x, clientY: point.y, pointerId, pointerType: 'mouse', buttons: 1 }));
+    element.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, cancelable: true, clientX: point.x + dx, clientY: point.y + dy, pointerId, pointerType: 'mouse', buttons: 1 }));
+    element.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, clientX: point.x + dx, clientY: point.y + dy, pointerId, pointerType: 'mouse', buttons: 0 }));
+    await raf(10);
+  };
+  const doubleClickCanvas = async (element) => {
+    const point = centerOf(element);
+    element.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, clientX: point.x, clientY: point.y }));
+    await raf(12);
+  };
 
   const api = await waitForNested();
   await raf(6);
+  const shellChrome = {
+    topbarInsideNestedWorkspace: Boolean(document.querySelector('.nested-workspace .topbar')),
+    statusbarInsideNestedWorkspace: Boolean(document.querySelector('.nested-workspace .statusbar')),
+    statusbarOutsideNestedWorkspace: Boolean(document.querySelector('.workspace > .statusbar')),
+  };
 
   const initial = api.getCollection();
   const schema = {
@@ -55,9 +96,19 @@ export async function runCanwayNestedProbe() {
   const appPortal = afterCreate.documents.root.model.nodes.find((node) => node.id === 'planning-canvas');
   const childCanvasId = appPortal?.data?.childCanvasId;
   const previewCanvas = await waitFor(
-    () => document.querySelector('.portal-overlay canvas[data-engine-mode="preview-live"]'),
-    'live preview canvas was not mounted',
+    () => document.querySelector('.portal-overlay canvas[data-engine-mode="embedded-live"]'),
+    'embedded child canvas was not mounted',
   );
+  const childViewport = previewCanvas.closest('.embedded-nested-viewport');
+  const childViewportRect = childViewport.getBoundingClientRect();
+  const childCenterRect = childViewport.querySelector(':scope > .nested-center-cell')?.getBoundingClientRect();
+  const childCenterPaneRatio = childCenterRect
+    ? {
+        width: childCenterRect.width / childViewportRect.width,
+        height: childCenterRect.height / childViewportRect.height,
+      }
+    : null;
+  const transparentActivationCount = document.querySelectorAll('.portal-activation').length;
 
   const withChildChange = cloneDocumentCollection(afterCreate);
   withChildChange.documents[childCanvasId].model = {
@@ -72,12 +123,17 @@ export async function runCanwayNestedProbe() {
   };
 
   const activeBeforePointer = api.activeCanvasId();
-  const activation = document.querySelector('.portal-activation');
-  activation.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, clientX: 10, clientY: 10, pointerId: 501, pointerType: 'mouse', buttons: 1 }));
-  activation.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, clientX: 10, clientY: 10, pointerId: 501, pointerType: 'mouse', buttons: 0 }));
+  const previewPoint = centerOf(previewCanvas);
+  previewCanvas.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, clientX: previewPoint.x, clientY: previewPoint.y, pointerId: 501, pointerType: 'mouse', buttons: 1 }));
+  window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, clientX: previewPoint.x, clientY: previewPoint.y, pointerId: 501, pointerType: 'mouse', buttons: 0 }));
   await raf(4);
   const activeAfterPointer = api.activeCanvasId();
-  activation.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+  const beforeEmbeddedWheel = api.getCollection();
+  await dispatchWheel(previewCanvas);
+  const afterEmbeddedWheel = api.getCollection();
+  await dragCanvas(previewCanvas, 26, 0);
+  const afterEmbeddedDrag = api.getCollection();
+  await doubleClickCanvas(previewCanvas);
   await raf(12);
   const activeAfterDoubleClick = api.activeCanvasId();
   const contextPlaneAfterEnter = document.querySelectorAll('canvas[data-engine-mode="context-live"]').length;
@@ -86,6 +142,13 @@ export async function runCanwayNestedProbe() {
   await raf(8);
   const afterParentReturn = api.getCollection();
   const parentSelection = afterParentReturn.view.selections.root;
+  const resetForIsolation = cloneDocumentCollection(afterParentReturn);
+  resetForIsolation.documents[childCanvasId].model = {
+    schemaVersion: 2,
+    nodes: [card('child-card', 0, 0, 'Child Card')],
+  };
+  api.replaceCollection(resetForIsolation);
+  await raf(8);
 
   api.executeDocumentCommand({ type: 'enter-child-canvas', parentCanvasId: 'root', portalNodeId: 'planning-canvas', source: 'nonvisual' });
   await raf(8);
@@ -107,17 +170,22 @@ export async function runCanwayNestedProbe() {
   api.replaceCollection(contextFixture);
   await raf(12);
   const stageBounds = document.querySelector('.nested-stage').getBoundingClientRect();
-  const contextShapes = [...document.querySelectorAll('.parent-context-shape-hit')];
+  const activeCenterCell = document.querySelector('.nested-stage > .nested-center-cell');
+  const activeCenterBounds = activeCenterCell.getBoundingClientRect();
+  const activeCanvasBounds = document.querySelector('.nested-stage > .nested-center-cell > canvas[data-engine-mode="active"]').getBoundingClientRect();
+  const topContextLayer = document.querySelector('.nested-stage > .parent-context-layer');
+  const contextShapes = [...topContextLayer.querySelectorAll(':scope > .parent-context-field .parent-context-shape-hit')];
   const contextNodeIds = contextShapes.map((item) => item.getAttribute('data-node-id'));
   const contextRegions = contextShapes.map((item) => item.getAttribute('data-region'));
   const contextUniqueRegions = [...new Set(contextRegions)].sort();
-  const contextFieldText = document.querySelector('.parent-context-field')?.textContent?.trim() ?? '';
+  const contextFieldText = topContextLayer.querySelector(':scope > .parent-context-field')?.textContent?.trim() ?? '';
   const legacyFloatingCardCount = document.querySelectorAll('.halo-item').length;
-  const rightContextCanvas = document.querySelector('.parent-context-canvas-clip[data-node-id="portal-right"] canvas[data-engine-mode="preview-live"]');
-  const liveContextCanvasCount = document.querySelectorAll('.parent-context-canvas-clip canvas[data-engine-mode="preview-live"]').length;
-  const contextCanvasClips = [...document.querySelectorAll('.parent-context-canvas-clip')];
+  const rightContextCanvas = topContextLayer.querySelector(':scope > .parent-context-canvas-layer > .parent-context-canvas-clip[data-node-id="portal-right"] canvas[data-engine-mode="embedded-live"]');
+  const nestedRightPortalCanvas = topContextLayer.querySelector(':scope > .parent-context-canvas-layer > .parent-context-canvas-clip[data-node-id="portal-right"] .portal-overlay canvas[data-engine-mode="embedded-live"]');
+  const contextCanvasClips = [...topContextLayer.querySelectorAll(':scope > .parent-context-canvas-layer > .parent-context-canvas-clip')];
+  const liveContextCanvasCount = contextCanvasClips.length;
   const contextCanvasModels = contextCanvasClips.map((item) => item.getAttribute('data-context-model'));
-  const contextClipRects = contextCanvasClips.map((item) => {
+  const readContextClipRects = () => [...topContextLayer.querySelectorAll(':scope > .parent-context-canvas-layer > .parent-context-canvas-clip')].map((item) => {
     const rect = item.getBoundingClientRect();
     return {
       region: item.getAttribute('data-region'),
@@ -128,6 +196,7 @@ export async function runCanwayNestedProbe() {
       h: Math.round(rect.height),
     };
   });
+  const contextClipRects = readContextClipRects();
   const clipFor = (region) => contextClipRects.find((item) => item.region === region);
   const near = (a, b, tolerance = 2) => Math.abs(a - b) <= tolerance;
   const cardinalPaneFill = {
@@ -136,6 +205,62 @@ export async function runCanwayNestedProbe() {
     bottom: Boolean(clipFor('bottom') && near(clipFor('bottom').y + clipFor('bottom').h, stageBounds.height) && clipFor('bottom').x > 0 && clipFor('bottom').w >= stageBounds.width * 0.5 && clipFor('bottom').h >= 64),
     left: Boolean(clipFor('left') && clipFor('left').x <= 2 && clipFor('left').y > 0 && clipFor('left').w >= 64 && clipFor('left').h >= stageBounds.height * 0.45),
   };
+  const rectsOverlap = (a, b) => {
+    const xOverlap = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+    const yOverlap = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+    return xOverlap > 1 && yOverlap > 1;
+  };
+  const activeCenterRect = {
+    x: Math.round(activeCenterBounds.left - stageBounds.left),
+    y: Math.round(activeCenterBounds.top - stageBounds.top),
+    w: Math.round(activeCenterBounds.width),
+    h: Math.round(activeCenterBounds.height),
+  };
+  const activeCanvasRect = {
+    x: Math.round(activeCanvasBounds.left - stageBounds.left),
+    y: Math.round(activeCanvasBounds.top - stageBounds.top),
+    w: Math.round(activeCanvasBounds.width),
+    h: Math.round(activeCanvasBounds.height),
+  };
+  const panesExclusive = contextClipRects.every((rect, index) => contextClipRects.every((other, otherIndex) => index >= otherIndex || !rectsOverlap(rect, other)));
+  const panesOutsideActiveCenter = contextClipRects.every((rect) => !rectsOverlap(rect, activeCenterRect));
+  const activeCanvasConfinedToCenter = near(activeCanvasRect.x, activeCenterRect.x)
+    && near(activeCanvasRect.y, activeCenterRect.y)
+    && near(activeCanvasRect.w, activeCenterRect.w)
+    && near(activeCanvasRect.h, activeCenterRect.h);
+  const leftBeforeResize = clipFor('left')?.w ?? null;
+  const topBeforeResize = clipFor('top')?.h ?? null;
+  const leftResizeHandle = topContextLayer.querySelector('[data-resize-handle="left"]');
+  if (leftResizeHandle) await dragElement(leftResizeHandle, 30, 0, 902);
+  await raf(8);
+  const clipAfterLeftResize = readContextClipRects();
+  const leftAfterResize = clipAfterLeftResize.find((item) => item.region === 'left')?.w ?? null;
+  const westColumnResized = ['top-left', 'left', 'bottom-left'].every((region) => {
+    const before = contextClipRects.find((item) => item.region === region);
+    const after = clipAfterLeftResize.find((item) => item.region === region);
+    return before && after && after.w > before.w;
+  });
+  const centerColumnResized = ['top', 'bottom'].every((region) => {
+    const before = contextClipRects.find((item) => item.region === region);
+    const after = clipAfterLeftResize.find((item) => item.region === region);
+    return before && after && after.w < before.w;
+  });
+  const topLeftResizeHandle = topContextLayer.querySelector('[data-resize-handle="top-left"]');
+  if (topLeftResizeHandle) await dragElement(topLeftResizeHandle, 16, 18, 903);
+  await raf(8);
+  const clipAfterIntersectionResize = readContextClipRects();
+  const leftAfterIntersectionResize = clipAfterIntersectionResize.find((item) => item.region === 'left')?.w ?? null;
+  const topAfterIntersectionResize = clipAfterIntersectionResize.find((item) => item.region === 'top')?.h ?? null;
+  const topRowResized = ['top-left', 'top', 'top-right'].every((region) => {
+    const before = clipAfterLeftResize.find((item) => item.region === region);
+    const after = clipAfterIntersectionResize.find((item) => item.region === region);
+    return before && after && after.h > before.h;
+  });
+  const leftResizeHandleAfterIntersection = topContextLayer.querySelector('[data-resize-handle="left"]');
+  if (leftResizeHandleAfterIntersection) await dragElement(leftResizeHandleAfterIntersection, 180, 0, 904);
+  await raf(8);
+  const clipAfterLargeResize = readContextClipRects();
+  const leftAfterLargeResize = clipAfterLargeResize.find((item) => item.region === 'left')?.w ?? null;
   const contextLiveShapeCount = contextShapes.filter((item) => item.getAttribute('data-live-canvas') === 'true').length;
   const emptyContextCanvases = contextCanvasClips
     .map((item) => ({
@@ -144,13 +269,24 @@ export async function runCanwayNestedProbe() {
       total: item.querySelector('canvas')?.dataset.totalNodes ?? null,
     }))
     .filter((item) => item.rendered === '0' || item.total === '0' || item.rendered === null || item.total === null);
-  document.querySelector('.parent-context-shape-hit[data-node-id="portal-right"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-  await raf(8);
+  const beforeRightContextWheel = api.getCollection();
+  if (rightContextCanvas) await dispatchWheel(rightContextCanvas);
+  const afterRightContextWheel = api.getCollection();
+  if (nestedRightPortalCanvas) await dispatchWheel(nestedRightPortalCanvas);
+  const afterNestedRightWheel = api.getCollection();
+  if (nestedRightPortalCanvas) await doubleClickCanvas(nestedRightPortalCanvas);
+  const activeAfterNestedPortalDoubleClick = api.activeCanvasId();
+  api.replaceCollection(contextFixture);
+  await raf(12);
+  const resetRightContextLayer = document.querySelector('.nested-stage > .parent-context-layer');
+  const rightCanvasAfterNestedReset = resetRightContextLayer.querySelector(':scope > .parent-context-canvas-layer > .parent-context-canvas-clip[data-node-id="portal-right"] canvas[data-engine-mode="embedded-live"]');
+  if (rightCanvasAfterNestedReset) await doubleClickCanvas(rightCanvasAfterNestedReset);
   const activeAfterPortalContext = api.activeCanvasId();
   api.replaceCollection(contextFixture);
   await raf(8);
-  document.querySelector('.parent-context-shape-hit[data-node-id="neighbor-top"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-  await raf(8);
+  const resetTopContextLayer = document.querySelector('.nested-stage > .parent-context-layer');
+  const topCanvasAfterReset = resetTopContextLayer.querySelector(':scope > .parent-context-canvas-layer > .parent-context-canvas-clip[data-node-id="neighbor-top"] canvas[data-engine-mode="embedded-live"]');
+  if (topCanvasAfterReset) await doubleClickCanvas(topCanvasAfterReset);
   const afterNonPortalContext = api.getCollection();
 
   const pastedPortal = stripPortalChildReferenceOnPaste(portal('copy-source', 0, 0, 'planning', 'Copied Portal'));
@@ -177,6 +313,7 @@ export async function runCanwayNestedProbe() {
 
   return {
     schema,
+    shellChrome,
     appPortal: {
       type: appPortal?.type,
       childCanvasId,
@@ -184,8 +321,14 @@ export async function runCanwayNestedProbe() {
     },
     preview: {
       mounted: Boolean(previewCanvas),
+      transparentActivationCount,
       update: previewUpdate,
+      childCenterPaneRatio,
       pointerDidNotEnter: activeBeforePointer === activeAfterPointer,
+      wheelChangedChildCamera: afterEmbeddedWheel.view.cameras[childCanvasId]?.scale !== beforeEmbeddedWheel.view.cameras[childCanvasId]?.scale,
+      wheelKeptParentCamera: afterEmbeddedWheel.view.cameras.root?.scale === beforeEmbeddedWheel.view.cameras.root?.scale,
+      dragMovedChildNode: afterEmbeddedDrag.documents[childCanvasId].model.nodes.find((node) => node.id === 'child-card')?.x !== 0,
+      dragKeptParentPortalStable: afterEmbeddedDrag.documents.root.model.nodes.find((node) => node.id === 'planning-canvas')?.x === appPortal?.x,
       doubleClickEntered: activeAfterDoubleClick === childCanvasId,
       contextPlaneAfterEnter,
     },
@@ -209,11 +352,27 @@ export async function runCanwayNestedProbe() {
       liveShapeCount: contextLiveShapeCount,
       canvasModels: contextCanvasModels,
       clipRects: contextClipRects,
+      activeCenterRect,
+      activeCanvasRect,
       cardinalPaneFill,
+      panesExclusive,
+      panesOutsideActiveCenter,
+      activeCanvasConfinedToCenter,
+      dividerResizeChangedLeft: leftBeforeResize !== null && leftAfterResize !== null && leftAfterResize > leftBeforeResize,
+      dividerResizeChangedWestColumn: westColumnResized,
+      dividerResizeChangedCenterColumn: centerColumnResized,
+      intersectionResizeChangedTop: topBeforeResize !== null && topAfterIntersectionResize !== null && topAfterIntersectionResize > topBeforeResize,
+      intersectionResizeChangedLeft: leftAfterResize !== null && leftAfterIntersectionResize !== null && leftAfterIntersectionResize > leftAfterResize,
+      intersectionResizeChangedTopRow: topRowResized,
+      dividerResizeMovesBeyondLegacyCap: leftAfterLargeResize !== null && leftAfterLargeResize > 260,
       emptyCanvases: emptyContextCanvases,
       rightCanvasRendered: rightContextCanvas?.dataset.renderedNodes ?? null,
       rightCanvasTotal: rightContextCanvas?.dataset.totalNodes ?? null,
-      portalActivationCanvas: activeAfterPortalContext,
+      rightPaneWheelChangedCamera: afterRightContextWheel.view.cameras['right-child']?.scale !== beforeRightContextWheel.view.cameras['right-child']?.scale,
+      nestedPortalCanvasMounted: Boolean(nestedRightPortalCanvas),
+      nestedPortalWheelChangedCamera: afterNestedRightWheel.view.cameras['right-grandchild']?.scale !== afterRightContextWheel.view.cameras['right-grandchild']?.scale,
+      nestedPortalDoubleClickCanvas: activeAfterNestedPortalDoubleClick,
+      borderPaneDoubleClickCanvas: activeAfterPortalContext,
       nonPortalActivationCanvas: afterNonPortalContext.activeCanvasId,
       nonPortalSelection: afterNonPortalContext.view.selections.root?.primarySelectedNodeId,
       buckets: {
@@ -270,7 +429,16 @@ function makeContextFixture(createInitialDocumentCollection, planDocumentCommand
   collection = renameNewestCanvas(collection, 'active-child', 'Active Child');
   collection = planDocumentCommand(collection, { type: 'create-child-canvas', parentCanvasId: 'root', nodeId: 'portal-right', source: 'nonvisual' }).collection;
   collection = renameNewestCanvas(collection, 'right-child', 'Right Child');
-  collection.documents['right-child'].model = { schemaVersion: 2, nodes: [card('right-child-card', 0, 0, 'Right Child Card')] };
+  collection.documents['right-child'].model = {
+    schemaVersion: 2,
+    nodes: [
+      card('right-child-card', 0, 0, 'Right Child Card'),
+      portal('right-nested-portal', 0, 0, null, 'Right Nested Portal'),
+    ],
+  };
+  collection = planDocumentCommand(collection, { type: 'create-child-canvas', parentCanvasId: 'right-child', nodeId: 'right-nested-portal', source: 'nonvisual' }).collection;
+  collection = renameNewestCanvas(collection, 'right-grandchild', 'Right Grandchild');
+  collection.documents['right-grandchild'].model = { schemaVersion: 2, nodes: [card('right-grandchild-card', 0, 0, 'Right Grandchild Card')] };
   collection = planDocumentCommand(collection, { type: 'enter-child-canvas', parentCanvasId: 'root', portalNodeId: 'portal-center', source: 'nonvisual' }).collection;
   return collection;
 }

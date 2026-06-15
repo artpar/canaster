@@ -1,15 +1,41 @@
 import { ListTree, Maximize2, Minus, Moon, Plus, RotateCcw, Sun, X } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createChildCanvasForNode, createInitialDocumentCollection, updateCanvasModel } from './engine/documentModel';
-import { NestedCanvasWorkspace, type NestedCanvasWorkspaceHandle } from './engine/nested/NestedCanvasWorkspace';
+import {
+  NestedCanvasWorkspace,
+  NodeAccessPanel,
+  WorkspaceStatusBar,
+  initialViewportStatus,
+  type NestedCanvasWorkspaceChromeState,
+  type NestedCanvasWorkspaceHandle,
+} from './engine/nested/NestedCanvasWorkspace';
 import { sampleModel } from './engine/sampleModel';
-import type { CanvasModel, ThemeName } from './engine/types';
+import type { CanvasCommand, CanvasModel, ThemeName } from './engine/types';
+import type { DocumentCommand } from './engine/documentTypes';
 
 export function App() {
   const workspaceRef = useRef<NestedCanvasWorkspaceHandle | null>(null);
   const [theme, setTheme] = useState<ThemeName>('dark');
   const [nodesOpen, setNodesOpen] = useState(false);
   const initialCollection = useMemo(() => createSampleDocumentCollection(), []);
+  const [chromeState, setChromeState] = useState<NestedCanvasWorkspaceChromeState>(() => ({
+    collection: initialCollection,
+    status: initialViewportStatus,
+    lastModelChange: null,
+  }));
+
+  const handleChromeStateChange = useCallback((next: NestedCanvasWorkspaceChromeState) => {
+    setChromeState(next);
+  }, []);
+
+  const executeActiveCanvasCommand = useCallback(
+    (command: CanvasCommand) => workspaceRef.current?.executeActiveCanvasCommand(command) ?? false,
+    [],
+  );
+
+  const executeDocumentCommand = useCallback((command: DocumentCommand) => {
+    workspaceRef.current?.executeDocumentCommand(command);
+  }, []);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -51,7 +77,25 @@ export function App() {
           </div>
         </div>
 
-        <NestedCanvasWorkspace ref={workspaceRef} initialCollection={initialCollection} theme={theme} nodesOpen={nodesOpen} />
+        <NestedCanvasWorkspace
+          ref={workspaceRef}
+          initialCollection={initialCollection}
+          theme={theme}
+          onChromeStateChange={handleChromeStateChange}
+        />
+        {nodesOpen ? (
+          <NodeAccessPanel
+            collection={chromeState.collection}
+            status={chromeState.status}
+            executeActiveCanvasCommand={executeActiveCanvasCommand}
+            executeDocumentCommand={executeDocumentCommand}
+          />
+        ) : null}
+        <WorkspaceStatusBar
+          collection={chromeState.collection}
+          status={chromeState.status}
+          lastModelChange={chromeState.lastModelChange}
+        />
       </section>
     </main>
   );

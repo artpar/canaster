@@ -129,11 +129,20 @@ function summarizeBrowserEvents(events) {
 function assertProbe(result, browserEvents) {
   assert(result.schema.collection === 1, 'document collection schemaVersion mismatch');
   assert(result.schema.modelVersions.every((version) => version === 2), 'canvas model schemaVersion mismatch');
+  assert(!result.shellChrome.topbarInsideNestedWorkspace, 'toolbar is rendered inside the recursive nested workspace');
+  assert(!result.shellChrome.statusbarInsideNestedWorkspace && result.shellChrome.statusbarOutsideNestedWorkspace, 'statusbar is not rendered outside the recursive nested workspace');
   assert(result.appPortal.type === 'canvas', 'portal node type mismatch');
   assert(result.appPortal.dataKeys.includes('childCanvasId') && result.appPortal.dataKeys.includes('nodeCount'), 'portal data not normalized');
-  assert(result.preview.mounted, 'live child preview canvas missing');
+  assert(result.preview.mounted, 'embedded child canvas missing');
+  assert(result.preview.transparentActivationCount === 0, 'transparent portal activation overlay still blocks pointer interaction');
   assert(result.preview.update.total === '1', 'preview canvas did not reflect child model update');
-  assert(result.preview.pointerDidNotEnter, 'single pointer preview activation entered child canvas');
+  assert(
+    Math.abs(result.preview.childCenterPaneRatio?.width - 0.8) <= 0.04 && Math.abs(result.preview.childCenterPaneRatio?.height - 0.8) <= 0.04,
+    `embedded child center pane is not 80% of its panel: ${JSON.stringify(result.preview.childCenterPaneRatio)}`,
+  );
+  assert(result.preview.pointerDidNotEnter, 'single pointer interaction entered child canvas');
+  assert(result.preview.wheelChangedChildCamera && result.preview.wheelKeptParentCamera, 'embedded portal wheel did not target only the child canvas camera');
+  assert(result.preview.dragMovedChildNode && result.preview.dragKeptParentPortalStable, 'embedded portal drag did not edit child canvas in isolation');
   assert(result.preview.doubleClickEntered, 'double click did not enter child canvas');
   assert(result.preview.contextPlaneAfterEnter >= 1, 'context parent plane missing after enter');
   assert(result.parentReturn.activeCanvasId === 'root', 'parent navigation did not return to root');
@@ -146,6 +155,13 @@ function assertProbe(result, browserEvents) {
   assert(result.parentContext.shapeCount === 8, `parent context field must render one nearest shape per pane: ${result.parentContext.shapeCount}`);
   assert(!result.parentContext.nodeIds.includes('neighbor-top-far') && !result.parentContext.nodeIds.includes('portal-right-far'), `parent context did not choose nearest candidates per pane: ${result.parentContext.nodeIds.join(',')}`);
   assert(Object.values(result.parentContext.cardinalPaneFill).every(Boolean), `cardinal parent context canvases do not fill their pane viewports: ${JSON.stringify({ fill: result.parentContext.cardinalPaneFill, rects: result.parentContext.clipRects })}`);
+  assert(result.parentContext.panesExclusive, `parent context panes overlap: ${JSON.stringify(result.parentContext.clipRects)}`);
+  assert(result.parentContext.panesOutsideActiveCenter, `parent context panes overlap the active center cell: ${JSON.stringify({ center: result.parentContext.activeCenterRect, rects: result.parentContext.clipRects })}`);
+  assert(result.parentContext.activeCanvasConfinedToCenter, `active canvas is not confined to center cell: ${JSON.stringify({ center: result.parentContext.activeCenterRect, active: result.parentContext.activeCanvasRect })}`);
+  assert(result.parentContext.dividerResizeChangedLeft, 'vertical divider drag did not resize west/east pane partition');
+  assert(result.parentContext.dividerResizeChangedWestColumn && result.parentContext.dividerResizeChangedCenterColumn, 'vertical divider drag did not resize the whole affected grid columns');
+  assert(result.parentContext.intersectionResizeChangedTop && result.parentContext.intersectionResizeChangedLeft && result.parentContext.intersectionResizeChangedTopRow, 'intersection handle drag did not resize both affected grid axes');
+  assert(result.parentContext.dividerResizeMovesBeyondLegacyCap, 'vertical divider drag is still capped near the default border band');
   assert(result.parentContext.legacyFloatingCardCount === 0, 'old floating sibling card DOM is still rendered');
   assert(result.parentContext.textContent === '', 'parent context field rendered visible text labels');
   assert(result.parentContext.liveCanvasCount === result.parentContext.shapeCount, `parent context field did not mount real canvases for every projected shape: ${result.parentContext.liveCanvasCount}/${result.parentContext.shapeCount}`);
@@ -153,8 +169,12 @@ function assertProbe(result, browserEvents) {
   assert(result.parentContext.canvasModels.includes('child'), 'parent context did not render sibling child canvas content');
   assert(result.parentContext.canvasModels.includes('snippet'), 'parent context did not render parent-node snippet canvases');
   assert(result.parentContext.emptyCanvases.length === 0, `parent context rendered empty canvas boxes: ${JSON.stringify(result.parentContext.emptyCanvases)}`);
-  assert(result.parentContext.rightCanvasRendered === '1' && result.parentContext.rightCanvasTotal === '1', 'projected sibling canvas did not render real child canvas content');
-  assert(result.parentContext.portalActivationCanvas === 'right-child', 'projected portal activation did not move sideways into sibling child canvas');
+  assert(Number(result.parentContext.rightCanvasRendered) >= 1 && Number(result.parentContext.rightCanvasTotal) >= 1, 'projected sibling canvas did not render real child canvas content');
+  assert(result.parentContext.rightPaneWheelChangedCamera, 'border pane wheel did not target pane canvas camera');
+  assert(result.parentContext.nestedPortalCanvasMounted, 'border pane did not render recursive nested portal canvas');
+  assert(result.parentContext.nestedPortalWheelChangedCamera, 'recursive nested portal canvas did not respond to wheel interaction');
+  assert(result.parentContext.nestedPortalDoubleClickCanvas === 'right-grandchild', 'recursive nested portal double-click did not enter nested child canvas');
+  assert(result.parentContext.borderPaneDoubleClickCanvas === 'right-child', 'projected portal double-click did not move sideways into sibling child canvas');
   assert(result.parentContext.nonPortalActivationCanvas === 'root', 'projected non-portal activation did not return to parent');
   assert(result.parentContext.nonPortalSelection === 'neighbor-top', 'projected non-portal activation did not select clicked node');
   assert(JSON.stringify(Object.values(result.parentContext.buckets)) === JSON.stringify(['right', 'bottom-right', 'bottom', 'bottom-left', 'left', 'top-left', 'top', 'top-right']), 'parent context angle buckets mismatch');

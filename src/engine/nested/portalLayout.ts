@@ -22,18 +22,6 @@ export function portalOverlayStyle(layout: PortalLayout): CSSProperties {
     height: layout.screenRect.h,
     overflow: 'hidden',
     borderRadius: 6,
-    pointerEvents: 'none',
-  };
-}
-
-export function portalActivationOverlayStyle(layout: PortalLayout): CSSProperties {
-  return {
-    position: 'absolute',
-    left: layout.screenRect.x,
-    top: layout.screenRect.y,
-    width: layout.screenRect.w,
-    height: layout.screenRect.h,
-    borderRadius: 6,
     pointerEvents: 'auto',
   };
 }

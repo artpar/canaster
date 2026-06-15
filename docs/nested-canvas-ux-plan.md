@@ -20,6 +20,9 @@ These decisions are final for the first real implementation:
 - Use a parent-context border field around all four sides and four corners of the active plane.
 - Render parent neighbors in a continuous fisheye-compressed border field, not as floating cards, shelves, or labeled buttons.
 - Each parent-context border pane must show exactly one nearest neighbor for that direction, and that neighbor's real clipped `CanvasEngine` must fill the pane viewport. Portal neighbors render their child canvas when available, and non-portal neighbors render a one-node parent snippet canvas. Empty border boxes and small thumbnail projections are not acceptable.
+- Parent-context panes must be exclusive cells in a 3x3, nine-cell frame. North, south, east, west, and all four corners share grid lines but never overlap.
+- The active nested canvas is the center cell of that same 3x3 frame. It is not a parent-context pane, and the parent-context border field must not be implemented as an overlay above a full-viewport active canvas.
+- The four border dividers and four corner/intersection points are draggable. Dragging a divider resizes one grid axis; dragging an intersection resizes both adjoining grid axes.
 - Use shallow copy for portal nodes in the first implementation: pasted portal nodes must have `data.childCanvasId: null`.
 - Require delete confirmation before deleting a portal node whose `data.childCanvasId` points to an existing child document.
 - Forbid canvas cycles.
@@ -109,7 +112,7 @@ export type NestedCanvasViewState = {
 
 export type EngineSlotId = string;
 
-export type EngineMode = 'active' | 'preview-live' | 'context-live' | 'dormant';
+export type EngineMode = 'active' | 'embedded-live' | 'preview-live' | 'context-live' | 'dormant';
 
 export type PortalPreviewFocus = {
   parentCanvasId: CanvasDocumentId;
@@ -353,7 +356,7 @@ Update `src/engine/CanvasEngine.ts`.
 Add public types to `src/engine/types.ts`:
 
 ```ts
-export type EngineInteractionMode = 'active' | 'preview-live' | 'context-live' | 'dormant';
+export type EngineInteractionMode = 'active' | 'embedded-live' | 'preview-live' | 'context-live' | 'dormant';
 
 export type ScreenRect = {
   x: number;
@@ -379,6 +382,7 @@ export type EngineOptions = {
   canvasId?: string;
   interactionMode?: EngineInteractionMode;
   beforeCommand?: (command: CanvasCommand) => CanvasCommand | false;
+  onCanvasDoubleClick?: (canvasId: string, event: MouseEvent) => boolean;
   onStatus?: (status: ViewportStatus) => void;
   onModelChange?: (model: CanvasModel, change: CanvasModelChange) => void;
   onPortalLayout?: (layouts: PortalLayout[]) => void;
@@ -389,8 +393,9 @@ Required behavior:
 
 - Default `interactionMode` is `'active'`.
 - In `'active'`, attach pointer, keyboard, wheel, double-click, focus, blur, and window listeners as today.
+- In `'embedded-live'`, attach the same input listeners as active, but keep toolbar commands targeting the active plane.
+- In `'embedded-live'`, single click, drag, wheel, and pinch interact with the embedded canvas directly; double-click is routed through `onCanvasDoubleClick` and enters that canvas when the host returns `true`.
 - In `'preview-live'`, attach no keyboard listeners and no window pointer listeners.
-- In `'preview-live'`, the host captures pointer events on an overlay element and sends document commands.
 - In `'context-live'`, attach no input listeners.
 - In `'dormant'`, do not run a `CanvasEngine`; render cached bitmap or geometry-only placeholder.
 - `setInteractionMode(mode)` can switch listener sets without reconstructing the engine.
@@ -400,7 +405,7 @@ Required behavior:
 - Portal layout uses `canvasPortalViewportRect(this.nodeContentRect(node))`.
 - `screenRect` is rounded to CSS pixels and relative to the engine canvas bounding client rect.
 - `worldToScreenRect(rect)` is a new public method used by stack and parent-context overlays.
-- `focusCanvas()` is a public method that focuses the engine canvas only in active mode.
+- `focusCanvas()` is a public method that focuses input-capable engine canvases.
 
 Command guard:
 
@@ -417,7 +422,7 @@ executeCommand(command: CanvasCommand) {
 
 Callout: inactive engines render; active engine edits.
 
-Never allow a preview or context engine to process movement, resize, delete, copy, paste, wheel pan, or keyboard commands directly.
+Never allow a preview or context engine to process movement, resize, delete, copy, paste, wheel pan, or keyboard commands directly. `embedded-live` engines are input-capable and may process normal canvas commands from their own pointer, wheel, touch, and focused keyboard events.
 
 ## Engine Slot Management
 
@@ -428,8 +433,8 @@ Constants:
 ```ts
 export const MAX_LIVE_PORTAL_PREVIEWS = 8;
 export const MAX_CONTEXT_ENGINES = 2;
-export const MIN_PORTAL_PREVIEW_W = 96;
-export const MIN_PORTAL_PREVIEW_H = 72;
+export const MIN_PORTAL_PREVIEW_W = 24;
+export const MIN_PORTAL_PREVIEW_H = 24;
 ```
 
 Types:
@@ -458,7 +463,7 @@ export function disposeRemovedSlots(previous: Map<EngineSlotId, EngineSlot>, nex
 Live portal selection:
 
 - Consider only visible portal layouts with `childCanvasId` pointing to an existing document.
-- Reject portal layouts smaller than `96x72`.
+- Reject portal layouts smaller than `24x24`; side border panes are intentionally narrow and still need recursive portal previews.
 - Sort by visible area descending.
 - Keep the first eight.
 - All other portal layouts use the canvas node's coarse fallback rendering.
@@ -466,7 +471,7 @@ Live portal selection:
 Slot modes:
 
 - Active canvas uses one full-stage slot in mode `active`.
-- Visible child portal previews use slots in mode `preview-live`.
+- Visible child portal previews use recursive slots in mode `embedded-live`.
 - The parent and grandparent stack planes use up to two context slots in mode `context-live`.
 - Older ancestors use dormant geometry slabs, not engines.
 
@@ -475,7 +480,7 @@ Callout: bounded live engines.
 The first implementation must never mount more than eleven `CanvasEngine` instances:
 
 - one active;
-- eight portal previews;
+- eight embedded portal or border-pane viewports;
 - two context ancestors.
 
 ## Portal Overlay Layout
@@ -487,7 +492,6 @@ Required exports:
 ```ts
 export function normalizePortalLayout(layout: PortalLayout, stageRect: DOMRect): PortalLayout;
 export function portalOverlayStyle(layout: PortalLayout): React.CSSProperties;
-export function portalActivationOverlayStyle(layout: PortalLayout): React.CSSProperties;
 export function visiblePortalLayoutsForCanvas(layouts: PortalLayout[]): PortalLayout[];
 ```
 
@@ -497,17 +501,15 @@ Overlay style:
 - `left/top/width/height` from `screenRect`;
 - `overflow: hidden`;
 - `borderRadius: 6`;
-- `pointerEvents: none` for the child canvas element;
-- separate activation overlay has `pointerEvents: auto`.
+- `pointerEvents: auto` so the child canvas receives pointer, wheel, touch, and double-click events directly.
 
-Preview canvas:
+Embedded canvas:
 
-- The preview `CanvasEngine` renders into a child `<canvas>`.
+- The embedded `CanvasEngine` renders into a child `<canvas>`.
 - The child canvas fills the portal overlay.
 - The child canvas is visually clipped by the overlay.
-- The host, not the child engine, handles pointer down on the activation overlay.
-
-Activation overlay:
+- The child engine handles pointer, wheel, touch, and focused keyboard interaction.
+- The host handles double-click through `onCanvasDoubleClick` and makes that canvas active.
 
 - Single click focuses preview.
 - Double click enters child canvas.
@@ -569,6 +571,11 @@ Constants:
 
 ```ts
 export const FIELD_BORDER_BAND = 112;
+export const FIELD_MIN_BORDER_BAND = 24;
+export const FIELD_MIN_CENTER_BAND = 72;
+export const EMBEDDED_FIELD_CENTER_RATIO = 0.8;
+export const EMBEDDED_FIELD_MIN_BORDER_BAND = 8;
+export const EMBEDDED_FIELD_MIN_CENTER_BAND = 32;
 ```
 
 Required exports:
@@ -611,6 +618,21 @@ Selection:
   - `bottom`: `x = band`, `y = stageHeight - band`, `w = stageWidth - 2 * band`, `h = band`;
   - `left`: `x = 0`, `y = band`, `w = band`, `h = stageHeight - 2 * band`;
   - corners: use the corresponding `band x band` corner pane.
+- Replace fixed `band` math with a normalized pane layout `{ left, right, top, bottom }`.
+- Render pane canvases in a single CSS grid with columns `left, center, right` and rows `top, center, bottom`.
+- Render the active `CanvasEngine`, stack planes, and active portal overlays inside the center grid cell only.
+- Render the eight parent-context canvases in the surrounding grid cells only. The parent-context layer may position hit maps and resize handles over the whole frame, but it must remain pointer-transparent over the center cell.
+- For recursive child canvases rendered inside portal or border panes, default the child 3x3 grid to an 80% center pane in both dimensions: left/right panes each start at 10% of the child panel width, and top/bottom panes each start at 10% of the child panel height.
+- Recursive child canvases use compact pane constraints: `EMBEDDED_FIELD_MIN_BORDER_BAND = 8` and `EMBEDDED_FIELD_MIN_CENTER_BAND = 32`. Top-level workspace panes keep the normal `FIELD_MIN_BORDER_BAND` and `FIELD_MIN_CENTER_BAND`.
+- `top` and `bottom` span only the center width between left and right panes.
+- `left` and `right` span only the center height between top and bottom panes.
+- Corner panes occupy only their own `{left/right} x {top/bottom}` cells.
+- Drag handles:
+  - left/right vertical dividers update `left` or `right`;
+  - top/bottom horizontal dividers update `top` or `bottom`;
+  - corner/intersection handles update both adjacent values.
+- Clamp divider movement only to preserve valid grid geometry: each outer pane must remain at least `FIELD_MIN_BORDER_BAND`, and the center cell must remain at least `FIELD_MIN_CENTER_BAND`.
+- Do not cap a pane at `FIELD_BORDER_BAND * 2` or any other cosmetic maximum. `FIELD_BORDER_BAND` is the initial/default size only; users must be able to drag dividers far beyond the default band while the remaining cells stay valid.
 - Preserve the sibling's directional relationship to the source portal.
 - Apply fisheye selection by distance: nearer siblings win their pane. Do not shrink the winning sibling inside the pane.
 - Render every selected pane sibling through a real clipped `CanvasEngine` that fills the pane viewport.
@@ -647,6 +669,13 @@ export type NestedCanvasWorkspaceProps = {
   initialCollection: CanvasDocumentCollection;
   theme: ThemeName;
   onCollectionChange?: (collection: CanvasDocumentCollection, changes: DocumentModelChange[]) => void;
+  onChromeStateChange?: (state: NestedCanvasWorkspaceChromeState) => void;
+};
+
+export type NestedCanvasWorkspaceChromeState = {
+  collection: CanvasDocumentCollection;
+  status: ViewportStatus;
+  lastModelChange: DocumentModelChange | null;
 };
 ```
 
@@ -661,35 +690,49 @@ Responsibilities:
 - maintain engine slots;
 - maintain portal layouts from active and context engines;
 - render parent-context border field;
-- render compact breadcrumb fallback;
-- render node access panel actions;
+- render compact breadcrumb fallback inside the active center cell;
 - render delete confirmation modal.
+
+App shell responsibilities:
+
+- render toolbar controls outside `NestedCanvasWorkspace`;
+- render status bar outside `NestedCanvasWorkspace`;
+- render node access panel outside `NestedCanvasWorkspace`;
+- receive active collection/status/last-change state from `NestedCanvasWorkspace`;
+- route toolbar and node-panel commands back through `NestedCanvasWorkspaceHandle`.
 
 DOM structure:
 
 ```tsx
-<section className="nested-workspace">
-  <div className="nested-stage">
-    <div className="stack-planes" />
-    <canvas className="canvas-surface active-plane" />
-    <div className="portal-overlays" />
-    <div className="parent-context-layer">
-      <div className="parent-context-canvas-layer" />
-      <svg className="parent-context-field" />
+<section className="workspace">
+  <div className="topbar" />
+  <section className="nested-workspace">
+    <div className="nested-stage">
+      <div className="nested-center-cell">
+        <div className="stack-planes" />
+        <canvas className="canvas-surface active-plane" />
+        <div className="portal-overlays" />
+        <div className="stack-breadcrumb" />
+      </div>
+      <div className="parent-context-layer">
+        <div className="parent-context-canvas-layer" />
+        <svg className="parent-context-field" />
+      </div>
     </div>
-    <div className="stack-breadcrumb" />
-  </div>
+    <DeletePortalConfirmation />
+  </section>
   <aside className="node-access-panel" />
   <div className="statusbar" />
-  <DeletePortalConfirmation />
 </section>
 ```
 
 CSS rules:
 
-- `.nested-stage` is `position: relative; overflow: hidden;`.
+- `.nested-stage` is the real 3x3 grid and fills `.nested-workspace`.
+- `.nested-center-cell` is the active canvas cell and owns stack planes, active canvas, active portal overlays, and breadcrumb.
+- `.topbar`, `.statusbar`, and `.node-access-panel` are shell chrome and must not be descendants of `.nested-workspace`.
 - All canvas planes are `position: absolute`.
-- Active plane fills the stage.
+- Active plane fills `.nested-center-cell`, not the outer stage.
 - Portal overlays use absolute rects from `PortalLayout`.
 - Parent-context visuals are edge-clipped real `CanvasEngine` canvases for the selected nearest sibling in each pane; SVG is only the transparent hit/affordance layer over rendered canvas content.
 - Do not render parent-context siblings as cards, text labels, shelves, or node-access-panel items.
@@ -776,8 +819,8 @@ Constants:
 MAX_LIVE_PORTAL_PREVIEWS = 8;
 MAX_CONTEXT_ENGINES = 2;
 MAX_TOTAL_ENGINES = 11;
-MIN_PORTAL_PREVIEW_W = 96;
-MIN_PORTAL_PREVIEW_H = 72;
+MIN_PORTAL_PREVIEW_W = 24;
+MIN_PORTAL_PREVIEW_H = 24;
 PORTAL_PREVIEW_MAX_FPS = 20;
 CONTEXT_ENGINE_MAX_FPS = 10;
 ACTIVE_ENGINE_FRAME_BUDGET_MS = 16;
@@ -787,7 +830,7 @@ PREVIEW_TOTAL_FRAME_BUDGET_MS = 10;
 Rules:
 
 - Active engine renders normally.
-- Preview-live engines mark dirty at most every `50ms`.
+- Embedded-live and preview-live engines mark dirty at most every `50ms`.
 - Context-live engines mark dirty at most every `100ms`.
 - If active engine frame budget is exceeded for three consecutive measured frames, demote portal previews by visible area until budget recovers.
 - Dormant fallback is coarse geometry from `describeNode` and node bounds, not a stale fake canvas.
@@ -841,7 +884,7 @@ Follow this order exactly:
 4. Update `canvasNodeDefinition` actions, hit testing, aperture helper, and portal preview render state.
 5. Add `NestedCanvasWorkspace` with one active engine and no live portal overlays.
 6. Replace `App.tsx` direct engine ownership with `NestedCanvasWorkspace`.
-7. Add live portal overlay slots with preview-live engines.
+7. Add live portal overlay slots with embedded-live recursive viewports.
 8. Add stack context planes.
 9. Add parent-context border field.
 10. Add delete confirmation modal and paste stripping integration.
@@ -923,7 +966,7 @@ Do not implement these in the first nested canvas release:
 - transclusion;
 - AI-only hidden canvases;
 - unlimited recursive engine mounting;
-- direct editing inside preview engines before promotion to active;
+- activation overlays that block direct embedded canvas interaction;
 - node definitions that instantiate engines.
 
 ## Completion Criteria
@@ -931,7 +974,7 @@ Do not implement these in the first nested canvas release:
 The nested canvas implementation is complete only when:
 
 - `NestedCanvasWorkspace` owns document collection state and engine slots;
-- `CanvasEngine` supports active, preview-live, context-live, and dormant modes;
+- `CanvasEngine` supports active, embedded-live, preview-live, context-live, and dormant modes;
 - live child engines render inside visible portal overlays;
 - only one engine owns edit focus at a time;
 - portal action routing uses document commands;

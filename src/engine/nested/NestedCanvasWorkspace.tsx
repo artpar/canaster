@@ -8,12 +8,16 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type Dispatch,
+  type PointerEvent as ReactPointerEvent,
+  type SetStateAction,
 } from 'react';
 import { CanvasEngine } from '../CanvasEngine';
 import {
   cameraForCanvas,
   cloneDocumentCollection,
   selectNodeInCanvas,
+  selectionForCanvas,
   setCameraForCanvas,
   setSelectionForCanvas,
   updateCanvasModel,
@@ -34,16 +38,33 @@ import type {
   ParentContextFieldShape,
 } from '../documentTypes';
 import { ACTIVE_ENGINE_FRAME_BUDGET_MS, livePortalSlotsFor, MAX_LIVE_PORTAL_PREVIEWS, MAX_TOTAL_ENGINES } from './engineSlots';
-import { buildParentContextField, parentContextRegionLabel } from './parentContextField';
-import { portalActivationOverlayStyle, portalOverlayStyle } from './portalLayout';
+import {
+  DEFAULT_PARENT_CONTEXT_PANE_LAYOUT,
+  EMBEDDED_FIELD_CENTER_RATIO,
+  EMBEDDED_FIELD_MIN_BORDER_BAND,
+  EMBEDDED_FIELD_MIN_CENTER_BAND,
+  buildParentContextField,
+  normalizeParentContextPaneLayout,
+  paneLayoutForCenterRatio,
+  parentContextRegionLabel,
+  type ParentContextPaneLayout,
+  type ParentContextPaneLayoutConstraints,
+} from './parentContextField';
+import { portalOverlayStyle } from './portalLayout';
 import { activePlaneStyle, stackPlaneStyle, visibleStackFrames } from './stackLayout';
 
 export type NestedCanvasWorkspaceProps = {
   initialCollection: CanvasDocumentCollection;
   theme: ThemeName;
-  nodesOpen?: boolean;
   animationEnabled?: boolean;
   onCollectionChange?: (collection: CanvasDocumentCollection, changes: DocumentModelChange[]) => void;
+  onChromeStateChange?: (state: NestedCanvasWorkspaceChromeState) => void;
+};
+
+export type NestedCanvasWorkspaceChromeState = {
+  collection: CanvasDocumentCollection;
+  status: ViewportStatus;
+  lastModelChange: DocumentModelChange | null;
 };
 
 export type NestedCanvasWorkspaceHandle = {
@@ -55,7 +76,7 @@ export type NestedCanvasWorkspaceHandle = {
   collection(): CanvasDocumentCollection;
 };
 
-const initialStatus: ViewportStatus = {
+export const initialViewportStatus: ViewportStatus = {
   zoom: 1,
   selectedNodeId: null,
   selectedNodeIds: [],
@@ -66,8 +87,20 @@ const initialStatus: ViewportStatus = {
   interaction: 'Idle',
 };
 
+const NO_PARENT_CONTEXT_PANE_LAYOUT: ParentContextPaneLayout = {
+  left: 0,
+  right: 0,
+  top: 0,
+  bottom: 0,
+};
+
+const EMBEDDED_PARENT_CONTEXT_CONSTRAINTS = {
+  minPaneBand: EMBEDDED_FIELD_MIN_BORDER_BAND,
+  minCenterBand: EMBEDDED_FIELD_MIN_CENTER_BAND,
+};
+
 export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, NestedCanvasWorkspaceProps>(function NestedCanvasWorkspace(
-  { initialCollection, theme, nodesOpen = false, animationEnabled = true, onCollectionChange },
+  { initialCollection, theme, animationEnabled = true, onCollectionChange, onChromeStateChange },
   ref,
 ) {
   const [collection, setCollection] = useState(() => {
@@ -77,18 +110,25 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
   });
   const collectionRef = useRef(collection);
   const activeEngineRef = useRef<CanvasEngine | null>(null);
-  const [status, setStatus] = useState<ViewportStatus>(initialStatus);
+  const [status, setStatus] = useState<ViewportStatus>(initialViewportStatus);
   const [lastModelChange, setLastModelChange] = useState<DocumentModelChange | null>(null);
   const [portalLayouts, setPortalLayouts] = useState<PortalLayout[]>([]);
   const [previewCapacity, setPreviewCapacity] = useState(MAX_LIVE_PORTAL_PREVIEWS);
   const activeFrameOverBudgetCount = useRef(0);
   const [stageRect, setStageRect] = useState<DOMRect>(() => new DOMRect(0, 0, 1, 1));
+  const [activeStageRect, setActiveStageRect] = useState<DOMRect>(() => new DOMRect(0, 0, 1, 1));
+  const [paneLayout, setPaneLayout] = useState<ParentContextPaneLayout>(DEFAULT_PARENT_CONTEXT_PANE_LAYOUT);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const activeStageRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     collectionRef.current = collection;
     exposeDebugApi();
   }, [collection]);
+
+  useEffect(() => {
+    onChromeStateChange?.({ collection, status, lastModelChange });
+  }, [collection, lastModelChange, onChromeStateChange, status]);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -100,8 +140,22 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    const activeStage = activeStageRef.current;
+    if (!activeStage) return;
+    const update = () => setActiveStageRect(activeStage.getBoundingClientRect());
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(activeStage);
+    return () => observer.disconnect();
+  }, []);
+
   const activeDocument = collection.documents[collection.activeCanvasId];
-  const parentContext = useMemo(() => buildParentContextField(collection, stageRect), [collection, stageRect]);
+  const parentContext = useMemo(() => buildParentContextField(collection, stageRect, collection.activeCanvasId, paneLayout), [collection, stageRect, paneLayout]);
+  const hasParentContext = parentContext.shapes.length > 0;
+  const normalizedPaneLayout = hasParentContext
+    ? normalizeParentContextPaneLayout(stageRect, paneLayout)
+    : NO_PARENT_CONTEXT_PANE_LAYOUT;
   const visibleContextFrames = useMemo(() => visibleStackFrames(collection), [collection]);
   const parentContextCanvasCapacity = Math.min(parentContext.shapes.length, Math.max(0, MAX_TOTAL_ENGINES - 1 - visibleContextFrames.length));
   const livePreviewCapacity = Math.max(0, MAX_TOTAL_ENGINES - 1 - visibleContextFrames.length - parentContextCanvasCapacity);
@@ -168,12 +222,46 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     setCollection(withSelection);
   }, []);
 
+  const handleEmbeddedStatus = useCallback((canvasId: CanvasDocumentId, _status: ViewportStatus, engine: CanvasEngine) => {
+    const base = collectionRef.current;
+    if (!base.documents[canvasId]) return;
+    const withCamera = setCameraForCanvas(base, canvasId, engine.getCamera());
+    const withSelection = setSelectionForCanvas(withCamera, canvasId, engine.getSelectionState());
+    collectionRef.current = withSelection;
+    setCollection(withSelection);
+  }, []);
+
   const handleActiveModelChange = useCallback((canvasId: CanvasDocumentId, model: CanvasModel) => {
     const base = collectionRef.current;
     if (base.activeCanvasId !== canvasId) return;
     const next = updateCanvasModel(base, base.activeCanvasId, model);
     commitCollection(next, []);
   }, [commitCollection, activeDocument.model]);
+
+  const handleEmbeddedModelChange = useCallback((canvasId: CanvasDocumentId, model: CanvasModel) => {
+    const base = collectionRef.current;
+    if (!base.documents[canvasId]) return;
+    const next = updateCanvasModel(base, canvasId, model);
+    commitCollection(next, []);
+  }, [commitCollection]);
+
+  const handleEmbeddedEnter = useCallback((canvasId: CanvasDocumentId) => {
+    executeDocumentCommand({ type: 'select-canvas', canvasId, source: 'pointer' });
+    return true;
+  }, [executeDocumentCommand]);
+
+  const handleContextSnippetModelChange = useCallback((shape: ParentContextFieldShape, model: CanvasModel) => {
+    const replacement = model.nodes.find((node) => node.id === shape.node.id);
+    const base = collectionRef.current;
+    const parent = base.documents[shape.parentCanvasId];
+    if (!replacement || !parent) return;
+    const nextParentModel: CanvasModel = {
+      schemaVersion: 2,
+      nodes: parent.model.nodes.map((node) => node.id === shape.node.id ? replacement : node),
+    };
+    const next = updateCanvasModel(base, shape.parentCanvasId, nextParentModel);
+    commitCollection(next, []);
+  }, [commitCollection]);
 
   const handleNodeAction = useCallback((nodeId: string, actionId: string, source: 'pointer' | 'keyboard' | 'nonvisual' | 'ai') => {
     executeDocumentCommand({ type: 'execute-node-action', canvasId: collectionRef.current.activeCanvasId, nodeId, actionId, source });
@@ -222,97 +310,110 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
 
   return (
     <section className="nested-workspace" aria-label="Nested canvas workspace" data-active-canvas-id={collection.activeCanvasId} onKeyDownCapture={handleWorkspaceKeyDownCapture}>
-      <div ref={stageRef} className="nested-stage" data-animation={collection.view.animationEnabled ? 'on' : 'off'}>
-        <div className="stack-planes" aria-hidden="true">
-          {dormantAncestorFrames(collection).map((frame, index) => {
-            const document = collection.documents[frame.canvasId];
-            if (!document) return null;
-            return (
-              <button
-                key={`slab:${frame.canvasId}`}
-                className="stack-slab"
-                type="button"
-                style={{ top: 92 + index * 38 }}
-                onClick={() => executeDocumentCommand({ type: 'select-canvas', canvasId: frame.canvasId, source: 'nonvisual' })}
-              >
-                {document.title}
-              </button>
-            );
-          })}
-          {visibleContextFrames.map((frame, index) => {
-            const document = collection.documents[frame.canvasId];
-            if (!document) return null;
-            return (
-              <button
-                key={frame.canvasId}
-                className="stack-plane-button"
-                type="button"
-                style={stackPlaneStyle({ ...frame, depth: index }, stageRect)}
-                aria-label={`Go to ${document.title}`}
-                onClick={() => executeDocumentCommand({ type: 'select-canvas', canvasId: frame.canvasId, source: 'nonvisual' })}
-              >
-                <EngineCanvas
-                  canvasId={frame.canvasId}
-                  model={document.model}
-                  theme={theme}
-                  mode="context-live"
-                  camera={cameraForCanvas(collection, frame.canvasId)}
-                  className="canvas-surface context-plane"
-                  ariaLabel={`${document.title} context canvas`}
-                />
-              </button>
-            );
-          })}
-        </div>
-
-        <ActiveEngineCanvas
-          key={collection.activeCanvasId}
-          refEngine={activeEngineRef}
-          canvasId={collection.activeCanvasId}
-          model={activeDocument.model}
-          theme={theme}
-          camera={cameraForCanvas(collection, collection.activeCanvasId)}
-          selection={collection.view.selections[collection.activeCanvasId]}
-          livePortalNodeIds={livePortalNodeIds}
-          onStatus={handleActiveStatus}
-          onModelChange={handleActiveModelChange}
-          onPortalLayout={setPortalLayouts}
-          onNodeAction={handleNodeAction}
-          beforeCommand={handleBeforeCommand}
-          onFrameMetrics={handleFrameMetrics}
-          style={activePlaneStyle(stageRect)}
-        />
-
-        <div className="portal-overlays" aria-label="Live child canvas previews">
-          {liveLayouts.map((layout) => {
-            const childCanvasId = layout.childCanvasId;
-            if (!childCanvasId) return null;
-            const child = collection.documents[childCanvasId];
-            if (!child) return null;
-            return (
-              <div key={`${layout.portalNodeId}:${childCanvasId}`} className="portal-overlay" style={portalOverlayStyle(layout)}>
-                <EngineCanvas
-                  canvasId={childCanvasId}
-                  model={child.model}
-                  theme={theme}
-                  mode="preview-live"
-                  className="canvas-surface portal-preview-canvas"
-                  ariaLabel={`${child.title} live preview`}
-                />
+      <div
+        ref={stageRef}
+        className="nested-stage"
+        data-animation={collection.view.animationEnabled ? 'on' : 'off'}
+        data-parent-context={hasParentContext ? 'on' : 'off'}
+        style={parentContextGridStyle(normalizedPaneLayout)}
+      >
+        <div ref={activeStageRef} className="nested-center-cell">
+          <div className="stack-planes" aria-hidden="true">
+            {dormantAncestorFrames(collection).map((frame, index) => {
+              const document = collection.documents[frame.canvasId];
+              if (!document) return null;
+              return (
                 <button
-                  className="portal-activation"
+                  key={`slab:${frame.canvasId}`}
+                  className="stack-slab"
                   type="button"
-                  style={portalActivationOverlayStyle(layout)}
-                  aria-label={`Open ${child.title}`}
-                  onClick={() => executeDocumentCommand({ type: 'focus-portal-preview', parentCanvasId: collection.activeCanvasId, portalNodeId: layout.portalNodeId, source: 'pointer' })}
-                  onDoubleClick={() => executeDocumentCommand({ type: 'enter-child-canvas', parentCanvasId: collection.activeCanvasId, portalNodeId: layout.portalNodeId, source: 'pointer' })}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') executeDocumentCommand({ type: 'enter-child-canvas', parentCanvasId: collection.activeCanvasId, portalNodeId: layout.portalNodeId, source: 'keyboard' });
-                  }}
-                />
-              </div>
-            );
-          })}
+                  style={{ top: 92 + index * 38 }}
+                  onClick={() => executeDocumentCommand({ type: 'select-canvas', canvasId: frame.canvasId, source: 'nonvisual' })}
+                >
+                  {document.title}
+                </button>
+              );
+            })}
+            {visibleContextFrames.map((frame, index) => {
+              const document = collection.documents[frame.canvasId];
+              if (!document) return null;
+              return (
+                <button
+                  key={frame.canvasId}
+                  className="stack-plane-button"
+                  type="button"
+                  style={stackPlaneStyle({ ...frame, depth: index }, activeStageRect)}
+                  aria-label={`Go to ${document.title}`}
+                  onClick={() => executeDocumentCommand({ type: 'select-canvas', canvasId: frame.canvasId, source: 'nonvisual' })}
+                >
+                  <EngineCanvas
+                    canvasId={frame.canvasId}
+                    model={document.model}
+                    theme={theme}
+                    mode="context-live"
+                    camera={cameraForCanvas(collection, frame.canvasId)}
+                    className="canvas-surface context-plane"
+                    ariaLabel={`${document.title} context canvas`}
+                  />
+                </button>
+              );
+            })}
+          </div>
+
+          <ActiveEngineCanvas
+            key={collection.activeCanvasId}
+            refEngine={activeEngineRef}
+            canvasId={collection.activeCanvasId}
+            model={activeDocument.model}
+            theme={theme}
+            camera={cameraForCanvas(collection, collection.activeCanvasId)}
+            selection={collection.view.selections[collection.activeCanvasId]}
+            livePortalNodeIds={livePortalNodeIds}
+            onStatus={handleActiveStatus}
+            onModelChange={handleActiveModelChange}
+            onPortalLayout={setPortalLayouts}
+            onNodeAction={handleNodeAction}
+            beforeCommand={handleBeforeCommand}
+            onFrameMetrics={handleFrameMetrics}
+            style={activePlaneStyle(activeStageRect)}
+          />
+
+          <div className="portal-overlays" aria-label="Live child canvas previews">
+            {liveLayouts.map((layout) => {
+              const childCanvasId = layout.childCanvasId;
+              if (!childCanvasId) return null;
+              const child = collection.documents[childCanvasId];
+              if (!child) return null;
+              return (
+                <div key={`${layout.portalNodeId}:${childCanvasId}`} className="portal-overlay" style={portalOverlayStyle(layout)}>
+                  <EmbeddedNestedViewport
+                    canvasId={childCanvasId}
+                    collection={collection}
+                    theme={theme}
+                    ariaLabel={`${child.title} live preview`}
+                    depth={0}
+                    remainingSlots={livePreviewCapacity}
+                    onStatus={handleEmbeddedStatus}
+                    onModelChange={handleEmbeddedModelChange}
+                    onEnterCanvas={handleEmbeddedEnter}
+                    onSnippetModelChange={handleContextSnippetModelChange}
+                  />
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="stack-breadcrumb" aria-label="Canvas path">
+            {collection.view.stackPath.map((frame) => {
+              const document = collection.documents[frame.canvasId];
+              if (!document) return null;
+              return (
+                <button key={frame.canvasId} type="button" onClick={() => executeDocumentCommand({ type: 'select-canvas', canvasId: frame.canvasId, source: 'nonvisual' })}>
+                  {document.title}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <ParentContextField
@@ -320,7 +421,13 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
           collection={collection}
           theme={theme}
           stageRect={stageRect}
+          paneLayout={paneLayout}
+          onPaneLayoutChange={setPaneLayout}
           liveCanvasCapacity={parentContextCanvasCapacity}
+          onStatus={handleEmbeddedStatus}
+          onModelChange={handleEmbeddedModelChange}
+          onEnterCanvas={handleEmbeddedEnter}
+          onSnippetModelChange={handleContextSnippetModelChange}
           onActivate={(shape) => {
             if (shape.portal) {
               executeDocumentCommand({ type: 'activate-neighbor-portal', parentCanvasId: shape.parentCanvasId, portalNodeId: shape.node.id, source: 'nonvisual' });
@@ -331,43 +438,6 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
             }
           }}
         />
-
-        <div className="stack-breadcrumb" aria-label="Canvas path">
-          {collection.view.stackPath.map((frame) => {
-            const document = collection.documents[frame.canvasId];
-            if (!document) return null;
-            return (
-              <button key={frame.canvasId} type="button" onClick={() => executeDocumentCommand({ type: 'select-canvas', canvasId: frame.canvasId, source: 'nonvisual' })}>
-                {document.title}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {nodesOpen ? (
-        <NodeAccessPanel
-          collection={collection}
-          status={status}
-          executeActiveCanvasCommand={executeActiveCanvasCommand}
-          executeDocumentCommand={executeDocumentCommand}
-        />
-      ) : null}
-
-      <div className="statusbar" role="status" aria-live="polite">
-        <span>
-          {status.selectionCount > 1
-            ? `${status.selectionCount} selected`
-            : status.selectedNodeId
-              ? `Selected ${status.selectedNodeId}`
-              : 'No selection'}
-        </span>
-        <span>
-          {status.cursorWorld ? `x ${Math.round(status.cursorWorld.x)} · y ${Math.round(status.cursorWorld.y)}` : 'Move over canvas'}
-        </span>
-        <span>Drawn {status.renderedNodes}/{status.totalNodes}</span>
-        <span>{status.interaction}</span>
-        <span>{lastModelChange ? `${lastModelChange.kind} ${lastModelChange.source}` : `Canvas ${collection.activeCanvasId}`}</span>
       </div>
 
       {collection.view.deleteConfirmation ? (
@@ -470,23 +540,54 @@ type EngineCanvasProps = {
   canvasId: CanvasDocumentId;
   model: CanvasModel;
   theme: ThemeName;
-  mode: 'preview-live' | 'context-live';
+  mode: 'embedded-live' | 'preview-live' | 'context-live';
   camera?: Camera;
+  selection?: CanvasSelectionState;
+  livePortalNodeIds?: Set<string>;
   className: string;
   ariaLabel: string;
+  onStatus?: (canvasId: CanvasDocumentId, status: ViewportStatus, engine: CanvasEngine) => void;
+  onModelChange?: (canvasId: CanvasDocumentId, model: CanvasModel) => void;
+  onPortalLayout?: (canvasId: CanvasDocumentId, layouts: PortalLayout[]) => void;
+  onCanvasDoubleClick?: (canvasId: CanvasDocumentId, event: MouseEvent) => boolean;
 };
 
-function EngineCanvas({ canvasId, model, theme, mode, camera, className, ariaLabel }: EngineCanvasProps) {
+function EngineCanvas({
+  canvasId,
+  model,
+  theme,
+  mode,
+  camera,
+  selection,
+  livePortalNodeIds,
+  className,
+  ariaLabel,
+  onStatus,
+  onModelChange,
+  onPortalLayout,
+  onCanvasDoubleClick,
+}: EngineCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<CanvasEngine | null>(null);
 
   useEffect(() => {
     if (!canvasRef.current) return;
-    const engine = new CanvasEngine(canvasRef.current, { canvasId, interactionMode: mode });
+    const engine = new CanvasEngine(canvasRef.current, {
+      canvasId,
+      interactionMode: mode,
+      onCanvasDoubleClick,
+      onStatus: (status) => onStatus?.(canvasId, status, engine),
+      onModelChange: (nextModel) => onModelChange?.(canvasId, nextModel),
+      onPortalLayout: (layouts) => onPortalLayout?.(canvasId, layouts),
+      livePortalNodeIds,
+      transformPastedNode: stripPortalChildReferenceOnPaste,
+      pasteInteractionForNodes: (nodes) => nodes.some((node) => node.type === BuiltInNodeTypes.canvas) ? 'Pasted canvas node without child contents' : null,
+    });
     engine.setModel(model);
     engine.setTheme(theme);
     if (camera) engine.setCamera(camera);
     else engine.fit(24);
+    if (selection) engine.setSelectionState(selection);
     engineRef.current = engine;
     return () => {
       engine.dispose();
@@ -497,23 +598,165 @@ function EngineCanvas({ canvasId, model, theme, mode, camera, className, ariaLab
   useEffect(() => {
     engineRef.current?.setModel(model, { preserveInteraction: true });
     engineRef.current?.setTheme(theme);
-  }, [model, theme]);
+    if (livePortalNodeIds) engineRef.current?.setLivePortalNodeIds(livePortalNodeIds);
+  }, [model, theme, livePortalNodeIds]);
 
   useEffect(() => {
     if (camera) engineRef.current?.setCamera(camera);
-  }, [camera]);
+    if (selection) engineRef.current?.setSelectionState(selection);
+  }, [camera, selection]);
 
   return <canvas ref={canvasRef} className={className} aria-label={ariaLabel} data-engine-mode={mode} />;
 }
 
-type NodeAccessPanelProps = {
+type EmbeddedNestedViewportProps = {
+  canvasId: CanvasDocumentId;
+  collection: CanvasDocumentCollection;
+  theme: ThemeName;
+  ariaLabel: string;
+  depth: number;
+  remainingSlots: number;
+  onStatus: (canvasId: CanvasDocumentId, status: ViewportStatus, engine: CanvasEngine) => void;
+  onModelChange: (canvasId: CanvasDocumentId, model: CanvasModel) => void;
+  onEnterCanvas: (canvasId: CanvasDocumentId) => boolean;
+  onSnippetModelChange: (shape: ParentContextFieldShape, model: CanvasModel) => void;
+};
+
+function EmbeddedNestedViewport({
+  canvasId,
+  collection,
+  theme,
+  ariaLabel,
+  depth,
+  remainingSlots,
+  onStatus,
+  onModelChange,
+  onEnterCanvas,
+  onSnippetModelChange,
+}: EmbeddedNestedViewportProps) {
+  const document = collection.documents[canvasId];
+  const [stageRect, setStageRect] = useState<DOMRect>(() => new DOMRect(0, 0, 1, 1));
+  const [paneLayoutOverride, setPaneLayoutOverride] = useState<ParentContextPaneLayout | null>(null);
+  const [portalLayouts, setPortalLayouts] = useState<PortalLayout[]>([]);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const update = () => setStageRect(viewport.getBoundingClientRect());
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, []);
+
+  const portalBudget = Math.max(0, remainingSlots - 1);
+  const defaultPaneLayout = useMemo(
+    () => paneLayoutForCenterRatio(stageRect, EMBEDDED_FIELD_CENTER_RATIO, EMBEDDED_PARENT_CONTEXT_CONSTRAINTS),
+    [stageRect],
+  );
+  const paneLayout = paneLayoutOverride ?? defaultPaneLayout;
+  const setEmbeddedPaneLayout: Dispatch<SetStateAction<ParentContextPaneLayout>> = useCallback((next) => {
+    setPaneLayoutOverride((current) => {
+      const base = current ?? defaultPaneLayout;
+      const resolved = typeof next === 'function' ? next(base) : next;
+      return normalizeParentContextPaneLayout(stageRect, resolved, EMBEDDED_PARENT_CONTEXT_CONSTRAINTS);
+    });
+  }, [defaultPaneLayout, stageRect]);
+  const contextField = useMemo(
+    () => buildParentContextField(collection, stageRect, canvasId, paneLayout, EMBEDDED_PARENT_CONTEXT_CONSTRAINTS),
+    [collection, stageRect, canvasId, paneLayout],
+  );
+  const childLayouts = useMemo(() => livePortalSlotsFor(collection, portalLayouts).slice(0, portalBudget), [collection, portalLayouts, portalBudget]);
+  const contextCapacity = Math.min(contextField.shapes.length, Math.max(0, portalBudget - childLayouts.length));
+  const showContextField = contextCapacity > 0 && contextField.shapes.length > 0;
+  const normalizedPaneLayout = showContextField
+    ? normalizeParentContextPaneLayout(stageRect, paneLayout, EMBEDDED_PARENT_CONTEXT_CONSTRAINTS)
+    : NO_PARENT_CONTEXT_PANE_LAYOUT;
+  const livePortalNodeIds = useMemo(() => new Set(childLayouts.map((layout) => layout.portalNodeId)), [childLayouts]);
+
+  if (!document) return null;
+
+  return (
+    <div
+      ref={viewportRef}
+      className="embedded-nested-viewport"
+      data-canvas-id={canvasId}
+      data-depth={depth}
+      data-parent-context={showContextField ? 'on' : 'off'}
+      style={parentContextGridStyle(normalizedPaneLayout)}
+    >
+      <div className="nested-center-cell">
+        <EngineCanvas
+          canvasId={canvasId}
+          model={document.model}
+          theme={theme}
+          mode="embedded-live"
+          camera={cameraForCanvas(collection, canvasId)}
+          selection={selectionForCanvas(collection, canvasId)}
+          livePortalNodeIds={livePortalNodeIds}
+          className="canvas-surface embedded-plane"
+          ariaLabel={ariaLabel}
+          onStatus={onStatus}
+          onModelChange={onModelChange}
+          onPortalLayout={(_, layouts) => setPortalLayouts(layouts)}
+          onCanvasDoubleClick={(targetCanvasId) => onEnterCanvas(targetCanvasId)}
+        />
+        {portalBudget > 0 ? (
+          <div className="portal-overlays" aria-label="Nested child canvas previews">
+            {childLayouts.map((layout) => {
+              if (!layout.childCanvasId || !collection.documents[layout.childCanvasId]) return null;
+              return (
+                <div key={`${canvasId}:${layout.portalNodeId}:${layout.childCanvasId}`} className="portal-overlay" style={portalOverlayStyle(layout)}>
+                  <EmbeddedNestedViewport
+                    canvasId={layout.childCanvasId}
+                    collection={collection}
+                    theme={theme}
+                    ariaLabel={`${collection.documents[layout.childCanvasId].title} nested preview`}
+                    depth={depth + 1}
+                    remainingSlots={Math.max(0, portalBudget - childLayouts.length)}
+                    onStatus={onStatus}
+                    onModelChange={onModelChange}
+                    onEnterCanvas={onEnterCanvas}
+                    onSnippetModelChange={onSnippetModelChange}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+      {showContextField ? (
+        <ParentContextField
+          field={contextField}
+          collection={collection}
+          theme={theme}
+          stageRect={stageRect}
+          paneLayout={paneLayout}
+          onPaneLayoutChange={setEmbeddedPaneLayout}
+          paneLayoutConstraints={EMBEDDED_PARENT_CONTEXT_CONSTRAINTS}
+          liveCanvasCapacity={contextCapacity}
+          onStatus={onStatus}
+          onModelChange={onModelChange}
+          onEnterCanvas={onEnterCanvas}
+          onSnippetModelChange={onSnippetModelChange}
+          onActivate={(shape) => {
+            if (shape.childCanvasId && collection.documents[shape.childCanvasId]) onEnterCanvas(shape.childCanvasId);
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+export type NodeAccessPanelProps = {
   collection: CanvasDocumentCollection;
   status: ViewportStatus;
   executeActiveCanvasCommand: (command: CanvasCommand) => boolean;
   executeDocumentCommand: (command: DocumentCommand) => void;
 };
 
-function NodeAccessPanel({ collection, status, executeActiveCanvasCommand, executeDocumentCommand }: NodeAccessPanelProps) {
+export function NodeAccessPanel({ collection, status, executeActiveCanvasCommand, executeDocumentCommand }: NodeAccessPanelProps) {
   const model = collection.documents[collection.activeCanvasId].model;
   return (
     <aside className="node-access-panel" aria-label="Canvas nodes">
@@ -587,6 +830,32 @@ function NodeAccessPanel({ collection, status, executeActiveCanvasCommand, execu
   );
 }
 
+export function WorkspaceStatusBar({
+  collection,
+  status,
+  lastModelChange,
+}: {
+  collection: CanvasDocumentCollection;
+  status: ViewportStatus;
+  lastModelChange: DocumentModelChange | null;
+}) {
+  return (
+    <div className="statusbar" role="status" aria-live="polite">
+      <span>
+        {status.selectionCount > 1
+          ? `${status.selectionCount} selected`
+          : status.selectedNodeId
+            ? `Selected ${status.selectedNodeId}`
+            : 'No selection'}
+      </span>
+      <span>{status.cursorWorld ? `x ${Math.round(status.cursorWorld.x)} · y ${Math.round(status.cursorWorld.y)}` : 'Move over canvas'}</span>
+      <span>Drawn {status.renderedNodes}/{status.totalNodes}</span>
+      <span>{status.interaction}</span>
+      <span>{lastModelChange ? `${lastModelChange.kind} ${lastModelChange.source}` : `Canvas ${collection.activeCanvasId}`}</span>
+    </div>
+  );
+}
+
 function IconButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
   return (
     <button className="icon-button" type="button" aria-label={label} title={label} onClick={onClick}>
@@ -600,24 +869,39 @@ function ParentContextField({
   collection,
   theme,
   stageRect,
+  paneLayout,
+  onPaneLayoutChange,
   liveCanvasCapacity,
+  onStatus,
+  onModelChange,
+  onEnterCanvas,
+  onSnippetModelChange,
   onActivate,
+  paneLayoutConstraints = {},
 }: {
   field: ReturnType<typeof buildParentContextField>;
   collection: CanvasDocumentCollection;
   theme: ThemeName;
   stageRect: DOMRect;
+  paneLayout: ParentContextPaneLayout;
+  onPaneLayoutChange: Dispatch<SetStateAction<ParentContextPaneLayout>>;
+  paneLayoutConstraints?: ParentContextPaneLayoutConstraints;
   liveCanvasCapacity: number;
+  onStatus: (canvasId: CanvasDocumentId, status: ViewportStatus, engine: CanvasEngine) => void;
+  onModelChange: (canvasId: CanvasDocumentId, model: CanvasModel) => void;
+  onEnterCanvas: (canvasId: CanvasDocumentId) => boolean;
+  onSnippetModelChange: (shape: ParentContextFieldShape, model: CanvasModel) => void;
   onActivate: (shape: ParentContextFieldShape) => void;
 }) {
   if (!field.shapes.length) return null;
+  const normalizedPaneLayout = normalizeParentContextPaneLayout(stageRect, paneLayout, paneLayoutConstraints);
   const liveCanvasShapes = field.shapes
     .sort((a, b) => b.detail - a.detail)
     .slice(0, liveCanvasCapacity);
   const liveCanvasShapeIds = new Set(liveCanvasShapes.map((shape) => shape.node.id));
   return (
     <div className="parent-context-layer" aria-label="Parent context field">
-      <div className="parent-context-canvas-layer" aria-hidden="true">
+      <div className="parent-context-canvas-layer" style={parentContextGridStyle(normalizedPaneLayout)}>
         {liveCanvasShapes.map((shape) => {
           const contextCanvas = parentContextCanvasForShape(collection, shape);
           return (
@@ -630,29 +914,45 @@ function ParentContextField({
               data-context-model={contextCanvas.kind}
               style={parentContextCanvasStyle(shape)}
             >
-              <EngineCanvas
-                canvasId={contextCanvas.canvasId}
-                model={contextCanvas.model}
-                theme={theme}
-                mode="preview-live"
-                className="canvas-surface parent-context-canvas"
-                ariaLabel={contextCanvas.ariaLabel}
-              />
+              {contextCanvas.kind === 'child' ? (
+                <EmbeddedNestedViewport
+                  canvasId={contextCanvas.canvasId}
+                  collection={collection}
+                  theme={theme}
+                  ariaLabel={contextCanvas.ariaLabel}
+                  depth={1}
+                  remainingSlots={Math.max(0, MAX_TOTAL_ENGINES - 1 - liveCanvasShapes.length)}
+                  onStatus={onStatus}
+                  onModelChange={onModelChange}
+                  onEnterCanvas={onEnterCanvas}
+                  onSnippetModelChange={onSnippetModelChange}
+                />
+              ) : (
+                <EngineCanvas
+                  canvasId={contextCanvas.canvasId}
+                  model={contextCanvas.model}
+                  theme={theme}
+                  mode="embedded-live"
+                  className="canvas-surface parent-context-canvas"
+                  ariaLabel={contextCanvas.ariaLabel}
+                  onModelChange={(_, model) => onSnippetModelChange(shape, model)}
+                  onCanvasDoubleClick={() => {
+                    onActivate(shape);
+                    return true;
+                  }}
+                />
+              )}
             </div>
           );
         })}
       </div>
+      <ParentContextResizers
+        stageRect={stageRect}
+        paneLayout={normalizedPaneLayout}
+        paneLayoutConstraints={paneLayoutConstraints}
+        onPaneLayoutChange={onPaneLayoutChange}
+      />
       <svg className="parent-context-field" viewBox={`0 0 ${stageRect.width} ${stageRect.height}`} role="group">
-        <defs>
-          <linearGradient id="parent-context-edge-v" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0" stopColor="currentColor" stopOpacity="0.28" />
-            <stop offset="1" stopColor="currentColor" stopOpacity="0.04" />
-          </linearGradient>
-        </defs>
-        <rect className="parent-context-vignette top" x="0" y="0" width={stageRect.width} height="118" />
-        <rect className="parent-context-vignette bottom" x="0" y={Math.max(0, stageRect.height - 118)} width={stageRect.width} height="118" />
-        <rect className="parent-context-vignette left" x="0" y="0" width="118" height={stageRect.height} />
-        <rect className="parent-context-vignette right" x={Math.max(0, stageRect.width - 118)} y="0" width="118" height={stageRect.height} />
         {field.shapes.map((shape) => {
           const description = describeNode(shape.node);
           const hasLiveCanvas = liveCanvasShapeIds.has(shape.node.id);
@@ -707,6 +1007,86 @@ function ParentContextField({
   );
 }
 
+type ParentContextResizeHandle = 'left' | 'right' | 'top' | 'bottom' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+
+function ParentContextResizers({
+  stageRect,
+  paneLayout,
+  paneLayoutConstraints,
+  onPaneLayoutChange,
+}: {
+  stageRect: DOMRect;
+  paneLayout: ParentContextPaneLayout;
+  paneLayoutConstraints: ParentContextPaneLayoutConstraints;
+  onPaneLayoutChange: Dispatch<SetStateAction<ParentContextPaneLayout>>;
+}) {
+  const dragRef = useRef<{ handle: ParentContextResizeHandle; startX: number; startY: number; startLayout: ParentContextPaneLayout } | null>(null);
+  const width = Math.max(1, stageRect.width);
+  const height = Math.max(1, stageRect.height);
+  const centerW = Math.max(1, width - paneLayout.left - paneLayout.right);
+  const centerH = Math.max(1, height - paneLayout.top - paneLayout.bottom);
+  const rightX = width - paneLayout.right;
+  const bottomY = height - paneLayout.bottom;
+
+  const startResize = (handle: ParentContextResizeHandle, event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Synthetic probe events may not have an active pointer.
+    }
+    dragRef.current = { handle, startX: event.clientX, startY: event.clientY, startLayout: paneLayout };
+  };
+
+  const updateResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    const next = { ...drag.startLayout };
+    if (drag.handle === 'left' || drag.handle === 'top-left' || drag.handle === 'bottom-left') next.left = drag.startLayout.left + dx;
+    if (drag.handle === 'right' || drag.handle === 'top-right' || drag.handle === 'bottom-right') next.right = drag.startLayout.right - dx;
+    if (drag.handle === 'top' || drag.handle === 'top-left' || drag.handle === 'top-right') next.top = drag.startLayout.top + dy;
+    if (drag.handle === 'bottom' || drag.handle === 'bottom-left' || drag.handle === 'bottom-right') next.bottom = drag.startLayout.bottom - dy;
+    onPaneLayoutChange(normalizeParentContextPaneLayout(stageRect, next, paneLayoutConstraints));
+  };
+
+  const stopResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!dragRef.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+    dragRef.current = null;
+  };
+
+  const handleProps = (handle: ParentContextResizeHandle, label: string, style: CSSProperties) => ({
+    className: `parent-context-resizer ${handle.includes('-') ? 'corner' : handle === 'left' || handle === 'right' ? 'vertical' : 'horizontal'}`,
+    type: 'button' as const,
+    'aria-label': label,
+    'data-resize-handle': handle,
+    style,
+    onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => startResize(handle, event),
+    onPointerMove: updateResize,
+    onPointerUp: stopResize,
+    onPointerCancel: stopResize,
+  });
+
+  return (
+    <div className="parent-context-resizers" aria-label="Resize parent context panes">
+      <button {...handleProps('left', 'Resize west panes', { left: paneLayout.left - 3, top: paneLayout.top, width: 6, height: centerH })} />
+      <button {...handleProps('right', 'Resize east panes', { left: rightX - 3, top: paneLayout.top, width: 6, height: centerH })} />
+      <button {...handleProps('top', 'Resize north panes', { left: paneLayout.left, top: paneLayout.top - 3, width: centerW, height: 6 })} />
+      <button {...handleProps('bottom', 'Resize south panes', { left: paneLayout.left, top: bottomY - 3, width: centerW, height: 6 })} />
+      <button {...handleProps('top-left', 'Resize northwest intersection', { left: paneLayout.left - 7, top: paneLayout.top - 7 })} />
+      <button {...handleProps('top-right', 'Resize northeast intersection', { left: rightX - 7, top: paneLayout.top - 7 })} />
+      <button {...handleProps('bottom-left', 'Resize southwest intersection', { left: paneLayout.left - 7, top: bottomY - 7 })} />
+      <button {...handleProps('bottom-right', 'Resize southeast intersection', { left: rightX - 7, top: bottomY - 7 })} />
+    </div>
+  );
+}
+
 function parentContextCanvasForShape(
   collection: CanvasDocumentCollection,
   shape: ParentContextFieldShape,
@@ -735,14 +1115,30 @@ function parentContextCanvasForShape(
   };
 }
 
-function parentContextCanvasStyle(shape: ParentContextFieldShape): CSSProperties {
+function parentContextGridStyle(paneLayout: ParentContextPaneLayout): CSSProperties {
   return {
-    left: shape.projectedRect.x,
-    top: shape.projectedRect.y,
-    width: shape.projectedRect.w,
-    height: shape.projectedRect.h,
+    gridTemplateColumns: `${paneLayout.left}px minmax(0, 1fr) ${paneLayout.right}px`,
+    gridTemplateRows: `${paneLayout.top}px minmax(0, 1fr) ${paneLayout.bottom}px`,
+  };
+}
+
+function parentContextCanvasStyle(shape: ParentContextFieldShape): CSSProperties {
+  const gridPlacement = gridPlacementForRegion(shape.region);
+  return {
+    ...gridPlacement,
     opacity: 0.55 + shape.detail * 0.38,
   };
+}
+
+function gridPlacementForRegion(region: ParentContextFieldShape['region']): CSSProperties {
+  if (region === 'top-left') return { gridColumn: '1', gridRow: '1' };
+  if (region === 'top') return { gridColumn: '2', gridRow: '1' };
+  if (region === 'top-right') return { gridColumn: '3', gridRow: '1' };
+  if (region === 'left') return { gridColumn: '1', gridRow: '2' };
+  if (region === 'right') return { gridColumn: '3', gridRow: '2' };
+  if (region === 'bottom-left') return { gridColumn: '1', gridRow: '3' };
+  if (region === 'bottom') return { gridColumn: '2', gridRow: '3' };
+  return { gridColumn: '3', gridRow: '3' };
 }
 
 function dormantAncestorFrames(collection: CanvasDocumentCollection) {
