@@ -20,6 +20,7 @@ export type NodeRenderState = {
   primary: boolean;
   hovered: boolean;
   quality: NodeRenderQuality;
+  portalPreview: 'none' | 'live' | 'unavailable';
 };
 
 export type NodeRenderContext<TData extends NodeData = NodeData> = {
@@ -56,6 +57,11 @@ export type NodeActionDescriptor = {
   available: boolean;
   disabledReason?: string;
 };
+
+export type BuiltInNodeActionId =
+  | 'enter-child-canvas'
+  | 'create-child-canvas'
+  | 'focus-portal-preview';
 
 export type NodeDescribeContext<TData extends NodeData = NodeData> = {
   node: CanvasNode & { data: TData };

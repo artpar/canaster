@@ -55,5 +55,18 @@ export const sampleModel: CanvasModel = {
         accent: 'task',
       },
     },
+    {
+      id: 'planning-canvas',
+      type: 'canvas',
+      x: 288,
+      y: 128,
+      w: 300,
+      h: 180,
+      data: {
+        childCanvasId: null,
+        title: 'Nested Plan',
+        nodeCount: 0,
+      },
+    },
   ],
 };

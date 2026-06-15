@@ -1,63 +1,17 @@
-import { Clipboard, Copy, ListTree, Maximize2, Minus, Moon, MoveRight, Plus, RotateCcw, Sun, Trash2, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
-import { CanvasEngine } from './engine/CanvasEngine';
-import { describeNode } from './engine/nodeTypes/registry';
+import { ListTree, Maximize2, Minus, Moon, Plus, RotateCcw, Sun, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createChildCanvasForNode, createInitialDocumentCollection, updateCanvasModel } from './engine/documentModel';
+import { NestedCanvasWorkspace, type NestedCanvasWorkspaceHandle } from './engine/nested/NestedCanvasWorkspace';
 import { sampleModel } from './engine/sampleModel';
-import type { CanvasCommand, CanvasModel, CanvasModelChange, ThemeName, ViewportStatus } from './engine/types';
-
-const initialStatus: ViewportStatus = {
-  zoom: 1,
-  selectedNodeId: null,
-  selectedNodeIds: [],
-  selectionCount: 0,
-  cursorWorld: null,
-  renderedNodes: 0,
-  totalNodes: 0,
-  interaction: 'Idle',
-};
-
-const initialModel: CanvasModel = {
-  schemaVersion: 2,
-  nodes: sampleModel.nodes.map((node) => ({ ...node, data: { ...node.data } })),
-};
+import type { CanvasModel, ThemeName } from './engine/types';
 
 export function App() {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const engineRef = useRef<CanvasEngine | null>(null);
-  const [model, setModel] = useState<CanvasModel>(initialModel);
-  const [lastModelChange, setLastModelChange] = useState<CanvasModelChange | null>(null);
+  const workspaceRef = useRef<NestedCanvasWorkspaceHandle | null>(null);
   const [theme, setTheme] = useState<ThemeName>('dark');
-  const [status, setStatus] = useState<ViewportStatus>(initialStatus);
   const [nodesOpen, setNodesOpen] = useState(false);
-  const executeCommand = (command: CanvasCommand) => engineRef.current?.executeCommand(command);
+  const initialCollection = useMemo(() => createSampleDocumentCollection(), []);
 
   useEffect(() => {
-    if (!canvasRef.current) return;
-
-    const engine = new CanvasEngine(canvasRef.current, {
-      onStatus: setStatus,
-      onModelChange: (nextModel, change) => {
-        setModel(nextModel);
-        setLastModelChange(change);
-      },
-    });
-    engine.setModel(model);
-    engine.setTheme(theme);
-    engine.fit();
-    engineRef.current = engine;
-
-    return () => {
-      engine.dispose();
-      engineRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    engineRef.current?.setModel(model, { preserveInteraction: true });
-  }, [model]);
-
-  useEffect(() => {
-    engineRef.current?.setTheme(theme);
     document.documentElement.dataset.theme = theme;
   }, [theme]);
 
@@ -70,17 +24,17 @@ export function App() {
             <span>Canway</span>
           </div>
           <div className="toolbar-group">
-            <IconButton label="Fit view" onClick={() => engineRef.current?.fit()}>
+            <IconButton label="Fit view" onClick={() => workspaceRef.current?.fitActiveCanvas()}>
               <Maximize2 size={17} />
             </IconButton>
-            <IconButton label="Reset zoom" onClick={() => engineRef.current?.resetZoom()}>
+            <IconButton label="Reset zoom" onClick={() => workspaceRef.current?.resetActiveZoom()}>
               <RotateCcw size={17} />
             </IconButton>
-            <IconButton label="Zoom out" onClick={() => engineRef.current?.zoomBy(0.82)}>
+            <IconButton label="Zoom out" onClick={() => workspaceRef.current?.zoomActiveBy(0.82)}>
               <Minus size={17} />
             </IconButton>
-            <span className="zoom-readout">{Math.round(status.zoom * 100)}%</span>
-            <IconButton label="Zoom in" onClick={() => engineRef.current?.zoomBy(1.22)}>
+            <span className="zoom-readout">Canvas</span>
+            <IconButton label="Zoom in" onClick={() => workspaceRef.current?.zoomActiveBy(1.22)}>
               <Plus size={17} />
             </IconButton>
           </div>
@@ -97,88 +51,48 @@ export function App() {
           </div>
         </div>
 
-        <canvas ref={canvasRef} className="canvas-surface" aria-label="Canway canvas" />
-
-        {nodesOpen ? <aside className="node-access-panel" aria-label="Canvas nodes">
-          <div className="node-access-header">
-            <span>Nodes</span>
-            <span>{status.selectionCount ? `${status.selectionCount} selected` : 'No selection'}</span>
-          </div>
-          <div className="node-access-actions" aria-label="Node editing commands">
-            <IconButton label="Move selection right" onClick={() => executeCommand({ type: 'move-selection', dx: 32, dy: 0, source: 'nonvisual' })}>
-              <MoveRight size={16} />
-            </IconButton>
-            <IconButton label="Resize primary selection wider" onClick={() => executeCommand({ type: 'resize-primary', dw: 32, dh: 0, source: 'nonvisual' })}>
-              <Maximize2 size={16} />
-            </IconButton>
-            <IconButton label="Copy selection" onClick={() => executeCommand({ type: 'copy-selection', source: 'nonvisual' })}>
-              <Copy size={16} />
-            </IconButton>
-            <IconButton label="Paste copied nodes" onClick={() => executeCommand({ type: 'paste-clipboard', source: 'nonvisual' })}>
-              <Clipboard size={16} />
-            </IconButton>
-            <IconButton label="Delete selection" onClick={() => executeCommand({ type: 'delete-selection', source: 'nonvisual' })}>
-              <Trash2 size={16} />
-            </IconButton>
-          </div>
-          <ul className="node-access-list" aria-label="Canvas node list">
-            {model.nodes.map((node) => {
-              const selected = status.selectedNodeIds.includes(node.id);
-              const primary = status.selectedNodeId === node.id;
-              const description = describeNode(node);
-              return (
-                <li key={node.id} className="node-access-row">
-                  <button
-                    className="node-access-select"
-                    type="button"
-                    aria-pressed={selected}
-                    aria-label={`${selected ? 'Selected' : 'Select'} ${description.label}, ${description.roleDescription}, x ${Math.round(node.x)}, y ${Math.round(node.y)}, width ${Math.round(node.w)}, height ${Math.round(node.h)}`}
-                    onClick={() => executeCommand({ type: 'select-node', nodeId: node.id, source: 'nonvisual' })}
-                  >
-                    <span>{description.label}</span>
-                    <span>{primary ? 'Primary' : selected ? 'Selected' : description.roleDescription}</span>
-                  </button>
-                  <button
-                    className="node-access-toggle"
-                    type="button"
-                    aria-label={`Toggle ${description.label} in selection`}
-                    aria-pressed={selected}
-                    onClick={() => executeCommand({ type: 'select-node', nodeId: node.id, mode: 'toggle', source: 'nonvisual' })}
-                  >
-                    +
-                  </button>
-                  <span className="node-access-meta">
-                    {description.roleDescription} · x {Math.round(node.x)} · y {Math.round(node.y)} · {Math.round(node.w)}x{Math.round(node.h)}
-                  </span>
-                  <span className="node-access-detail">{description.details.join(' · ')}</span>
-                </li>
-              );
-            })}
-          </ul>
-        </aside> : null}
-
-        <div className="statusbar" role="status" aria-live="polite">
-          <span>
-            {status.selectionCount > 1
-              ? `${status.selectionCount} selected`
-              : status.selectedNodeId
-                ? `Selected ${status.selectedNodeId}`
-                : 'No selection'}
-          </span>
-          <span>
-            {status.cursorWorld
-              ? `x ${Math.round(status.cursorWorld.x)} · y ${Math.round(status.cursorWorld.y)}`
-              : 'Move over canvas'}
-          </span>
-          <span>
-            Drawn {status.renderedNodes}/{status.totalNodes}
-          </span>
-          <span>{status.interaction}</span>
-          <span>{lastModelChange ? `${lastModelChange.kind} ${lastModelChange.nodeId} ${lastModelChange.source}` : 'No model changes'}</span>
-        </div>
+        <NestedCanvasWorkspace ref={workspaceRef} initialCollection={initialCollection} theme={theme} nodesOpen={nodesOpen} />
       </section>
     </main>
   );
+}
+
+const sampleNestedCanvasModel: CanvasModel = {
+  schemaVersion: 2,
+  nodes: [
+    {
+      id: 'nested-brief',
+      type: 'card',
+      x: -112,
+      y: -64,
+      w: 224,
+      h: 112,
+      data: {
+        title: 'Nested Canvas',
+        detail: 'This child canvas is live before the first click',
+        accent: 'system',
+      },
+    },
+    {
+      id: 'nested-note',
+      type: 'text',
+      x: 160,
+      y: 32,
+      w: 220,
+      h: 120,
+      data: {
+        text: 'Parent context stays visible around this plane.',
+      },
+    },
+  ],
+};
+
+function createSampleDocumentCollection() {
+  const collectionWithRoot = createInitialDocumentCollection(sampleModel, 'Root');
+  const collectionWithChild = createChildCanvasForNode(collectionWithRoot, 'root', 'planning-canvas');
+  const portal = collectionWithChild.documents.root.model.nodes.find((node) => node.id === 'planning-canvas');
+  const childCanvasId = typeof portal?.data.childCanvasId === 'string' ? portal.data.childCanvasId : null;
+  return childCanvasId ? updateCanvasModel(collectionWithChild, childCanvasId, sampleNestedCanvasModel) : collectionWithChild;
 }
 
 type IconButtonProps = {

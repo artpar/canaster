@@ -1,21 +1,28 @@
 import { THEMES, type CanvasTheme } from './theme';
 import { cloneNodeData } from './nodeTypes/data';
-import { hitTestNodeContent, nodeDefinitionFor, parseNodeData, renderNodeContent } from './nodeTypes/registry';
+import { canvasPortalViewportRect } from './nodeTypes/canvasNode';
+import { describeNode, hitTestNodeContent, nodeDefinitionFor, parseNodeData, renderNodeContent } from './nodeTypes/registry';
 import type { NodeContentRect } from './nodeTypes/types';
 import type {
   Camera,
   CanvasCommand,
   CanvasEditSource,
+  CanvasFrameMetrics,
   CanvasModel,
   CanvasModelChange,
   CanvasNode,
   CanvasOperation,
+  CanvasPortalNodeData,
   CanvasSelectionState,
+  EngineInteractionMode,
   EngineOptions,
+  PortalLayout,
+  ScreenRect,
   ThemeName,
   ViewportStatus,
   WorldPoint,
 } from './types';
+import { BuiltInNodeTypes } from './types';
 
 const MIN_SCALE = 0.08;
 const MAX_SCALE = 4;
@@ -31,6 +38,8 @@ const COMPACT_NODE_SCALE = 0.22;
 const COMPACT_NODE_COUNT = 350;
 const WHEEL_LINE_PX = 16;
 const WHEEL_PAGE_PX = 640;
+const PREVIEW_FRAME_INTERVAL_MS = 50;
+const CONTEXT_FRAME_INTERVAL_MS = 100;
 
 type DragState =
   | { mode: 'pan'; pointerId: number; sx: number; sy: number; camX: number; camY: number; moved: boolean }
@@ -86,13 +95,21 @@ type CommandPlan = {
 export class CanvasEngine {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
+  private readonly canvasId: string;
+  private readonly beforeCommand?: (command: CanvasCommand) => CanvasCommand | false;
+  private readonly onNodeAction?: (nodeId: string, actionId: string, source: CanvasEditSource) => boolean;
   private readonly onStatus?: (status: ViewportStatus) => void;
   private readonly onModelChange?: (model: CanvasModel, change: CanvasModelChange) => void;
+  private readonly onPortalLayout?: (layouts: PortalLayout[]) => void;
+  private readonly onFrameMetrics?: (metrics: CanvasFrameMetrics) => void;
+  private readonly transformPastedNode?: (node: CanvasNode) => CanvasNode;
+  private readonly pasteInteractionForNodes?: (nodes: CanvasNode[]) => string | null;
   private readonly resizeObserver: ResizeObserver;
 
   private model: CanvasModel = { schemaVersion: 2, nodes: [] };
   private theme: CanvasTheme = THEMES.dark;
   private camera: Camera = { x: 0, y: 0, scale: 1 };
+  private interactionMode: EngineInteractionMode = 'active';
   private selectedNodeIds = new Set<string>();
   private primarySelectedNodeId: string | null = null;
   private hoverNodeId: string | null = null;
@@ -107,12 +124,17 @@ export class CanvasEngine {
   private dirty = true;
   private frameQueued = false;
   private statusFrame: number | null = null;
+  private throttleTimer: number | null = null;
+  private inputListenersAttached = false;
   private lastRenderedNodes = 0;
+  private lastRenderTime = 0;
   private interaction = 'Idle';
   private resizeMode = false;
   private clipboard: CanvasNode[] = [];
   private pasteCounter = 1;
   private disposed = false;
+  private livePortalNodeIds = new Set<string>();
+  private highlightNodeIds = new Set<string>();
 
   constructor(canvas: HTMLCanvasElement, options: EngineOptions = {}) {
     const ctx = canvas.getContext('2d');
@@ -120,22 +142,22 @@ export class CanvasEngine {
 
     this.canvas = canvas;
     this.ctx = ctx;
+    this.canvasId = options.canvasId ?? 'canvas';
+    this.interactionMode = options.interactionMode ?? 'active';
+    this.beforeCommand = options.beforeCommand;
+    this.onNodeAction = options.onNodeAction;
     this.onStatus = options.onStatus;
     this.onModelChange = options.onModelChange;
+    this.onPortalLayout = options.onPortalLayout;
+    this.onFrameMetrics = options.onFrameMetrics;
+    this.transformPastedNode = options.transformPastedNode;
+    this.pasteInteractionForNodes = options.pasteInteractionForNodes;
+    this.livePortalNodeIds = new Set(options.livePortalNodeIds ?? []);
+    this.highlightNodeIds = new Set(options.highlightNodeIds ?? []);
     this.resizeObserver = new ResizeObserver(() => this.resize());
 
-    this.canvas.tabIndex = 0;
-    this.canvas.addEventListener('pointerdown', this.onPointerDown);
-    this.canvas.addEventListener('pointercancel', this.onPointerCancel);
-    this.canvas.addEventListener('lostpointercapture', this.onLostPointerCapture);
-    this.canvas.addEventListener('keydown', this.onKeyDown);
-    this.canvas.addEventListener('focus', this.onFocus);
-    this.canvas.addEventListener('blur', this.onBlur);
-    window.addEventListener('pointermove', this.onPointerMove);
-    window.addEventListener('pointerup', this.onPointerUp);
-    window.addEventListener('blur', this.onWindowBlur);
-    this.canvas.addEventListener('wheel', this.onWheel, { passive: false });
-    this.canvas.addEventListener('dblclick', this.onDoubleClick);
+    this.canvas.tabIndex = this.interactionMode === 'active' ? 0 : -1;
+    this.attachInputListenersForMode();
     this.resizeObserver.observe(this.canvas);
     this.resize();
     this.emitStatus();
@@ -144,18 +166,9 @@ export class CanvasEngine {
   dispose() {
     this.disposed = true;
     if (this.statusFrame !== null) cancelAnimationFrame(this.statusFrame);
+    if (this.throttleTimer !== null) window.clearTimeout(this.throttleTimer);
     this.resizeObserver.disconnect();
-    this.canvas.removeEventListener('pointerdown', this.onPointerDown);
-    this.canvas.removeEventListener('pointercancel', this.onPointerCancel);
-    this.canvas.removeEventListener('lostpointercapture', this.onLostPointerCapture);
-    this.canvas.removeEventListener('keydown', this.onKeyDown);
-    this.canvas.removeEventListener('focus', this.onFocus);
-    this.canvas.removeEventListener('blur', this.onBlur);
-    window.removeEventListener('pointermove', this.onPointerMove);
-    window.removeEventListener('pointerup', this.onPointerUp);
-    window.removeEventListener('blur', this.onWindowBlur);
-    this.canvas.removeEventListener('wheel', this.onWheel);
-    this.canvas.removeEventListener('dblclick', this.onDoubleClick);
+    this.detachInputListeners();
   }
 
   setModel(model: CanvasModel, options: SetModelOptions = {}) {
@@ -174,6 +187,56 @@ export class CanvasEngine {
   setTheme(name: ThemeName) {
     this.theme = THEMES[name];
     this.markDirty();
+  }
+
+  setInteractionMode(mode: EngineInteractionMode) {
+    if (this.interactionMode === mode) return;
+    this.interactionMode = mode;
+    this.canvas.tabIndex = mode === 'active' ? 0 : -1;
+    this.finishPointerInteraction(null, false);
+    this.finishTouchGesture();
+    this.touchPoints.clear();
+    this.attachInputListenersForMode();
+    this.markDirty();
+    this.emitStatus();
+  }
+
+  setLivePortalNodeIds(ids: Set<string>) {
+    this.livePortalNodeIds = new Set(ids);
+    this.markDirty();
+  }
+
+  setHighlightNodeIds(ids: string[]) {
+    this.highlightNodeIds = new Set(ids);
+    this.markDirty();
+  }
+
+  getCamera(): Camera {
+    return { ...this.camera };
+  }
+
+  setCamera(camera: Camera) {
+    if (this.camera.x === camera.x && this.camera.y === camera.y && this.camera.scale === camera.scale) return;
+    this.camera = { ...camera };
+    this.markDirty();
+    this.emitStatus();
+  }
+
+  getSelectionState(): CanvasSelectionState {
+    return this.selectionState();
+  }
+
+  setSelectionState(selection: CanvasSelectionState) {
+    const current = this.selectionState();
+    if (sameSelectionState(current, selection)) return;
+    this.reconcileSelection(new Set(selection.selectedNodeIds), selection.primarySelectedNodeId);
+    this.resizeMode = Boolean(selection.resizeMode && this.primarySelectedNodeId);
+    this.markDirty();
+    this.emitStatus();
+  }
+
+  focusCanvas() {
+    if (this.interactionMode === 'active') this.canvas.focus({ preventScroll: true });
   }
 
   fit(padding = 72) {
@@ -201,8 +264,18 @@ export class CanvasEngine {
   }
 
   executeCommand(command: CanvasCommand) {
+    if (this.interactionMode !== 'active') {
+      this.interaction = 'Inactive canvas';
+      this.emitStatus();
+      return false;
+    }
+    const guarded = this.beforeCommand?.(command) ?? command;
+    if (guarded === false) {
+      this.emitStatus();
+      return false;
+    }
     this.clearPreview();
-    return this.applyCommandPlan(this.planCommand(command), true).operations.length > 0;
+    return this.applyCommandPlan(this.planCommand(guarded), true).operations.length > 0;
   }
 
   private applyCommandPlan(plan: CommandPlan, emitChange: boolean) {
@@ -333,7 +406,8 @@ export class CanvasEngine {
     const pasted = this.clipboard.map((node) => {
       const id = uniqueNodeId(`${node.id}-copy`, existingIds);
       existingIds.add(id);
-      return { ...cloneNode(node), id, x: snapCoordinate(node.x + offset), y: snapCoordinate(node.y + offset) };
+      const transformed = this.transformPastedNode?.(node) ?? cloneNode(node);
+      return { ...transformed, id, x: snapCoordinate(node.x + offset), y: snapCoordinate(node.y + offset) };
     });
     const selection = {
       selectedNodeIds: pasted.map((node) => node.id),
@@ -347,7 +421,7 @@ export class CanvasEngine {
         { type: 'set-paste-counter', from: this.pasteCounter, to: this.pasteCounter + 1 },
       ],
       change: { kind: 'node-create', nodeId: pasted[0]?.id ?? null, nodeIds: pasted.map((node) => node.id), source },
-      interaction: pasted.length > 1 ? `Pasted ${pasted.length} nodes` : 'Pasted node',
+      interaction: this.pasteInteractionForNodes?.(pasted) ?? (pasted.length > 1 ? `Pasted ${pasted.length} nodes` : 'Pasted node'),
     };
   }
 
@@ -393,11 +467,22 @@ export class CanvasEngine {
   private renderLoop() {
     this.frameQueued = false;
     if (this.disposed || !this.dirty) return;
+    const interval = this.frameIntervalMs();
+    const elapsed = performance.now() - this.lastRenderTime;
+    if (interval > 0 && elapsed < interval) {
+      this.frameQueued = true;
+      this.throttleTimer = window.setTimeout(() => {
+        this.throttleTimer = null;
+        requestAnimationFrame(() => this.renderLoop());
+      }, interval - elapsed);
+      return;
+    }
     this.dirty = false;
     this.render();
   }
 
   private render() {
+    const started = performance.now();
     const { ctx, canvas, theme, dpr, camera } = this;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -417,8 +502,17 @@ export class CanvasEngine {
     for (const node of visibleNodes) this.drawNode(node, compact);
     const renderedNodes = visibleNodes.length;
     this.lastRenderedNodes = renderedNodes;
+    this.lastRenderTime = performance.now();
     this.canvas.dataset.renderedNodes = String(renderedNodes);
     this.canvas.dataset.totalNodes = String(this.model.nodes.length);
+    this.onPortalLayout?.(this.portalLayoutsFor(visibleNodes));
+    this.onFrameMetrics?.({
+      canvasId: this.canvasId,
+      mode: this.interactionMode,
+      renderedNodes,
+      totalNodes: this.model.nodes.length,
+      frameMs: performance.now() - started,
+    });
     this.emitStatus();
   }
 
@@ -456,10 +550,11 @@ export class CanvasEngine {
     const definition = nodeDefinitionFor(renderNode);
     const data = parseNodeData(renderNode);
     const state = {
-      selected: this.selectedNodeIds.has(renderNode.id),
+      selected: this.selectedNodeIds.has(renderNode.id) || this.highlightNodeIds.has(renderNode.id),
       primary: renderNode.id === this.primarySelectedNodeId,
       hovered: renderNode.id === this.hoverNodeId,
       quality: compact ? 'compact' as const : 'normal' as const,
+      portalPreview: this.portalPreviewState(renderNode),
     };
 
     this.drawNodeShell(renderNode, { selected: state.selected, primary: state.primary, hovered: state.hovered, compact });
@@ -523,6 +618,15 @@ export class CanvasEngine {
     };
   }
 
+  worldToScreenRect(rect: { x: number; y: number; w: number; h: number }): ScreenRect {
+    return {
+      x: Math.round(this.camera.x + rect.x * this.camera.scale),
+      y: Math.round(this.camera.y + rect.y * this.camera.scale),
+      w: Math.round(rect.w * this.camera.scale),
+      h: Math.round(rect.h * this.camera.scale),
+    };
+  }
+
   private clipToNodeContent(rect: NodeContentRect) {
     this.ctx.beginPath();
     this.ctx.rect(rect.x, rect.y, rect.w, rect.h);
@@ -530,6 +634,7 @@ export class CanvasEngine {
   }
 
   private onPointerDown = (event: PointerEvent) => {
+    if (this.interactionMode !== 'active') return;
     event.preventDefault();
     this.canvas.focus({ preventScroll: true });
     const point = this.eventPoint(event);
@@ -564,6 +669,13 @@ export class CanvasEngine {
     const node = this.nodeAt(world);
 
     if (node) {
+      const hit = this.nodeInternalHit(node, world);
+      if (hit?.type === 'activate' && this.routeNodeAction(node.id, hit.action, 'pointer')) {
+        this.interaction = 'Node action';
+        this.markDirty();
+        this.emitStatus();
+        return;
+      }
       const mode = event.shiftKey || event.metaKey || event.ctrlKey ? 'toggle' : this.selectedNodeIds.has(node.id) ? 'add' : 'replace';
       this.executeCommand({ type: 'select-node', nodeId: node.id, mode, source: 'pointer' });
       if (!this.selectedNodeIds.has(node.id)) {
@@ -606,6 +718,7 @@ export class CanvasEngine {
   };
 
   private onPointerMove = (event: PointerEvent) => {
+    if (this.interactionMode !== 'active') return;
     const point = this.eventPoint(event);
     if (event.pointerType === 'touch' && this.touchPoints.has(event.pointerId)) {
       this.touchPoints.set(event.pointerId, point);
@@ -655,18 +768,21 @@ export class CanvasEngine {
   };
 
   private onPointerUp = (event: PointerEvent) => {
+    if (this.interactionMode !== 'active') return;
     if (this.gesture && this.finishTouchPointer(event.pointerId)) return;
     if (event.pointerType === 'touch') this.touchPoints.delete(event.pointerId);
     this.finishPointerInteraction(event.pointerId, true);
   };
 
   private onPointerCancel = (event: PointerEvent) => {
+    if (this.interactionMode !== 'active') return;
     if (this.gesture && this.finishTouchPointer(event.pointerId)) return;
     if (event.pointerType === 'touch') this.touchPoints.delete(event.pointerId);
     this.finishPointerInteraction(event.pointerId, false);
   };
 
   private onLostPointerCapture = (event: PointerEvent) => {
+    if (this.interactionMode !== 'active') return;
     if (this.gesture && this.finishTouchPointer(event.pointerId)) return;
     if (event.pointerType === 'touch') this.touchPoints.delete(event.pointerId);
     this.finishPointerInteraction(event.pointerId, false);
@@ -689,6 +805,7 @@ export class CanvasEngine {
   };
 
   private onKeyDown = (event: KeyboardEvent) => {
+    if (this.interactionMode !== 'active') return;
     const step = event.shiftKey ? KEYBOARD_FAST_STEP : KEYBOARD_STEP;
     const movement = keyMovement(event.key, step);
 
@@ -718,8 +835,14 @@ export class CanvasEngine {
 
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      if (!this.primarySelectedNodeId) this.selectNearestNodeToViewportCenter();
-      this.interaction = this.primarySelectedNodeId ? 'Keyboard selection' : 'Keyboard no target';
+      const selected = this.selectedNode();
+      const action = selected ? describeNode(selected).actions.find((candidate) => candidate.available && candidate.id === 'enter-child-canvas') : null;
+      if (selected && action && this.routeNodeAction(selected.id, action.id, 'keyboard')) {
+        this.interaction = 'Keyboard node action';
+      } else {
+        if (!this.primarySelectedNodeId) this.selectNearestNodeToViewportCenter();
+        this.interaction = this.primarySelectedNodeId ? 'Keyboard selection' : 'Keyboard no target';
+      }
       this.markDirty();
       this.emitStatus();
       return;
@@ -757,6 +880,7 @@ export class CanvasEngine {
   };
 
   private onWheel = (event: WheelEvent) => {
+    if (this.interactionMode !== 'active') return;
     event.preventDefault();
     const point = this.eventPoint(event);
     if (event.ctrlKey || event.metaKey) {
@@ -779,6 +903,7 @@ export class CanvasEngine {
   };
 
   private onDoubleClick = (event: MouseEvent) => {
+    if (this.interactionMode !== 'active') return;
     const point = this.eventPoint(event);
     this.zoomAt(point.x, point.y, 1.55);
   };
@@ -821,7 +946,6 @@ export class CanvasEngine {
     for (let i = this.model.nodes.length - 1; i >= 0; i--) {
       const node = this.model.nodes[i];
       if (point.x >= node.x && point.x <= node.x + node.w && point.y >= node.y && point.y <= node.y + node.h) {
-        this.nodeInternalHit(node, point);
         return node;
       }
     }
@@ -1073,6 +1197,77 @@ export class CanvasEngine {
       });
     });
   }
+
+  private attachInputListenersForMode() {
+    if (this.interactionMode === 'active') {
+      if (this.inputListenersAttached) return;
+      this.canvas.addEventListener('pointerdown', this.onPointerDown);
+      this.canvas.addEventListener('pointercancel', this.onPointerCancel);
+      this.canvas.addEventListener('lostpointercapture', this.onLostPointerCapture);
+      this.canvas.addEventListener('keydown', this.onKeyDown);
+      this.canvas.addEventListener('focus', this.onFocus);
+      this.canvas.addEventListener('blur', this.onBlur);
+      window.addEventListener('pointermove', this.onPointerMove);
+      window.addEventListener('pointerup', this.onPointerUp);
+      window.addEventListener('blur', this.onWindowBlur);
+      this.canvas.addEventListener('wheel', this.onWheel, { passive: false });
+      this.canvas.addEventListener('dblclick', this.onDoubleClick);
+      this.inputListenersAttached = true;
+      return;
+    }
+    this.detachInputListeners();
+  }
+
+  private detachInputListeners() {
+    if (!this.inputListenersAttached) return;
+    this.canvas.removeEventListener('pointerdown', this.onPointerDown);
+    this.canvas.removeEventListener('pointercancel', this.onPointerCancel);
+    this.canvas.removeEventListener('lostpointercapture', this.onLostPointerCapture);
+    this.canvas.removeEventListener('keydown', this.onKeyDown);
+    this.canvas.removeEventListener('focus', this.onFocus);
+    this.canvas.removeEventListener('blur', this.onBlur);
+    window.removeEventListener('pointermove', this.onPointerMove);
+    window.removeEventListener('pointerup', this.onPointerUp);
+    window.removeEventListener('blur', this.onWindowBlur);
+    this.canvas.removeEventListener('wheel', this.onWheel);
+    this.canvas.removeEventListener('dblclick', this.onDoubleClick);
+    this.inputListenersAttached = false;
+  }
+
+  private frameIntervalMs() {
+    if (this.interactionMode === 'preview-live') return PREVIEW_FRAME_INTERVAL_MS;
+    if (this.interactionMode === 'context-live') return CONTEXT_FRAME_INTERVAL_MS;
+    return 0;
+  }
+
+  private portalLayoutsFor(visibleNodes: CanvasNode[]): PortalLayout[] {
+    const cullBounds = this.visibleWorldBounds();
+    return visibleNodes
+      .filter((node) => node.type === BuiltInNodeTypes.canvas)
+      .map((node) => {
+        const data = parseNodeData(node) as CanvasPortalNodeData;
+        const worldRect = canvasPortalViewportRect(this.nodeContentRect(node));
+        return {
+          parentCanvasId: this.canvasId,
+          portalNodeId: node.id,
+          childCanvasId: data.childCanvasId,
+          worldRect,
+          screenRect: this.worldToScreenRect(worldRect),
+          visible: intersectsRect(worldRect, cullBounds),
+        };
+      });
+  }
+
+  private portalPreviewState(node: CanvasNode): 'none' | 'live' | 'unavailable' {
+    if (node.type !== BuiltInNodeTypes.canvas) return 'none';
+    const data = parseNodeData(node) as CanvasPortalNodeData;
+    if (!data.childCanvasId) return 'none';
+    return this.livePortalNodeIds.has(node.id) ? 'live' : 'unavailable';
+  }
+
+  private routeNodeAction(nodeId: string, actionId: string, source: CanvasEditSource) {
+    return this.onNodeAction?.(nodeId, actionId, source) ?? false;
+  }
 }
 
 function cloneModel(model: CanvasModel): CanvasModel {
@@ -1197,6 +1392,10 @@ function uniqueNodeId(base: string, existingIds: Set<string>) {
 
 function intersectsNode(node: CanvasNode, bounds: VisibleWorldBounds) {
   return !(node.x > bounds.x1 || node.x + node.w < bounds.x0 || node.y > bounds.y1 || node.y + node.h < bounds.y0);
+}
+
+function intersectsRect(rect: { x: number; y: number; w: number; h: number }, bounds: VisibleWorldBounds) {
+  return !(rect.x > bounds.x1 || rect.x + rect.w < bounds.x0 || rect.y > bounds.y1 || rect.y + rect.h < bounds.y0);
 }
 
 function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {

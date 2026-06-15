@@ -58,6 +58,277 @@ button {
   touch-action: none;
 }
 
+.nested-workspace,
+.nested-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.nested-stage {
+  background: #101217;
+}
+
+:root[data-theme='light'] .nested-stage {
+  background: #f4f6f8;
+}
+
+.stack-planes,
+.portal-overlays,
+.parent-context-layer,
+.parent-context-field,
+.stack-breadcrumb {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.stack-plane-button {
+  display: block;
+  border: 0;
+  padding: 0;
+  overflow: hidden;
+  background: transparent;
+  pointer-events: auto;
+  transition:
+    transform 160ms cubic-bezier(0.2, 0, 0.2, 1),
+    opacity 160ms cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+.stack-slab {
+  position: absolute;
+  left: 10px;
+  z-index: 1;
+  width: 34px;
+  height: 120px;
+  border: 1px solid rgba(139, 150, 165, 0.24);
+  border-radius: 7px;
+  color: #8b96a5;
+  background: rgba(24, 29, 37, 0.64);
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.stack-slab:focus-visible {
+  outline: 2px solid #5aa7ff;
+  outline-offset: 2px;
+}
+
+.nested-stage[data-animation='off'] .stack-plane-button {
+  transition-duration: 0ms;
+}
+
+.active-plane,
+.context-plane {
+  position: absolute;
+  inset: 0;
+}
+
+.portal-overlays {
+  z-index: 4;
+}
+
+.portal-overlay {
+  box-shadow:
+    inset 0 0 0 1px rgba(90, 167, 255, 0.38),
+    0 8px 24px rgba(0, 0, 0, 0.22);
+}
+
+.portal-preview-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.portal-activation {
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.portal-activation:focus-visible {
+  outline: 2px solid #5aa7ff;
+  outline-offset: -2px;
+}
+
+.parent-context-layer {
+  z-index: 5;
+}
+
+.parent-context-field,
+.parent-context-canvas-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.parent-context-field {
+  color: #5aa7ff;
+  overflow: hidden;
+}
+
+.parent-context-canvas-clip {
+  position: absolute;
+  overflow: hidden;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px rgba(90, 167, 255, 0.38);
+  pointer-events: none;
+}
+
+.parent-context-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.parent-context-vignette {
+  fill: currentColor;
+  opacity: 0.04;
+}
+
+.parent-context-vignette.top,
+.parent-context-vignette.bottom {
+  opacity: 0.05;
+}
+
+.parent-context-shape-hit {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.parent-context-shape {
+  fill: rgba(165, 178, 194, 0.34);
+  stroke: rgba(238, 242, 246, 0.32);
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.parent-context-shape.portal {
+  fill: rgba(90, 167, 255, 0.18);
+  stroke: rgba(90, 167, 255, 0.66);
+}
+
+.parent-context-aperture {
+  fill: none;
+  stroke: rgba(66, 201, 135, 0.82);
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+}
+
+.parent-context-hit-rect {
+  fill: transparent;
+  stroke: transparent;
+  pointer-events: all;
+}
+
+.parent-context-shape-hit:hover .parent-context-shape,
+.parent-context-shape-hit:focus-visible .parent-context-shape {
+  opacity: 1;
+  stroke: #5aa7ff;
+  stroke-width: 2;
+}
+
+.parent-context-shape-hit:focus-visible {
+  outline: none;
+}
+
+:root[data-theme='light'] .parent-context-field {
+  color: #2f6fd0;
+}
+
+:root[data-theme='light'] .parent-context-shape {
+  fill: rgba(61, 70, 82, 0.22);
+  stroke: rgba(24, 33, 45, 0.32);
+}
+
+:root[data-theme='light'] .parent-context-shape.portal {
+  fill: rgba(47, 111, 208, 0.16);
+  stroke: rgba(47, 111, 208, 0.58);
+}
+
+.stack-breadcrumb {
+  top: auto;
+  right: auto;
+  bottom: 58px;
+  left: 14px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  pointer-events: auto;
+}
+
+.stack-breadcrumb button,
+.node-action-button,
+.delete-confirmation button {
+  border: 1px solid rgba(139, 150, 165, 0.24);
+  border-radius: 6px;
+  color: #c6ced8;
+  background: rgba(24, 29, 37, 0.84);
+  cursor: pointer;
+}
+
+.stack-breadcrumb button {
+  height: 28px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+
+.node-action-button {
+  grid-column: 1 / -1;
+  min-height: 28px;
+  font-size: 12px;
+}
+
+.node-action-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.delete-confirmation {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  background: rgba(6, 8, 12, 0.42);
+}
+
+.delete-confirmation-panel {
+  width: min(360px, calc(100% - 32px));
+  padding: 18px;
+  border: 1px solid rgba(139, 150, 165, 0.28);
+  border-radius: 8px;
+  color: #eef2f6;
+  background: rgba(24, 29, 37, 0.96);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
+}
+
+.delete-confirmation-panel h2 {
+  margin: 0 0 8px;
+  font-size: 17px;
+}
+
+.delete-confirmation-panel p {
+  margin: 0 0 14px;
+  color: #8b96a5;
+  font-size: 13px;
+}
+
+.delete-confirmation-panel div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.delete-confirmation button {
+  height: 32px;
+  padding: 0 12px;
+}
+
 .canvas-surface:focus-visible {
   outline: 2px solid #5aa7ff;
   outline-offset: -4px;

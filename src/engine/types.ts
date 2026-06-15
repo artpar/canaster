@@ -116,7 +116,43 @@ export type ViewportStatus = {
   interaction: string;
 };
 
+export type EngineInteractionMode = 'active' | 'preview-live' | 'context-live' | 'dormant';
+
+export type ScreenRect = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
+export type PortalLayout = {
+  parentCanvasId: string;
+  portalNodeId: string;
+  childCanvasId: string | null;
+  worldRect: CanvasNodeGeometry;
+  screenRect: ScreenRect;
+  visible: boolean;
+};
+
+export type CanvasFrameMetrics = {
+  canvasId: string;
+  mode: EngineInteractionMode;
+  renderedNodes: number;
+  totalNodes: number;
+  frameMs: number;
+};
+
 export type EngineOptions = {
+  canvasId?: string;
+  interactionMode?: EngineInteractionMode;
+  beforeCommand?: (command: CanvasCommand) => CanvasCommand | false;
+  onNodeAction?: (nodeId: string, actionId: string, source: CanvasEditSource) => boolean;
   onStatus?: (status: ViewportStatus) => void;
   onModelChange?: (model: CanvasModel, change: CanvasModelChange) => void;
+  onPortalLayout?: (layouts: PortalLayout[]) => void;
+  onFrameMetrics?: (metrics: CanvasFrameMetrics) => void;
+  livePortalNodeIds?: Set<string>;
+  highlightNodeIds?: string[];
+  transformPastedNode?: (node: CanvasNode) => CanvasNode;
+  pasteInteractionForNodes?: (nodes: CanvasNode[]) => string | null;
 };

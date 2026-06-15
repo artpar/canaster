@@ -357,7 +357,7 @@ export async function runCanwayFoundationProbe() {
       }
 
       const canvasPortal = engine.model.nodes.find((node) => node.id === 'canvas-portal') ?? makeCanvasNode('canvas-portal', 0, 0);
-      const internalHit = engine.nodeInternalHit?.(canvasPortal, { x: canvasPortal.x + 20, y: canvasPortal.y + 20 }) ?? null;
+      const internalHit = engine.nodeInternalHit?.(canvasPortal, { x: canvasPortal.x + 40, y: canvasPortal.y + 70 }) ?? null;
 
       return {
         rendered: initialRendered,

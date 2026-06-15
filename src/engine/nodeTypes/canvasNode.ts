@@ -1,7 +1,7 @@
 import { BuiltInNodeTypes, type CanvasPortalNodeData } from '../types';
 import { asNullableString, asNumber, asString } from './data';
 import { clipText, drawTypeBadge } from './rendering';
-import type { NodeDefinition } from './types';
+import type { NodeContentRect, NodeDefinition } from './types';
 
 export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = {
   type: BuiltInNodeTypes.canvas,
@@ -27,25 +27,33 @@ export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = {
 
     if (state.quality !== 'compact') {
       ctx.strokeStyle = theme.nodeBorder;
-      const previewX = contentRect.x + 6;
-      const previewY = contentRect.y + 36;
-      const previewW = Math.max(0, contentRect.w - 12);
-      const previewH = Math.max(0, contentRect.h - 72);
+      const preview = canvasPortalViewportRect(contentRect);
+      const previewX = preview.x;
+      const previewY = preview.y;
+      const previewW = preview.w;
+      const previewH = preview.h;
       ctx.strokeRect(previewX, previewY, previewW, previewH);
       ctx.fillStyle = theme.mutedText;
       ctx.font = '12px ui-sans-serif, system-ui, sans-serif';
-      if (data.childCanvasId) {
+      if (!data.childCanvasId) {
+        ctx.fillText('No child canvas', previewX + 10, previewY + 10);
+      } else if (state.portalPreview === 'unavailable') {
+        ctx.fillText('Live preview unavailable', previewX + 10, previewY + 10);
+        ctx.fillText(`${data.nodeCount} child node${data.nodeCount === 1 ? '' : 's'}`, previewX + 10, previewY + 10);
+      } else if (state.portalPreview === 'none') {
         ctx.fillText(`${data.nodeCount} child node${data.nodeCount === 1 ? '' : 's'}`, previewX + 10, previewY + 10);
         ctx.fillText(clipText(ctx, data.childCanvasId, Math.max(0, previewW - 20)), previewX + 10, previewY + 28);
-      } else {
-        ctx.fillText('No child canvas', previewX + 10, previewY + 10);
       }
-      drawPreviewBoxes(ctx, previewX, previewY, previewW, previewH, theme);
+      if (state.portalPreview !== 'live') drawPreviewBoxes(ctx, previewX, previewY, previewW, previewH, theme);
     }
 
     drawTypeBadge(ctx, contentRect, 'CANVAS', theme);
   },
-  hitTest() {
+  hitTest({ data, point, contentRect }) {
+    const preview = canvasPortalViewportRect(contentRect);
+    if (point.x >= preview.x && point.x <= preview.x + preview.w && point.y >= preview.y && point.y <= preview.y + preview.h) {
+      return { type: 'activate', action: data.childCanvasId ? 'enter-child-canvas' : 'create-child-canvas' };
+    }
     return { type: 'body' };
   },
   describe({ data }) {
@@ -54,10 +62,24 @@ export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = {
       roleDescription: 'Canvas portal',
       details: [data.childCanvasId ? `child ${data.childCanvasId}` : 'no child canvas', `${data.nodeCount} child node${data.nodeCount === 1 ? '' : 's'}`],
       state: [],
-      actions: [],
+      actions: data.childCanvasId
+        ? [
+            { id: 'enter-child-canvas', label: 'Enter canvas', available: true },
+            { id: 'focus-portal-preview', label: 'Focus preview', available: true },
+          ]
+        : [{ id: 'create-child-canvas', label: 'Create child canvas', available: true }],
     };
   },
 };
+
+export function canvasPortalViewportRect(contentRect: NodeContentRect): NodeContentRect {
+  return {
+    x: contentRect.x + 6,
+    y: contentRect.y + 36,
+    w: Math.max(0, contentRect.w - 12),
+    h: Math.max(0, contentRect.h - 72),
+  };
+}
 
 function drawPreviewBoxes(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, theme: { nodeBorder: string }) {
   if (w < 64 || h < 48) return;

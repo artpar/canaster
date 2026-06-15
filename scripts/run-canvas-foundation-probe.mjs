@@ -163,7 +163,7 @@ function assertProbe(result, browserEvents) {
   assert(result.app.sequentialFocusables.some((entry) => entry.tag === 'canvas'), 'canvas is not reachable in sequential keyboard focus');
   assert(result.app.sequentialFocusables.findIndex((entry) => entry.tag === 'canvas') >= 5, 'toolbar controls should remain before canvas in tab order');
   assert(result.app.nodeAccess.label === 'Canvas nodes', 'node access panel is missing');
-  assert(result.app.nodeAccess.nodeCount === 4, 'node access panel does not expose all sample nodes');
+  assert(result.app.nodeAccess.nodeCount === 5, 'node access panel does not expose all sample nodes');
   assert(result.app.nodeAccess.nodeLabels.some((label) => label.includes('Source Model')), 'node access panel missing Source Model');
   assert(result.app.nodeAccess.actionLabels.includes('Move selection right'), 'node access move command missing');
   assert(result.app.nodeAccess.actionLabels.includes('Delete selection'), 'node access delete command missing');
@@ -215,8 +215,16 @@ function assertProbe(result, browserEvents) {
     'image source placeholder did not document unimplemented preview loading',
   );
   assert(result.nodePluginContract.descriptions['canvas-portal']?.roleDescription === 'Canvas portal', 'canvas node role description missing');
-  assert(Object.values(result.nodePluginContract.actionCounts).every((count) => count === 0), 'Phase 3 node descriptions exposed action buttons');
-  assert(result.nodePluginContract.canvasPortalHit?.type === 'body', 'canvas portal exposed a non-body hit target before action routing');
+  assert(result.nodePluginContract.actionCounts['canvas-portal'] >= 1, 'canvas portal action missing');
+  assert(
+    Object.entries(result.nodePluginContract.actionCounts).every(([id, count]) => id === 'canvas-portal' ? count >= 1 : count === 0),
+    'non-canvas node descriptions exposed unexpected action buttons',
+  );
+  assert(result.nodePluginContract.canvasPortalHit?.type === 'activate', 'canvas portal aperture did not expose activation hit target');
+  assert(
+    ['create-child-canvas', 'enter-child-canvas'].includes(result.nodePluginContract.canvasPortalHit?.action),
+    'canvas portal aperture action mismatch',
+  );
   assert(result.nodePluginContract.unknown.moved?.x === 480 && result.nodePluginContract.unknown.moved?.y === 32, 'unknown node did not move through core command');
   assert(result.nodePluginContract.unknown.deleted, 'unknown node was not deletable through core command');
   assert(result.nodePluginContract.unknown.pastedDataEqual, 'unknown node custom data was not preserved through copy/paste');
