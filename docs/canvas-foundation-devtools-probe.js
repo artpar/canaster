@@ -1,10 +1,12 @@
 export async function runCanwayFoundationProbe() {
   const { CanvasEngine } = await import('/src/engine/CanvasEngine.ts');
   const { sampleModel } = await import('/src/engine/sampleModel.ts');
+  const SNAP_STEP = 32;
 
   const raf = async (count = 1) => {
     for (let i = 0; i < count; i++) await new Promise((resolve) => requestAnimationFrame(resolve));
   };
+  const isSnapped = (value) => Math.abs(value / SNAP_STEP - Math.round(value / SNAP_STEP)) < 0.0001;
   const cloneModel = (model) => ({ nodes: model.nodes.map((node) => ({ ...node })) });
   const modelBounds = (model) => {
     if (!model.nodes.length) return null;
@@ -34,7 +36,7 @@ export async function runCanwayFoundationProbe() {
     };
   };
   const screen = (camera, x, y) => ({ x: camera.x + x * camera.scale, y: camera.y + y * camera.scale });
-  const dispatchPointer = (target, type, x, y, id = 1, pointerType = 'mouse') => {
+  const dispatchPointer = (target, type, x, y, id = 1, pointerType = 'mouse', options = {}) => {
     target.dispatchEvent(
       new PointerEvent(type, {
         bubbles: true,
@@ -45,6 +47,10 @@ export async function runCanwayFoundationProbe() {
         pointerType,
         isPrimary: id === 1,
         buttons: type === 'pointerup' || type === 'pointercancel' || type === 'lostpointercapture' ? 0 : 1,
+        altKey: options.altKey ?? false,
+        shiftKey: options.shiftKey ?? false,
+        metaKey: options.metaKey ?? false,
+        ctrlKey: options.ctrlKey ?? false,
       }),
     );
   };
@@ -264,10 +270,14 @@ export async function runCanwayFoundationProbe() {
               h: geometryAfterMove.h - beforeGeometry.h,
             }
           : null,
+      movedTo: geometryAfterMove,
+      moveSnapped: geometryAfterMove ? isSnapped(geometryAfterMove.x) && isSnapped(geometryAfterMove.y) : false,
       resizedBy:
         geometryAfterMove && resizedAfter
           ? { x: resizedAfter.x - geometryAfterMove.x, y: resizedAfter.y - geometryAfterMove.y, w: resizedAfter.w - geometryAfterMove.w, h: resizedAfter.h - geometryAfterMove.h }
           : null,
+      resizedTo: resizedAfter ? { x: resizedAfter.x, y: resizedAfter.y, w: resizedAfter.w, h: resizedAfter.h } : null,
+      resizeSnapped: resizedAfter ? isSnapped(resizedAfter.w) : false,
       resizeChange,
       escapeExitedResizeMode: statuses.at(-1)?.interaction === 'Keyboard resize ended',
     };
@@ -285,22 +295,27 @@ export async function runCanwayFoundationProbe() {
     engine.selectNode('source', 'nonvisual');
     await raf(2);
     const beforeNonvisualMove = changes.length;
-    engine.moveSelection(10, 0, 'nonvisual');
+    engine.moveSelection(SNAP_STEP, 0, 'nonvisual');
     await raf(2);
+    const sourceAfterNonvisualMove = engine.model.nodes.find((node) => node.id === 'source');
     result.nonvisualMove = {
       delta: changes.length - beforeNonvisualMove,
       change: changes.at(-1)?.change,
-      sourceX: engine.model.nodes.find((node) => node.id === 'source')?.x,
+      sourceX: sourceAfterNonvisualMove?.x,
+      snapped: sourceAfterNonvisualMove ? isSnapped(sourceAfterNonvisualMove.x) && isSnapped(sourceAfterNonvisualMove.y) : false,
     };
 
     const beforeNonvisualResize = changes.length;
     const widthBeforeResize = engine.model.nodes.find((node) => node.id === 'source')?.w;
-    engine.resizePrimarySelection(10, 0, 'nonvisual');
+    engine.resizePrimarySelection(SNAP_STEP, 0, 'nonvisual');
     await raf(2);
+    const sourceAfterNonvisualResize = engine.model.nodes.find((node) => node.id === 'source');
     result.nonvisualResize = {
       delta: changes.length - beforeNonvisualResize,
       change: changes.at(-1)?.change,
-      widthDelta: (engine.model.nodes.find((node) => node.id === 'source')?.w ?? 0) - (widthBeforeResize ?? 0),
+      widthDelta: (sourceAfterNonvisualResize?.w ?? 0) - (widthBeforeResize ?? 0),
+      width: sourceAfterNonvisualResize?.w,
+      widthSnapped: sourceAfterNonvisualResize ? isSnapped(sourceAfterNonvisualResize.w) : false,
     };
 
     engine.selectNode('source', 'nonvisual');
@@ -322,7 +337,7 @@ export async function runCanwayFoundationProbe() {
     const beforeMultiMove = changes.length;
     const beforeSource = { ...engine.model.nodes.find((node) => node.id === 'source') };
     const beforePlanner = { ...engine.model.nodes.find((node) => node.id === 'planner') };
-    engine.moveSelection(20, 10, 'keyboard');
+    engine.moveSelection(SNAP_STEP * 2, SNAP_STEP, 'keyboard');
     await raf(2);
     const afterSource = engine.model.nodes.find((node) => node.id === 'source');
     const afterPlanner = engine.model.nodes.find((node) => node.id === 'planner');
@@ -331,6 +346,8 @@ export async function runCanwayFoundationProbe() {
       change: changes.at(-1)?.change,
       sourceDelta: { x: afterSource.x - beforeSource.x, y: afterSource.y - beforeSource.y },
       plannerDelta: { x: afterPlanner.x - beforePlanner.x, y: afterPlanner.y - beforePlanner.y },
+      sourceSnapped: isSnapped(afterSource.x) && isSnapped(afterSource.y),
+      plannerSnapped: isSnapped(afterPlanner.x) && isSnapped(afterPlanner.y),
       selectionCount: statuses.at(-1)?.selectionCount,
     };
 
@@ -343,11 +360,13 @@ export async function runCanwayFoundationProbe() {
     engine.pasteClipboard('keyboard');
     await raf(3);
     const pasteChange = changes.at(-1)?.change;
+    const pastedNodes = engine.model.nodes.filter((node) => !idsBeforePaste.has(node.id));
     result.multiPaste = {
       delta: changes.length - beforePaste,
       change: pasteChange,
       totalNodes: engine.model.nodes.length,
-      newIds: engine.model.nodes.filter((node) => !idsBeforePaste.has(node.id)).map((node) => node.id),
+      newIds: pastedNodes.map((node) => node.id),
+      positionsSnapped: pastedNodes.every((node) => isSnapped(node.x) && isSnapped(node.y)),
       selectedNodeIds: statuses.at(-1)?.selectedNodeIds ?? [],
     };
 
@@ -363,6 +382,88 @@ export async function runCanwayFoundationProbe() {
 
     return result;
   });
+
+  const snapContract = await withEngine(
+    { nodes: [{ id: 'snap', label: 'Snap Target', detail: 'grid snap probe', kind: 'task', x: 0, y: 0, w: 160, h: 96 }] },
+    async ({ canvas, engine, changes }) => {
+      const result = {};
+      const center = () => {
+        const node = engine.model.nodes[0];
+        return { x: node.x + node.w / 2, y: node.y + node.h / 2 };
+      };
+      const handle = () => {
+        const node = engine.model.nodes[0];
+        return { x: node.x + node.w - 12, y: node.y + node.h - 12 };
+      };
+
+      let point = center();
+      const beforeSnappedMove = changes.length;
+      dispatchPointer(canvas, 'pointerdown', point.x, point.y, 701);
+      dispatchPointer(window, 'pointermove', point.x + 45, point.y + 45, 701);
+      dispatchPointer(window, 'pointerup', point.x + 45, point.y + 45, 701);
+      await raf(3);
+      let node = engine.model.nodes[0];
+      result.pointerMove = {
+        delta: changes.length - beforeSnappedMove,
+        x: node.x,
+        y: node.y,
+        snapped: isSnapped(node.x) && isSnapped(node.y),
+      };
+
+      point = handle();
+      const beforeSnappedResize = changes.length;
+      dispatchPointer(canvas, 'pointerdown', point.x, point.y, 702);
+      dispatchPointer(window, 'pointermove', point.x + 23, point.y + 23, 702);
+      dispatchPointer(window, 'pointerup', point.x + 23, point.y + 23, 702);
+      await raf(3);
+      node = engine.model.nodes[0];
+      result.pointerResize = {
+        delta: changes.length - beforeSnappedResize,
+        w: node.w,
+        h: node.h,
+        snapped: isSnapped(node.w) && isSnapped(node.h),
+      };
+
+      engine.setModel({ nodes: [{ id: 'snap', label: 'Snap Target', detail: 'grid snap probe', kind: 'task', x: 0, y: 0, w: 160, h: 96 }] });
+      await raf(3);
+      point = center();
+      const beforePrecisionMove = changes.length;
+      dispatchPointer(canvas, 'pointerdown', point.x, point.y, 703);
+      dispatchPointer(window, 'pointermove', point.x + 45, point.y + 45, 703, 'mouse', { altKey: true });
+      dispatchPointer(window, 'pointerup', point.x + 45, point.y + 45, 703);
+      await raf(3);
+      node = engine.model.nodes[0];
+      result.precisionMove = {
+        delta: changes.length - beforePrecisionMove,
+        x: node.x,
+        y: node.y,
+        snapped: isSnapped(node.x) && isSnapped(node.y),
+      };
+
+      engine.setModel({ nodes: [{ id: 'snap', label: 'Snap Target', detail: 'grid snap probe', kind: 'task', x: 0, y: 0, w: 160, h: 96 }] });
+      await raf(3);
+      point = center();
+      dispatchPointer(canvas, 'pointerdown', point.x, point.y, 704);
+      dispatchPointer(window, 'pointerup', point.x, point.y, 704);
+      await raf(2);
+      point = handle();
+      const beforePrecisionResize = changes.length;
+      dispatchPointer(canvas, 'pointerdown', point.x, point.y, 705);
+      dispatchPointer(window, 'pointermove', point.x + 23, point.y + 23, 705, 'mouse', { altKey: true });
+      dispatchPointer(window, 'pointerup', point.x + 23, point.y + 23, 705);
+      await raf(3);
+      node = engine.model.nodes[0];
+      result.precisionResize = {
+        delta: changes.length - beforePrecisionResize,
+        w: node.w,
+        h: node.h,
+        snapped: isSnapped(node.w) && isSnapped(node.h),
+      };
+
+      return result;
+    },
+    { width: 420, height: 320, fit: false },
+  );
 
   const cancellation = await withEngine(sampleModel, async ({ canvas, engine, changes, camera }) => {
     const source = engine.model.nodes.find((node) => node.id === 'source');
@@ -614,11 +715,11 @@ export async function runCanwayFoundationProbe() {
         const handle = screen(camera, source.x + source.w - 12, source.y + source.h - 12);
 
         dispatchPointer(canvas, 'pointerdown', center.x, center.y, 5000 + i * 5);
-        dispatchPointer(window, 'pointermove', center.x + 8, center.y + 3, 5000 + i * 5);
-        dispatchPointer(window, 'pointerup', center.x + 8, center.y + 3, 5000 + i * 5);
+        dispatchPointer(window, 'pointermove', center.x + 45, center.y + 20, 5000 + i * 5);
+        dispatchPointer(window, 'pointerup', center.x + 45, center.y + 20, 5000 + i * 5);
         dispatchPointer(canvas, 'pointerdown', handle.x, handle.y, 5001 + i * 5);
-        dispatchPointer(window, 'pointermove', handle.x + 5, handle.y + 3, 5001 + i * 5);
-        dispatchPointer(window, 'pointerup', handle.x + 5, handle.y + 3, 5001 + i * 5);
+        dispatchPointer(window, 'pointermove', handle.x + 23, handle.y + 23, 5001 + i * 5);
+        dispatchPointer(window, 'pointerup', handle.x + 23, handle.y + 23, 5001 + i * 5);
         dispatchPointer(canvas, 'pointerdown', center.x, center.y, 5002 + i * 5);
         dispatchPointer(window, 'pointermove', center.x + 6, center.y, 5002 + i * 5);
         dispatchPointer(canvas, 'pointercancel', center.x + 6, center.y, 5002 + i * 5);
@@ -843,6 +944,7 @@ export async function runCanwayFoundationProbe() {
     culling,
     keyboardContract,
     advancedEditing,
+    snapContract,
     cancellation,
     touchPointerOwnership,
     multiTouchPolicy,

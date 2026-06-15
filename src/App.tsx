@@ -102,10 +102,10 @@ export function App() {
             <span>{status.selectionCount ? `${status.selectionCount} selected` : 'No selection'}</span>
           </div>
           <div className="node-access-actions" aria-label="Node editing commands">
-            <IconButton label="Move selection right" onClick={() => engineRef.current?.moveSelection(10, 0, 'nonvisual')}>
+            <IconButton label="Move selection right" onClick={() => engineRef.current?.moveSelection(32, 0, 'nonvisual')}>
               <MoveRight size={16} />
             </IconButton>
-            <IconButton label="Resize primary selection wider" onClick={() => engineRef.current?.resizePrimarySelection(10, 0, 'nonvisual')}>
+            <IconButton label="Resize primary selection wider" onClick={() => engineRef.current?.resizePrimarySelection(32, 0, 'nonvisual')}>
               <Maximize2 size={16} />
             </IconButton>
             <IconButton label="Copy selection" onClick={() => engineRef.current?.copySelection()}>

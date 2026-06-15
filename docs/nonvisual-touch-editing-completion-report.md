@@ -58,14 +58,22 @@ Selection behavior:
 
 Keyboard behavior:
 
-- Arrow keys move selected nodes by `10`;
-- Shift plus Arrow moves selected nodes by `40`;
+- Arrow keys move selected nodes by one visible grid step (`32` world units);
+- Shift plus Arrow moves selected nodes by four visible grid steps (`128` world units);
 - `r` toggles keyboard resize mode for the primary selected node;
-- Arrow keys resize width/height in resize mode;
+- Arrow keys resize width/height in resize mode and snap the edited dimension to the visible grid;
 - Escape exits resize mode or clears selection;
 - Delete/Backspace delete the selected node or selected group;
 - Cmd/Ctrl+C copies the current selection to the internal engine clipboard;
-- Cmd/Ctrl+V pastes copied nodes with collision-free ids and positional offset.
+- Cmd/Ctrl+V pastes copied nodes with collision-free ids and grid-snapped positional offset.
+
+Snap-to-grid behavior:
+
+- the visible grid is the editing grid: `32` world units;
+- keyboard, nonvisual commands, and paste always snap edited coordinates or dimensions;
+- pointer drag and resize snap to the nearest grid coordinate or size;
+- holding Alt during pointer drag or resize bypasses snap for precision placement;
+- zero-delta pointer drag/resize keeps existing geometry instead of forcing legacy unsnapped nodes onto the grid.
 
 Clipboard contract:
 
@@ -84,14 +92,17 @@ Model-change metadata:
 Automated evidence from `npm run probe:canvas`:
 
 - no-selection delete/copy/paste are no-ops and emit no model changes;
-- nonvisual move emits one `node-move` with `source: "nonvisual"`;
-- nonvisual resize emits one `node-resize` and changes width by `10`;
+- nonvisual move emits one `node-move` with `source: "nonvisual"` and grid-snaps the final position;
+- nonvisual resize emits one `node-resize` and grid-snaps the edited width;
 - single delete emits one `node-delete`, removes `source`, and clears selection;
-- multi-move emits one `node-move` with two node ids and moves both selected nodes by `20,10`;
+- multi-move emits one `node-move` with two node ids and snaps both selected node positions;
 - copy emits no model change;
-- multi-paste emits one `node-create`, creates two collision-free ids, and selects the pasted nodes;
+- multi-paste emits one `node-create`, creates two collision-free ids, snaps pasted positions, and selects the pasted nodes;
 - multi-delete emits one `node-delete` with two node ids and clears selection;
-- keyboard resize emits `node-resize` with `source: "keyboard"`.
+- keyboard resize emits `node-resize` with `source: "keyboard"` and snaps the edited dimension;
+- pointer snap probe moves a node from `0,0` to `32,32` for a `45,45` raw drag;
+- pointer snap probe resizes a `160x96` node to `192x128` for a raw `183x119` resize;
+- Alt pointer probe preserves raw `45,45` move and raw `183x119` resize.
 
 ## Real-Device Touch Status
 

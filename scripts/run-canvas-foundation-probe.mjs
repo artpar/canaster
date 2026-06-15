@@ -201,9 +201,10 @@ function assertProbe(result, browserEvents) {
     result.keyboardContract.keyboardChanges.every((change) => change.kind === 'node-move' && change.source === 'keyboard'),
     'keyboard movement change metadata is wrong',
   );
-  assert(result.keyboardContract.movedBy?.x === 10 && result.keyboardContract.movedBy?.y === 40, 'keyboard movement distance mismatch');
+  assert(result.keyboardContract.moveSnapped, 'keyboard movement did not snap node position to grid');
   assert(result.keyboardContract.movedBy?.w === 0 && result.keyboardContract.movedBy?.h === 0, 'keyboard movement resized the node');
-  assert(result.keyboardContract.resizedBy?.w === 10 && result.keyboardContract.resizedBy?.h === 0, 'keyboard resize distance mismatch');
+  assert(result.keyboardContract.resizedBy?.w > 0 && result.keyboardContract.resizedBy?.h === 0, 'keyboard resize distance mismatch');
+  assert(result.keyboardContract.resizeSnapped, 'keyboard resize did not snap node width to grid');
   assert(result.keyboardContract.resizeChange?.kind === 'node-resize' && result.keyboardContract.resizeChange?.source === 'keyboard', 'keyboard resize change metadata is wrong');
   assert(result.keyboardContract.escapeExitedResizeMode, 'Escape did not exit keyboard resize mode');
 
@@ -214,25 +215,41 @@ function assertProbe(result, browserEvents) {
   assert(result.advancedEditing.nonvisualMove.delta === 1, 'nonvisual move did not emit exactly once');
   assert(result.advancedEditing.nonvisualMove.change?.kind === 'node-move', 'nonvisual move change kind mismatch');
   assert(result.advancedEditing.nonvisualMove.change?.source === 'nonvisual', 'nonvisual move source mismatch');
+  assert(result.advancedEditing.nonvisualMove.snapped, 'nonvisual move did not snap node position');
   assert(result.advancedEditing.nonvisualResize.delta === 1, 'nonvisual resize did not emit exactly once');
-  assert(result.advancedEditing.nonvisualResize.widthDelta === 10, 'nonvisual resize width delta mismatch');
+  assert(result.advancedEditing.nonvisualResize.widthDelta > 0, 'nonvisual resize width delta mismatch');
+  assert(result.advancedEditing.nonvisualResize.widthSnapped, 'nonvisual resize did not snap node width');
   assert(result.advancedEditing.singleDelete.delta === 1, 'single delete did not emit exactly once');
   assert(result.advancedEditing.singleDelete.change?.kind === 'node-delete', 'single delete change kind mismatch');
   assert(result.advancedEditing.singleDelete.exists === false, 'single delete left deleted node behind');
   assert(result.advancedEditing.singleDelete.selectionCount === 0, 'single delete did not clear selection');
   assert(result.advancedEditing.multiMove.delta === 1, 'multi move did not emit exactly once');
   assert(result.advancedEditing.multiMove.change?.nodeIds?.length === 2, 'multi move did not include both selected node ids');
-  assert(result.advancedEditing.multiMove.sourceDelta.x === 20 && result.advancedEditing.multiMove.sourceDelta.y === 10, 'multi move source delta mismatch');
-  assert(result.advancedEditing.multiMove.plannerDelta.x === 20 && result.advancedEditing.multiMove.plannerDelta.y === 10, 'multi move planner delta mismatch');
+  assert(result.advancedEditing.multiMove.sourceSnapped, 'multi move did not snap source position');
+  assert(result.advancedEditing.multiMove.plannerSnapped, 'multi move did not snap planner position');
   assert(result.advancedEditing.copyReturned === true && result.advancedEditing.copyDelta === 0, 'copy should not mutate model');
   assert(result.advancedEditing.multiPaste.delta === 1, 'multi paste did not emit exactly once');
   assert(result.advancedEditing.multiPaste.change?.kind === 'node-create', 'multi paste change kind mismatch');
   assert(result.advancedEditing.multiPaste.newIds.length === 2, 'multi paste did not create two nodes');
   assert(new Set(result.advancedEditing.multiPaste.newIds).size === 2, 'multi paste ids collided');
+  assert(result.advancedEditing.multiPaste.positionsSnapped, 'multi paste did not snap pasted positions');
   assert(result.advancedEditing.multiPaste.selectedNodeIds.length === 2, 'multi paste did not select pasted nodes');
   assert(result.advancedEditing.multiDelete.delta === 1, 'multi delete did not emit exactly once');
   assert(result.advancedEditing.multiDelete.change?.nodeIds?.length === 2, 'multi delete did not include both selected nodes');
   assert(result.advancedEditing.multiDelete.selectionCount === 0, 'multi delete did not clear selection');
+
+  assert(result.snapContract.pointerMove.delta === 1, 'pointer snap move did not emit exactly once');
+  assert(result.snapContract.pointerMove.x === 32 && result.snapContract.pointerMove.y === 32, 'pointer move did not snap to nearest grid coordinate');
+  assert(result.snapContract.pointerMove.snapped, 'pointer move final position is not grid-snapped');
+  assert(result.snapContract.pointerResize.delta === 1, 'pointer snap resize did not emit exactly once');
+  assert(result.snapContract.pointerResize.w === 192 && result.snapContract.pointerResize.h === 128, 'pointer resize did not snap to nearest grid size');
+  assert(result.snapContract.pointerResize.snapped, 'pointer resize final size is not grid-snapped');
+  assert(result.snapContract.precisionMove.delta === 1, 'precision pointer move did not emit exactly once');
+  assert(result.snapContract.precisionMove.x === 45 && result.snapContract.precisionMove.y === 45, 'Alt pointer move did not preserve raw coordinates');
+  assert(result.snapContract.precisionMove.snapped === false, 'Alt pointer move should bypass snap');
+  assert(result.snapContract.precisionResize.delta === 1, 'precision pointer resize did not emit exactly once');
+  assert(result.snapContract.precisionResize.w === 183 && result.snapContract.precisionResize.h === 119, 'Alt pointer resize did not preserve raw size');
+  assert(result.snapContract.precisionResize.snapped === false, 'Alt pointer resize should bypass snap');
 
   for (const [name, entry] of Object.entries(result.cancellation)) {
     assert(entry.modelChangeDelta === 0, `${name} emitted a model change`);

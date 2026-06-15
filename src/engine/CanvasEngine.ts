@@ -19,8 +19,9 @@ const RESIZE_HANDLE = 12;
 const MIN_NODE_W = 140;
 const MIN_NODE_H = 76;
 const CULL_MARGIN_SCREEN = 96;
-const KEYBOARD_STEP = 10;
-const KEYBOARD_FAST_STEP = 40;
+const SNAP_STEP = GRID_STEP;
+const KEYBOARD_STEP = SNAP_STEP;
+const KEYBOARD_FAST_STEP = SNAP_STEP * 4;
 const COMPACT_NODE_SCALE = 0.22;
 const COMPACT_NODE_COUNT = 350;
 
@@ -195,14 +196,25 @@ export class CanvasEngine {
 
   moveSelection(dx: number, dy: number, source: 'keyboard' | 'nonvisual' = 'nonvisual') {
     const nodes = this.selectedNodes();
-    if (!nodes.length || (dx === 0 && dy === 0)) {
+    if (!nodes.length) {
       this.interaction = 'Move no selection';
       this.emitStatus();
       return false;
     }
+    if (dx === 0 && dy === 0) {
+      this.interaction = 'Move unchanged';
+      this.emitStatus();
+      return false;
+    }
+    const before = nodes.map((node) => ({ node, geometry: nodeGeometry(node) }));
     for (const node of nodes) {
-      node.x += dx;
-      node.y += dy;
+      node.x = snapCoordinate(node.x + dx);
+      node.y = snapCoordinate(node.y + dy);
+    }
+    if (before.every((entry) => sameNodeGeometry(entry.node, entry.geometry))) {
+      this.interaction = 'Move unchanged';
+      this.emitStatus();
+      return false;
     }
     this.interaction = source === 'keyboard' ? 'Keyboard move' : 'Nonvisual move';
     this.markDirty();
@@ -213,14 +225,19 @@ export class CanvasEngine {
 
   resizePrimarySelection(dw: number, dh: number, source: 'keyboard' | 'nonvisual' = 'nonvisual') {
     const node = this.selectedNode();
-    if (!node || (dw === 0 && dh === 0)) {
+    if (!node) {
       this.interaction = 'Resize no selection';
       this.emitStatus();
       return false;
     }
+    if (dw === 0 && dh === 0) {
+      this.interaction = 'Resize unchanged';
+      this.emitStatus();
+      return false;
+    }
     const before = nodeGeometry(node);
-    node.w = Math.max(MIN_NODE_W, node.w + dw);
-    node.h = Math.max(MIN_NODE_H, node.h + dh);
+    node.w = dw === 0 ? node.w : snapNodeWidth(node.w + dw);
+    node.h = dh === 0 ? node.h : snapNodeHeight(node.h + dh);
     if (sameNodeGeometry(node, before)) {
       this.interaction = 'Resize unchanged';
       this.emitStatus();
@@ -273,11 +290,11 @@ export class CanvasEngine {
       return false;
     }
     const existingIds = new Set(this.model.nodes.map((node) => node.id));
-    const offset = 34 * this.pasteCounter++;
+    const offset = SNAP_STEP * this.pasteCounter++;
     const pasted = this.clipboard.map((node) => {
       const id = uniqueNodeId(`${node.id}-copy`, existingIds);
       existingIds.add(id);
-      return { ...node, id, x: node.x + offset, y: node.y + offset };
+      return { ...node, id, x: snapCoordinate(node.x + offset), y: snapCoordinate(node.y + offset) };
     });
     this.model.nodes = [...this.model.nodes, ...pasted];
     this.selectedNodeIds = new Set(pasted.map((node) => node.id));
@@ -513,8 +530,10 @@ export class CanvasEngine {
     if (this.drag && event.pointerId !== this.drag.pointerId) return;
 
     if (this.drag?.mode === 'node') {
-      const nextX = world.x - this.drag.dx;
-      const nextY = world.y - this.drag.dy;
+      const rawX = world.x - this.drag.dx;
+      const rawY = world.y - this.drag.dy;
+      const nextX = event.altKey || nearlyEqual(rawX, this.drag.original.x) ? rawX : snapCoordinate(rawX);
+      const nextY = event.altKey || nearlyEqual(rawY, this.drag.original.y) ? rawY : snapCoordinate(rawY);
       const deltaX = nextX - this.drag.original.x;
       const deltaY = nextY - this.drag.original.y;
       if (this.drag.group.length > 1) {
@@ -531,8 +550,10 @@ export class CanvasEngine {
         : !sameNodeGeometry(this.drag.node, this.drag.original);
       this.markDirty();
     } else if (this.drag?.mode === 'resize') {
-      this.drag.node.w = Math.max(MIN_NODE_W, world.x - this.drag.ox - this.drag.node.x);
-      this.drag.node.h = Math.max(MIN_NODE_H, world.y - this.drag.oy - this.drag.node.y);
+      const rawW = Math.max(MIN_NODE_W, world.x - this.drag.ox - this.drag.node.x);
+      const rawH = Math.max(MIN_NODE_H, world.y - this.drag.oy - this.drag.node.y);
+      this.drag.node.w = event.altKey || nearlyEqual(rawW, this.drag.original.w) ? rawW : snapNodeWidth(rawW);
+      this.drag.node.h = event.altKey || nearlyEqual(rawH, this.drag.original.h) ? rawH : snapNodeHeight(rawH);
       this.drag.moved = !sameNodeGeometry(this.drag.node, this.drag.original);
       this.markDirty();
     } else if (this.drag?.mode === 'pan') {
@@ -978,6 +999,22 @@ function restoreNodeGeometry(node: CanvasNode, geometry: NodeGeometry) {
 
 function sameNodeGeometry(node: CanvasNode, geometry: NodeGeometry) {
   return node.x === geometry.x && node.y === geometry.y && node.w === geometry.w && node.h === geometry.h;
+}
+
+function snapCoordinate(value: number) {
+  return Math.round(value / SNAP_STEP) * SNAP_STEP;
+}
+
+function snapNodeWidth(value: number) {
+  return Math.max(MIN_NODE_W, snapCoordinate(value));
+}
+
+function snapNodeHeight(value: number) {
+  return Math.max(MIN_NODE_H, snapCoordinate(value));
+}
+
+function nearlyEqual(a: number, b: number) {
+  return Math.abs(a - b) < 0.0001;
 }
 
 function keyMovement(key: string, step: number) {
