@@ -289,10 +289,51 @@ gcloud dns managed-zones describe canaster-in --format='value(nameServers)'
 
 Give the output name servers to Namecheap. In Namecheap, set `canaster.in` to Custom DNS and replace the Namecheap nameservers with the Google Cloud DNS nameservers returned by the last command. Do not add separate Namecheap host records if Cloud DNS is authoritative.
 
-After the Namecheap nameserver change propagates:
+### DNS Delegation Status
+
+Current state as of 2026-06-15 18:36 IST:
+
+- Google Cloud DNS API is enabled for `agent4-471206`.
+- Google Cloud DNS managed zone `canaster-in` exists and is authoritative for `canaster.in.`.
+- The owner updated Namecheap to use Google Cloud DNS custom nameservers.
+- Google Cloud DNS authoritative servers already answer for the zone:
+
+```bash
+dig @ns-cloud-a1.googledomains.com +short SOA canaster.in
+dig @ns-cloud-a1.googledomains.com +short NS canaster.in
+```
+
+Expected authoritative nameservers:
+
+```text
+ns-cloud-a1.googledomains.com
+ns-cloud-a2.googledomains.com
+ns-cloud-a3.googledomains.com
+ns-cloud-a4.googledomains.com
+```
+
+Observed immediately after the Namecheap update:
 
 ```bash
 dig +short NS canaster.in
+dig @8.8.8.8 +short NS canaster.in
+dig @1.1.1.1 +short NS canaster.in
+dig @ns1.registry.in. +norecurse NS canaster.in
+```
+
+The public recursive resolvers returned no NS records, and the `.in` registry server returned `NXDOMAIN`. That means Namecheap has not yet propagated the delegation to the `.in` registry from the perspective of those resolvers. This is not a Google Cloud DNS zone problem; the Google authoritative zone exists and responds.
+
+After the Namecheap nameserver change propagates, these commands must return the Google nameservers:
+
+```bash
+dig +short NS canaster.in
+dig @8.8.8.8 +short NS canaster.in
+dig @1.1.1.1 +short NS canaster.in
+```
+
+The `A` records for `canaster.in` and `www.canaster.in` should not be expected until the global load balancer IP is created and the Cloud DNS `A` records are added. After those records are created, verify:
+
+```bash
 dig +short A canaster.in
 dig +short A www.canaster.in
 gcloud compute ssl-certificates describe canaster-managed-cert --global --format='value(managed.status)'
