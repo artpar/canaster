@@ -106,7 +106,9 @@ export async function runCanwayNestedProbe() {
   const contextFixture = makeContextFixture(createInitialDocumentCollection, planDocumentCommand, card, portal);
   api.replaceCollection(contextFixture);
   await raf(12);
+  const stageBounds = document.querySelector('.nested-stage').getBoundingClientRect();
   const contextShapes = [...document.querySelectorAll('.parent-context-shape-hit')];
+  const contextNodeIds = contextShapes.map((item) => item.getAttribute('data-node-id'));
   const contextRegions = contextShapes.map((item) => item.getAttribute('data-region'));
   const contextUniqueRegions = [...new Set(contextRegions)].sort();
   const contextFieldText = document.querySelector('.parent-context-field')?.textContent?.trim() ?? '';
@@ -115,6 +117,25 @@ export async function runCanwayNestedProbe() {
   const liveContextCanvasCount = document.querySelectorAll('.parent-context-canvas-clip canvas[data-engine-mode="preview-live"]').length;
   const contextCanvasClips = [...document.querySelectorAll('.parent-context-canvas-clip')];
   const contextCanvasModels = contextCanvasClips.map((item) => item.getAttribute('data-context-model'));
+  const contextClipRects = contextCanvasClips.map((item) => {
+    const rect = item.getBoundingClientRect();
+    return {
+      region: item.getAttribute('data-region'),
+      nodeId: item.getAttribute('data-node-id'),
+      x: Math.round(rect.left - stageBounds.left),
+      y: Math.round(rect.top - stageBounds.top),
+      w: Math.round(rect.width),
+      h: Math.round(rect.height),
+    };
+  });
+  const clipFor = (region) => contextClipRects.find((item) => item.region === region);
+  const near = (a, b, tolerance = 2) => Math.abs(a - b) <= tolerance;
+  const cardinalPaneFill = {
+    top: Boolean(clipFor('top') && clipFor('top').y <= 2 && clipFor('top').x > 0 && clipFor('top').w >= stageBounds.width * 0.5 && clipFor('top').h >= 64),
+    right: Boolean(clipFor('right') && near(clipFor('right').x + clipFor('right').w, stageBounds.width) && clipFor('right').y > 0 && clipFor('right').w >= 64 && clipFor('right').h >= stageBounds.height * 0.45),
+    bottom: Boolean(clipFor('bottom') && near(clipFor('bottom').y + clipFor('bottom').h, stageBounds.height) && clipFor('bottom').x > 0 && clipFor('bottom').w >= stageBounds.width * 0.5 && clipFor('bottom').h >= 64),
+    left: Boolean(clipFor('left') && clipFor('left').x <= 2 && clipFor('left').y > 0 && clipFor('left').w >= 64 && clipFor('left').h >= stageBounds.height * 0.45),
+  };
   const contextLiveShapeCount = contextShapes.filter((item) => item.getAttribute('data-live-canvas') === 'true').length;
   const emptyContextCanvases = contextCanvasClips
     .map((item) => ({
@@ -180,12 +201,15 @@ export async function runCanwayNestedProbe() {
     },
     parentContext: {
       regions: contextUniqueRegions,
+      nodeIds: contextNodeIds,
       shapeCount: contextShapes.length,
       legacyFloatingCardCount,
       textContent: contextFieldText,
       liveCanvasCount: liveContextCanvasCount,
       liveShapeCount: contextLiveShapeCount,
       canvasModels: contextCanvasModels,
+      clipRects: contextClipRects,
+      cardinalPaneFill,
       emptyCanvases: emptyContextCanvases,
       rightCanvasRendered: rightContextCanvas?.dataset.renderedNodes ?? null,
       rightCanvasTotal: rightContextCanvas?.dataset.totalNodes ?? null,
@@ -230,7 +254,9 @@ function makeContextFixture(createInitialDocumentCollection, planDocumentCommand
     nodes: [
       portal('portal-center', 0, 0, null, 'Center'),
       card('neighbor-top', 20, -260, 'Top'),
+      card('neighbor-top-far', 20, -560, 'Far Top'),
       portal('portal-right', 430, 24, null, 'Right Portal'),
+      portal('portal-right-far', 780, 24, null, 'Far Right Portal'),
       card('neighbor-bottom', 20, 300, 'Bottom'),
       card('neighbor-left', -330, 24, 'Left'),
       card('neighbor-top-right', 390, -220, 'Top Right'),

@@ -8,9 +8,6 @@ import type {
 } from '../documentTypes';
 
 export const FIELD_BORDER_BAND = 112;
-export const FIELD_MIN_SHAPE = 64;
-export const FIELD_MAX_SHAPE_W = 220;
-export const FIELD_MAX_SHAPE_H = 150;
 
 const REGION_ORDER: ParentContextRegion[] = ['top', 'top-right', 'right', 'bottom-right', 'bottom', 'bottom-left', 'left', 'top-left'];
 
@@ -23,28 +20,33 @@ export function buildParentContextField(collection: CanvasDocumentCollection, st
   if (!parent || !source) return { sourceCanvasId: null, sourcePortalNodeId: null, shapes: [] };
 
   const sourceCenter = { x: source.x + source.w / 2, y: source.y + source.h / 2 };
-  const shapes = parent.model.nodes
+  const nearestByRegion = new Map<ParentContextRegion, ParentContextFieldShape>();
+
+  parent.model.nodes
     .filter((node) => node.id !== source.id)
-    .map((node): ParentContextFieldShape => {
+    .forEach((node) => {
       const dx = node.x + node.w / 2 - sourceCenter.x;
       const dy = node.y + node.h / 2 - sourceCenter.y;
       const distance = Math.hypot(dx, dy);
       const region = regionForContextVector(dx, dy);
       const detail = detailForDistance(distance);
-      const projectedRect = projectNodeToBorder({ dx, dy, nodeW: node.w, nodeH: node.h, region, detail, stageRect });
       const portalData = node.type === BuiltInNodeTypes.canvas ? (node.data as CanvasPortalNodeData) : null;
-      return {
+      const shape = {
         region,
         parentCanvasId: parent.id,
         node: cloneNode(node),
         distance,
-        projectedRect,
+        projectedRect: paneRectForRegion(region, stageRect),
         childCanvasId: portalData?.childCanvasId ?? null,
         opacity: 0.22 + detail * 0.58,
         detail,
         portal: node.type === BuiltInNodeTypes.canvas,
       };
-    })
+      const previous = nearestByRegion.get(region);
+      if (!previous || shape.distance < previous.distance) nearestByRegion.set(region, shape);
+    });
+
+  const shapes = [...nearestByRegion.values()]
     .sort((a, b) => REGION_ORDER.indexOf(a.region) - REGION_ORDER.indexOf(b.region) || b.detail - a.detail);
 
   return { sourceCanvasId: parent.id, sourcePortalNodeId: source.id, shapes };
@@ -66,49 +68,21 @@ export function parentContextRegionLabel(region: ParentContextRegion): string {
   return region.split('-').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
 }
 
-function projectNodeToBorder({
-  dx,
-  dy,
-  nodeW,
-  nodeH,
-  region,
-  detail,
-  stageRect,
-}: {
-  dx: number;
-  dy: number;
-  nodeW: number;
-  nodeH: number;
-  region: ParentContextRegion;
-  detail: number;
-  stageRect: DOMRect;
-}) {
-  const band = Math.min(FIELD_BORDER_BAND, Math.max(56, Math.min(stageRect.width, stageRect.height) * 0.18));
-  const centerX = stageRect.width / 2;
-  const centerY = stageRect.height / 2;
-  const compression = 0.18 + detail * 0.22;
-  const w = clamp(nodeW * (0.28 + detail * 0.36), FIELD_MIN_SHAPE, FIELD_MAX_SHAPE_W);
-  const h = clamp(nodeH * (0.28 + detail * 0.36), FIELD_MIN_SHAPE, FIELD_MAX_SHAPE_H);
-  const xAlong = clamp(centerX + dx * compression - w / 2, band * 0.45, stageRect.width - band * 0.45 - w);
-  const yAlong = clamp(centerY + dy * compression - h / 2, band * 0.45, stageRect.height - band * 0.45 - h);
-  const flatH = Math.max(FIELD_MIN_SHAPE, h * 0.72);
-  const flatW = Math.max(FIELD_MIN_SHAPE, w * 0.72);
+function paneRectForRegion(region: ParentContextRegion, stageRect: DOMRect) {
+  const width = Math.max(1, stageRect.width);
+  const height = Math.max(1, stageRect.height);
+  const band = Math.min(FIELD_BORDER_BAND, Math.max(64, Math.min(width, height) * 0.2), width / 3, height / 3);
+  const centerW = Math.max(1, width - band * 2);
+  const centerH = Math.max(1, height - band * 2);
 
-  if (region === 'top') return { x: xAlong, y: -flatH * 0.18, w, h: flatH };
-  if (region === 'bottom') return { x: xAlong, y: stageRect.height - flatH * 0.82, w, h: flatH };
-  if (region === 'left') return { x: -flatW * 0.18, y: yAlong, w: flatW, h };
-  if (region === 'right') return { x: stageRect.width - flatW * 0.82, y: yAlong, w: flatW, h };
-
-  const cornerX = region.includes('left') ? -w * 0.14 : stageRect.width - w * 0.86;
-  const cornerY = region.includes('top') ? -h * 0.14 : stageRect.height - h * 0.86;
-  const spreadX = clamp(Math.abs(dx) * compression * 0.22, 0, band * 0.42);
-  const spreadY = clamp(Math.abs(dy) * compression * 0.22, 0, band * 0.42);
-  return {
-    x: region.includes('left') ? cornerX + spreadX : cornerX - spreadX,
-    y: region.includes('top') ? cornerY + spreadY : cornerY - spreadY,
-    w,
-    h,
-  };
+  if (region === 'top') return { x: band, y: 0, w: centerW, h: band };
+  if (region === 'right') return { x: width - band, y: band, w: band, h: centerH };
+  if (region === 'bottom') return { x: band, y: height - band, w: centerW, h: band };
+  if (region === 'left') return { x: 0, y: band, w: band, h: centerH };
+  if (region === 'top-right') return { x: width - band, y: 0, w: band, h: band };
+  if (region === 'bottom-right') return { x: width - band, y: height - band, w: band, h: band };
+  if (region === 'bottom-left') return { x: 0, y: height - band, w: band, h: band };
+  return { x: 0, y: 0, w: band, h: band };
 }
 
 function detailForDistance(distance: number) {

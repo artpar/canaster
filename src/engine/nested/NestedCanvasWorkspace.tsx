@@ -100,12 +100,16 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     return () => observer.disconnect();
   }, []);
 
-  const liveLayouts = useMemo(() => livePortalSlotsFor(collection, portalLayouts).slice(0, previewCapacity), [collection, portalLayouts, previewCapacity]);
-  const livePortalNodeIds = useMemo(() => new Set(liveLayouts.map((layout) => layout.portalNodeId)), [liveLayouts]);
   const activeDocument = collection.documents[collection.activeCanvasId];
   const parentContext = useMemo(() => buildParentContextField(collection, stageRect), [collection, stageRect]);
   const visibleContextFrames = useMemo(() => visibleStackFrames(collection), [collection]);
-  const parentContextCanvasCapacity = Math.max(0, MAX_TOTAL_ENGINES - 1 - visibleContextFrames.length - liveLayouts.length);
+  const parentContextCanvasCapacity = Math.min(parentContext.shapes.length, Math.max(0, MAX_TOTAL_ENGINES - 1 - visibleContextFrames.length));
+  const livePreviewCapacity = Math.max(0, MAX_TOTAL_ENGINES - 1 - visibleContextFrames.length - parentContextCanvasCapacity);
+  const liveLayouts = useMemo(
+    () => livePortalSlotsFor(collection, portalLayouts).slice(0, Math.min(previewCapacity, livePreviewCapacity)),
+    [collection, portalLayouts, previewCapacity, livePreviewCapacity],
+  );
+  const livePortalNodeIds = useMemo(() => new Set(liveLayouts.map((layout) => layout.portalNodeId)), [liveLayouts]);
 
   useEffect(() => {
     activeEngineRef.current?.setLivePortalNodeIds(livePortalNodeIds);
@@ -621,6 +625,7 @@ function ParentContextField({
               key={`context-canvas:${shape.node.id}:${contextCanvas.canvasId}`}
               className="parent-context-canvas-clip"
               data-node-id={shape.node.id}
+              data-region={shape.region}
               data-child-canvas-id={shape.childCanvasId ?? ''}
               data-context-model={contextCanvas.kind}
               style={parentContextCanvasStyle(shape)}
@@ -673,7 +678,7 @@ function ParentContextField({
                 y={shape.projectedRect.y}
                 width={shape.projectedRect.w}
                 height={shape.projectedRect.h}
-                rx={Math.max(1, Math.min(4, 1 + shape.detail * 3))}
+                rx={0}
                 opacity={hasLiveCanvas ? 0.1 : shape.opacity}
               />
               {shape.portal && !hasLiveCanvas ? (

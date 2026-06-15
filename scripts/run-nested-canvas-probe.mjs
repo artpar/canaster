@@ -143,7 +143,9 @@ function assertProbe(result, browserEvents) {
   assert(result.isolation.parentMoved, 'parent portal did not move after returning');
   assert(result.isolation.childStableAfterParentMove, 'parent edit mutated child model');
   assert(result.parentContext.regions.length === 8, `parent context field did not render all eight regions: ${result.parentContext.regions.join(',')}`);
-  assert(result.parentContext.shapeCount >= 8, 'parent context field did not render projected hit shapes');
+  assert(result.parentContext.shapeCount === 8, `parent context field must render one nearest shape per pane: ${result.parentContext.shapeCount}`);
+  assert(!result.parentContext.nodeIds.includes('neighbor-top-far') && !result.parentContext.nodeIds.includes('portal-right-far'), `parent context did not choose nearest candidates per pane: ${result.parentContext.nodeIds.join(',')}`);
+  assert(Object.values(result.parentContext.cardinalPaneFill).every(Boolean), `cardinal parent context canvases do not fill their pane viewports: ${JSON.stringify({ fill: result.parentContext.cardinalPaneFill, rects: result.parentContext.clipRects })}`);
   assert(result.parentContext.legacyFloatingCardCount === 0, 'old floating sibling card DOM is still rendered');
   assert(result.parentContext.textContent === '', 'parent context field rendered visible text labels');
   assert(result.parentContext.liveCanvasCount === result.parentContext.shapeCount, `parent context field did not mount real canvases for every projected shape: ${result.parentContext.liveCanvasCount}/${result.parentContext.shapeCount}`);

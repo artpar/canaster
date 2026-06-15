@@ -19,7 +19,7 @@ These decisions are final for the first real implementation:
 - Create a document collection layer above `CanvasModel`; do not overload one `CanvasModel` with multiple canvases.
 - Use a parent-context border field around all four sides and four corners of the active plane.
 - Render parent neighbors in a continuous fisheye-compressed border field, not as floating cards, shelves, or labeled buttons.
-- Every projected parent neighbor must mount a real clipped `CanvasEngine` in the border geometry; portal neighbors render their child canvas when available, and non-portal neighbors render a one-node parent snippet canvas. Empty border boxes are not acceptable.
+- Each parent-context border pane must show exactly one nearest neighbor for that direction, and that neighbor's real clipped `CanvasEngine` must fill the pane viewport. Portal neighbors render their child canvas when available, and non-portal neighbors render a one-node parent snippet canvas. Empty border boxes and small thumbnail projections are not acceptable.
 - Use shallow copy for portal nodes in the first implementation: pasted portal nodes must have `data.childCanvasId: null`.
 - Require delete confirmation before deleting a portal node whose `data.childCanvasId` points to an existing child document.
 - Forbid canvas cycles.
@@ -569,9 +569,6 @@ Constants:
 
 ```ts
 export const FIELD_BORDER_BAND = 112;
-export const FIELD_MIN_SHAPE = 64;
-export const FIELD_MAX_SHAPE_W = 220;
-export const FIELD_MAX_SHAPE_H = 150;
 ```
 
 Required exports:
@@ -605,15 +602,23 @@ Selection:
 - Siblings are all nodes in the parent canvas except the source portal node.
 - For each sibling, compute center point from `x + w / 2`, `y + h / 2`.
 - Assign region by angle.
-- Project every sibling into a top, right, bottom, left, or corner border band.
+- Assign every sibling to a top, right, bottom, left, or corner border pane.
+- For each of the eight panes, keep only the nearest sibling by center-to-center distance from the source portal.
+- Render no more than one sibling per pane.
+- Set the selected sibling's `projectedRect` to the full pane viewport:
+  - `top`: `x = band`, `y = 0`, `w = stageWidth - 2 * band`, `h = band`;
+  - `right`: `x = stageWidth - band`, `y = band`, `w = band`, `h = stageHeight - 2 * band`;
+  - `bottom`: `x = band`, `y = stageHeight - band`, `w = stageWidth - 2 * band`, `h = band`;
+  - `left`: `x = 0`, `y = band`, `w = band`, `h = stageHeight - 2 * band`;
+  - corners: use the corresponding `band x band` corner pane.
 - Preserve the sibling's directional relationship to the source portal.
-- Apply fisheye compression by distance: nearer siblings are larger and clearer, farther siblings flatten toward the outer edge.
-- Render every projected sibling through a real clipped `CanvasEngine`.
+- Apply fisheye selection by distance: nearer siblings win their pane. Do not shrink the winning sibling inside the pane.
+- Render every selected pane sibling through a real clipped `CanvasEngine` that fills the pane viewport.
 - For a canvas sibling with an existing `childCanvasId`, render the child document model in the projected rect.
 - For a non-canvas sibling, render a snippet model with `schemaVersion: 2` and exactly that sibling node in the projected rect.
 - For a canvas sibling without an existing child document, render a snippet model for the portal node itself in the projected rect; do not show a hollow aperture-only placeholder.
 - Do not render labels, text blocks, cards, shelves, or button-like visual boxes in the border field.
-- Maintain a hit map from each projected shape or live preview rect to the parent node id.
+- Maintain a hit map from each pane rect to the selected parent node id.
 
 Interaction:
 
@@ -686,7 +691,7 @@ CSS rules:
 - All canvas planes are `position: absolute`.
 - Active plane fills the stage.
 - Portal overlays use absolute rects from `PortalLayout`.
-- Parent-context visuals are edge-clipped real `CanvasEngine` canvases for every projected sibling; SVG is only the transparent hit/affordance layer over rendered canvas content.
+- Parent-context visuals are edge-clipped real `CanvasEngine` canvases for the selected nearest sibling in each pane; SVG is only the transparent hit/affordance layer over rendered canvas content.
 - Do not render parent-context siblings as cards, text labels, shelves, or node-access-panel items.
 
 App integration:
