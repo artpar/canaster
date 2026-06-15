@@ -385,7 +385,7 @@ button {
   top: 14px;
   left: 14px;
   right: 14px;
-  z-index: 2;
+  z-index: 20;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -445,6 +445,12 @@ button {
   pointer-events: auto;
 }
 
+.document-group {
+  flex: 1;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
 .icon-button {
   display: inline-flex;
   align-items: center;
@@ -495,8 +501,65 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
+.shell-input,
+.shell-select {
+  height: 30px;
+  min-width: 0;
+  border: 1px solid rgba(139, 150, 165, 0.22);
+  border-radius: 6px;
+  color: #c6ced8;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 12px;
+  outline: none;
+}
+
+.shell-input {
+  width: 142px;
+  padding: 0 8px;
+}
+
+.shell-select {
+  width: 168px;
+  padding: 0 6px;
+}
+
+.shell-input:focus,
+.shell-select:focus {
+  border-color: #5aa7ff;
+}
+
+.sync-readout {
+  min-width: 104px;
+  max-width: 180px;
+  overflow: hidden;
+  color: #8b96a5;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sync-readout.clean {
+  color: #42c987;
+}
+
+.sync-readout.dirty,
+.sync-readout.saving,
+.sync-readout.loading {
+  color: #e0b75d;
+}
+
+.sync-readout.error {
+  color: #ff7f7f;
+}
+
 :root[data-theme='light'] .zoom-readout {
   color: #3d4652;
+}
+
+:root[data-theme='light'] .shell-input,
+:root[data-theme='light'] .shell-select {
+  color: #3d4652;
+  background: rgba(24, 33, 45, 0.04);
 }
 
 .node-access-panel {
@@ -504,7 +567,7 @@ button {
   top: 68px;
   right: 14px;
   bottom: 62px;
-  z-index: 2;
+  z-index: 20;
   display: flex;
   flex-direction: column;
   width: min(310px, calc(100% - 28px));
@@ -647,7 +710,7 @@ button {
   position: absolute;
   left: 14px;
   bottom: 14px;
-  z-index: 2;
+  z-index: 20;
   display: grid;
   grid-template-columns: 92px 92px 70px 112px minmax(0, 1fr);
   align-items: center;
@@ -688,6 +751,14 @@ button {
     height: 36px;
   }
 
+  .document-group {
+    flex-basis: 100%;
+    justify-content: flex-start;
+    height: auto;
+    min-height: 36px;
+    flex-wrap: wrap;
+  }
+
   .icon-button {
     width: 28px;
     height: 28px;
@@ -696,6 +767,19 @@ button {
   .zoom-readout {
     min-width: 42px;
     font-size: 12px;
+  }
+
+  .shell-input {
+    width: 112px;
+  }
+
+  .shell-select {
+    width: 132px;
+  }
+
+  .sync-readout {
+    max-width: 128px;
+    font-size: 11px;
   }
 
   .node-access-panel {

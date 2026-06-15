@@ -2,35 +2,40 @@
 
 ## Backend Boundary
 
-Canaster uses Daptin as the backend. The frontend owns nested canvas rendering, canvas interaction, and local interaction state. Daptin owns auth, users, groups, permissions, schema, CRUD, relationships, snapshots, static site hosting, live topics, and YJS transport.
+Canaster uses Daptin as the backend. The frontend owns nested canvas rendering and canvas interaction. Daptin owns auth, users, permissions, built-in `document` CRUD, file blob storage, and static site hosting.
 
 There is no Canaster-specific API server in v1.
+
+The concrete MVP backend architecture and implementation plan is `docs/daptin-canaster-architecture-plan.md`. That plan is based on verified Daptin docs/source/runtime behavior and supersedes both the earlier normalized `space` / `plane` / `snapshot` model and the temporary `canaster_document` proposal.
 
 ## Daptin Responsibilities
 
 - Auth: use Daptin `user_account` actions for signup, signin, password reset, and future OAuth.
-- Authorization: use Daptin owner rows, `DefaultPermission: 16256`, `usergroup_id`, and access APIs.
-- Persistence: use Daptin JSON:API CRUD for `space`, `plane`, and `snapshot`.
-- Relationships: use Daptin relation columns exactly as defined in `daptin/schema_canaster.yaml`.
+- Authorization: use Daptin row permissions on built-in `document`.
+- Persistence: use Daptin JSON:API CRUD for built-in `document`.
+- File storage: store one `application/json` file in `document.document_content`.
 - Static hosting: use Daptin `site` records backed by a `cloud_store`.
-- Collaboration: use Daptin `/yjs/{document}` for live plane documents and `/live` for presence/events.
-- Auditing: enable audit on authoring rows (`space`, `plane`) and keep autosave snapshots non-audited.
+- Collaboration: future work, not MVP.
 
 ## Schema Contract
 
-`daptin/schema_canaster.yaml` is the backend schema source of truth.
+`daptin/schema_canaster.yaml` was removed because it was stale for MVP app state.
 
-- `space` is the top-level user-owned workspace and sharing unit.
-- `plane` is a nested visual plane. Every plane belongs to one `space`; root planes have no `parent_plane_id`; child planes use `parent_plane_id`.
-- `snapshot` stores full restore state, including the collection state and undo/redo history.
+- The MVP app table is Daptin built-in `document`.
+- `document_content` stores the full Canaster snapshot as an `application/json` file blob.
+- `space`, `plane`, and `snapshot` must be removed from the Canaster schema before frontend/backend integration.
+- `canaster_document` must not be added for MVP.
 
-Relation columns are fixed:
+The MVP should not define Canaster app entities or relationships in Daptin schema files.
 
-- `plane.space_id`: required, Daptin `belongs_to space`.
-- `plane.parent_plane_id`: nullable, Daptin `has_one plane`.
-- `snapshot.space_id`: required, Daptin `belongs_to space`.
+The app must not construct generated object/usergroup join table names.
 
-The app must not construct generated join table names. It can pass Daptin `reference_id` values and named relation columns to the SDK.
+Permission rule:
+
+- create built-in `document` rows with harmless placeholder content first;
+- immediately PATCH private rows to `permission: 16256`;
+- PATCH public rows to `permission: 16259`;
+- private sharing and collaboration are future work, not MVP.
 
 ## Local Backend
 
@@ -53,7 +58,7 @@ Local service defaults:
 - Schema folder: `/opt/daptin/schema`
 - Daptin storage: `/data/storage`
 
-The compose file mounts `./daptin` as `DAPTIN_SCHEMA_FOLDER`, so schema changes require a Daptin container restart.
+The compose file mounts `./daptin` as `DAPTIN_SCHEMA_FOLDER`. MVP app state does not add schema files; it uses Daptin's built-in `document`.
 
 Current local status as of 2026-06-15 18:53 IST:
 
@@ -63,7 +68,7 @@ Current local status as of 2026-06-15 18:53 IST:
 - Daptin storage uses the `canaster_daptin-data` Docker volume.
 - Compose waits for Postgres health before starting Daptin.
 - Verified with `curl http://localhost:6336/api/world?page%5Bsize%5D=5`.
-- Verified with `npm run daptin:smoke`.
+- Verified with `npm run daptin:smoke:local`.
 
 ## Production Backend
 
@@ -86,7 +91,7 @@ Fixed production defaults:
 - Daptin site store: `canaster-site`
 - Daptin site path: `/canaster`
 
-The Cloud Run service is capped at `--max-instances=1` for v1. Daptin’s DB state is safe in Cloud SQL, but Daptin site/YJS/file storage uses a mounted Cloud Storage filesystem and the current collaboration design has not yet been validated for multi-instance concurrent write semantics.
+The Cloud Run service is capped at `--max-instances=1` for v1. Daptin’s DB state is safe in Cloud SQL, but Daptin site/file storage uses a mounted Cloud Storage filesystem. Multi-instance file write semantics are not part of MVP.
 
 Current production status as of 2026-06-15 18:53 IST:
 
@@ -110,7 +115,7 @@ Do not continue production deployment until local integration is confirmed again
 `deploy/daptin/Dockerfile` builds a thin Canaster Daptin image:
 
 - Base image: `daptin/daptin:v0.12.17`
-- Bakes `schema_canaster.yaml` into `/opt/canaster/schema`
+- Creates an empty `/opt/canaster/schema` folder for MVP app state
 - Uses `/opt/canaster/entrypoint.sh`
 - Reads `PORT` from Cloud Run
 - Requires `DAPTIN_DB_CONNECTION_STRING`
@@ -431,13 +436,11 @@ Install and use `daptin-client@0.7.12`.
 The frontend adapter must expose only this Canaster-facing API:
 
 - `signUp`, `signIn`, `signOut`
-- `listSpaces`, `createSpace`, `loadSpace`
-- `savePlane`, `saveSnapshot`, `loadCurrentSnapshot`
-- `shareSpaceWithGroup`, `updateSpaceGroupPermission`, `removeSpaceGroup`
-- `connectPlaneYjs(spaceRef, planeRef)`
-- `connectSpaceLive(spaceRef)`
+- `listDocuments`, `createDocument`, `loadDocument`
+- `saveDocument`, `makeDocumentPrivate`, `makeDocumentPublic`
+- `deleteDocument`
 
-The adapter must not expose Daptin join table names or custom auth/share abstractions.
+The adapter must not expose Daptin join table names, custom auth abstractions, sharing, or collaboration for MVP.
 
 ## Source References
 

@@ -1,19 +1,22 @@
-import { access, mkdtemp, mkdir, copyFile, rm } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import net from 'node:net';
+import { DaptinClient } from 'daptin-client';
 
-const repoRoot = process.cwd();
 const daptinSourceDir = process.env.DAPTIN_SOURCE_DIR || '/Users/artpar/workspace/code/github.com/daptin/daptin';
 const daptinCliSourceDir = process.env.DAPTIN_CLI_SOURCE_DIR || '/Users/artpar/workspace/code/github.com/daptin/daptin-cli';
 const daptinCli = process.env.DAPTIN_CLI || '/Users/artpar/workspace/code/github.com/daptin/daptin-cli/out/bin/daptin-cli';
 const daptinBinary = process.env.DAPTIN_BINARY || '';
-const buildDaptinFromSource = process.env.DAPTIN_BUILD_FROM_SOURCE === 'true';
 const smokeRuntime = process.env.DAPTIN_SMOKE_RUNTIME || 'docker';
 const daptinDockerImage = process.env.DAPTIN_DOCKER_IMAGE || 'daptin/daptin:v0.12.17';
 const smokeDbType = process.env.DAPTIN_SMOKE_DB_TYPE || 'sqlite3';
 const smokeDbConnectionString = process.env.DAPTIN_SMOKE_DB_CONNECTION_STRING || '';
+const smokeEndpoint = process.env.DAPTIN_SMOKE_ENDPOINT || '';
+
+const PRIVATE_PERMISSION = 16256;
+const PUBLIC_READ_PERMISSION = 16259;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -51,23 +54,9 @@ async function fileExists(filePath) {
 
 async function resolveDaptinCommand(workDir) {
   if (daptinBinary) return daptinBinary;
-
   const builtBinary = path.join(workDir, process.platform === 'win32' ? 'daptin.exe' : 'daptin');
   await run('go', ['build', '-o', builtBinary, '.'], { cwd: daptinSourceDir });
   return builtBinary;
-}
-
-function parseJsonOutput(output) {
-  const start = output.search(/[\[{]/);
-  assert(start >= 0, `Command did not return JSON:\n${output}`);
-  return JSON.parse(output.slice(start));
-}
-
-function parseQuietReference(output) {
-  const matches = output.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi);
-  if (matches?.length) return matches[matches.length - 1];
-  const lines = output.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  return lines[lines.length - 1] ?? '';
 }
 
 async function stopProcess(child) {
@@ -105,20 +94,154 @@ async function run(command, args, options = {}) {
   return output;
 }
 
+async function request(baseUrl, pathName, options = {}) {
+  const response = await fetch(`${baseUrl}${pathName}`, {
+    ...options,
+    headers: {
+      ...(options.body ? { 'Content-Type': 'application/vnd.api+json' } : {}),
+      ...options.headers,
+    },
+  });
+  const text = await response.text();
+  const body = text ? JSON.parse(text) : null;
+  return { response, body };
+}
+
+function createDaptinClient(baseUrl, getToken) {
+  return new DaptinClient(baseUrl, false, { getToken }, {});
+}
+
+function rowId(row) {
+  return row?.id ?? row?.reference_id ?? row?.referenceId ?? row?.attributes?.reference_id;
+}
+
+function rowAttr(row, key) {
+  const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+  return row?.attributes?.[key] ?? row?.attributes?.[camelKey] ?? row?.[key] ?? row?.[camelKey];
+}
+
+function statusFromSdkError(error) {
+  return error?.response?.status ?? error?.status ?? error?.code ?? null;
+}
+
+function formatSdkError(error) {
+  if (error?.message) return error.message;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+function encodeSnapshotFile(name, snapshot) {
+  const json = JSON.stringify(snapshot);
+  const base64 = Buffer.from(json, 'utf8').toString('base64');
+  return {
+    name,
+    file: `data:application/json;base64,${base64}`,
+    type: 'application/json',
+  };
+}
+
+function decodeSnapshotFile(documentContent) {
+  const files = typeof documentContent === 'string' ? JSON.parse(documentContent) : documentContent;
+  assert(Array.isArray(files), 'document_content is not a file array JSON string');
+  assert(files.length === 1, `expected exactly one file, got ${files.length}`);
+  assert(files[0].type === 'application/json', `expected application/json file, got ${files[0].type}`);
+  const [, base64] = files[0].file.split(',');
+  assert(base64, 'file data URI did not contain a base64 payload');
+  return JSON.parse(Buffer.from(base64, 'base64').toString('utf8'));
+}
+
+function canasterSnapshot() {
+  return {
+    schemaVersion: 1,
+    history: {
+      present: {
+        schemaVersion: 1,
+        rootCanvasId: 'root',
+        activeCanvasId: 'root',
+        documents: {
+          root: {
+            id: 'root',
+            title: 'Root',
+            parentCanvasId: null,
+            parentNodeId: null,
+            model: {
+              schemaVersion: 2,
+              nodes: [
+                {
+                  id: 'smoke-node',
+                  type: 'text',
+                  x: 10,
+                  y: 20,
+                  w: 180,
+                  h: 80,
+                  label: 'Smoke node',
+                  detail: 'Persisted through Daptin document_content',
+                },
+              ],
+            },
+          },
+        },
+        view: {
+          cameras: { root: { x: 40, y: 50, zoom: 0.8 } },
+          selections: { root: { nodeId: 'smoke-node', nodeIds: ['smoke-node'] } },
+          paneLayouts: { root: { left: 0.1, right: 0.1, top: 0.1, bottom: 0.1 } },
+          activeCanvasId: 'root',
+          focusedEngineId: 'root',
+          previewFocus: null,
+          stackPath: [],
+          parentContext: { sourceCanvasId: null, sourcePortalNodeId: null, shapes: [] },
+          animationEnabled: true,
+          deleteConfirmation: null,
+        },
+      },
+      undoStack: [],
+      redoStack: [],
+    },
+    lastModelChange: null,
+  };
+}
+
+async function readTokenFromCliConfig(cliConfig) {
+  const raw = await readFile(cliConfig, 'utf8');
+  const currentContext = raw.match(/currentContext:\s*(.+)/)?.[1]?.trim();
+  assert(currentContext, `Could not find currentContext in ${cliConfig}`);
+  const hosts = [];
+  let currentHost = null;
+  const lines = raw.split(/\r?\n/);
+  for (const line of lines) {
+    if (/^\s*-\s+/.test(line)) {
+      currentHost = {};
+      hosts.push(currentHost);
+      const [, inlineKey, inlineValue] = line.match(/^\s*-\s+([^:]+):\s*(.*)\s*$/) ?? [];
+      if (inlineKey) currentHost[inlineKey.trim()] = inlineValue.trim();
+      continue;
+    }
+    if (!currentHost) continue;
+    const [, key, value] = line.match(/^\s*([^:]+):\s*(.*)\s*$/) ?? [];
+    if (key) currentHost[key.trim()] = value.trim();
+  }
+  const activeHost = hosts.find((host) => host.name === currentContext);
+  if (activeHost?.token) return activeHost.token;
+  throw new Error(`Could not find token for context ${currentContext} in ${cliConfig}`);
+}
+
 async function main() {
   const workDir = await mkdtemp(path.join(tmpdir(), 'canaster-daptin-'));
   const schemaDir = path.join(workDir, 'schema');
   const storageDir = path.join(workDir, 'storage');
-  const port = await freePort();
-  const httpsPort = await freePort();
-  const baseUrl = `http://127.0.0.1:${port}`;
+  const startDaptin = !smokeEndpoint;
+  const port = startDaptin ? await freePort() : null;
+  const httpsPort = startDaptin ? await freePort() : null;
+  const baseUrl = smokeEndpoint || `http://127.0.0.1:${port}`;
   const cliConfig = path.join(workDir, 'cli.yaml');
   let daptin;
 
   try {
     await mkdir(schemaDir, { recursive: true });
     await mkdir(storageDir, { recursive: true });
-    await copyFile(path.join(repoRoot, 'daptin/schema_canaster.yaml'), path.join(schemaDir, 'schema_canaster.yaml'));
 
     let cliCommand = daptinCli;
     if (!(await fileExists(cliCommand))) {
@@ -126,100 +249,133 @@ async function main() {
       await run('go', ['build', '-o', cliCommand, '.'], { cwd: daptinCliSourceDir });
     }
 
-    const daptinArgs = [
-      '-port', smokeRuntime === 'docker' && !daptinBinary ? ':8080' : `:${port}`,
-      '-https_port', `:${httpsPort}`,
-      '-db_type', smokeDbType,
-      '-db_connection_string', smokeDbConnectionString || (smokeRuntime === 'docker' && !daptinBinary ? '/data/canaster.db' : path.join(workDir, 'canaster.db')),
-      '-local_storage_path', smokeRuntime === 'docker' && !daptinBinary ? '/data/storage' : storageDir,
-      '-olric_env', 'local',
-    ];
-    if (smokeRuntime === 'docker' && !daptinBinary) {
-      daptin = spawnProcess('docker', [
-        'run',
-        '--rm',
-        '-p', `127.0.0.1:${port}:8080`,
-        '-v', `${schemaDir}:/schema:ro`,
-        '-v', `${workDir}:/data`,
-        '-e', 'DAPTIN_SCHEMA_FOLDER=/schema',
-        '-e', 'DAPTIN_STORAGE=/data/storage',
-        '--add-host', 'host.docker.internal:host-gateway',
-        '--entrypoint', '/opt/daptin/daptin',
-        daptinDockerImage,
-        ...daptinArgs,
-      ]);
-    } else {
-      const daptinCommand = await resolveDaptinCommand(workDir);
-      const serverEnv = {
-        ...process.env,
-        DAPTIN_SCHEMA_FOLDER: schemaDir,
-        DAPTIN_STORAGE: storageDir,
-      };
-      daptin = spawnProcess(daptinCommand, daptinArgs, { cwd: schemaDir, env: serverEnv });
+    if (startDaptin) {
+      const daptinArgs = [
+        '-port', smokeRuntime === 'docker' && !daptinBinary ? ':8080' : `:${port}`,
+        '-https_port', `:${httpsPort}`,
+        '-db_type', smokeDbType,
+        '-db_connection_string', smokeDbConnectionString || (smokeRuntime === 'docker' && !daptinBinary ? '/data/canaster.db' : path.join(workDir, 'canaster.db')),
+        '-local_storage_path', smokeRuntime === 'docker' && !daptinBinary ? '/data/storage' : storageDir,
+        '-olric_env', 'local',
+      ];
+      if (smokeRuntime === 'docker' && !daptinBinary) {
+        daptin = spawnProcess('docker', [
+          'run',
+          '--rm',
+          '-p', `127.0.0.1:${port}:8080`,
+          '-v', `${schemaDir}:/schema:ro`,
+          '-v', `${workDir}:/data`,
+          '-e', 'DAPTIN_SCHEMA_FOLDER=/schema',
+          '-e', 'DAPTIN_STORAGE=/data/storage',
+          '--add-host', 'host.docker.internal:host-gateway',
+          '--entrypoint', '/opt/daptin/daptin',
+          daptinDockerImage,
+          ...daptinArgs,
+        ]);
+      } else {
+        const daptinCommand = await resolveDaptinCommand(workDir);
+        const serverEnv = {
+          ...process.env,
+          DAPTIN_SCHEMA_FOLDER: schemaDir,
+          DAPTIN_STORAGE: storageDir,
+        };
+        daptin = spawnProcess(daptinCommand, daptinArgs, { cwd: schemaDir, env: serverEnv });
+      }
     }
 
     await waitForHttp(`${baseUrl}/api/world?page%5Bsize%5D=1`);
 
     const env = { ...process.env, DAPTIN_CLI_CONFIG: cliConfig };
-    await run(cliCommand, ['context', 'add', 'canaster-smoke', baseUrl], { env });
-    await run(cliCommand, ['context', 'set', 'canaster-smoke'], { env });
+    await run(cliCommand, ['--config', cliConfig, 'context', 'add', 'canaster-smoke', baseUrl], { env });
+    await run(cliCommand, ['--config', cliConfig, 'context', 'set', 'canaster-smoke'], { env });
 
-    const email = `admin-${Date.now()}@canaster.local`;
+    const email = `smoke-${Date.now()}@canaster.local`;
     const password = 'CanasterSmoke1234';
-    await run(cliCommand, ['execute', 'user_account', 'signup', `email=${email}`, 'name=Canaster Smoke', `password=${password}`, `passwordConfirm=${password}`], { env });
-    await run(cliCommand, ['execute', 'user_account', 'signin', `email=${email}`, `password=${password}`], { env });
-    await run(cliCommand, ['execute', 'world', 'become_an_administrator'], { env });
+    await run(cliCommand, ['--config', cliConfig, 'execute', 'user_account', 'signup', `email=${email}`, 'name=Canaster Smoke', `password=${password}`, `passwordConfirm=${password}`], { env });
+    await run(cliCommand, ['--config', cliConfig, 'execute', 'user_account', 'signin', `email=${email}`, `password=${password}`], { env });
+    const token = await readTokenFromCliConfig(cliConfig);
 
-    const worldJson = await run(cliCommand, ['--output', 'json', 'list', '--columns', 'table_name', '--page-size', '500', 'world'], { env });
-    const world = parseJsonOutput(worldJson);
-    const tableNames = new Set(world.map((row) => row.table_name ?? row.attributes?.table_name));
-    for (const table of ['space', 'plane', 'snapshot']) {
-      assert(
-        tableNames.has(table),
-        `Daptin did not load table: ${table}. Loaded tables: ${[...tableNames].sort().join(', ')}\n${daptin.output?.join('') ?? ''}`,
-      );
+    const authenticatedClient = createDaptinClient(baseUrl, () => token);
+    const guestClient = createDaptinClient(baseUrl, () => '');
+    await authenticatedClient.worldManager.loadModels();
+    await guestClient.worldManager.loadModels();
+
+    const worldBody = await authenticatedClient.jsonApi.findAll('world', { page: { size: 500 } });
+    const tableNames = new Set((worldBody.data ?? []).map((row) => rowAttr(row, 'table_name')));
+    assert(tableNames.has('document'), 'Daptin built-in document table is missing');
+    for (const staleTable of ['space', 'plane', 'snapshot', 'canaster_document']) {
+      assert(!tableNames.has(staleTable), `stale MVP table is loaded: ${staleTable}`);
     }
 
-    const slug = `smoke-${Date.now()}`;
-    const spaceRef = parseQuietReference(await run(cliCommand, ['--quiet', 'create', 'space', `name=Smoke Space`, `slug=${slug}`, 'visibility=private', 'metadata_json={}'], { env }));
-    assert(spaceRef, 'space create did not return a reference id');
+    const documentKey = `smoke-${Date.now()}`;
+    const placeholderFile = encodeSnapshotFile('pending.canaster.json', { schemaVersion: 1, pending: true });
+    const createBody = await authenticatedClient.jsonApi.create('document', {
+      document_name: 'pending.canaster.json',
+      document_path: `/canaster/pending/${documentKey}.canaster.json`,
+      document_extension: 'json',
+      mime_type: 'application/json',
+      document_content: JSON.stringify([placeholderFile]),
+    });
+    const documentRef = rowId(createBody.data);
+    assert(documentRef, 'document create did not return a reference id');
+    assert(rowAttr(createBody.data, 'permission') === 2097151, `expected built-in document create permission 2097151, got ${rowAttr(createBody.data, 'permission')}`);
 
-    const rootPlaneRef = parseQuietReference(await run(cliCommand, [
-      '--quiet',
-      'create',
-      'plane',
-      'plane_key=root',
-      'title=Root',
-      'model_json={"schemaVersion":2,"nodes":[]}',
-      'view_json={}',
-      'metadata_json={}',
-      `space_id=${spaceRef}`,
-    ], { env }));
-    assert(rootPlaneRef, 'plane create did not return a reference id');
+    // daptin-client@0.7.12 runtime expects update(model, { id, ...attrs }).
+    const privatePatchBody = await authenticatedClient.jsonApi.update('document', {
+      id: documentRef,
+      permission: PRIVATE_PERMISSION,
+    });
+    assert(rowAttr(privatePatchBody.data, 'permission') === PRIVATE_PERMISSION, 'private permission patch did not persist');
 
-    const snapshotRef = parseQuietReference(await run(cliCommand, [
-      '--quiet',
-      'create',
-      'snapshot',
-      `snapshot_key=${slug}-autosave`,
-      'kind=autosave',
-      'schema_version=1',
-      'active_plane_key=root',
-      'collection_json={"schemaVersion":1}',
-      'history_json={"undoStack":[],"redoStack":[]}',
-      'last_model_change_json=null',
-      `space_id=${spaceRef}`,
-    ], { env }));
-    assert(snapshotRef, 'snapshot create did not return a reference id');
-    await run(cliCommand, ['update', 'space', spaceRef, `current_snapshot_ref=${snapshotRef}`], { env });
+    const snapshot = canasterSnapshot();
+    const realFile = encodeSnapshotFile(`${documentKey}.canaster.json`, snapshot);
+    await authenticatedClient.jsonApi.update('document', {
+      id: documentRef,
+      document_name: `${documentKey}.canaster.json`,
+      document_path: `/canaster/documents/${documentRef}.canaster.json`,
+      document_extension: 'json',
+      mime_type: 'application/json',
+      document_content: JSON.stringify([realFile]),
+    });
 
-    const rootPlaneJson = await run(cliCommand, ['--output', 'json', 'get', 'plane', rootPlaneRef, '--columns', 'reference_id,space_id'], { env });
-    const rootPlane = parseJsonOutput(rootPlaneJson);
-    const rootPlaneSpace = rootPlane.space_id ?? rootPlane.attributes?.space_id;
-    assert(JSON.stringify(rootPlaneSpace).includes(spaceRef), 'plane.space_id relation was not persisted on the plane row');
+    try {
+      await guestClient.jsonApi.find('document', documentRef);
+      throw new Error('private document should not be guest-readable');
+    } catch (error) {
+      const status = statusFromSdkError(error);
+      if (status !== 403) {
+        const { response: rawGuestPrivateResponse } = await request(baseUrl, `/api/document/${documentRef}`);
+        assert(rawGuestPrivateResponse.status === 403, `private document should return 403 to guest; sdk error ${formatSdkError(error)}; raw status ${rawGuestPrivateResponse.status}`);
+      }
+    }
 
-    console.log(JSON.stringify({ baseUrl, dbType: smokeDbType, tables: [...tableNames].filter((name) => ['space', 'plane', 'snapshot'].includes(name)), spaceRef, rootPlaneRef, snapshotRef }, null, 2));
-    console.log('Canaster Daptin smoke passed');
+    const getBody = await authenticatedClient.jsonApi.find('document', documentRef);
+    const decoded = decodeSnapshotFile(rowAttr(getBody.data, 'document_content'));
+    assert(decoded.schemaVersion === 1, 'decoded snapshot schemaVersion mismatch');
+    assert(decoded.history.present.activeCanvasId === 'root', 'decoded activeCanvasId mismatch');
+    assert(decoded.history.present.view.cameras.root.zoom === 0.8, 'decoded camera zoom mismatch');
+    assert(decoded.history.present.documents.root.model.nodes[0].id === 'smoke-node', 'decoded node mismatch');
+
+    const publicPatchBody = await authenticatedClient.jsonApi.update('document', {
+      id: documentRef,
+      permission: PUBLIC_READ_PERMISSION,
+    });
+    assert(rowAttr(publicPatchBody.data, 'permission') === PUBLIC_READ_PERMISSION, 'public permission patch did not persist');
+
+    const guestPublicBody = await guestClient.jsonApi.find('document', documentRef);
+    assert(rowAttr(guestPublicBody.data, 'document_name') === `${documentKey}.canaster.json`, 'guest public read returned wrong document');
+
+    console.log(JSON.stringify({
+      baseUrl,
+      runtime: startDaptin ? 'isolated' : 'existing-endpoint',
+      dbType: startDaptin ? smokeDbType : 'external',
+      documentRef,
+      privatePermission: PRIVATE_PERMISSION,
+      publicPermission: PUBLIC_READ_PERMISSION,
+      decodedActiveCanvasId: decoded.history.present.activeCanvasId,
+      decodedNodeCount: decoded.history.present.documents.root.model.nodes.length,
+    }, null, 2));
+    console.log('Canaster Daptin document-blob smoke passed');
   } finally {
     await stopProcess(daptin);
     await rm(workDir, { recursive: true, force: true });

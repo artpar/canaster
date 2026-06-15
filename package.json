@@ -11,6 +11,7 @@
     "daptin:down": "docker compose -f docker-compose.daptin.yml down",
     "daptin:logs": "docker compose -f docker-compose.daptin.yml logs -f daptin",
     "daptin:smoke": "node scripts/daptin-smoke.mjs",
+    "daptin:smoke:local": "DAPTIN_SMOKE_ENDPOINT=http://localhost:6336 node scripts/daptin-smoke.mjs",
     "probe:canvas": "node scripts/run-canvas-foundation-probe.mjs",
     "probe:nested": "node scripts/run-nested-canvas-probe.mjs"
   },

@@ -43,6 +43,7 @@ import type {
 import {
   createWorkspaceHistory,
   createWorkspaceSnapshot,
+  hydrateWorkspaceSnapshot,
   pushWorkspaceHistory,
   redoWorkspaceHistory,
   replaceWorkspacePresent,
@@ -91,6 +92,9 @@ export type NestedCanvasWorkspaceHandle = {
   executeActiveCanvasCommand(command: CanvasCommand): boolean;
   executeDocumentCommand(command: DocumentCommand): void;
   collection(): CanvasDocumentCollection;
+  getWorkspaceSnapshot(): CanvasWorkspaceSnapshot;
+  loadWorkspaceSnapshot(snapshot: CanvasWorkspaceSnapshot, interaction?: string): void;
+  flushWorkspaceSnapshot(): Promise<void>;
 };
 
 export const initialViewportStatus: ViewportStatus = {
@@ -326,6 +330,26 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     return true;
   }, [commitWorkspaceHistory, saveActiveViewport]);
 
+  const getWorkspaceSnapshot = useCallback(() => {
+    const current = replaceWorkspacePresent(historyRef.current, saveActiveViewport(collectionRef.current));
+    return createWorkspaceSnapshot(current, lastModelChangeRef.current);
+  }, [saveActiveViewport]);
+
+  const loadWorkspaceSnapshotIntoWorkspace = useCallback((snapshot: CanvasWorkspaceSnapshot, interaction = 'Document loaded') => {
+    const hydrated = hydrateWorkspaceSnapshot(snapshot);
+    historyRef.current = hydrated.history;
+    collectionRef.current = hydrated.history.present;
+    lastModelChangeRef.current = hydrated.lastModelChange;
+    setHistory(hydrated.history);
+    setLastModelChange(hydrated.lastModelChange);
+    setStatus((current) => ({ ...current, interaction }));
+    mirrorWorkspaceSnapshot(hydrated);
+    persistWorkspaceSnapshot(hydrated);
+    onCollectionChange?.(hydrated.history.present, []);
+  }, [mirrorWorkspaceSnapshot, onCollectionChange, persistWorkspaceSnapshot]);
+
+  const flushWorkspaceSnapshot = useCallback(() => persistWorkspaceSnapshot(getWorkspaceSnapshot()), [getWorkspaceSnapshot, persistWorkspaceSnapshot]);
+
   const handlePaneLayoutChange = useCallback((canvasId: CanvasDocumentId, nextLayout: ParentContextPaneLayout) => {
     const base = collectionRef.current;
     if (!base.documents[canvasId]) return;
@@ -350,7 +374,10 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     executeActiveCanvasCommand,
     executeDocumentCommand,
     collection: () => cloneDocumentCollection(collectionRef.current),
-  }), [executeActiveCanvasCommand, executeDocumentCommand, redoWorkspace, undoWorkspace]);
+    getWorkspaceSnapshot,
+    loadWorkspaceSnapshot: loadWorkspaceSnapshotIntoWorkspace,
+    flushWorkspaceSnapshot,
+  }), [executeActiveCanvasCommand, executeDocumentCommand, flushWorkspaceSnapshot, getWorkspaceSnapshot, loadWorkspaceSnapshotIntoWorkspace, redoWorkspace, undoWorkspace]);
 
   const handleActiveStatus = useCallback((canvasId: CanvasDocumentId, nextStatus: ViewportStatus) => {
     if (collectionRef.current.activeCanvasId !== canvasId) return;
@@ -440,8 +467,9 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
   function exposeDebugApi() {
     (window as Window & { __canwayNested?: unknown }).__canwayNested = {
       getCollection: () => cloneDocumentCollection(collectionRef.current),
-      getWorkspaceSnapshot: () => createWorkspaceSnapshot(historyRef.current, lastModelChangeRef.current),
-      flushWorkspaceSnapshot: () => persistWorkspaceSnapshot(createWorkspaceSnapshot(historyRef.current, lastModelChangeRef.current)),
+      getWorkspaceSnapshot,
+      loadWorkspaceSnapshot: loadWorkspaceSnapshotIntoWorkspace,
+      flushWorkspaceSnapshot,
       executeDocumentCommand,
       executeActiveCanvasCommand,
       replaceCollection: (next: CanvasDocumentCollection) => commitCollection(cloneDocumentCollection(next), []),

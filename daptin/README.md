@@ -5,22 +5,19 @@ This directory is the backend contract for Canaster. Daptin is the backend; Cana
 ## Daptin Responsibilities
 
 - Auth, users, groups, row ownership, and permission bitmasks.
-- CRUD APIs for `space`, `plane`, and `snapshot`.
-- Relationships through Daptin relation keys, not app-specific join tables.
-- Sharing through the built-in `usergroup_id` relation and Daptin access APIs.
+- CRUD APIs for built-in `document`.
 - Static hosting through Daptin `site` and `cloud_store` for production frontend delivery.
-- Optional collaboration through Daptin `/yjs/{document}` and `/live` topics.
-- Audit trail on user-authored `space` and `plane` rows.
+- JSON file blob persistence through `document.document_content`.
 
 ## Schema
 
-`schema_canaster.yaml` defines:
+MVP uses Daptin's built-in `document` table:
 
-- `space`: the top-level user-owned container.
-- `plane`: one nested visual plane in a space.
-- `snapshot`: full-workspace restore and history state.
+- `document_content`: one `application/json` file containing the full nested canvas snapshot, view state, and undo/redo history.
 
-All app tables use `DefaultPermission: 16256`, meaning owner-only by default. Public or shared access must be granted with Daptin permissions/usergroups, not with custom Canaster share rows.
+The older `space` / `plane` / `snapshot` schema is stale and must not be used for MVP backend integration. Do not add `canaster_document` for MVP. See `docs/daptin-canaster-architecture-plan.md` for the concrete built-in `document` file-blob plan.
+
+Built-in `document` creates rows as public by default in the verified runtime, so the MVP create flow must create a harmless placeholder row, immediately PATCH `permission: 16256`, then PATCH the real JSON file content.
 
 ## Local Daptin Startup
 
@@ -34,7 +31,14 @@ npm run daptin:down
 
 Local Daptin uses Postgres, not SQLite, to stay close to production.
 
-Use `scripts/daptin-smoke.mjs` for the supported repo-level smoke flow.
+Use `scripts/daptin-smoke.mjs` for the supported repo-level smoke flow:
+
+```bash
+npm run daptin:smoke
+npm run daptin:smoke:local
+```
+
+`daptin:smoke` starts an isolated temporary Daptin. `daptin:smoke:local` verifies the permanent Compose instance at `http://localhost:6336`.
 
 ## SDK Boundary
 
@@ -42,13 +46,12 @@ Frontend code must use `daptin-client` and Daptin managers:
 
 - `authManager` / `actionManager` for sign up, sign in, password reset, and actions.
 - `worldManager` to load models before JSON:API calls.
-- `jsonApi` for `space`, `plane`, and `snapshot` CRUD.
-- `relationshipManager` for `space_id`, `parent_plane_id`, and `usergroup_id`.
-- `accessManager` for object/group permission changes.
-- `yjsManager` for collaborative documents named `space:{spaceRef}:plane:{planeRef}`.
-- `liveManager` for presence topics named `space:{spaceRef}`.
+- `jsonApi` for built-in `document` CRUD.
+- file-array encode/decode helpers for `document_content`.
 
-Do not construct generated join table names in Canaster code.
+With `daptin-client@0.7.12`, send `document_content` as `JSON.stringify(fileArray)` through `jsonApi.create` and `jsonApi.update`. Decode reads by parsing the returned string.
+
+Do not implement private sharing or collaboration in MVP.
 
 ## Production Deploy Shape
 
@@ -56,7 +59,7 @@ The production Daptin instance runs on Google Cloud Run and owns both API and st
 
 1. Run Daptin with Cloud SQL for PostgreSQL.
 2. Mount a Cloud Storage bucket at `/data/storage`.
-3. Load `schema_canaster.yaml` through the baked startup schema folder.
+3. Start with an empty Canaster schema folder for MVP app state; use Daptin's built-in `document`.
 4. Create an admin user and run the smoke test.
 5. Create/link a Daptin `cloud_store` for static site files.
 6. Create a `site` row for `canaster.in`.

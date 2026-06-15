@@ -1,5 +1,16 @@
-import { ListTree, Maximize2, Minus, Moon, Plus, Redo2, RotateCcw, Sun, Undo2, X } from 'lucide-react';
+import { FilePlus2, ListTree, LogIn, LogOut, Maximize2, Minus, Moon, Plus, Redo2, RefreshCw, RotateCcw, Save, Sun, Undo2, UserPlus, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createDocument,
+  listDocuments,
+  loadDocument,
+  saveDocument,
+  signIn,
+  signOut,
+  signUp,
+  type CanasterDocumentSummary,
+} from './backend/canasterDocuments';
+import { DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY, DAPTIN_LAST_EMAIL_STORAGE_KEY, getToken } from './backend/daptinClient';
 import { createChildCanvasForNode, createInitialDocumentCollection, updateCanvasModel } from './engine/documentModel';
 import {
   NestedCanvasWorkspace,
@@ -15,9 +26,21 @@ import type { DocumentCommand } from './engine/documentTypes';
 
 export function App() {
   const workspaceRef = useRef<NestedCanvasWorkspaceHandle | null>(null);
+  const ignoreDirtyUntilRef = useRef(0);
+  const lastSavedSnapshotSignatureRef = useRef<string | null>(null);
   const [theme, setTheme] = useState<ThemeName>('dark');
   const [nodesOpen, setNodesOpen] = useState(false);
+  const [authEmail, setAuthEmail] = useState(() => window.localStorage.getItem(DAPTIN_LAST_EMAIL_STORAGE_KEY) ?? '');
+  const [authName, setAuthName] = useState('Canaster User');
+  const [authPassword, setAuthPassword] = useState('');
+  const [signedIn, setSignedIn] = useState(() => Boolean(getToken()));
+  const [documents, setDocuments] = useState<CanasterDocumentSummary[]>([]);
+  const [activeDocumentId, setActiveDocumentId] = useState(() => window.localStorage.getItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY) ?? '');
+  const [documentTitle, setDocumentTitle] = useState('Canaster Workspace');
+  const [syncStatus, setSyncStatus] = useState<'anonymous' | 'loading' | 'clean' | 'dirty' | 'saving' | 'error'>(() => (getToken() ? 'loading' : 'anonymous'));
+  const [syncMessage, setSyncMessage] = useState(() => (getToken() ? 'Restoring session' : 'Local draft'));
   const initialCollection = useMemo(() => createSampleDocumentCollection(), []);
+  const workspaceStorageKey = activeDocumentId ? `daptin:${activeDocumentId}` : undefined;
   const [chromeState, setChromeState] = useState<NestedCanvasWorkspaceChromeState>(() => ({
     collection: initialCollection,
     status: initialViewportStatus,
@@ -29,6 +52,20 @@ export function App() {
   const handleChromeStateChange = useCallback((next: NestedCanvasWorkspaceChromeState) => {
     setChromeState(next);
   }, []);
+
+  const handleWorkspaceCollectionChange = useCallback(() => {
+    if (Date.now() < ignoreDirtyUntilRef.current) return;
+    if (activeDocumentId) {
+      const currentSnapshot = workspaceRef.current?.getWorkspaceSnapshot();
+      if (currentSnapshot && snapshotSignature(currentSnapshot) === lastSavedSnapshotSignatureRef.current) {
+        setSyncStatus('clean');
+        setSyncMessage('Saved');
+        return;
+      }
+      setSyncStatus((current) => current === 'loading' || current === 'saving' || current === 'error' ? current : 'dirty');
+      setSyncMessage((current) => current === 'Loading document' || current === 'Saving document' ? current : 'Unsaved changes');
+    }
+  }, [activeDocumentId]);
 
   const executeActiveCanvasCommand = useCallback(
     (command: CanvasCommand) => workspaceRef.current?.executeActiveCanvasCommand(command) ?? false,
@@ -43,13 +80,156 @@ export function App() {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
 
+  const refreshDocuments = useCallback(async () => {
+    if (!getToken()) return [];
+    const rows = await listDocuments();
+    setDocuments(rows);
+    return rows;
+  }, []);
+
+  const loadDaptinDocument = useCallback(async (documentRef: string) => {
+    if (!documentRef) return;
+    setSyncStatus('loading');
+    setSyncMessage('Loading document');
+    try {
+      const snapshot = await loadDocument(documentRef);
+      lastSavedSnapshotSignatureRef.current = snapshotSignature(snapshot);
+      ignoreDirtyUntilRef.current = Date.now() + 1200;
+      workspaceRef.current?.loadWorkspaceSnapshot(snapshot, 'Document loaded');
+      window.localStorage.setItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY, documentRef);
+      setActiveDocumentId(documentRef);
+      setSyncStatus('clean');
+      setSyncMessage('Saved');
+      window.setTimeout(() => {
+        const currentSnapshot = workspaceRef.current?.getWorkspaceSnapshot();
+        if (currentSnapshot && snapshotSignature(currentSnapshot) === lastSavedSnapshotSignatureRef.current) {
+          setSyncStatus('clean');
+          setSyncMessage('Saved');
+        }
+      }, 1600);
+    } catch (error) {
+      setSyncStatus('error');
+      setSyncMessage(errorMessage(error));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!signedIn) return;
+    let canceled = false;
+    refreshDocuments()
+      .then((rows) => {
+        if (canceled) return;
+        const restoredDocumentId = activeDocumentId || window.localStorage.getItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY) || '';
+        if (restoredDocumentId) {
+          return loadDaptinDocument(restoredDocumentId);
+        }
+        setSyncStatus('clean');
+        setSyncMessage('Signed in');
+      })
+      .catch((error) => {
+        if (canceled) return;
+        setSyncStatus('error');
+        setSyncMessage(errorMessage(error));
+      });
+    return () => {
+      canceled = true;
+    };
+  }, [activeDocumentId, loadDaptinDocument, refreshDocuments, signedIn]);
+
+  const handleSignUp = useCallback(async () => {
+    if (!authEmail.trim() || !authPassword) return;
+    setSyncStatus('loading');
+    setSyncMessage('Signing up');
+    try {
+      await signUp({ name: authName.trim() || 'Canaster User', email: authEmail.trim(), password: authPassword });
+      window.localStorage.setItem(DAPTIN_LAST_EMAIL_STORAGE_KEY, authEmail.trim());
+      setSignedIn(true);
+      setSyncStatus('clean');
+      setSyncMessage('Signed in');
+      await refreshDocuments();
+    } catch (error) {
+      setSyncStatus('error');
+      setSyncMessage(errorMessage(error));
+    }
+  }, [authEmail, authName, authPassword, refreshDocuments]);
+
+  const handleSignIn = useCallback(async () => {
+    if (!authEmail.trim() || !authPassword) return;
+    setSyncStatus('loading');
+    setSyncMessage('Signing in');
+    try {
+      await signIn({ email: authEmail.trim(), password: authPassword });
+      window.localStorage.setItem(DAPTIN_LAST_EMAIL_STORAGE_KEY, authEmail.trim());
+      setSignedIn(true);
+      setSyncStatus('clean');
+      setSyncMessage('Signed in');
+      await refreshDocuments();
+    } catch (error) {
+      setSyncStatus('error');
+      setSyncMessage(errorMessage(error));
+    }
+  }, [authEmail, authPassword, refreshDocuments]);
+
+  const handleSignOut = useCallback(async () => {
+    await signOut();
+    window.localStorage.removeItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY);
+    setSignedIn(false);
+    setActiveDocumentId('');
+    lastSavedSnapshotSignatureRef.current = null;
+    setDocuments([]);
+    setAuthPassword('');
+    setSyncStatus('anonymous');
+    setSyncMessage('Local draft');
+  }, []);
+
+  const handleCreateDocument = useCallback(async () => {
+    const snapshot = workspaceRef.current?.getWorkspaceSnapshot();
+    if (!snapshot) return;
+    setSyncStatus('saving');
+    setSyncMessage('Creating document');
+    try {
+      await workspaceRef.current?.flushWorkspaceSnapshot();
+      const documentRef = await createDocument(documentTitle, snapshot);
+      lastSavedSnapshotSignatureRef.current = snapshotSignature(snapshot);
+      window.localStorage.setItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY, documentRef);
+      setActiveDocumentId(documentRef);
+      await refreshDocuments();
+      ignoreDirtyUntilRef.current = Date.now() + 1200;
+      setSyncStatus('clean');
+      setSyncMessage('Saved');
+    } catch (error) {
+      setSyncStatus('error');
+      setSyncMessage(errorMessage(error));
+    }
+  }, [documentTitle, refreshDocuments]);
+
+  const handleSaveDocument = useCallback(async () => {
+    if (!activeDocumentId) return;
+    const snapshot = workspaceRef.current?.getWorkspaceSnapshot();
+    if (!snapshot) return;
+    setSyncStatus('saving');
+    setSyncMessage('Saving document');
+    try {
+      await workspaceRef.current?.flushWorkspaceSnapshot();
+      await saveDocument(activeDocumentId, snapshot);
+      lastSavedSnapshotSignatureRef.current = snapshotSignature(snapshot);
+      await refreshDocuments();
+      ignoreDirtyUntilRef.current = Date.now() + 1200;
+      setSyncStatus('clean');
+      setSyncMessage('Saved');
+    } catch (error) {
+      setSyncStatus('error');
+      setSyncMessage(errorMessage(error));
+    }
+  }, [activeDocumentId, refreshDocuments]);
+
   return (
     <main className="app-shell">
       <section className="workspace" aria-label="Canvas workspace">
         <div className="topbar" aria-label="Canvas controls">
           <div className="brand">
             <span className="brand-mark" />
-            <span>Canway</span>
+            <span>Canaster</span>
           </div>
           <div className="toolbar-group">
             <IconButton label="Undo" disabled={!chromeState.canUndo} onClick={() => workspaceRef.current?.undoWorkspace()}>
@@ -83,12 +263,89 @@ export function App() {
               {nodesOpen ? <X size={17} /> : <ListTree size={17} />}
             </IconButton>
           </div>
+          <form className="toolbar-group document-group" aria-label="Documents" onSubmit={(event) => event.preventDefault()}>
+            {signedIn ? (
+              <>
+                <select
+                  className="shell-select"
+                  aria-label="Active document"
+                  name="active-document"
+                  value={activeDocumentId}
+                  onChange={(event) => loadDaptinDocument(event.target.value)}
+                >
+                  <option value="">No document</option>
+                  {documents.map((document) => (
+                    <option key={document.id} value={document.id}>{document.title}</option>
+                  ))}
+                </select>
+                <input
+                  className="shell-input"
+                  aria-label="Document title"
+                  name="document-title"
+                  value={documentTitle}
+                  onChange={(event) => setDocumentTitle(event.target.value)}
+                />
+                <IconButton label="Create document" onClick={handleCreateDocument}>
+                  <FilePlus2 size={17} />
+                </IconButton>
+                <IconButton label="Save document" disabled={!activeDocumentId || syncStatus === 'saving'} onClick={handleSaveDocument}>
+                  <Save size={17} />
+                </IconButton>
+                <IconButton label="Refresh documents" onClick={() => refreshDocuments()}>
+                  <RefreshCw size={17} />
+                </IconButton>
+                <IconButton label="Sign out" onClick={handleSignOut}>
+                  <LogOut size={17} />
+                </IconButton>
+              </>
+            ) : (
+              <>
+                <input
+                  className="shell-input"
+                  aria-label="Name"
+                  name="name"
+                  autoComplete="name"
+                  value={authName}
+                  onChange={(event) => setAuthName(event.target.value)}
+                />
+                <input
+                  className="shell-input"
+                  type="email"
+                  aria-label="Email"
+                  name="email"
+                  autoComplete="email"
+                  placeholder="email"
+                  value={authEmail}
+                  onChange={(event) => setAuthEmail(event.target.value)}
+                />
+                <input
+                  className="shell-input"
+                  type="password"
+                  aria-label="Password"
+                  name="password"
+                  autoComplete="current-password"
+                  placeholder="password"
+                  value={authPassword}
+                  onChange={(event) => setAuthPassword(event.target.value)}
+                />
+                <IconButton label="Sign up" disabled={!authEmail || !authPassword || syncStatus === 'loading'} onClick={handleSignUp}>
+                  <UserPlus size={17} />
+                </IconButton>
+                <IconButton label="Sign in" disabled={!authEmail || !authPassword || syncStatus === 'loading'} onClick={handleSignIn}>
+                  <LogIn size={17} />
+                </IconButton>
+              </>
+            )}
+            <span className={`sync-readout ${syncStatus}`}>{syncMessage}</span>
+          </form>
         </div>
 
         <NestedCanvasWorkspace
           ref={workspaceRef}
           initialCollection={initialCollection}
           theme={theme}
+          storageKey={workspaceStorageKey}
+          onCollectionChange={handleWorkspaceCollectionChange}
           onChromeStateChange={handleChromeStateChange}
         />
         {nodesOpen ? (
@@ -107,6 +364,20 @@ export function App() {
       </section>
     </main>
   );
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return userFacingError(error.message);
+  if (typeof error === 'string') return userFacingError(error);
+  return 'Save failed';
+}
+
+function userFacingError(message: string): string {
+  return message.replace(/daptin\s*/gi, '').replace(/\s+/g, ' ').trim() || 'Request failed';
+}
+
+function snapshotSignature(snapshot: unknown): string {
+  return JSON.stringify(snapshot);
 }
 
 const sampleNestedCanvasModel: CanvasModel = {
