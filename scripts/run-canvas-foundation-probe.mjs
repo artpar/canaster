@@ -255,6 +255,13 @@ function assertProbe(result, browserEvents) {
   assert(result.snapContract.pointerResize.delta === 1, 'pointer snap resize did not emit exactly once');
   assert(result.snapContract.pointerResize.w === 192 && result.snapContract.pointerResize.h === 128, 'pointer resize did not snap to nearest grid size');
   assert(result.snapContract.pointerResize.snapped, 'pointer resize final size is not grid-snapped');
+  assert(result.snapContract.pointerPreviewReturn.delta === 0, 'pointer return-to-origin preview committed a model change');
+  assert(result.snapContract.pointerPreviewReturn.movedPreview.x === 32 && result.snapContract.pointerPreviewReturn.movedPreview.y === 32, 'pointer preview did not move to snapped cell');
+  assert(result.snapContract.pointerPreviewReturn.returnedPreview.x === 0 && result.snapContract.pointerPreviewReturn.returnedPreview.y === 0, 'pointer preview did not return to original cell');
+  assert(
+    result.snapContract.pointerPreviewReturn.renderCountAfterReturn > result.snapContract.pointerPreviewReturn.renderCountAfterMove,
+    'pointer no-op preview after rollback did not schedule a repaint',
+  );
   for (const [name, entry] of Object.entries(result.cancellation)) {
     assert(entry.modelChangeDelta === 0, `${name} emitted a model change`);
     assert(entry.rolledBack === true, `${name} did not roll back`);

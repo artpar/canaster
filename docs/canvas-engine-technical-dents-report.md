@@ -2,13 +2,15 @@
 
 Date: 2026-06-14
 
+Current status note, 2026-06-15: the drag/resize implementation described in this historical report has been superseded by the command-operation path in `CanvasEngine.executeCommand`. Pointer preview and commit now use command planning and operation application; references to `sameNodeGeometry` and direct transient geometry comparison are historical, not current code.
+
 ## Executive Verdict
 
 Reliable enough.
 
 The current Canway canvas foundation is reliable enough to build the next product layer on after two small foundation issues fixed during this investigation. The verified engine now has clean model-change boundaries for zero-delta drag/resize moves, bounded small-node detail text layout, high-DPI rendering, fit/reset/toolbar/wheel/double-click zoom behavior, interruption rollback, viewport culling, lifecycle cleanup, React model re-handoff, and stress coverage through 1,000 runtime nodes.
 
-No larger confirmed issue remains unfixed. The main residual risk is lack of checked-in browser interaction regression tests.
+No larger confirmed issue remained unfixed at the time. Current checked-in regression coverage now includes `npm run probe:canvas`.
 
 ## Confirmed Issues Fixed
 
@@ -24,7 +26,7 @@ Source proof:
 Fix:
 
 - Node drag and resize now set `drag.moved` from actual geometry comparison, not from pointermove presence.
-- Added `sameNodeGeometry` to compare current geometry with the interaction's original geometry.
+- Historical fix used geometry comparison to avoid no-op commits. Current code plans command operations and treats an empty operation plan as no-op.
 
 Source references:
 
@@ -75,8 +77,8 @@ None.
 
 ## Suspected But Unconfirmed Risks
 
-- There is no checked-in browser interaction regression harness. The runtime probes in this report are repeatable scripts run through Chrome DevTools, but they are not yet part of `npm test` or CI.
-- The engine still uses transient in-engine model mutation during drag and resize before emitting a cloned committed snapshot on pointer-up. The current behavior is verified, but future undo/redo, collaboration, persistence, or multi-cursor work should introduce explicit transactions before extending this pattern.
+- A checked-in browser interaction regression harness now exists as `npm run probe:canvas`.
+- Pointer drag and resize now preview through command planning and apply concrete operations before commit; undo/redo, collaboration, persistence, or multi-cursor work should build on the operation model rather than reintroducing direct mutation paths.
 - Stress coverage reached 1,000 simple nodes in the browser and remained responsive enough for the foundation. This does not prove performance for future rich domain-specific nodes, connection routing, labels, minimaps, or export.
 
 ## State-Machine Map
@@ -87,8 +89,8 @@ None.
 | Idle, selection | Engine `selectedNodeId`; React status mirrors it | committed engine UI state | cleared by background pointerdown or invalid model handoff | no | yes for selection stroke | yes | selection probe: `Selected source`, last change `No model changes` |
 | Hovering node | Engine `hoverNodeId` and cursor | transient | replaced by next hover | no | yes on hover target change | yes | direct hover model-change delta `0` |
 | Drag candidate before movement | Engine `drag` with original geometry | transient | cancel restores original geometry | no | selection render only | yes | no-op down/up and zero-delta move emitted `0` changes |
-| Active node drag | Engine mutates private cloned node geometry | transient until pointer-up | cancel/lost-capture/blur restores original geometry | only on successful pointer-up with changed geometry | yes | yes | real drag emitted one `node-move`; cancel emitted `0` and original hit target restored |
-| Active resize | Engine mutates private cloned node size | transient until pointer-up | cancel/lost-capture/blur restores original geometry | only on successful pointer-up with changed geometry | yes | yes | real resize emitted one `node-resize`; zero-delta resize emitted `0` |
+| Active node drag | Engine applies command-operation preview to private cloned model | transient until pointer-up | cancel/lost-capture/blur restores original geometry | only on successful pointer-up with changed operation plan | yes | yes | real drag emitted one `node-move`; cancel emitted `0` and original hit target restored |
+| Active resize | Engine applies command-operation preview to private cloned model | transient until pointer-up | cancel/lost-capture/blur restores original geometry | only on successful pointer-up with changed operation plan | yes | yes | real resize emitted one `node-resize`; zero-delta resize emitted `0` |
 | Active pan | Engine camera | transient until pointer-up, but no model commit | cancel/lost-capture/blur restores original camera | no | yes | yes | pan blur preserved world coordinate `{x:0,y:0}` before/after; successful/canceled pan changes `0` |
 | Wheel zoom | Engine camera | committed viewport state | none | no | yes | yes | app zoom `122% -> 180%`, cursor anchor `{x:105,y:24}` before/after |
 | Double-click zoom | Engine camera | committed viewport state | none | no | yes | yes | direct double-click model-change delta `0` |
@@ -246,7 +248,7 @@ Console and network:
 
 ## Regression Strategy
 
-No checked-in Playwright/browser harness was added in this pass.
+A checked-in Chrome/CDP browser harness has since been added as `npm run probe:canvas`.
 
 Reason:
 
@@ -265,6 +267,6 @@ Recommended next regression task:
 
 ## Final Recommendation
 
-Proceed with the next product layer, but keep the first product-layer task narrow and add a checked-in browser interaction suite before introducing persistence, undo/redo, collaboration, domain-specific node complexity, connection routing, export, or canvas-library replacement.
+Proceed with the next product layer, but keep the first product-layer task narrow and keep extending the checked-in browser interaction suite before introducing persistence, undo/redo, collaboration, domain-specific node complexity, connection routing, export, or canvas-library replacement.
 
 The foundation is not perfect, but the remaining gaps are regression-automation and future-scale risks, not confirmed blockers in the current engine.

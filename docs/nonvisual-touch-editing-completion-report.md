@@ -73,6 +73,7 @@ Snap-to-grid behavior:
 - pointer drag and resize snap to the nearest grid coordinate or size;
 - pointer drag and resize preview through the same command planner used for commit;
 - zero-delta pointer drag/resize keeps existing geometry instead of forcing legacy unsnapped nodes onto the grid.
+- drag-out-then-back preview returns to the original snapped cell, schedules a repaint, and commits no model change.
 
 Clipboard contract:
 
@@ -103,6 +104,7 @@ Automated evidence from `npm run probe:canvas`:
 - pointer snap probe moves a node from `0,0` to `32,32` for a `45,45` raw drag;
 - pointer snap probe resizes a `160x96` node to `192x128` for a raw `183x119` resize;
 - pointer preview and pointer commit use the same command planner and operation application path.
+- pointer preview return probe moves to `32,32`, returns to `0,0`, schedules another render, and emits no model change on pointer-up.
 
 ## Real-Device Touch Status
 

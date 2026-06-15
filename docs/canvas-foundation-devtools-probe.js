@@ -445,6 +445,37 @@ export async function runCanwayFoundationProbe() {
         snapped: isSnapped(node.w) && isSnapped(node.h),
       };
 
+      engine.setModel({ nodes: [{ id: 'snap', label: 'Snap Target', detail: 'grid snap probe', kind: 'task', x: 0, y: 0, w: 160, h: 96 }] });
+      await raf(3);
+      let renderCount = 0;
+      const originalRender = engine.render?.bind(engine);
+      if (originalRender) {
+        engine.render = () => {
+          renderCount++;
+          return originalRender();
+        };
+      }
+      point = center();
+      const beforeReturnPreview = changes.length;
+      dispatchPointer(canvas, 'pointerdown', point.x, point.y, 703);
+      dispatchPointer(window, 'pointermove', point.x + 45, point.y + 45, 703);
+      await raf(3);
+      const movedPreview = { x: engine.model.nodes[0].x, y: engine.model.nodes[0].y };
+      const renderCountAfterMove = renderCount;
+      dispatchPointer(window, 'pointermove', point.x + 5, point.y + 5, 703);
+      await raf(3);
+      const returnedPreview = { x: engine.model.nodes[0].x, y: engine.model.nodes[0].y };
+      const renderCountAfterReturn = renderCount;
+      dispatchPointer(window, 'pointerup', point.x + 5, point.y + 5, 703);
+      await raf(3);
+      result.pointerPreviewReturn = {
+        delta: changes.length - beforeReturnPreview,
+        movedPreview,
+        returnedPreview,
+        renderCountAfterMove,
+        renderCountAfterReturn,
+      };
+
       return result;
     },
     { width: 420, height: 320, fit: false },

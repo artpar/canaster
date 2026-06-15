@@ -200,13 +200,14 @@ export class CanvasEngine {
     return this.applyCommandPlan(this.planCommand(command), true).operations.length > 0;
   }
 
-  private previewCommand(command: CanvasCommand) {
-    return this.applyCommandPlan(this.planCommand(command), false);
+  private applyPreviewCommand(command: CanvasCommand, forceRender = false) {
+    return this.applyCommandPlan(this.planCommand(command), false, forceRender);
   }
 
-  private applyCommandPlan(plan: CommandPlan, emitChange: boolean) {
+  private applyCommandPlan(plan: CommandPlan, emitChange: boolean, forceRender = false) {
     this.interaction = plan.interaction;
     if (!plan.operations.length) {
+      if (forceRender) this.markDirty();
       this.emitStatus();
       return plan;
     }
@@ -586,7 +587,7 @@ export class CanvasEngine {
       const rawY = world.y - this.drag.dy;
       const command: CanvasCommand = { type: 'move-selection', dx: rawX - this.drag.original.x, dy: rawY - this.drag.original.y, source: 'pointer' };
       this.rollbackInteraction(this.drag);
-      const plan = this.previewCommand(command);
+      const plan = this.applyPreviewCommand(command, true);
       this.drag.command = plan.operations.length ? command : null;
       this.drag.moved = plan.operations.length > 0;
     } else if (this.drag?.mode === 'resize') {
@@ -594,7 +595,7 @@ export class CanvasEngine {
       const rawH = Math.max(MIN_NODE_H, world.y - this.drag.oy - this.drag.node.y);
       const command: CanvasCommand = { type: 'resize-primary', dw: rawW - this.drag.original.w, dh: rawH - this.drag.original.h, source: 'pointer' };
       this.rollbackInteraction(this.drag);
-      const plan = this.previewCommand(command);
+      const plan = this.applyPreviewCommand(command, true);
       this.drag.command = plan.operations.length ? command : null;
       this.drag.moved = plan.operations.length > 0;
     } else if (this.drag?.mode === 'pan') {

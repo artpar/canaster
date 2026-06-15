@@ -2,6 +2,8 @@
 
 Date: 2026-06-14
 
+Current status note, 2026-06-15: drag/resize internals in this historical audit have been superseded by `executeCommand` command planning and concrete `CanvasOperation` application. The current checked-in regression harness is `npm run probe:canvas`.
+
 ## Summary Verdict
 
 The current canvas foundation is reliable enough to build the next layer on after one small model-change boundary fix made during this audit. The verified foundation supports high-DPI rendering, fit/reset/zoom controls, wheel zoom with cursor anchoring, node selection, drag, resize, interruption rollback, viewport culling, theme redraw, React model-change handoff, and coalesced status updates.
@@ -57,7 +59,7 @@ DOM/canvas owns:
 Commit and rollback boundaries:
 
 - `setModel` clones React-owned model into the engine and can preserve valid selection/hover across committed model updates: `src/engine/CanvasEngine.ts:115`.
-- Drag/resize mutations stay internal until pointer-up emits a cloned model snapshot: `src/engine/CanvasEngine.ts:513`.
+- Drag/resize previews now apply command-planned operations to the private cloned model; pointer-up rolls back the preview and commits through `executeCommand`.
 - Pointer cancel, lost capture, and window blur all route through rollback: `src/engine/CanvasEngine.ts:360`, `src/engine/CanvasEngine.ts:364`, `src/engine/CanvasEngine.ts:368`, `src/engine/CanvasEngine.ts:487`.
 
 ## Render Invariants
@@ -113,9 +115,9 @@ Console/network:
 
 ## Residual Risks
 
-- The interruption checks are browser-probe coverage, not checked-in automated tests. They are strong enough for this audit, but regressions could reappear without a future automated interaction suite.
+- The interruption checks are now covered by the checked-in Chrome/CDP probe run through `npm run probe:canvas`; keep extending that harness as interaction complexity grows.
 - Culling was verified with the sample model and a far pan to `0/4`; very large graphs may need separate stress/performance profiling.
-- The engine still uses immediate in-memory geometry mutation during active drag/resize and commits a cloned snapshot on pointer-up. That is acceptable for the current imperative engine, but future undo/redo or collaboration work should add explicit transactions rather than extending transient mutation semantics.
+- Pointer drag/resize now previews through command planning and concrete operations before pointer-up commit. Future undo/redo or collaboration work should extend the operation model rather than reintroducing direct geometry mutation paths.
 
 ## Completion Criteria Audit
 
