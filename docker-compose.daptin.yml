@@ -29,7 +29,8 @@ services:
       - ./daptin:/opt/daptin/schema:ro
       - daptin-data:/data
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
 
   postgres:
     image: postgres:16
@@ -37,6 +38,11 @@ services:
       POSTGRES_USER: canaster
       POSTGRES_PASSWORD: canaster
       POSTGRES_DB: canaster
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U canaster -d canaster"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
     volumes:
       - postgres-data:/var/lib/postgresql/data
 

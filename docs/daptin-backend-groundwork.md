@@ -55,6 +55,16 @@ Local service defaults:
 
 The compose file mounts `./daptin` as `DAPTIN_SCHEMA_FOLDER`, so schema changes require a Daptin container restart.
 
+Current local status as of 2026-06-15 18:53 IST:
+
+- `npm run daptin:up` starts local Daptin and local Postgres.
+- Daptin is available at `http://localhost:6336`.
+- Postgres uses the `canaster_postgres-data` Docker volume.
+- Daptin storage uses the `canaster_daptin-data` Docker volume.
+- Compose waits for Postgres health before starting Daptin.
+- Verified with `curl http://localhost:6336/api/world?page%5Bsize%5D=5`.
+- Verified with `npm run daptin:smoke`.
+
 ## Production Backend
 
 Production runs Daptin on Google Cloud Run with Cloud SQL for PostgreSQL and a Cloud Storage volume mounted at `/data/storage`.
@@ -77,6 +87,23 @@ Fixed production defaults:
 - Daptin site path: `/canaster`
 
 The Cloud Run service is capped at `--max-instances=1` for v1. Daptin’s DB state is safe in Cloud SQL, but Daptin site/YJS/file storage uses a mounted Cloud Storage filesystem and the current collaboration design has not yet been validated for multi-instance concurrent write semantics.
+
+Current production status as of 2026-06-15 18:53 IST:
+
+- Google Cloud project: `agent4-471206`.
+- Cloud DNS zone `canaster-in` exists.
+- Artifact Registry repository `canaster` exists in `asia-south1`.
+- Cloud Storage bucket `canaster-daptin-storage` exists.
+- Service account `canaster-daptin-run@agent4-471206.iam.gserviceaccount.com` exists.
+- Cloud SQL instance `canaster-postgres` exists as Enterprise `db-g1-small`, 10 GB SSD.
+- Secret Manager secret `canaster-daptin-db-connection` exists.
+- Cloud Run service `canaster-daptin` does not exist yet.
+- Load balancer, serverless NEG, managed certificate, and `A` records do not exist yet.
+
+The current cost-bearing production resource is Cloud SQL. The estimated always-on cost for `db-g1-small` plus 10 GB SSD/backups is roughly USD 28/month before traffic. Adding the HTTPS load balancer later is expected to add roughly USD 18/month.
+
+Do not continue production deployment until local integration is confirmed against `http://localhost:6336`.
+
 
 ## Production Image
 
