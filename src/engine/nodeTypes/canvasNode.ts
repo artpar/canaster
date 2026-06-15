@@ -1,0 +1,68 @@
+import { BuiltInNodeTypes, type CanvasPortalNodeData } from '../types';
+import { asNullableString, asNumber, asString } from './data';
+import { clipText, drawTypeBadge } from './rendering';
+import type { NodeDefinition } from './types';
+
+export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = {
+  type: BuiltInNodeTypes.canvas,
+  displayName: 'Canvas',
+  defaultSize: { w: 300, h: 180 },
+  minSize: { w: 160, h: 100 },
+  createDefaultData() {
+    return { childCanvasId: null, title: 'Canvas', nodeCount: 0 };
+  },
+  parseData(raw) {
+    return {
+      childCanvasId: asNullableString(raw.childCanvasId),
+      title: asString(raw.title, 'Canvas'),
+      nodeCount: Math.max(0, Math.floor(asNumber(raw.nodeCount, 0))),
+    };
+  },
+  render({ ctx, data, theme, contentRect, state }) {
+    ctx.fillStyle = theme.headerText;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.font = '600 15px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    ctx.fillText(clipText(ctx, data.title || 'Canvas', Math.max(0, contentRect.w - 8)), contentRect.x + 4, contentRect.y + 4);
+
+    if (state.quality !== 'compact') {
+      ctx.strokeStyle = theme.nodeBorder;
+      const previewX = contentRect.x + 6;
+      const previewY = contentRect.y + 36;
+      const previewW = Math.max(0, contentRect.w - 12);
+      const previewH = Math.max(0, contentRect.h - 72);
+      ctx.strokeRect(previewX, previewY, previewW, previewH);
+      ctx.fillStyle = theme.mutedText;
+      ctx.font = '12px ui-sans-serif, system-ui, sans-serif';
+      if (data.childCanvasId) {
+        ctx.fillText(`${data.nodeCount} child node${data.nodeCount === 1 ? '' : 's'}`, previewX + 10, previewY + 10);
+        ctx.fillText(clipText(ctx, data.childCanvasId, Math.max(0, previewW - 20)), previewX + 10, previewY + 28);
+      } else {
+        ctx.fillText('No child canvas', previewX + 10, previewY + 10);
+      }
+      drawPreviewBoxes(ctx, previewX, previewY, previewW, previewH, theme);
+    }
+
+    drawTypeBadge(ctx, contentRect, 'CANVAS', theme);
+  },
+  hitTest() {
+    return { type: 'body' };
+  },
+  describe({ data }) {
+    return {
+      label: data.title || 'Canvas node',
+      roleDescription: 'Canvas portal',
+      details: [data.childCanvasId ? `child ${data.childCanvasId}` : 'no child canvas', `${data.nodeCount} child node${data.nodeCount === 1 ? '' : 's'}`],
+      state: [],
+      actions: [],
+    };
+  },
+};
+
+function drawPreviewBoxes(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, theme: { nodeBorder: string }) {
+  if (w < 64 || h < 48) return;
+  ctx.strokeStyle = theme.nodeBorder;
+  for (let i = 0; i < 3; i++) {
+    ctx.strokeRect(x + 14 + i * 34, y + h - 34 - i * 5, 24, 16);
+  }
+}

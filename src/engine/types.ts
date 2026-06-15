@@ -6,22 +6,61 @@ export type Camera = {
   scale: number;
 };
 
-export type CanvasNodeKind = 'task' | 'data' | 'system';
+export const BuiltInNodeTypes = {
+  card: 'card',
+  text: 'text',
+  image: 'image',
+  canvas: 'canvas',
+} as const;
 
-export type CanvasNode = {
+export type BuiltInNodeType = (typeof BuiltInNodeTypes)[keyof typeof BuiltInNodeTypes];
+export type NodeTypeId = string;
+
+export type JsonPrimitive = null | boolean | number | string;
+export type JsonObject = { [key: string]: JsonValue };
+export type JsonArray = JsonValue[];
+export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
+
+export type NodeData = JsonObject;
+
+export type CanvasNode<TData extends NodeData = NodeData> = {
   id: string;
-  label: string;
-  detail: string;
-  kind: CanvasNodeKind;
+  type: NodeTypeId;
   x: number;
   y: number;
   w: number;
   h: number;
+  data: TData;
 };
 
 export type CanvasModel = {
+  schemaVersion: 2;
   nodes: CanvasNode[];
 };
+
+export type CardAccent = 'task' | 'data' | 'system';
+
+export type CardNodeData = {
+  title: string;
+  detail: string;
+  accent: CardAccent;
+} & JsonObject;
+
+export type TextNodeData = {
+  text: string;
+} & JsonObject;
+
+export type ImageNodeData = {
+  src: string | null;
+  alt: string;
+  fit: 'contain' | 'cover';
+} & JsonObject;
+
+export type CanvasPortalNodeData = {
+  childCanvasId: string | null;
+  title: string;
+  nodeCount: number;
+} & JsonObject;
 
 export type CanvasEditSource = 'pointer' | 'keyboard' | 'nonvisual' | 'ai';
 

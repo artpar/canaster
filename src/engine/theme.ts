@@ -1,4 +1,4 @@
-import type { CanvasNodeKind, ThemeName } from './types';
+import type { CardAccent, ThemeName } from './types';
 
 export type CanvasTheme = {
   name: ThemeName;
@@ -13,7 +13,7 @@ export type CanvasTheme = {
   mutedText: string;
   selected: string;
   resizeFill: string;
-  kind: Record<CanvasNodeKind, string>;
+  kind: Record<CardAccent, string>;
 };
 
 export const THEMES: Record<ThemeName, CanvasTheme> = {

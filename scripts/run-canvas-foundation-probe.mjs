@@ -203,6 +203,32 @@ function assertProbe(result, browserEvents) {
   assert(result.culling.edge.rendered === '1' && result.culling.edge.total === '1', 'edge culling should render intersecting node');
   assert(result.culling.off.rendered === '0' && result.culling.off.total === '1', 'offscreen culling should skip fully offscreen node');
 
+  assert(result.nodePluginContract.rendered === '9' && result.nodePluginContract.total === '9', 'node plugin contract fixtures did not all render');
+  assert(result.nodePluginContract.descriptions['bad-card-null']?.label === 'Untitled card', 'malformed null card did not normalize label');
+  assert(result.nodePluginContract.descriptions['bad-card-accent']?.details?.some((detail) => detail.includes('accent task')), 'malformed card accent did not normalize');
+  assert(result.nodePluginContract.descriptions['unknown-custom']?.roleDescription === 'Unknown node', 'unknown node role description missing');
+  assert(result.nodePluginContract.descriptions['bad-text-markdown']?.label === 'Empty text node', 'malformed text node did not stay empty');
+  assert(result.nodePluginContract.descriptions['image-null']?.details?.includes('no source'), 'null image source placeholder not described');
+  assert(result.nodePluginContract.descriptions['bad-image-src']?.details?.includes('no source'), 'malformed image source did not normalize to no source');
+  assert(
+    result.nodePluginContract.descriptions['image-src']?.details?.includes('preview loading not implemented yet'),
+    'image source placeholder did not document unimplemented preview loading',
+  );
+  assert(result.nodePluginContract.descriptions['canvas-portal']?.roleDescription === 'Canvas portal', 'canvas node role description missing');
+  assert(Object.values(result.nodePluginContract.actionCounts).every((count) => count === 0), 'Phase 3 node descriptions exposed action buttons');
+  assert(result.nodePluginContract.canvasPortalHit?.type === 'body', 'canvas portal exposed a non-body hit target before action routing');
+  assert(result.nodePluginContract.unknown.moved?.x === 480 && result.nodePluginContract.unknown.moved?.y === 32, 'unknown node did not move through core command');
+  assert(result.nodePluginContract.unknown.deleted, 'unknown node was not deletable through core command');
+  assert(result.nodePluginContract.unknown.pastedDataEqual, 'unknown node custom data was not preserved through copy/paste');
+  assert(result.nodePluginContract.unknown.pastedDataSameReference === false, 'unknown node pasted data shared object reference');
+  for (const [nodeId, entry] of Object.entries(result.nodePluginContract.operationsByType)) {
+    assert(entry.delta >= 4, `${nodeId} did not execute core select/move/resize/paste/delete flow`);
+    assert(entry.originalExists, `${nodeId} original node was deleted during type operation probe`);
+    assert(entry.pastedDeleted, `${nodeId} pasted node was not deletable`);
+    assert(entry.dataEqual, `${nodeId} pasted data did not equal source data`);
+    assert(entry.dataSameReference === false, `${nodeId} pasted data shared object reference`);
+  }
+
   assert(result.keyboardContract.tabIndex === 0, 'probe canvas is not sequentially focusable');
   assert(result.keyboardContract.programmaticFocusWorks, 'probe canvas does not accept programmatic pointer-style focus');
   assert(result.keyboardContract.noSelectionDelta === 0, 'no-selection arrow keys changed the model');
@@ -412,6 +438,7 @@ async function main() {
       browserEvents,
       app: result.app,
       modelBoundaryDeltas: result.modelBoundary.deltas,
+      nodePluginContract: result.nodePluginContract,
       keyboardContract: result.keyboardContract,
       advancedEditing: result.advancedEditing,
       cancellation: result.cancellation,

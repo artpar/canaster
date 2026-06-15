@@ -1,6 +1,7 @@
 import { Clipboard, Copy, ListTree, Maximize2, Minus, Moon, MoveRight, Plus, RotateCcw, Sun, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { CanvasEngine } from './engine/CanvasEngine';
+import { describeNode } from './engine/nodeTypes/registry';
 import { sampleModel } from './engine/sampleModel';
 import type { CanvasCommand, CanvasModel, CanvasModelChange, ThemeName, ViewportStatus } from './engine/types';
 
@@ -16,7 +17,8 @@ const initialStatus: ViewportStatus = {
 };
 
 const initialModel: CanvasModel = {
-  nodes: sampleModel.nodes.map((node) => ({ ...node })),
+  schemaVersion: 2,
+  nodes: sampleModel.nodes.map((node) => ({ ...node, data: { ...node.data } })),
 };
 
 export function App() {
@@ -123,31 +125,32 @@ export function App() {
             {model.nodes.map((node) => {
               const selected = status.selectedNodeIds.includes(node.id);
               const primary = status.selectedNodeId === node.id;
+              const description = describeNode(node);
               return (
                 <li key={node.id} className="node-access-row">
                   <button
                     className="node-access-select"
                     type="button"
                     aria-pressed={selected}
-                    aria-label={`${selected ? 'Selected' : 'Select'} ${node.label}, ${node.kind}, x ${Math.round(node.x)}, y ${Math.round(node.y)}, width ${Math.round(node.w)}, height ${Math.round(node.h)}`}
+                    aria-label={`${selected ? 'Selected' : 'Select'} ${description.label}, ${description.roleDescription}, x ${Math.round(node.x)}, y ${Math.round(node.y)}, width ${Math.round(node.w)}, height ${Math.round(node.h)}`}
                     onClick={() => executeCommand({ type: 'select-node', nodeId: node.id, source: 'nonvisual' })}
                   >
-                    <span>{node.label}</span>
-                    <span>{primary ? 'Primary' : selected ? 'Selected' : node.kind}</span>
+                    <span>{description.label}</span>
+                    <span>{primary ? 'Primary' : selected ? 'Selected' : description.roleDescription}</span>
                   </button>
                   <button
                     className="node-access-toggle"
                     type="button"
-                    aria-label={`Toggle ${node.label} in selection`}
+                    aria-label={`Toggle ${description.label} in selection`}
                     aria-pressed={selected}
                     onClick={() => executeCommand({ type: 'select-node', nodeId: node.id, mode: 'toggle', source: 'nonvisual' })}
                   >
                     +
                   </button>
                   <span className="node-access-meta">
-                    {node.kind} · x {Math.round(node.x)} · y {Math.round(node.y)} · {Math.round(node.w)}x{Math.round(node.h)}
+                    {description.roleDescription} · x {Math.round(node.x)} · y {Math.round(node.y)} · {Math.round(node.w)}x{Math.round(node.h)}
                   </span>
-                  <span className="node-access-detail">{node.detail}</span>
+                  <span className="node-access-detail">{description.details.join(' · ')}</span>
                 </li>
               );
             })}

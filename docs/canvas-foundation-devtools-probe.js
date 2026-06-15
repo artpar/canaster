@@ -1,5 +1,6 @@
 export async function runCanwayFoundationProbe() {
   const { CanvasEngine } = await import('/src/engine/CanvasEngine.ts');
+  const { describeNode } = await import('/src/engine/nodeTypes/registry.ts');
   const { sampleModel } = await import('/src/engine/sampleModel.ts');
   const SNAP_STEP = 32;
 
@@ -7,7 +8,45 @@ export async function runCanwayFoundationProbe() {
     for (let i = 0; i < count; i++) await new Promise((resolve) => requestAnimationFrame(resolve));
   };
   const isSnapped = (value) => Math.abs(value / SNAP_STEP - Math.round(value / SNAP_STEP)) < 0.0001;
-  const cloneModel = (model) => ({ nodes: model.nodes.map((node) => ({ ...node })) });
+  const cloneData = (data) => JSON.parse(JSON.stringify(data));
+  const cloneModel = (model) => ({ schemaVersion: 2, nodes: model.nodes.map((node) => ({ ...node, data: cloneData(node.data) })) });
+  const modelOf = (nodes) => ({ schemaVersion: 2, nodes });
+  const makeCardNode = (id, x, y, w = 160, h = 96, title = id, detail = `Detail for ${id}`, accent = 'task') => ({
+    id,
+    type: 'card',
+    x,
+    y,
+    w,
+    h,
+    data: { title, detail, accent },
+  });
+  const makeTextNode = (id, x, y, text = '') => ({
+    id,
+    type: 'text',
+    x,
+    y,
+    w: 240,
+    h: 140,
+    data: { text },
+  });
+  const makeImageNode = (id, x, y, data = { src: null, alt: '', fit: 'contain' }) => ({
+    id,
+    type: 'image',
+    x,
+    y,
+    w: 280,
+    h: 180,
+    data,
+  });
+  const makeCanvasNode = (id, x, y, data = { childCanvasId: null, title: 'Canvas', nodeCount: 0 }) => ({
+    id,
+    type: 'canvas',
+    x,
+    y,
+    w: 300,
+    h: 180,
+    data,
+  });
   const modelBounds = (model) => {
     if (!model.nodes.length) return null;
     let x0 = Infinity;
@@ -244,8 +283,8 @@ export async function runCanwayFoundationProbe() {
   });
 
   const culling = await (async () => {
-    const edge = { nodes: [{ id: 'edge', label: 'edge', detail: 'crosses viewport edge', kind: 'task', x: -50, y: 80, w: 160, h: 120 }] };
-    const off = { nodes: [{ id: 'off', label: 'off', detail: 'fully offscreen', kind: 'task', x: 5000, y: 5000, w: 160, h: 120 }] };
+    const edge = modelOf([makeCardNode('edge', -50, 80, 160, 120, 'edge', 'crosses viewport edge')]);
+    const off = modelOf([makeCardNode('off', 5000, 5000, 160, 120, 'off', 'fully offscreen')]);
     return {
       edge: await withEngine(edge, async ({ canvas }) => ({ rendered: canvas.dataset.renderedNodes, total: canvas.dataset.totalNodes }), {
         width: 400,
@@ -259,6 +298,85 @@ export async function runCanwayFoundationProbe() {
       }),
     };
   })();
+
+  const nodePluginContract = await withEngine(
+    modelOf([
+      { id: 'bad-card-null', type: 'card', data: null, x: 0, y: 0, w: 180, h: 90 },
+      { id: 'bad-card-accent', type: 'card', data: { title: 42, accent: 'bad' }, x: 220, y: 0, w: 180, h: 90 },
+      { id: 'unknown-custom', type: 'vendor.unknown', data: { nested: { value: 7 }, list: ['a', 2, true] }, x: 440, y: 0, w: 220, h: 120 },
+      makeTextNode('valid-text', 0, 160, 'First line\nSecond line'),
+      { id: 'bad-text-markdown', type: 'text', data: { markdown: '# hello' }, x: 280, y: 160, w: 240, h: 140 },
+      makeImageNode('image-null', 560, 160),
+      makeImageNode('bad-image-src', 880, 160, { src: 42, alt: 17, fit: 'stretch' }),
+      makeImageNode('image-src', 1200, 160, { src: 'https://example.com/assets/photo.png', alt: 'Example image', fit: 'cover' }),
+      makeCanvasNode('canvas-portal', 0, 380, { childCanvasId: 'child-a', title: 'Child canvas', nodeCount: 3 }),
+    ]),
+    async ({ canvas, engine, changes }) => {
+      await raf(6);
+      const initialRendered = canvas.dataset.renderedNodes;
+      const initialTotal = canvas.dataset.totalNodes;
+      const descriptions = Object.fromEntries(engine.model.nodes.map((node) => [node.id, describeNode(node)]));
+
+      engine.executeCommand({ type: 'select-node', nodeId: 'unknown-custom', source: 'nonvisual' });
+      engine.executeCommand({ type: 'move-selection', dx: SNAP_STEP, dy: SNAP_STEP, source: 'nonvisual' });
+      const unknownMoved = engine.model.nodes.find((node) => node.id === 'unknown-custom');
+      engine.executeCommand({ type: 'copy-selection', source: 'nonvisual' });
+      const idsBeforeUnknownPaste = new Set(engine.model.nodes.map((node) => node.id));
+      engine.executeCommand({ type: 'paste-clipboard', source: 'nonvisual' });
+      const unknownPasted = engine.model.nodes.find((node) => !idsBeforeUnknownPaste.has(node.id));
+      engine.executeCommand({ type: 'select-node', nodeId: 'unknown-custom', source: 'nonvisual' });
+      engine.executeCommand({ type: 'delete-selection', source: 'nonvisual' });
+
+      const operationsByType = {};
+      for (const nodeId of ['valid-text', 'image-null', 'canvas-portal']) {
+        engine.setModel(
+          modelOf([
+            makeTextNode('valid-text', 0, 0, 'First line\nSecond line'),
+            makeImageNode('image-null', 320, 0),
+            makeCanvasNode('canvas-portal', 680, 0, { childCanvasId: 'child-a', title: 'Child canvas', nodeCount: 3 }),
+          ]),
+        );
+        await raf(2);
+        const before = changes.length;
+        engine.executeCommand({ type: 'select-node', nodeId, source: 'nonvisual' });
+        engine.executeCommand({ type: 'move-selection', dx: SNAP_STEP, dy: 0, source: 'nonvisual' });
+        engine.executeCommand({ type: 'resize-primary', dw: SNAP_STEP, dh: 0, source: 'nonvisual' });
+        const original = engine.model.nodes.find((node) => node.id === nodeId);
+        engine.executeCommand({ type: 'copy-selection', source: 'nonvisual' });
+        const idsBeforePaste = new Set(engine.model.nodes.map((node) => node.id));
+        engine.executeCommand({ type: 'paste-clipboard', source: 'nonvisual' });
+        const pasted = engine.model.nodes.find((node) => !idsBeforePaste.has(node.id));
+        engine.executeCommand({ type: 'delete-selection', source: 'nonvisual' });
+        operationsByType[nodeId] = {
+          delta: changes.length - before,
+          originalExists: engine.model.nodes.some((node) => node.id === nodeId),
+          pastedDeleted: pasted ? !engine.model.nodes.some((node) => node.id === pasted.id) : false,
+          dataEqual: JSON.stringify(original?.data) === JSON.stringify(pasted?.data),
+          dataSameReference: original?.data === pasted?.data,
+        };
+      }
+
+      const canvasPortal = engine.model.nodes.find((node) => node.id === 'canvas-portal') ?? makeCanvasNode('canvas-portal', 0, 0);
+      const internalHit = engine.nodeInternalHit?.(canvasPortal, { x: canvasPortal.x + 20, y: canvasPortal.y + 20 }) ?? null;
+
+      return {
+        rendered: initialRendered,
+        total: initialTotal,
+        descriptions,
+        unknown: {
+          moved: unknownMoved ? { x: unknownMoved.x, y: unknownMoved.y } : null,
+          deleted: !engine.model.nodes.some((node) => node.id === 'unknown-custom'),
+          pastedData: unknownPasted?.data ?? null,
+          pastedDataEqual: JSON.stringify(unknownPasted?.data) === JSON.stringify({ nested: { value: 7 }, list: ['a', 2, true] }),
+          pastedDataSameReference: unknownPasted?.data === unknownMoved?.data,
+        },
+        operationsByType,
+        canvasPortalHit: internalHit,
+        actionCounts: Object.fromEntries(Object.entries(descriptions).map(([id, description]) => [id, description.actions.length])),
+      };
+    },
+    { width: 1500, height: 700, fit: false },
+  );
 
   const keyboardContract = await withEngine(sampleModel, async ({ canvas, engine, changes, statuses }) => {
     canvas.focus({ preventScroll: true });
@@ -474,7 +592,7 @@ export async function runCanwayFoundationProbe() {
   });
 
   const snapContract = await withEngine(
-    { nodes: [{ id: 'snap', label: 'Snap Target', detail: 'grid snap probe', kind: 'task', x: 0, y: 0, w: 160, h: 96 }] },
+    modelOf([makeCardNode('snap', 0, 0, 160, 96, 'Snap Target', 'grid snap probe')]),
     async ({ canvas, engine, changes }) => {
       const result = {};
       const center = () => {
@@ -514,7 +632,7 @@ export async function runCanwayFoundationProbe() {
         snapped: isSnapped(node.w) && isSnapped(node.h),
       };
 
-      engine.setModel({ nodes: [{ id: 'snap', label: 'Snap Target', detail: 'grid snap probe', kind: 'task', x: 0, y: 0, w: 160, h: 96 }] });
+      engine.setModel(modelOf([makeCardNode('snap', 0, 0, 160, 96, 'Snap Target', 'grid snap probe')]));
       await raf(3);
       let renderCount = 0;
       const originalRender = engine.render?.bind(engine);
@@ -852,57 +970,43 @@ export async function runCanwayFoundationProbe() {
   })();
 
   const futureModelShape = await (async () => {
-    const makeNode = (id, x, y, w = 160, h = 96, label = id, detail = `Detail for ${id}`) => ({
-      id,
-      label,
-      detail,
-      kind: 'task',
-      x,
-      y,
-      w,
-      h,
-    });
-    const grid = (count, columns, gap = 210) => ({
-      nodes: Array.from({ length: count }, (_, i) => makeNode(`node-${i}`, (i % columns) * gap, Math.floor(i / columns) * 140)),
-    });
+    const makeNode = (id, x, y, w = 160, h = 96, label = id, detail = `Detail for ${id}`) => makeCardNode(id, x, y, w, h, label, detail);
+    const grid = (count, columns, gap = 210) =>
+      modelOf(Array.from({ length: count }, (_, i) => makeNode(`node-${i}`, (i % columns) * gap, Math.floor(i / columns) * 140)));
     const cases = [
       { name: '1000-nodes', model: grid(1000, 40) },
       { name: '2000-nodes', model: grid(2000, 50) },
       {
         name: 'dense-overlap',
-        model: { nodes: Array.from({ length: 180 }, (_, i) => makeNode(`dense-${i}`, 180 + (i % 12) * 4, 140 + Math.floor(i / 12) * 3)) },
+        model: modelOf(Array.from({ length: 180 }, (_, i) => makeNode(`dense-${i}`, 180 + (i % 12) * 4, 140 + Math.floor(i / 12) * 3))),
       },
-      { name: 'extreme-coordinates', model: { nodes: [makeNode('neg-far', -100000, -80000), makeNode('pos-far', 120000, 90000)] } },
-      { name: 'min-size-nodes', model: { nodes: [makeNode('min-a', 0, 0, 140, 76), makeNode('min-b', 170, 0, 140, 76)] } },
-      { name: 'very-wide-tall', model: { nodes: [makeNode('wide', 0, 0, 1600, 96), makeNode('tall', 0, 140, 160, 1600)] } },
+      { name: 'extreme-coordinates', model: modelOf([makeNode('neg-far', -100000, -80000), makeNode('pos-far', 120000, 90000)]) },
+      { name: 'min-size-nodes', model: modelOf([makeNode('min-a', 0, 0, 140, 76), makeNode('min-b', 170, 0, 140, 76)]) },
+      { name: 'very-wide-tall', model: modelOf([makeNode('wide', 0, 0, 1600, 96), makeNode('tall', 0, 140, 160, 1600)]) },
       {
         name: 'long-text',
-        model: {
-          nodes: [
-            makeNode(
-              'long-text',
-              0,
-              0,
-              220,
-              132,
-              'SupercalifragilisticexpialidociousUnbrokenCanvasLabelWithoutSpaces',
-              'A very long multiword detail value that should wrap predictably and then clip without changing model data or throwing during paint',
-            ),
-          ],
-        },
+        model: modelOf([
+          makeNode(
+            'long-text',
+            0,
+            0,
+            220,
+            132,
+            'SupercalifragilisticexpialidociousUnbrokenCanvasLabelWithoutSpaces',
+            'A very long multiword detail value that should wrap predictably and then clip without changing model data or throwing during paint',
+          ),
+        ]),
       },
       {
         name: 'mixed-near-far',
-        model: { nodes: [makeNode('near', 20, 20), makeNode('far-1', 20000, 12000), makeNode('far-2', -26000, -16000)] },
+        model: modelOf([makeNode('near', 20, 20), makeNode('far-1', 20000, 12000), makeNode('far-2', -26000, -16000)]),
       },
       {
         name: 'unusual-valid-ids-labels',
-        model: {
-          nodes: [
-            makeNode('id with spaces', 0, 0, 180, 96, 'label with spaces', 'punctuation !@#$%^&*()[]{}'),
-            makeNode('id/slash?query#hash', 210, 0, 180, 96, 'slash / query ? hash #', 'quotes "single" and backtick ` values'),
-          ],
-        },
+        model: modelOf([
+          makeNode('id with spaces', 0, 0, 180, 96, 'label with spaces', 'punctuation !@#$%^&*()[]{}'),
+          makeNode('id/slash?query#hash', 210, 0, 180, 96, 'slash / query ? hash #', 'quotes "single" and backtick ` values'),
+        ]),
       },
     ];
     const errors = [];
@@ -942,19 +1046,8 @@ export async function runCanwayFoundationProbe() {
   })();
 
   const largeGraphPerformance = await (async () => {
-    const makeNode = (id, x, y) => ({
-      id,
-      label: `Node ${id}`,
-      detail: `Dense render detail for ${id}`,
-      kind: 'task',
-      x,
-      y,
-      w: 160,
-      h: 96,
-    });
-    const grid = (count, columns, gap = 210) => ({
-      nodes: Array.from({ length: count }, (_, i) => makeNode(i, (i % columns) * gap, Math.floor(i / columns) * 140)),
-    });
+    const makeNode = (id, x, y) => makeCardNode(String(id), x, y, 160, 96, `Node ${id}`, `Dense render detail for ${id}`);
+    const grid = (count, columns, gap = 210) => modelOf(Array.from({ length: count }, (_, i) => makeNode(i, (i % columns) * gap, Math.floor(i / columns) * 140)));
     const measure = async (name, model) =>
       await withEngine(
         model,
@@ -1033,6 +1126,7 @@ export async function runCanwayFoundationProbe() {
     overlappingResize,
     navigationContract,
     culling,
+    nodePluginContract,
     keyboardContract,
     advancedEditing,
     commandExecutor,

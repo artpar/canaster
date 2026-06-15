@@ -1,4 +1,7 @@
 import { THEMES, type CanvasTheme } from './theme';
+import { cloneNodeData } from './nodeTypes/data';
+import { hitTestNodeContent, nodeDefinitionFor, parseNodeData, renderNodeContent } from './nodeTypes/registry';
+import type { NodeContentRect } from './nodeTypes/types';
 import type {
   Camera,
   CanvasCommand,
@@ -20,8 +23,6 @@ const MAX_DPR = 2;
 const GRID_STEP = 32;
 const NODE_RADIUS = 8;
 const RESIZE_HANDLE = 12;
-const MIN_NODE_W = 140;
-const MIN_NODE_H = 76;
 const CULL_MARGIN_SCREEN = 96;
 const SNAP_STEP = GRID_STEP;
 const KEYBOARD_STEP = SNAP_STEP;
@@ -89,7 +90,7 @@ export class CanvasEngine {
   private readonly onModelChange?: (model: CanvasModel, change: CanvasModelChange) => void;
   private readonly resizeObserver: ResizeObserver;
 
-  private model: CanvasModel = { nodes: [] };
+  private model: CanvasModel = { schemaVersion: 2, nodes: [] };
   private theme: CanvasTheme = THEMES.dark;
   private camera: Camera = { x: 0, y: 0, scale: 1 };
   private selectedNodeIds = new Set<string>();
@@ -158,10 +159,11 @@ export class CanvasEngine {
   }
 
   setModel(model: CanvasModel, options: SetModelOptions = {}) {
+    if (model.schemaVersion !== 2) throw new Error('CanvasEngine only accepts schemaVersion 2 models');
     const selectedNodeIds = options.preserveInteraction ? new Set(this.selectedNodeIds) : new Set<string>();
     const primarySelectedNodeId = options.preserveInteraction ? this.primarySelectedNodeId : null;
     const hoverNodeId = options.preserveInteraction ? this.hoverNodeId : null;
-    this.model = { nodes: model.nodes.map((node) => ({ ...node })) };
+    this.model = cloneModel(model);
     this.reconcileSelection(selectedNodeIds, primarySelectedNodeId);
     this.hoverNodeId = hoverNodeId && this.model.nodes.some((node) => node.id === hoverNodeId) ? hoverNodeId : null;
     if (!this.primarySelectedNodeId && this.interaction.startsWith('Keyboard')) this.interaction = 'Idle';
@@ -292,8 +294,8 @@ export class CanvasEngine {
     const from = nodeGeometry(node);
     const to = {
       ...from,
-      w: dw === 0 ? node.w : snapNodeWidth(node.w + dw),
-      h: dh === 0 ? node.h : snapNodeHeight(node.h + dh),
+      w: dw === 0 ? node.w : snapNodeWidth(node, node.w + dw),
+      h: dh === 0 ? node.h : snapNodeHeight(node, node.h + dh),
     };
     const operations: CanvasOperation[] = sameGeometry(from, to) ? [] : [{ type: 'set-node-geometry', nodeId: node.id, from, to }];
     return {
@@ -306,7 +308,7 @@ export class CanvasEngine {
   private planDeleteSelection(source: CanvasEditSource): CommandPlan {
     const ids = this.selectionIds();
     if (!ids.length) return { operations: [], interaction: 'Delete no selection' };
-    const nodes = this.selectedNodes().map((node) => ({ ...node }));
+    const nodes = this.selectedNodes().map(cloneNode);
     return {
       operations: [{ type: 'delete-nodes', nodes }, { type: 'set-selection', from: this.selectionState(), to: emptySelectionState() }],
       change: { kind: 'node-delete', nodeId: ids[0] ?? null, nodeIds: ids, source },
@@ -317,9 +319,9 @@ export class CanvasEngine {
   private planCopySelection(source: CanvasEditSource): CommandPlan {
     const nodes = this.selectedNodes();
     if (!nodes.length) return { operations: [], interaction: 'Copy no selection' };
-    const to = nodes.map((node) => ({ ...node }));
+    const to = nodes.map(cloneNode);
     return {
-      operations: [{ type: 'set-clipboard', from: this.clipboard.map((node) => ({ ...node })), to }],
+      operations: [{ type: 'set-clipboard', from: this.clipboard.map(cloneNode), to }],
       interaction: source === 'ai' ? (nodes.length > 1 ? `AI copied ${nodes.length} nodes` : 'AI copied node') : nodes.length > 1 ? `Copied ${nodes.length} nodes` : 'Copied node',
     };
   }
@@ -331,7 +333,7 @@ export class CanvasEngine {
     const pasted = this.clipboard.map((node) => {
       const id = uniqueNodeId(`${node.id}-copy`, existingIds);
       existingIds.add(id);
-      return { ...node, id, x: snapCoordinate(node.x + offset), y: snapCoordinate(node.y + offset) };
+      return { ...cloneNode(node), id, x: snapCoordinate(node.x + offset), y: snapCoordinate(node.y + offset) };
     });
     const selection = {
       selectedNodeIds: pasted.map((node) => node.id),
@@ -361,11 +363,11 @@ export class CanvasEngine {
         this.model.nodes = this.model.nodes.filter((node) => !deleteSet.has(node.id));
         if (this.hoverNodeId && deleteSet.has(this.hoverNodeId)) this.hoverNodeId = null;
       } else if (operation.type === 'create-nodes') {
-        this.model.nodes = [...this.model.nodes, ...operation.nodes.map((node) => ({ ...node }))];
+        this.model.nodes = [...this.model.nodes, ...operation.nodes.map(cloneNode)];
       } else if (operation.type === 'set-paste-counter') {
         this.pasteCounter = operation.to;
       } else if (operation.type === 'set-clipboard') {
-        this.clipboard = operation.to.map((node) => ({ ...node }));
+        this.clipboard = operation.to.map(cloneNode);
       }
     }
   }
@@ -450,12 +452,41 @@ export class CanvasEngine {
 
   private drawNode(node: CanvasNode, compact: boolean) {
     const { ctx, theme } = this;
+    const renderNode = this.renderNode(node);
+    const definition = nodeDefinitionFor(renderNode);
+    const data = parseNodeData(renderNode);
+    const state = {
+      selected: this.selectedNodeIds.has(renderNode.id),
+      primary: renderNode.id === this.primarySelectedNodeId,
+      hovered: renderNode.id === this.hoverNodeId,
+      quality: compact ? 'compact' as const : 'normal' as const,
+    };
+
+    this.drawNodeShell(renderNode, { selected: state.selected, primary: state.primary, hovered: state.hovered, compact });
+    const contentRect = this.nodeContentRect(renderNode);
+    ctx.save();
+    this.clipToNodeContent(contentRect);
+    renderNodeContent({
+      definition,
+      ctx,
+      node: renderNode,
+      data,
+      theme,
+      contentRect,
+      state,
+    });
+    ctx.restore();
+    if (state.primary) this.drawResizeHandle(renderNode);
+  }
+
+  private drawNodeShell(node: CanvasNode, state: { selected: boolean; primary: boolean; hovered: boolean; compact: boolean }) {
+    const { ctx, theme } = this;
     const selected = this.selectedNodeIds.has(node.id);
     const primary = node.id === this.primarySelectedNodeId;
     const hovered = node.id === this.hoverNodeId;
     const radius = NODE_RADIUS;
 
-    if (!compact || selected || hovered) {
+    if (!state.compact || selected || hovered) {
       ctx.save();
       ctx.shadowColor = theme.nodeShadow;
       ctx.shadowBlur = selected ? 18 : 12;
@@ -474,40 +505,28 @@ export class CanvasEngine {
     ctx.strokeStyle = selected ? theme.selected : theme.nodeBorder;
     ctx.lineWidth = primary ? 3 : selected ? 2.2 : hovered ? 1.8 : 1.2;
     ctx.stroke();
+  }
 
-    const accent = theme.kind[node.kind];
-    ctx.fillStyle = accent;
-    roundRectPath(ctx, node.x + 12, node.y + 12, 28, 6, 3);
-    ctx.fill();
+  private drawResizeHandle(node: CanvasNode) {
+    const handle = this.resizeHandleRect(node);
+    this.ctx.fillStyle = this.theme.resizeFill;
+    roundRectPath(this.ctx, handle.x, handle.y, handle.w, handle.h, 3);
+    this.ctx.fill();
+  }
 
-    if (compact && !selected && !hovered) return;
+  private nodeContentRect(node: CanvasNode): NodeContentRect {
+    return {
+      x: node.x + 12,
+      y: node.y + 12,
+      w: Math.max(0, node.w - 24),
+      h: Math.max(0, node.h - 24),
+    };
+  }
 
-    ctx.fillStyle = theme.headerText;
-    ctx.font = '600 15px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    ctx.textBaseline = 'top';
-    ctx.textAlign = 'left';
-    ctx.fillText(clipText(ctx, node.label, node.w - 56), node.x + 16, node.y + 28);
-
-    ctx.fillStyle = theme.bodyText;
-    ctx.font = '13px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    const detailY = node.y + 56;
-    const lines = wrapText(ctx, node.detail, node.w - 32, detailLineCapacity(node.h));
-    let y = detailY;
-    for (const line of lines) {
-      ctx.fillText(line, node.x + 16, y);
-      y += 18;
-    }
-
-    ctx.fillStyle = theme.mutedText;
-    ctx.font = '600 10px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText(node.kind.toUpperCase(), node.x + 16, node.y + node.h - 24);
-
-    if (primary) {
-      const handle = this.resizeHandleRect(node);
-      ctx.fillStyle = theme.resizeFill;
-      roundRectPath(ctx, handle.x, handle.y, handle.w, handle.h, 3);
-      ctx.fill();
-    }
+  private clipToNodeContent(rect: NodeContentRect) {
+    this.ctx.beginPath();
+    this.ctx.rect(rect.x, rect.y, rect.w, rect.h);
+    this.ctx.clip();
   }
 
   private onPointerDown = (event: PointerEvent) => {
@@ -609,8 +628,9 @@ export class CanvasEngine {
       this.drag.command = plan.operations.length ? command : null;
       this.drag.moved = plan.operations.length > 0;
     } else if (this.drag?.mode === 'resize') {
-      const rawW = Math.max(MIN_NODE_W, world.x - this.drag.ox - this.drag.node.x);
-      const rawH = Math.max(MIN_NODE_H, world.y - this.drag.oy - this.drag.node.y);
+      const minSize = nodeDefinitionFor(this.drag.node).minSize;
+      const rawW = Math.max(minSize.w, world.x - this.drag.ox - this.drag.node.x);
+      const rawH = Math.max(minSize.h, world.y - this.drag.oy - this.drag.node.y);
       const command: CanvasCommand = { type: 'resize-primary', dw: rawW - this.drag.original.w, dh: rawH - this.drag.original.h, source: 'pointer' };
       const plan = this.applyPreviewPlan(this.planCommand(command));
       this.drag.command = plan.operations.length ? command : null;
@@ -801,10 +821,23 @@ export class CanvasEngine {
     for (let i = this.model.nodes.length - 1; i >= 0; i--) {
       const node = this.model.nodes[i];
       if (point.x >= node.x && point.x <= node.x + node.w && point.y >= node.y && point.y <= node.y + node.h) {
+        this.nodeInternalHit(node, point);
         return node;
       }
     }
     return null;
+  }
+
+  private nodeInternalHit(node: CanvasNode, point: WorldPoint) {
+    const definition = nodeDefinitionFor(node);
+    const data = parseNodeData(node);
+    return hitTestNodeContent({
+      definition,
+      node,
+      data,
+      point,
+      contentRect: this.nodeContentRect(node),
+    });
   }
 
   private cursorFor(point: WorldPoint, node: CanvasNode | null) {
@@ -1043,7 +1076,11 @@ export class CanvasEngine {
 }
 
 function cloneModel(model: CanvasModel): CanvasModel {
-  return { nodes: model.nodes.map((node) => ({ ...node })) };
+  return { schemaVersion: 2, nodes: model.nodes.map(cloneNode) };
+}
+
+function cloneNode(node: CanvasNode): CanvasNode {
+  return { ...node, data: cloneNodeData(node.data) };
 }
 
 function nodeGeometry(node: CanvasNode): NodeGeometry {
@@ -1107,12 +1144,12 @@ function snapCoordinate(value: number) {
   return Math.round(value / SNAP_STEP) * SNAP_STEP;
 }
 
-function snapNodeWidth(value: number) {
-  return Math.max(MIN_NODE_W, snapCoordinate(value));
+function snapNodeWidth(node: CanvasNode, value: number) {
+  return Math.max(nodeDefinitionFor(node).minSize.w, snapCoordinate(value));
 }
 
-function snapNodeHeight(value: number) {
-  return Math.max(MIN_NODE_H, snapCoordinate(value));
+function snapNodeHeight(node: CanvasNode, value: number) {
+  return Math.max(nodeDefinitionFor(node).minSize.h, snapCoordinate(value));
 }
 
 function sourceInteraction(source: CanvasEditSource, action: 'selection' | 'move' | 'resize') {
@@ -1171,46 +1208,6 @@ function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: n
   ctx.arcTo(x, y + h, x, y, radius);
   ctx.arcTo(x, y, x + w, y, radius);
   ctx.closePath();
-}
-
-function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines: number) {
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
-  let line = '';
-  for (const word of words) {
-    const next = line ? `${line} ${word}` : word;
-    if (ctx.measureText(next).width > maxWidth && line) {
-      lines.push(line);
-      line = word;
-      if (lines.length === maxLines - 1) break;
-    } else {
-      line = next;
-    }
-  }
-  if (line && lines.length < maxLines) lines.push(clipText(ctx, line, maxWidth));
-  return lines;
-}
-
-function clipText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
-  if (ctx.measureText(text).width <= maxWidth) return text;
-  let lo = 0;
-  let hi = text.length;
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >> 1;
-    if (ctx.measureText(`${text.slice(0, mid)}...`).width <= maxWidth) lo = mid;
-    else hi = mid - 1;
-  }
-  return `${text.slice(0, lo)}...`;
-}
-
-function detailLineCapacity(nodeHeight: number) {
-  const detailTop = 56;
-  const kindTop = nodeHeight - 24;
-  const lineHeight = 18;
-  const textHeight = 13;
-  const gapBeforeKind = 6;
-  const available = kindTop - gapBeforeKind - detailTop - textHeight;
-  return Math.max(0, Math.min(2, Math.floor(available / lineHeight) + 1));
 }
 
 function clamp(value: number, min: number, max: number) {
