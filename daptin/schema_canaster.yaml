@@ -1,0 +1,142 @@
+Tables:
+  - TableName: space
+    Icon: box
+    TableDescription: "A Canaster user space. This is the top-level share, permission, and navigation unit."
+    DefaultPermission: 16256
+    IsAuditEnabled: true
+    Columns:
+      - Name: name
+        DataType: varchar(180)
+        ColumnType: label
+        IsNullable: false
+        IsIndexed: true
+      - Name: slug
+        DataType: varchar(180)
+        ColumnType: alias
+        IsNullable: false
+        IsIndexed: true
+        IsUnique: true
+      - Name: description
+        DataType: text
+        ColumnType: content
+        IsNullable: true
+      - Name: visibility
+        DataType: varchar(32)
+        ColumnType: label
+        DefaultValue: "'private'"
+        IsNullable: false
+        IsIndexed: true
+      - Name: current_snapshot_ref
+        DataType: varchar(64)
+        ColumnType: alias
+        IsNullable: true
+        IsIndexed: true
+      - Name: metadata_json
+        DataType: text
+        ColumnType: json
+        IsNullable: true
+
+  - TableName: plane
+    Icon: square
+    TableDescription: "One nested visual plane inside a Canaster space. The frontend owns canvas semantics; Daptin owns persistence, ownership, relations, and access."
+    DefaultPermission: 16256
+    IsAuditEnabled: true
+    Columns:
+      - Name: plane_key
+        DataType: varchar(120)
+        ColumnType: alias
+        IsNullable: false
+        IsIndexed: true
+      - Name: title
+        DataType: varchar(180)
+        ColumnType: label
+        IsNullable: false
+        IsIndexed: true
+      - Name: parent_node_key
+        DataType: varchar(120)
+        ColumnType: alias
+        IsNullable: true
+        IsIndexed: true
+      - Name: sort_key
+        DataType: varchar(120)
+        ColumnType: alias
+        IsNullable: true
+        IsIndexed: true
+      - Name: model_json
+        DataType: text
+        ColumnType: json
+        IsNullable: false
+      - Name: view_json
+        DataType: text
+        ColumnType: json
+        IsNullable: true
+      - Name: metadata_json
+        DataType: text
+        ColumnType: json
+        IsNullable: true
+    Relations:
+      - Subject: plane
+        Object: space
+        Relation: belongs_to
+        ObjectName: space_id
+        OnDelete: cascade
+      - Subject: plane
+        Object: plane
+        Relation: has_one
+        ObjectName: parent_plane_id
+        OnDelete: cascade
+
+  - TableName: snapshot
+    Icon: history
+    TableDescription: "Versioned full-workspace state used for restore, undo/redo transfer, and recovery."
+    DefaultPermission: 16256
+    IsAuditEnabled: false
+    Columns:
+      - Name: snapshot_key
+        DataType: varchar(120)
+        ColumnType: alias
+        IsNullable: false
+        IsIndexed: true
+      - Name: kind
+        DataType: varchar(40)
+        ColumnType: label
+        DefaultValue: "'autosave'"
+        IsNullable: false
+        IsIndexed: true
+      - Name: schema_version
+        DataType: int(11)
+        ColumnType: measurement
+        DefaultValue: "1"
+        IsNullable: false
+      - Name: client_version
+        DataType: varchar(60)
+        ColumnType: label
+        IsNullable: true
+      - Name: active_plane_key
+        DataType: varchar(120)
+        ColumnType: alias
+        IsNullable: true
+        IsIndexed: true
+      - Name: collection_json
+        DataType: text
+        ColumnType: json
+        IsNullable: false
+      - Name: history_json
+        DataType: text
+        ColumnType: json
+        IsNullable: true
+      - Name: last_model_change_json
+        DataType: text
+        ColumnType: json
+        IsNullable: true
+      - Name: checksum
+        DataType: varchar(128)
+        ColumnType: alias
+        IsNullable: true
+        IsIndexed: true
+    Relations:
+      - Subject: snapshot
+        Object: space
+        Relation: belongs_to
+        ObjectName: space_id
+        OnDelete: cascade

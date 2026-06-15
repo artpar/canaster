@@ -1,5 +1,5 @@
 {
-  "name": "canway",
+  "name": "canaster",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -7,14 +7,24 @@
     "dev": "vite --host 0.0.0.0",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0",
+    "daptin:up": "docker compose -f docker-compose.daptin.yml up -d",
+    "daptin:down": "docker compose -f docker-compose.daptin.yml down",
+    "daptin:logs": "docker compose -f docker-compose.daptin.yml logs -f daptin",
+    "daptin:smoke": "node scripts/daptin-smoke.mjs",
     "probe:canvas": "node scripts/run-canvas-foundation-probe.mjs",
     "probe:nested": "node scripts/run-nested-canvas-probe.mjs"
   },
   "dependencies": {
+    "daptin-client": "^0.7.12",
     "dexie": "^4.4.3",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
+  },
+  "overrides": {
+    "daptin-client": {
+      "axios": "^1.18.0"
+    }
   },
   "devDependencies": {
     "@types/react": "^18.3.12",

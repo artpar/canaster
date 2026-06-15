@@ -1,0 +1,45 @@
+name: canaster
+
+services:
+  daptin:
+    image: daptin/daptin:v0.12.17
+    working_dir: /opt/daptin
+    entrypoint:
+      - /opt/daptin/daptin
+    environment:
+      DAPTIN_SCHEMA_FOLDER: /opt/daptin/schema
+      DAPTIN_STORAGE: /data/storage
+    command:
+      - -runtime
+      - release
+      - -port
+      - ":8080"
+      - -db_type
+      - postgres
+      - -db_connection_string
+      - host=postgres user=canaster password=canaster dbname=canaster sslmode=disable
+      - -local_storage_path
+      - /data/storage
+      - -olric_env
+      - local
+    ports:
+      - "6336:8080"
+      - "6443:6443"
+    volumes:
+      - ./daptin:/opt/daptin/schema:ro
+      - daptin-data:/data
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: canaster
+      POSTGRES_PASSWORD: canaster
+      POSTGRES_DB: canaster
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  daptin-data:
+  postgres-data:
