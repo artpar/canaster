@@ -161,7 +161,12 @@ function assertProbe(result, browserEvents) {
   assert(result.app.tabIndex === 0, 'canvas must be keyboard focusable');
   assert(result.app.statusRole === 'status' && result.app.statusLive === 'polite', 'statusbar live-region contract failed');
   assert(result.app.sequentialFocusables.some((entry) => entry.tag === 'canvas'), 'canvas is not reachable in sequential keyboard focus');
-  assert(result.app.sequentialFocusables.at(-1)?.tag === 'canvas', 'toolbar controls should remain before canvas in tab order');
+  assert(result.app.sequentialFocusables.findIndex((entry) => entry.tag === 'canvas') >= 5, 'toolbar controls should remain before canvas in tab order');
+  assert(result.app.nodeAccess.label === 'Canvas nodes', 'node access panel is missing');
+  assert(result.app.nodeAccess.nodeCount === 4, 'node access panel does not expose all sample nodes');
+  assert(result.app.nodeAccess.nodeLabels.some((label) => label.includes('Source Model')), 'node access panel missing Source Model');
+  assert(result.app.nodeAccess.actionLabels.includes('Move selection right'), 'node access move command missing');
+  assert(result.app.nodeAccess.actionLabels.includes('Delete selection'), 'node access delete command missing');
 
   const expectedDeltas = {
     hover: 0,
@@ -198,8 +203,36 @@ function assertProbe(result, browserEvents) {
   );
   assert(result.keyboardContract.movedBy?.x === 10 && result.keyboardContract.movedBy?.y === 40, 'keyboard movement distance mismatch');
   assert(result.keyboardContract.movedBy?.w === 0 && result.keyboardContract.movedBy?.h === 0, 'keyboard movement resized the node');
-  assert(result.keyboardContract.escapeClearedSelection, 'Escape did not clear selection');
-  assert(result.keyboardContract.deleteBackspaceDelta === 0, 'Delete/Backspace changed the model without a deletion contract');
+  assert(result.keyboardContract.resizedBy?.w === 10 && result.keyboardContract.resizedBy?.h === 0, 'keyboard resize distance mismatch');
+  assert(result.keyboardContract.resizeChange?.kind === 'node-resize' && result.keyboardContract.resizeChange?.source === 'keyboard', 'keyboard resize change metadata is wrong');
+  assert(result.keyboardContract.escapeExitedResizeMode, 'Escape did not exit keyboard resize mode');
+
+  assert(result.advancedEditing.noSelectionDelete, 'delete without selection should be a no-op');
+  assert(result.advancedEditing.noSelectionCopy, 'copy without selection should be a no-op');
+  assert(result.advancedEditing.noClipboardPaste, 'paste without clipboard should be a no-op');
+  assert(result.advancedEditing.noopDelta === 0, 'no-op edit commands emitted model changes');
+  assert(result.advancedEditing.nonvisualMove.delta === 1, 'nonvisual move did not emit exactly once');
+  assert(result.advancedEditing.nonvisualMove.change?.kind === 'node-move', 'nonvisual move change kind mismatch');
+  assert(result.advancedEditing.nonvisualMove.change?.source === 'nonvisual', 'nonvisual move source mismatch');
+  assert(result.advancedEditing.nonvisualResize.delta === 1, 'nonvisual resize did not emit exactly once');
+  assert(result.advancedEditing.nonvisualResize.widthDelta === 10, 'nonvisual resize width delta mismatch');
+  assert(result.advancedEditing.singleDelete.delta === 1, 'single delete did not emit exactly once');
+  assert(result.advancedEditing.singleDelete.change?.kind === 'node-delete', 'single delete change kind mismatch');
+  assert(result.advancedEditing.singleDelete.exists === false, 'single delete left deleted node behind');
+  assert(result.advancedEditing.singleDelete.selectionCount === 0, 'single delete did not clear selection');
+  assert(result.advancedEditing.multiMove.delta === 1, 'multi move did not emit exactly once');
+  assert(result.advancedEditing.multiMove.change?.nodeIds?.length === 2, 'multi move did not include both selected node ids');
+  assert(result.advancedEditing.multiMove.sourceDelta.x === 20 && result.advancedEditing.multiMove.sourceDelta.y === 10, 'multi move source delta mismatch');
+  assert(result.advancedEditing.multiMove.plannerDelta.x === 20 && result.advancedEditing.multiMove.plannerDelta.y === 10, 'multi move planner delta mismatch');
+  assert(result.advancedEditing.copyReturned === true && result.advancedEditing.copyDelta === 0, 'copy should not mutate model');
+  assert(result.advancedEditing.multiPaste.delta === 1, 'multi paste did not emit exactly once');
+  assert(result.advancedEditing.multiPaste.change?.kind === 'node-create', 'multi paste change kind mismatch');
+  assert(result.advancedEditing.multiPaste.newIds.length === 2, 'multi paste did not create two nodes');
+  assert(new Set(result.advancedEditing.multiPaste.newIds).size === 2, 'multi paste ids collided');
+  assert(result.advancedEditing.multiPaste.selectedNodeIds.length === 2, 'multi paste did not select pasted nodes');
+  assert(result.advancedEditing.multiDelete.delta === 1, 'multi delete did not emit exactly once');
+  assert(result.advancedEditing.multiDelete.change?.nodeIds?.length === 2, 'multi delete did not include both selected nodes');
+  assert(result.advancedEditing.multiDelete.selectionCount === 0, 'multi delete did not clear selection');
 
   for (const [name, entry] of Object.entries(result.cancellation)) {
     assert(entry.modelChangeDelta === 0, `${name} emitted a model change`);
@@ -323,6 +356,7 @@ async function main() {
       app: result.app,
       modelBoundaryDeltas: result.modelBoundary.deltas,
       keyboardContract: result.keyboardContract,
+      advancedEditing: result.advancedEditing,
       cancellation: result.cancellation,
       multiTouchPolicy: result.multiTouchPolicy,
       longRunChurn: result.longRunChurn,

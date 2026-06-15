@@ -105,6 +105,13 @@ export async function runCanwayFoundationProbe() {
         ariaLabel: appCanvas.getAttribute('aria-label'),
         statusRole: document.querySelector('.statusbar')?.getAttribute('role') ?? null,
         statusLive: document.querySelector('.statusbar')?.getAttribute('aria-live') ?? null,
+        nodeAccess: {
+          label: document.querySelector('.node-access-panel')?.getAttribute('aria-label') ?? null,
+          nodeCount: document.querySelectorAll('.node-access-row').length,
+          selectedText: document.querySelector('.node-access-header')?.textContent?.trim() ?? '',
+          nodeLabels: [...document.querySelectorAll('.node-access-select')].map((element) => element.textContent?.trim() ?? ''),
+          actionLabels: [...document.querySelectorAll('.node-access-actions button')].map((element) => element.getAttribute('aria-label') ?? ''),
+        },
         sequentialFocusables: [...document.querySelectorAll('button, canvas')]
           .filter((element) => !element.disabled && element.tabIndex >= 0)
           .map((element) => ({
@@ -228,29 +235,131 @@ export async function runCanwayFoundationProbe() {
     canvas.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowRight' }));
     canvas.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown', shiftKey: true }));
     await raf(3);
+    const keyboardMoveChanges = changes.slice(keyboardBefore).map((entry) => entry.change);
 
     const selectedAfter = engine.model.nodes.find((node) => node.id === selectedNodeId);
+    const geometryAfterMove = selectedAfter ? { x: selectedAfter.x, y: selectedAfter.y, w: selectedAfter.w, h: selectedAfter.h } : null;
+    canvas.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'r' }));
+    canvas.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowRight' }));
+    await raf(3);
+    const resizedAfter = engine.model.nodes.find((node) => node.id === selectedNodeId);
+    const resizeChange = changes.at(-1)?.change;
     canvas.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }));
     await raf(3);
-
-    const deleteBefore = changes.length;
-    canvas.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Delete' }));
-    canvas.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Backspace' }));
-    await raf(2);
 
     return {
       tabIndex: canvas.tabIndex,
       programmaticFocusWorks: document.activeElement === canvas,
       noSelectionDelta,
       selectedNodeId,
-      keyboardChanges: changes.slice(keyboardBefore).map((entry) => entry.change),
+      keyboardChanges: keyboardMoveChanges,
       movedBy:
-        beforeGeometry && selectedAfter
-          ? { x: selectedAfter.x - beforeGeometry.x, y: selectedAfter.y - beforeGeometry.y, w: selectedAfter.w - beforeGeometry.w, h: selectedAfter.h - beforeGeometry.h }
+        beforeGeometry && geometryAfterMove
+          ? {
+              x: geometryAfterMove.x - beforeGeometry.x,
+              y: geometryAfterMove.y - beforeGeometry.y,
+              w: geometryAfterMove.w - beforeGeometry.w,
+              h: geometryAfterMove.h - beforeGeometry.h,
+            }
           : null,
-      escapeClearedSelection: statuses.at(-1)?.selectedNodeId === null,
-      deleteBackspaceDelta: changes.length - deleteBefore,
+      resizedBy:
+        geometryAfterMove && resizedAfter
+          ? { x: resizedAfter.x - geometryAfterMove.x, y: resizedAfter.y - geometryAfterMove.y, w: resizedAfter.w - geometryAfterMove.w, h: resizedAfter.h - geometryAfterMove.h }
+          : null,
+      resizeChange,
+      escapeExitedResizeMode: statuses.at(-1)?.interaction === 'Keyboard resize ended',
     };
+  });
+
+  const advancedEditing = await withEngine(sampleModel, async ({ engine, changes, statuses }) => {
+    const result = {};
+    const beforeNoop = changes.length;
+    result.noSelectionDelete = engine.deleteSelection('keyboard') === false;
+    result.noSelectionCopy = engine.copySelection() === false;
+    result.noClipboardPaste = engine.pasteClipboard('keyboard') === false;
+    await raf(2);
+    result.noopDelta = changes.length - beforeNoop;
+
+    engine.selectNode('source', 'nonvisual');
+    await raf(2);
+    const beforeNonvisualMove = changes.length;
+    engine.moveSelection(10, 0, 'nonvisual');
+    await raf(2);
+    result.nonvisualMove = {
+      delta: changes.length - beforeNonvisualMove,
+      change: changes.at(-1)?.change,
+      sourceX: engine.model.nodes.find((node) => node.id === 'source')?.x,
+    };
+
+    const beforeNonvisualResize = changes.length;
+    const widthBeforeResize = engine.model.nodes.find((node) => node.id === 'source')?.w;
+    engine.resizePrimarySelection(10, 0, 'nonvisual');
+    await raf(2);
+    result.nonvisualResize = {
+      delta: changes.length - beforeNonvisualResize,
+      change: changes.at(-1)?.change,
+      widthDelta: (engine.model.nodes.find((node) => node.id === 'source')?.w ?? 0) - (widthBeforeResize ?? 0),
+    };
+
+    engine.selectNode('source', 'nonvisual');
+    const beforeSingleDelete = changes.length;
+    engine.deleteSelection('keyboard');
+    await raf(2);
+    result.singleDelete = {
+      delta: changes.length - beforeSingleDelete,
+      change: changes.at(-1)?.change,
+      exists: engine.model.nodes.some((node) => node.id === 'source'),
+      selectionCount: statuses.at(-1)?.selectionCount,
+    };
+
+    engine.setModel(cloneModel(sampleModel));
+    await raf(2);
+    engine.selectNode('source', 'nonvisual');
+    engine.selectNode('planner', 'nonvisual', 'toggle');
+    await raf(2);
+    const beforeMultiMove = changes.length;
+    const beforeSource = { ...engine.model.nodes.find((node) => node.id === 'source') };
+    const beforePlanner = { ...engine.model.nodes.find((node) => node.id === 'planner') };
+    engine.moveSelection(20, 10, 'keyboard');
+    await raf(2);
+    const afterSource = engine.model.nodes.find((node) => node.id === 'source');
+    const afterPlanner = engine.model.nodes.find((node) => node.id === 'planner');
+    result.multiMove = {
+      delta: changes.length - beforeMultiMove,
+      change: changes.at(-1)?.change,
+      sourceDelta: { x: afterSource.x - beforeSource.x, y: afterSource.y - beforeSource.y },
+      plannerDelta: { x: afterPlanner.x - beforePlanner.x, y: afterPlanner.y - beforePlanner.y },
+      selectionCount: statuses.at(-1)?.selectionCount,
+    };
+
+    const beforeCopy = changes.length;
+    result.copyReturned = engine.copySelection();
+    await raf(1);
+    result.copyDelta = changes.length - beforeCopy;
+    const beforePaste = changes.length;
+    const idsBeforePaste = new Set(engine.model.nodes.map((node) => node.id));
+    engine.pasteClipboard('keyboard');
+    await raf(3);
+    const pasteChange = changes.at(-1)?.change;
+    result.multiPaste = {
+      delta: changes.length - beforePaste,
+      change: pasteChange,
+      totalNodes: engine.model.nodes.length,
+      newIds: engine.model.nodes.filter((node) => !idsBeforePaste.has(node.id)).map((node) => node.id),
+      selectedNodeIds: statuses.at(-1)?.selectedNodeIds ?? [],
+    };
+
+    const beforeMultiDelete = changes.length;
+    engine.deleteSelection('nonvisual');
+    await raf(2);
+    result.multiDelete = {
+      delta: changes.length - beforeMultiDelete,
+      change: changes.at(-1)?.change,
+      remainingIds: engine.model.nodes.map((node) => node.id),
+      selectionCount: statuses.at(-1)?.selectionCount,
+    };
+
+    return result;
   });
 
   const cancellation = await withEngine(sampleModel, async ({ canvas, engine, changes, camera }) => {
@@ -731,6 +840,7 @@ export async function runCanwayFoundationProbe() {
     overlappingResize,
     culling,
     keyboardContract,
+    advancedEditing,
     cancellation,
     touchPointerOwnership,
     multiTouchPolicy,

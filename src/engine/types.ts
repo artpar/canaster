@@ -23,9 +23,13 @@ export type CanvasModel = {
   nodes: CanvasNode[];
 };
 
+export type CanvasEditSource = 'pointer' | 'keyboard' | 'nonvisual';
+
 export type CanvasModelChange =
-  | { kind: 'node-move'; nodeId: string; source: 'pointer' | 'keyboard' }
-  | { kind: 'node-resize'; nodeId: string; source: 'pointer' | 'keyboard' };
+  | { kind: 'node-move'; nodeId: string; nodeIds: string[]; source: CanvasEditSource }
+  | { kind: 'node-resize'; nodeId: string; nodeIds: string[]; source: CanvasEditSource }
+  | { kind: 'node-delete'; nodeId: string | null; nodeIds: string[]; source: CanvasEditSource }
+  | { kind: 'node-create'; nodeId: string | null; nodeIds: string[]; source: CanvasEditSource };
 
 export type WorldPoint = {
   x: number;
@@ -35,6 +39,8 @@ export type WorldPoint = {
 export type ViewportStatus = {
   zoom: number;
   selectedNodeId: string | null;
+  selectedNodeIds: string[];
+  selectionCount: number;
   cursorWorld: WorldPoint | null;
   renderedNodes: number;
   totalNodes: number;

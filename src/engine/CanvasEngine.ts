@@ -34,6 +34,7 @@ type DragState =
       dy: number;
       moved: boolean;
       original: NodeGeometry;
+      group: Array<{ node: CanvasNode; original: NodeGeometry }>;
     }
   | { mode: 'resize'; pointerId: number; node: CanvasNode; ox: number; oy: number; moved: boolean; original: NodeGeometry }
   | null;
@@ -78,7 +79,8 @@ export class CanvasEngine {
   private model: CanvasModel = { nodes: [] };
   private theme: CanvasTheme = THEMES.dark;
   private camera: Camera = { x: 0, y: 0, scale: 1 };
-  private selectedNodeId: string | null = null;
+  private selectedNodeIds = new Set<string>();
+  private primarySelectedNodeId: string | null = null;
   private hoverNodeId: string | null = null;
   private cursorWorld: WorldPoint | null = null;
   private drag: DragState = null;
@@ -92,6 +94,9 @@ export class CanvasEngine {
   private statusFrame: number | null = null;
   private lastRenderedNodes = 0;
   private interaction = 'Idle';
+  private resizeMode = false;
+  private clipboard: CanvasNode[] = [];
+  private pasteCounter = 1;
   private disposed = false;
 
   constructor(canvas: HTMLCanvasElement, options: EngineOptions = {}) {
@@ -139,12 +144,13 @@ export class CanvasEngine {
   }
 
   setModel(model: CanvasModel, options: SetModelOptions = {}) {
-    const selectedNodeId = options.preserveInteraction ? this.selectedNodeId : null;
+    const selectedNodeIds = options.preserveInteraction ? new Set(this.selectedNodeIds) : new Set<string>();
+    const primarySelectedNodeId = options.preserveInteraction ? this.primarySelectedNodeId : null;
     const hoverNodeId = options.preserveInteraction ? this.hoverNodeId : null;
     this.model = { nodes: model.nodes.map((node) => ({ ...node })) };
-    this.selectedNodeId = selectedNodeId && this.model.nodes.some((node) => node.id === selectedNodeId) ? selectedNodeId : null;
+    this.reconcileSelection(selectedNodeIds, primarySelectedNodeId);
     this.hoverNodeId = hoverNodeId && this.model.nodes.some((node) => node.id === hoverNodeId) ? hoverNodeId : null;
-    if (!this.selectedNodeId && this.interaction.startsWith('Keyboard')) this.interaction = 'Idle';
+    if (!this.primarySelectedNodeId && this.interaction.startsWith('Keyboard')) this.interaction = 'Idle';
     this.markDirty();
     this.emitStatus();
   }
@@ -176,6 +182,112 @@ export class CanvasEngine {
 
   zoomBy(factor: number) {
     this.zoomAt(this.viewW / 2, this.viewH / 2, factor);
+  }
+
+  selectNode(nodeId: string, source: 'nonvisual' | 'keyboard' = 'nonvisual', mode: 'replace' | 'toggle' | 'add' = 'replace') {
+    if (!this.model.nodes.some((node) => node.id === nodeId)) return false;
+    this.applySelection(nodeId, mode);
+    this.interaction = source === 'nonvisual' ? 'Nonvisual selection' : 'Keyboard selection';
+    this.markDirty();
+    this.emitStatus();
+    return true;
+  }
+
+  moveSelection(dx: number, dy: number, source: 'keyboard' | 'nonvisual' = 'nonvisual') {
+    const nodes = this.selectedNodes();
+    if (!nodes.length || (dx === 0 && dy === 0)) {
+      this.interaction = 'Move no selection';
+      this.emitStatus();
+      return false;
+    }
+    for (const node of nodes) {
+      node.x += dx;
+      node.y += dy;
+    }
+    this.interaction = source === 'keyboard' ? 'Keyboard move' : 'Nonvisual move';
+    this.markDirty();
+    this.emitModelChange({ kind: 'node-move', nodeId: this.primarySelectedNodeId ?? nodes[0].id, nodeIds: nodes.map((node) => node.id), source });
+    this.emitStatus();
+    return true;
+  }
+
+  resizePrimarySelection(dw: number, dh: number, source: 'keyboard' | 'nonvisual' = 'nonvisual') {
+    const node = this.selectedNode();
+    if (!node || (dw === 0 && dh === 0)) {
+      this.interaction = 'Resize no selection';
+      this.emitStatus();
+      return false;
+    }
+    const before = nodeGeometry(node);
+    node.w = Math.max(MIN_NODE_W, node.w + dw);
+    node.h = Math.max(MIN_NODE_H, node.h + dh);
+    if (sameNodeGeometry(node, before)) {
+      this.interaction = 'Resize unchanged';
+      this.emitStatus();
+      return false;
+    }
+    this.interaction = source === 'keyboard' ? 'Keyboard resize' : 'Nonvisual resize';
+    this.markDirty();
+    this.emitModelChange({ kind: 'node-resize', nodeId: node.id, nodeIds: [node.id], source });
+    this.emitStatus();
+    return true;
+  }
+
+  deleteSelection(source: 'keyboard' | 'nonvisual' = 'nonvisual') {
+    const ids = this.selectionIds();
+    if (!ids.length) {
+      this.interaction = 'Delete no selection';
+      this.emitStatus();
+      return false;
+    }
+    const deleteSet = new Set(ids);
+    this.model.nodes = this.model.nodes.filter((node) => !deleteSet.has(node.id));
+    this.selectedNodeIds.clear();
+    this.primarySelectedNodeId = null;
+    if (this.hoverNodeId && deleteSet.has(this.hoverNodeId)) this.hoverNodeId = null;
+    this.resizeMode = false;
+    this.interaction = ids.length > 1 ? `Deleted ${ids.length} nodes` : 'Deleted node';
+    this.markDirty();
+    this.emitModelChange({ kind: 'node-delete', nodeId: ids[0] ?? null, nodeIds: ids, source });
+    this.emitStatus();
+    return true;
+  }
+
+  copySelection() {
+    const nodes = this.selectedNodes();
+    if (!nodes.length) {
+      this.interaction = 'Copy no selection';
+      this.emitStatus();
+      return false;
+    }
+    this.clipboard = nodes.map((node) => ({ ...node }));
+    this.interaction = nodes.length > 1 ? `Copied ${nodes.length} nodes` : 'Copied node';
+    this.emitStatus();
+    return true;
+  }
+
+  pasteClipboard(source: 'keyboard' | 'nonvisual' = 'nonvisual') {
+    if (!this.clipboard.length) {
+      this.interaction = 'Paste no clipboard';
+      this.emitStatus();
+      return false;
+    }
+    const existingIds = new Set(this.model.nodes.map((node) => node.id));
+    const offset = 34 * this.pasteCounter++;
+    const pasted = this.clipboard.map((node) => {
+      const id = uniqueNodeId(`${node.id}-copy`, existingIds);
+      existingIds.add(id);
+      return { ...node, id, x: node.x + offset, y: node.y + offset };
+    });
+    this.model.nodes = [...this.model.nodes, ...pasted];
+    this.selectedNodeIds = new Set(pasted.map((node) => node.id));
+    this.primarySelectedNodeId = pasted[0]?.id ?? null;
+    this.resizeMode = false;
+    this.interaction = pasted.length > 1 ? `Pasted ${pasted.length} nodes` : 'Pasted node';
+    this.markDirty();
+    this.emitModelChange({ kind: 'node-create', nodeId: pasted[0]?.id ?? null, nodeIds: pasted.map((node) => node.id), source });
+    this.emitStatus();
+    return true;
   }
 
   private resize() {
@@ -257,7 +369,8 @@ export class CanvasEngine {
 
   private drawNode(node: CanvasNode, compact: boolean) {
     const { ctx, theme } = this;
-    const selected = node.id === this.selectedNodeId;
+    const selected = this.selectedNodeIds.has(node.id);
+    const primary = node.id === this.primarySelectedNodeId;
     const hovered = node.id === this.hoverNodeId;
     const radius = NODE_RADIUS;
 
@@ -278,7 +391,7 @@ export class CanvasEngine {
 
     roundRectPath(ctx, node.x, node.y, node.w, node.h, radius);
     ctx.strokeStyle = selected ? theme.selected : theme.nodeBorder;
-    ctx.lineWidth = selected ? 2.5 : hovered ? 1.8 : 1.2;
+    ctx.lineWidth = primary ? 3 : selected ? 2.2 : hovered ? 1.8 : 1.2;
     ctx.stroke();
 
     const accent = theme.kind[node.kind];
@@ -308,7 +421,7 @@ export class CanvasEngine {
     ctx.font = '600 10px ui-sans-serif, system-ui, sans-serif';
     ctx.fillText(node.kind.toUpperCase(), node.x + 16, node.y + node.h - 24);
 
-    if (selected) {
+    if (primary) {
       const handle = this.resizeHandleRect(node);
       ctx.fillStyle = theme.resizeFill;
       roundRectPath(ctx, handle.x, handle.y, handle.w, handle.h, 3);
@@ -350,7 +463,7 @@ export class CanvasEngine {
     const node = this.nodeAt(world);
 
     if (node) {
-      this.selectedNodeId = node.id;
+      this.applySelection(node.id, event.shiftKey || event.metaKey || event.ctrlKey ? 'toggle' : 'replace');
       this.drag = {
         mode: 'node',
         pointerId: event.pointerId,
@@ -359,6 +472,7 @@ export class CanvasEngine {
         dy: world.y - node.y,
         moved: false,
         original: nodeGeometry(node),
+        group: this.selectedNodeIds.has(node.id) ? this.selectedNodes().map((selected) => ({ node: selected, original: nodeGeometry(selected) })) : [],
       };
       this.interaction = 'Drag node';
       this.capturePointer(event.pointerId);
@@ -367,7 +481,7 @@ export class CanvasEngine {
       return;
     }
 
-    this.selectedNodeId = null;
+    this.clearSelection();
     this.drag = {
       mode: 'pan',
       pointerId: event.pointerId,
@@ -399,9 +513,22 @@ export class CanvasEngine {
     if (this.drag && event.pointerId !== this.drag.pointerId) return;
 
     if (this.drag?.mode === 'node') {
-      this.drag.node.x = world.x - this.drag.dx;
-      this.drag.node.y = world.y - this.drag.dy;
-      this.drag.moved = !sameNodeGeometry(this.drag.node, this.drag.original);
+      const nextX = world.x - this.drag.dx;
+      const nextY = world.y - this.drag.dy;
+      const deltaX = nextX - this.drag.original.x;
+      const deltaY = nextY - this.drag.original.y;
+      if (this.drag.group.length > 1) {
+        for (const entry of this.drag.group) {
+          entry.node.x = entry.original.x + deltaX;
+          entry.node.y = entry.original.y + deltaY;
+        }
+      } else {
+        this.drag.node.x = nextX;
+        this.drag.node.y = nextY;
+      }
+      this.drag.moved = this.drag.group.length > 1
+        ? this.drag.group.some((entry) => !sameNodeGeometry(entry.node, entry.original))
+        : !sameNodeGeometry(this.drag.node, this.drag.original);
       this.markDirty();
     } else if (this.drag?.mode === 'resize') {
       this.drag.node.w = Math.max(MIN_NODE_W, world.x - this.drag.ox - this.drag.node.x);
@@ -452,7 +579,7 @@ export class CanvasEngine {
   };
 
   private onFocus = () => {
-    this.interaction = this.selectedNodeId ? 'Canvas focused' : 'Canvas focused, no selection';
+    this.interaction = this.primarySelectedNodeId ? 'Canvas focused' : 'Canvas focused, no selection';
     this.emitStatus();
   };
 
@@ -462,23 +589,13 @@ export class CanvasEngine {
   };
 
   private onKeyDown = (event: KeyboardEvent) => {
-    const selectedNode = this.selectedNode();
     const step = event.shiftKey ? KEYBOARD_FAST_STEP : KEYBOARD_STEP;
     const movement = keyMovement(event.key, step);
 
     if (movement) {
       event.preventDefault();
-      if (!selectedNode) {
-        this.interaction = 'Keyboard no selection';
-        this.emitStatus();
-        return;
-      }
-      selectedNode.x += movement.x;
-      selectedNode.y += movement.y;
-      this.interaction = event.shiftKey ? 'Keyboard move fast' : 'Keyboard move';
-      this.markDirty();
-      this.emitModelChange({ kind: 'node-move', nodeId: selectedNode.id, source: 'keyboard' });
-      this.emitStatus();
+      if (this.resizeMode) this.resizePrimarySelection(movement.x, movement.y, 'keyboard');
+      else this.moveSelection(movement.x, movement.y, 'keyboard');
       return;
     }
 
@@ -487,8 +604,13 @@ export class CanvasEngine {
       this.finishPointerInteraction(null, false);
       this.finishTouchGesture();
       this.touchPoints.clear();
-      this.selectedNodeId = null;
-      this.interaction = 'Selection cleared';
+      if (this.resizeMode) {
+        this.resizeMode = false;
+        this.interaction = 'Keyboard resize ended';
+      } else {
+        this.clearSelection();
+        this.interaction = 'Selection cleared';
+      }
       this.markDirty();
       this.emitStatus();
       return;
@@ -496,8 +618,8 @@ export class CanvasEngine {
 
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      if (!this.selectedNodeId) this.selectNearestNodeToViewportCenter();
-      this.interaction = this.selectedNodeId ? 'Keyboard selection' : 'Keyboard no target';
+      if (!this.primarySelectedNodeId) this.selectNearestNodeToViewportCenter();
+      this.interaction = this.primarySelectedNodeId ? 'Keyboard selection' : 'Keyboard no target';
       this.markDirty();
       this.emitStatus();
       return;
@@ -505,7 +627,31 @@ export class CanvasEngine {
 
     if (event.key === 'Delete' || event.key === 'Backspace') {
       event.preventDefault();
-      this.interaction = 'Delete disabled';
+      this.deleteSelection('keyboard');
+      return;
+    }
+
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'c') {
+      event.preventDefault();
+      this.copySelection();
+      return;
+    }
+
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v') {
+      event.preventDefault();
+      this.pasteClipboard('keyboard');
+      return;
+    }
+
+    if (event.key.toLowerCase() === 'r') {
+      event.preventDefault();
+      if (!this.primarySelectedNodeId) {
+        this.interaction = 'Resize no selection';
+      } else {
+        this.resizeMode = !this.resizeMode;
+        this.interaction = this.resizeMode ? 'Keyboard resize mode' : 'Keyboard resize ended';
+      }
+      this.markDirty();
       this.emitStatus();
     }
   };
@@ -568,8 +714,53 @@ export class CanvasEngine {
   }
 
   private selectedNode() {
-    if (!this.selectedNodeId) return null;
-    return this.model.nodes.find((node) => node.id === this.selectedNodeId) ?? null;
+    if (!this.primarySelectedNodeId) return null;
+    return this.model.nodes.find((node) => node.id === this.primarySelectedNodeId) ?? null;
+  }
+
+  private selectedNodes() {
+    const selected = this.selectedNodeIds;
+    return this.model.nodes.filter((node) => selected.has(node.id));
+  }
+
+  private selectionIds() {
+    return this.selectedNodes().map((node) => node.id);
+  }
+
+  private clearSelection() {
+    this.selectedNodeIds.clear();
+    this.primarySelectedNodeId = null;
+    this.resizeMode = false;
+  }
+
+  private applySelection(nodeId: string, mode: 'replace' | 'toggle' | 'add') {
+    if (mode === 'replace') {
+      this.selectedNodeIds = new Set([nodeId]);
+      this.primarySelectedNodeId = nodeId;
+      this.resizeMode = false;
+      return;
+    }
+
+    if (mode === 'toggle' && this.selectedNodeIds.has(nodeId)) {
+      this.selectedNodeIds.delete(nodeId);
+      if (this.primarySelectedNodeId === nodeId) this.primarySelectedNodeId = this.selectedNodeIds.values().next().value ?? null;
+      if (!this.primarySelectedNodeId) this.resizeMode = false;
+      return;
+    }
+
+    this.selectedNodeIds.add(nodeId);
+    this.primarySelectedNodeId = nodeId;
+    this.resizeMode = false;
+  }
+
+  private reconcileSelection(selectedNodeIds: Set<string>, primarySelectedNodeId: string | null) {
+    const existing = new Set(this.model.nodes.map((node) => node.id));
+    this.selectedNodeIds = new Set([...selectedNodeIds].filter((nodeId) => existing.has(nodeId)));
+    this.primarySelectedNodeId =
+      primarySelectedNodeId && this.selectedNodeIds.has(primarySelectedNodeId)
+        ? primarySelectedNodeId
+        : (this.selectedNodeIds.values().next().value ?? null);
+    if (!this.primarySelectedNodeId) this.resizeMode = false;
   }
 
   private selectNearestNodeToViewportCenter() {
@@ -585,7 +776,8 @@ export class CanvasEngine {
         nearestDistance = distance;
       }
     }
-    this.selectedNodeId = nearest?.id ?? null;
+    if (nearest) this.applySelection(nearest.id, 'replace');
+    else this.clearSelection();
   }
 
   private resizeHandleRect(node: CanvasNode) {
@@ -640,10 +832,11 @@ export class CanvasEngine {
     if (commit) {
       if (drag.mode === 'node' && drag.moved) {
         this.interaction = 'Pointer move';
-        this.emitModelChange({ kind: 'node-move', nodeId: drag.node.id, source: 'pointer' });
+        const nodeIds = drag.group.length > 1 ? drag.group.map((entry) => entry.node.id) : [drag.node.id];
+        this.emitModelChange({ kind: 'node-move', nodeId: drag.node.id, nodeIds, source: 'pointer' });
       } else if (drag.mode === 'resize' && drag.moved) {
         this.interaction = 'Pointer resize';
-        this.emitModelChange({ kind: 'node-resize', nodeId: drag.node.id, source: 'pointer' });
+        this.emitModelChange({ kind: 'node-resize', nodeId: drag.node.id, nodeIds: [drag.node.id], source: 'pointer' });
       } else if (drag.mode === 'pan' && drag.moved) {
         this.interaction = 'Pointer pan';
       }
@@ -661,6 +854,11 @@ export class CanvasEngine {
     if (drag.mode === 'pan') {
       this.camera.x = drag.camX;
       this.camera.y = drag.camY;
+      return;
+    }
+
+    if (drag.mode === 'node' && drag.group.length > 1) {
+      for (const entry of drag.group) restoreNodeGeometry(entry.node, entry.original);
       return;
     }
 
@@ -751,7 +949,9 @@ export class CanvasEngine {
       if (this.disposed) return;
       this.onStatus?.({
         zoom: this.camera.scale,
-        selectedNodeId: this.selectedNodeId,
+        selectedNodeId: this.primarySelectedNodeId,
+        selectedNodeIds: this.selectionIds(),
+        selectionCount: this.selectedNodeIds.size,
         cursorWorld: this.cursorWorld,
         renderedNodes: this.lastRenderedNodes,
         totalNodes: this.model.nodes.length,
@@ -801,6 +1001,16 @@ function midpoint(a: ScreenPoint, b: ScreenPoint) {
 
 function distance(a: ScreenPoint, b: ScreenPoint) {
   return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function uniqueNodeId(base: string, existingIds: Set<string>) {
+  const normalized = base.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase() || 'node-copy';
+  let candidate = normalized;
+  let suffix = 2;
+  while (existingIds.has(candidate)) {
+    candidate = `${normalized}-${suffix++}`;
+  }
+  return candidate;
 }
 
 function intersectsNode(node: CanvasNode, bounds: VisibleWorldBounds) {

@@ -1,4 +1,4 @@
-import { Maximize2, Minus, Moon, Plus, RotateCcw, Sun } from 'lucide-react';
+import { Clipboard, Copy, Maximize2, Minus, Moon, MoveRight, Plus, RotateCcw, Sun, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { CanvasEngine } from './engine/CanvasEngine';
 import { sampleModel } from './engine/sampleModel';
@@ -7,6 +7,8 @@ import type { CanvasModel, CanvasModelChange, ThemeName, ViewportStatus } from '
 const initialStatus: ViewportStatus = {
   zoom: 1,
   selectedNodeId: null,
+  selectedNodeIds: [],
+  selectionCount: 0,
   cursorWorld: null,
   renderedNodes: 0,
   totalNodes: 0,
@@ -90,8 +92,71 @@ export function App() {
 
         <canvas ref={canvasRef} className="canvas-surface" aria-label="Canway canvas" />
 
+        <aside className="node-access-panel" aria-label="Canvas nodes">
+          <div className="node-access-header">
+            <span>Nodes</span>
+            <span>{status.selectionCount ? `${status.selectionCount} selected` : 'No selection'}</span>
+          </div>
+          <div className="node-access-actions" aria-label="Node editing commands">
+            <IconButton label="Move selection right" onClick={() => engineRef.current?.moveSelection(10, 0, 'nonvisual')}>
+              <MoveRight size={16} />
+            </IconButton>
+            <IconButton label="Resize primary selection wider" onClick={() => engineRef.current?.resizePrimarySelection(10, 0, 'nonvisual')}>
+              <Maximize2 size={16} />
+            </IconButton>
+            <IconButton label="Copy selection" onClick={() => engineRef.current?.copySelection()}>
+              <Copy size={16} />
+            </IconButton>
+            <IconButton label="Paste copied nodes" onClick={() => engineRef.current?.pasteClipboard('nonvisual')}>
+              <Clipboard size={16} />
+            </IconButton>
+            <IconButton label="Delete selection" onClick={() => engineRef.current?.deleteSelection('nonvisual')}>
+              <Trash2 size={16} />
+            </IconButton>
+          </div>
+          <ul className="node-access-list" aria-label="Canvas node list">
+            {model.nodes.map((node) => {
+              const selected = status.selectedNodeIds.includes(node.id);
+              const primary = status.selectedNodeId === node.id;
+              return (
+                <li key={node.id} className="node-access-row">
+                  <button
+                    className="node-access-select"
+                    type="button"
+                    aria-pressed={selected}
+                    aria-label={`${selected ? 'Selected' : 'Select'} ${node.label}, ${node.kind}, x ${Math.round(node.x)}, y ${Math.round(node.y)}, width ${Math.round(node.w)}, height ${Math.round(node.h)}`}
+                    onClick={() => engineRef.current?.selectNode(node.id, 'nonvisual')}
+                  >
+                    <span>{node.label}</span>
+                    <span>{primary ? 'Primary' : selected ? 'Selected' : node.kind}</span>
+                  </button>
+                  <button
+                    className="node-access-toggle"
+                    type="button"
+                    aria-label={`Toggle ${node.label} in selection`}
+                    aria-pressed={selected}
+                    onClick={() => engineRef.current?.selectNode(node.id, 'nonvisual', 'toggle')}
+                  >
+                    +
+                  </button>
+                  <span className="node-access-meta">
+                    {node.kind} · x {Math.round(node.x)} · y {Math.round(node.y)} · {Math.round(node.w)}x{Math.round(node.h)}
+                  </span>
+                  <span className="node-access-detail">{node.detail}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </aside>
+
         <div className="statusbar" role="status" aria-live="polite">
-          <span>{status.selectedNodeId ? `Selected ${status.selectedNodeId}` : 'No selection'}</span>
+          <span>
+            {status.selectionCount > 1
+              ? `${status.selectionCount} selected`
+              : status.selectedNodeId
+                ? `Selected ${status.selectedNodeId}`
+                : 'No selection'}
+          </span>
           <span>
             {status.cursorWorld
               ? `x ${Math.round(status.cursorWorld.x)} · y ${Math.round(status.cursorWorld.y)}`
