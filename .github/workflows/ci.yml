@@ -45,10 +45,11 @@ jobs:
           go-version: "1.23"
       - run: npm ci
       - name: Install Daptin CLI
-        run: go install github.com/daptin/daptin-cli@latest
+        run: |
+          go install github.com/daptin/daptin-cli@latest
+          echo "DAPTIN_CLI=$HOME/go/bin/daptin-cli" >> "$GITHUB_ENV"
       - name: Smoke Canaster schema against Daptin
         env:
-          DAPTIN_CLI: ${{ env.HOME }}/go/bin/daptin-cli
           DAPTIN_DOCKER_IMAGE: daptin/daptin:v0.12.17
           DAPTIN_SMOKE_RUNTIME: docker
           DAPTIN_SMOKE_DB_TYPE: postgres

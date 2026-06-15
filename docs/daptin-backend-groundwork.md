@@ -145,6 +145,13 @@ gcloud dns managed-zones create canaster-in \
   --description="Canaster production DNS"
 ```
 
+The `canaster-in` zone was created in `agent4-471206` on 2026-06-15 with these Google Cloud DNS nameservers:
+
+- `ns-cloud-a1.googledomains.com`
+- `ns-cloud-a2.googledomains.com`
+- `ns-cloud-a3.googledomains.com`
+- `ns-cloud-a4.googledomains.com`
+
 After the SQL user password exists, store the exact Daptin connection string in Secret Manager:
 
 ```bash
