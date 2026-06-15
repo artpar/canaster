@@ -92,7 +92,7 @@ None.
 | Active node drag | Engine stores render-only preview geometry from command planning | transient until pointer-up | cancel/lost-capture/blur clears preview geometry | only on successful pointer-up with changed operation plan | yes | yes | real drag emitted one `node-move`; cancel emitted `0`; preview did not mutate committed model |
 | Active resize | Engine stores render-only preview geometry from command planning | transient until pointer-up | cancel/lost-capture/blur clears preview geometry | only on successful pointer-up with changed operation plan | yes | yes | real resize emitted one `node-resize`; zero-delta resize emitted `0`; preview did not mutate committed model |
 | Active pan | Engine camera | transient until pointer-up, but no model commit | cancel/lost-capture/blur restores original camera | no | yes | yes | pan blur preserved world coordinate `{x:0,y:0}` before/after; successful/canceled pan changes `0` |
-| Wheel zoom | Engine camera | committed viewport state | none | no | yes | yes | app zoom `122% -> 180%`, cursor anchor `{x:105,y:24}` before/after |
+| Wheel navigation | Engine camera | committed viewport state | none | no | yes | yes | plain wheel pans; Shift-wheel pans horizontally; Ctrl/Cmd-wheel zoom keeps cursor anchor stable |
 | Double-click zoom | Engine camera | committed viewport state | none | no | yes | yes | direct double-click model-change delta `0` |
 | Fit/reset/toolbar zoom | React button calls engine camera methods | committed viewport state | none | no | yes | yes | fit reported `Drawn 4/4`; toolbar remained usable after theme switch |
 | Theme switch | React `theme`, document dataset, engine theme | committed UI state | next switch | no | yes | no model status required | pixel changed `[16,18,23,255] -> [244,246,248,255]`; model changes `0` |
@@ -119,7 +119,7 @@ None.
 | Selection must not emit model changes | proven | app `Selected source ... No model changes`; direct selection delta `0` |
 | Pan must not emit model changes | proven | successful pan and canceled pan deltas `0` |
 | Fit/reset/button zoom must not emit model changes | proven | fit/toolbar changed zoom/render status only; no callback path in source outside drag/resize |
-| Wheel zoom must not emit model changes | proven | direct wheel delta `0`; app last change unchanged |
+| Wheel pan/zoom must not emit model changes | proven | direct wheel delta `0`; app last change unchanged |
 | Double-click zoom must not emit model changes | proven | direct double-click delta `0` |
 | Theme toggle must not emit model changes | proven | direct theme delta `0`; app pixel/theme changed without model change |
 | Canvas resize must not emit model changes | proven | direct ResizeObserver delta `0` |
@@ -220,7 +220,7 @@ Browser app probes:
 | Probe | Evidence | Result |
 | --- | --- | --- |
 | Initial nonblank high-DPI canvas | CSS `1280x900`, bitmap `2560x1800`, DPR `2`, rendered `4/4`, 3 unique sampled colors | pass |
-| Wheel zoom anchor | zoom `122% -> 180%`; cursor world `{x:105,y:24}` before/after at same screen point | pass |
+| Wheel navigation | plain wheel pans; Shift-wheel pans horizontally; Ctrl/Cmd-wheel zoom keeps cursor anchor stable | pass |
 | Fit renders sample | zoom `122%`, rendered `4/4` | pass |
 | Selection boundary | `Selected source ... No model changes` | pass |
 | Drag commit and React handoff | `Selected source ... node-move source` | pass |

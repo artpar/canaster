@@ -50,8 +50,8 @@ export async function runCanwayFoundationProbe() {
       }),
     );
   };
-  const dispatchWheel = (target, x, y, deltaY) => {
-    target.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, clientX: x, clientY: y, deltaY }));
+  const dispatchWheel = (target, x, y, deltaY, options = {}) => {
+    target.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, clientX: x, clientY: y, deltaX: options.deltaX ?? 0, deltaY, ...options }));
   };
   const makeCanvas = (w = 800, h = 600) => {
     const canvas = document.createElement('canvas');
@@ -199,6 +199,48 @@ export async function runCanwayFoundationProbe() {
       source = changes.at(-1).model.nodes.find((node) => node.id === 'source');
     }
     return { counts, changes: changes.map((entry) => entry.change), finalSource: source };
+  });
+
+  const navigationContract = await withEngine(sampleModel, async ({ canvas, engine, changes }) => {
+    const worldAt = (x, y) => ({ x: (x - engine.camera.x) / engine.camera.scale, y: (y - engine.camera.y) / engine.camera.scale });
+    const result = {};
+
+    const beforePlain = { ...engine.camera };
+    const beforePlainChanges = changes.length;
+    dispatchWheel(canvas, 320, 240, 80, { deltaX: 24 });
+    await raf(3);
+    result.plainWheelPan = {
+      modelDelta: changes.length - beforePlainChanges,
+      xMoved: engine.camera.x !== beforePlain.x,
+      yMoved: engine.camera.y !== beforePlain.y,
+      scaleStable: engine.camera.scale === beforePlain.scale,
+      interaction: engine.interaction,
+    };
+
+    const beforeShift = { ...engine.camera };
+    dispatchWheel(canvas, 320, 240, 96, { shiftKey: true });
+    await raf(3);
+    result.shiftWheelHorizontalPan = {
+      xMoved: engine.camera.x !== beforeShift.x,
+      yStable: engine.camera.y === beforeShift.y,
+      scaleStable: engine.camera.scale === beforeShift.scale,
+    };
+
+    const zoomPoint = { x: 360, y: 260 };
+    const beforeZoom = { ...engine.camera };
+    const anchorBefore = worldAt(zoomPoint.x, zoomPoint.y);
+    const beforeZoomChanges = changes.length;
+    dispatchWheel(canvas, zoomPoint.x, zoomPoint.y, -180, { ctrlKey: true });
+    await raf(3);
+    const anchorAfter = worldAt(zoomPoint.x, zoomPoint.y);
+    result.modifierWheelZoom = {
+      modelDelta: changes.length - beforeZoomChanges,
+      zoomed: engine.camera.scale > beforeZoom.scale,
+      anchorStable: Math.abs(anchorAfter.x - anchorBefore.x) < 0.001 && Math.abs(anchorAfter.y - anchorBefore.y) < 0.001,
+      interaction: engine.interaction,
+    };
+
+    return result;
   });
 
   const culling = await (async () => {
@@ -989,6 +1031,7 @@ export async function runCanwayFoundationProbe() {
     app,
     modelBoundary,
     overlappingResize,
+    navigationContract,
     culling,
     keyboardContract,
     advancedEditing,

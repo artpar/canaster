@@ -207,6 +207,9 @@ Do not fake accessibility with hidden text that cannot operate the same model. N
 Current automated coverage:
 
 - pointer drag/resize/pan;
+- plain wheel/trackpad pan;
+- Shift-wheel horizontal pan;
+- Ctrl/Cmd-wheel cursor-anchored zoom;
 - pointer cancel;
 - lost pointer capture;
 - window blur;
@@ -258,6 +261,7 @@ Add or update probe coverage when touching:
 - operation application;
 - selection semantics;
 - drag/resize preview;
+- wheel/trackpad pan and modifier-wheel zoom;
 - pointer cancel/lost capture/blur behavior;
 - keyboard editing;
 - nonvisual controls;

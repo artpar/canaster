@@ -54,7 +54,7 @@ Two-touch interactions now operate on the viewport only:
 - adding a second touch during node drag rolls back the node edit and enters gesture handling;
 - adding a second touch during resize rolls back the resize and enters gesture handling;
 - pointer cancel ends the gesture and leaves no stuck gesture state;
-- wheel zoom and pointer model edits still use the existing contracts.
+- plain wheel/trackpad pan, modifier-wheel zoom, and pointer model edits still use the existing contracts.
 
 Evidence from `npm run probe:canvas`:
 

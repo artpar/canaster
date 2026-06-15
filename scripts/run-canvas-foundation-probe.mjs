@@ -189,6 +189,17 @@ function assertProbe(result, browserEvents) {
     result.overlappingResize.counts.every((entry) => entry.change?.kind === 'node-resize' && entry.change?.nodeId === 'source'),
     'overlapping resize did not prioritize selected resize handle',
   );
+  assert(result.navigationContract.plainWheelPan.modelDelta === 0, 'plain wheel pan emitted a model change');
+  assert(result.navigationContract.plainWheelPan.xMoved && result.navigationContract.plainWheelPan.yMoved, 'plain wheel did not pan both axes from wheel deltas');
+  assert(result.navigationContract.plainWheelPan.scaleStable, 'plain wheel pan changed zoom');
+  assert(result.navigationContract.plainWheelPan.interaction === 'Scroll pan', 'plain wheel interaction label mismatch');
+  assert(result.navigationContract.shiftWheelHorizontalPan.xMoved, 'shift wheel did not pan horizontally');
+  assert(result.navigationContract.shiftWheelHorizontalPan.yStable, 'shift wheel changed vertical camera position');
+  assert(result.navigationContract.shiftWheelHorizontalPan.scaleStable, 'shift wheel changed zoom');
+  assert(result.navigationContract.modifierWheelZoom.modelDelta === 0, 'modifier wheel zoom emitted a model change');
+  assert(result.navigationContract.modifierWheelZoom.zoomed, 'modifier wheel did not zoom');
+  assert(result.navigationContract.modifierWheelZoom.anchorStable, 'modifier wheel zoom did not keep cursor anchor stable');
+  assert(result.navigationContract.modifierWheelZoom.interaction === 'Wheel zoom', 'modifier wheel interaction label mismatch');
   assert(result.culling.edge.rendered === '1' && result.culling.edge.total === '1', 'edge culling should render intersecting node');
   assert(result.culling.off.rendered === '0' && result.culling.off.total === '1', 'offscreen culling should skip fully offscreen node');
 

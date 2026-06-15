@@ -28,6 +28,8 @@ const KEYBOARD_STEP = SNAP_STEP;
 const KEYBOARD_FAST_STEP = SNAP_STEP * 4;
 const COMPACT_NODE_SCALE = 0.22;
 const COMPACT_NODE_COUNT = 350;
+const WHEEL_LINE_PX = 16;
+const WHEEL_PAGE_PX = 640;
 
 type DragState =
   | { mode: 'pan'; pointerId: number; sx: number; sy: number; camX: number; camY: number; moved: boolean }
@@ -737,8 +739,23 @@ export class CanvasEngine {
   private onWheel = (event: WheelEvent) => {
     event.preventDefault();
     const point = this.eventPoint(event);
-    const factor = Math.exp(-event.deltaY * 0.0015);
-    this.zoomAt(point.x, point.y, factor);
+    if (event.ctrlKey || event.metaKey) {
+      const factor = Math.exp(-event.deltaY * 0.0015);
+      this.zoomAt(point.x, point.y, factor);
+      this.interaction = 'Wheel zoom';
+      this.emitStatus();
+      return;
+    }
+
+    const delta = normalizedWheelDelta(event);
+    const panX = event.shiftKey && delta.x === 0 ? delta.y : delta.x;
+    const panY = event.shiftKey && delta.x === 0 ? 0 : delta.y;
+    this.camera.x -= panX;
+    this.camera.y -= panY;
+    this.cursorWorld = this.screenToWorld(point.x, point.y);
+    this.interaction = 'Scroll pan';
+    this.markDirty();
+    this.emitStatus();
   };
 
   private onDoubleClick = (event: MouseEvent) => {
@@ -1124,6 +1141,11 @@ function midpoint(a: ScreenPoint, b: ScreenPoint) {
 
 function distance(a: ScreenPoint, b: ScreenPoint) {
   return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function normalizedWheelDelta(event: WheelEvent) {
+  const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? WHEEL_LINE_PX : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? WHEEL_PAGE_PX : 1;
+  return { x: event.deltaX * unit, y: event.deltaY * unit };
 }
 
 function uniqueNodeId(base: string, existingIds: Set<string>) {

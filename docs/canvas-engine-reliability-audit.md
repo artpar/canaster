@@ -6,7 +6,7 @@ Current status note, 2026-06-15: drag/resize internals in this historical audit 
 
 ## Summary Verdict
 
-The current canvas foundation is reliable enough to build the next layer on after one small model-change boundary fix made during this audit. The verified foundation supports high-DPI rendering, fit/reset/zoom controls, wheel zoom with cursor anchoring, node selection, drag, resize, interruption rollback, viewport culling, theme redraw, React model-change handoff, and coalesced status updates.
+The current canvas foundation is reliable enough to build the next layer on after one small model-change boundary fix made during this audit. The verified foundation supports high-DPI rendering, fit/reset/zoom controls, plain wheel/trackpad pan, modifier-wheel zoom with cursor anchoring, node selection, drag, resize, interruption rollback, viewport culling, theme redraw, React model-change handoff, and coalesced status updates.
 
 No larger product-direction issues were confirmed. The remaining risks are test-coverage and scale risks, not blockers for the current foundation.
 
@@ -93,7 +93,7 @@ Browser/runtime probes were run in Chrome against the Vite dev server.
 | --- | --- | --- |
 | Nonblank high-DPI canvas | CSS size `1280x900`, bitmap size `2560x1800`, `data-dpr=2`, sampled color count `4` | Pass |
 | Fit view renders all sample nodes | Canvas dataset `4/4`, status `Drawn 4/4`, zoom `122%` | Pass |
-| Wheel zoom keeps cursor anchor stable | Cursor anchor at screen `{x:742,y:423}` reported world `{x:189,y:2}` before and after wheel; zoom changed `122% -> 180%` | Pass |
+| Wheel navigation | Plain wheel pans without model changes or zoom; Shift-wheel pans horizontally; Ctrl/Cmd-wheel zoom keeps cursor anchor stable | Pass |
 | Selection emits no model change | Clicked `source`; status ended with `No model changes` | Pass |
 | Drag commit emits exactly one model change | Mutation-observed last-line values: `No model changes -> node-move source` | Pass |
 | Resize commit emits exactly one model change | Mutation-observed last-line values: `node-move source -> node-resize source` | Pass |
