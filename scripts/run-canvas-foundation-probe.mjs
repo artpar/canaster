@@ -238,19 +238,23 @@ function assertProbe(result, browserEvents) {
   assert(result.advancedEditing.multiDelete.change?.nodeIds?.length === 2, 'multi delete did not include both selected nodes');
   assert(result.advancedEditing.multiDelete.selectionCount === 0, 'multi delete did not clear selection');
 
+  assert(result.commandExecutor.selectReturned === true, 'AI command selection failed');
+  assert(result.commandExecutor.moveReturned === true, 'AI command move failed');
+  assert(result.commandExecutor.move.delta === 1, 'AI command move did not emit exactly once');
+  assert(result.commandExecutor.move.change?.kind === 'node-move' && result.commandExecutor.move.change?.source === 'ai', 'AI command move metadata is wrong');
+  assert(result.commandExecutor.move.snapped, 'AI command move did not share snap behavior');
+  assert(result.commandExecutor.resizeReturned === true, 'AI command resize failed');
+  assert(result.commandExecutor.resize.delta === 1, 'AI command resize did not emit exactly once');
+  assert(result.commandExecutor.resize.change?.kind === 'node-resize' && result.commandExecutor.resize.change?.source === 'ai', 'AI command resize metadata is wrong');
+  assert(result.commandExecutor.resize.snapped, 'AI command resize did not share snap behavior');
+  assert(result.commandExecutor.noopReturned === false && result.commandExecutor.noopDelta === 0, 'AI command no-op emitted a model change');
+
   assert(result.snapContract.pointerMove.delta === 1, 'pointer snap move did not emit exactly once');
   assert(result.snapContract.pointerMove.x === 32 && result.snapContract.pointerMove.y === 32, 'pointer move did not snap to nearest grid coordinate');
   assert(result.snapContract.pointerMove.snapped, 'pointer move final position is not grid-snapped');
   assert(result.snapContract.pointerResize.delta === 1, 'pointer snap resize did not emit exactly once');
   assert(result.snapContract.pointerResize.w === 192 && result.snapContract.pointerResize.h === 128, 'pointer resize did not snap to nearest grid size');
   assert(result.snapContract.pointerResize.snapped, 'pointer resize final size is not grid-snapped');
-  assert(result.snapContract.precisionMove.delta === 1, 'precision pointer move did not emit exactly once');
-  assert(result.snapContract.precisionMove.x === 45 && result.snapContract.precisionMove.y === 45, 'Alt pointer move did not preserve raw coordinates');
-  assert(result.snapContract.precisionMove.snapped === false, 'Alt pointer move should bypass snap');
-  assert(result.snapContract.precisionResize.delta === 1, 'precision pointer resize did not emit exactly once');
-  assert(result.snapContract.precisionResize.w === 183 && result.snapContract.precisionResize.h === 119, 'Alt pointer resize did not preserve raw size');
-  assert(result.snapContract.precisionResize.snapped === false, 'Alt pointer resize should bypass snap');
-
   for (const [name, entry] of Object.entries(result.cancellation)) {
     assert(entry.modelChangeDelta === 0, `${name} emitted a model change`);
     assert(entry.rolledBack === true, `${name} did not roll back`);

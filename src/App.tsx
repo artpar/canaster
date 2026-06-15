@@ -2,7 +2,7 @@ import { Clipboard, Copy, ListTree, Maximize2, Minus, Moon, MoveRight, Plus, Rot
 import { useEffect, useRef, useState } from 'react';
 import { CanvasEngine } from './engine/CanvasEngine';
 import { sampleModel } from './engine/sampleModel';
-import type { CanvasModel, CanvasModelChange, ThemeName, ViewportStatus } from './engine/types';
+import type { CanvasCommand, CanvasModel, CanvasModelChange, ThemeName, ViewportStatus } from './engine/types';
 
 const initialStatus: ViewportStatus = {
   zoom: 1,
@@ -27,6 +27,7 @@ export function App() {
   const [theme, setTheme] = useState<ThemeName>('dark');
   const [status, setStatus] = useState<ViewportStatus>(initialStatus);
   const [nodesOpen, setNodesOpen] = useState(false);
+  const executeCommand = (command: CanvasCommand) => engineRef.current?.executeCommand(command);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -102,19 +103,19 @@ export function App() {
             <span>{status.selectionCount ? `${status.selectionCount} selected` : 'No selection'}</span>
           </div>
           <div className="node-access-actions" aria-label="Node editing commands">
-            <IconButton label="Move selection right" onClick={() => engineRef.current?.moveSelection(32, 0, 'nonvisual')}>
+            <IconButton label="Move selection right" onClick={() => executeCommand({ type: 'move-selection', dx: 32, dy: 0, source: 'nonvisual' })}>
               <MoveRight size={16} />
             </IconButton>
-            <IconButton label="Resize primary selection wider" onClick={() => engineRef.current?.resizePrimarySelection(32, 0, 'nonvisual')}>
+            <IconButton label="Resize primary selection wider" onClick={() => executeCommand({ type: 'resize-primary', dw: 32, dh: 0, source: 'nonvisual' })}>
               <Maximize2 size={16} />
             </IconButton>
-            <IconButton label="Copy selection" onClick={() => engineRef.current?.copySelection()}>
+            <IconButton label="Copy selection" onClick={() => executeCommand({ type: 'copy-selection', source: 'nonvisual' })}>
               <Copy size={16} />
             </IconButton>
-            <IconButton label="Paste copied nodes" onClick={() => engineRef.current?.pasteClipboard('nonvisual')}>
+            <IconButton label="Paste copied nodes" onClick={() => executeCommand({ type: 'paste-clipboard', source: 'nonvisual' })}>
               <Clipboard size={16} />
             </IconButton>
-            <IconButton label="Delete selection" onClick={() => engineRef.current?.deleteSelection('nonvisual')}>
+            <IconButton label="Delete selection" onClick={() => executeCommand({ type: 'delete-selection', source: 'nonvisual' })}>
               <Trash2 size={16} />
             </IconButton>
           </div>
@@ -129,7 +130,7 @@ export function App() {
                     type="button"
                     aria-pressed={selected}
                     aria-label={`${selected ? 'Selected' : 'Select'} ${node.label}, ${node.kind}, x ${Math.round(node.x)}, y ${Math.round(node.y)}, width ${Math.round(node.w)}, height ${Math.round(node.h)}`}
-                    onClick={() => engineRef.current?.selectNode(node.id, 'nonvisual')}
+                    onClick={() => executeCommand({ type: 'select-node', nodeId: node.id, source: 'nonvisual' })}
                   >
                     <span>{node.label}</span>
                     <span>{primary ? 'Primary' : selected ? 'Selected' : node.kind}</span>
@@ -139,7 +140,7 @@ export function App() {
                     type="button"
                     aria-label={`Toggle ${node.label} in selection`}
                     aria-pressed={selected}
-                    onClick={() => engineRef.current?.selectNode(node.id, 'nonvisual', 'toggle')}
+                    onClick={() => executeCommand({ type: 'select-node', nodeId: node.id, mode: 'toggle', source: 'nonvisual' })}
                   >
                     +
                   </button>

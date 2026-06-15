@@ -36,7 +36,7 @@ export async function runCanwayFoundationProbe() {
     };
   };
   const screen = (camera, x, y) => ({ x: camera.x + x * camera.scale, y: camera.y + y * camera.scale });
-  const dispatchPointer = (target, type, x, y, id = 1, pointerType = 'mouse', options = {}) => {
+  const dispatchPointer = (target, type, x, y, id = 1, pointerType = 'mouse') => {
     target.dispatchEvent(
       new PointerEvent(type, {
         bubbles: true,
@@ -47,10 +47,6 @@ export async function runCanwayFoundationProbe() {
         pointerType,
         isPrimary: id === 1,
         buttons: type === 'pointerup' || type === 'pointercancel' || type === 'lostpointercapture' ? 0 : 1,
-        altKey: options.altKey ?? false,
-        shiftKey: options.shiftKey ?? false,
-        metaKey: options.metaKey ?? false,
-        ctrlKey: options.ctrlKey ?? false,
       }),
     );
   };
@@ -286,16 +282,16 @@ export async function runCanwayFoundationProbe() {
   const advancedEditing = await withEngine(sampleModel, async ({ engine, changes, statuses }) => {
     const result = {};
     const beforeNoop = changes.length;
-    result.noSelectionDelete = engine.deleteSelection('keyboard') === false;
-    result.noSelectionCopy = engine.copySelection() === false;
-    result.noClipboardPaste = engine.pasteClipboard('keyboard') === false;
+    result.noSelectionDelete = engine.executeCommand({ type: 'delete-selection', source: 'keyboard' }) === false;
+    result.noSelectionCopy = engine.executeCommand({ type: 'copy-selection', source: 'keyboard' }) === false;
+    result.noClipboardPaste = engine.executeCommand({ type: 'paste-clipboard', source: 'keyboard' }) === false;
     await raf(2);
     result.noopDelta = changes.length - beforeNoop;
 
-    engine.selectNode('source', 'nonvisual');
+    engine.executeCommand({ type: 'select-node', nodeId: 'source', source: 'nonvisual' });
     await raf(2);
     const beforeNonvisualMove = changes.length;
-    engine.moveSelection(SNAP_STEP, 0, 'nonvisual');
+    engine.executeCommand({ type: 'move-selection', dx: SNAP_STEP, dy: 0, source: 'nonvisual' });
     await raf(2);
     const sourceAfterNonvisualMove = engine.model.nodes.find((node) => node.id === 'source');
     result.nonvisualMove = {
@@ -307,7 +303,7 @@ export async function runCanwayFoundationProbe() {
 
     const beforeNonvisualResize = changes.length;
     const widthBeforeResize = engine.model.nodes.find((node) => node.id === 'source')?.w;
-    engine.resizePrimarySelection(SNAP_STEP, 0, 'nonvisual');
+    engine.executeCommand({ type: 'resize-primary', dw: SNAP_STEP, dh: 0, source: 'nonvisual' });
     await raf(2);
     const sourceAfterNonvisualResize = engine.model.nodes.find((node) => node.id === 'source');
     result.nonvisualResize = {
@@ -318,9 +314,9 @@ export async function runCanwayFoundationProbe() {
       widthSnapped: sourceAfterNonvisualResize ? isSnapped(sourceAfterNonvisualResize.w) : false,
     };
 
-    engine.selectNode('source', 'nonvisual');
+    engine.executeCommand({ type: 'select-node', nodeId: 'source', source: 'nonvisual' });
     const beforeSingleDelete = changes.length;
-    engine.deleteSelection('keyboard');
+    engine.executeCommand({ type: 'delete-selection', source: 'keyboard' });
     await raf(2);
     result.singleDelete = {
       delta: changes.length - beforeSingleDelete,
@@ -331,13 +327,13 @@ export async function runCanwayFoundationProbe() {
 
     engine.setModel(cloneModel(sampleModel));
     await raf(2);
-    engine.selectNode('source', 'nonvisual');
-    engine.selectNode('planner', 'nonvisual', 'toggle');
+    engine.executeCommand({ type: 'select-node', nodeId: 'source', source: 'nonvisual' });
+    engine.executeCommand({ type: 'select-node', nodeId: 'planner', mode: 'toggle', source: 'nonvisual' });
     await raf(2);
     const beforeMultiMove = changes.length;
     const beforeSource = { ...engine.model.nodes.find((node) => node.id === 'source') };
     const beforePlanner = { ...engine.model.nodes.find((node) => node.id === 'planner') };
-    engine.moveSelection(SNAP_STEP * 2, SNAP_STEP, 'keyboard');
+    engine.executeCommand({ type: 'move-selection', dx: SNAP_STEP * 2, dy: SNAP_STEP, source: 'keyboard' });
     await raf(2);
     const afterSource = engine.model.nodes.find((node) => node.id === 'source');
     const afterPlanner = engine.model.nodes.find((node) => node.id === 'planner');
@@ -352,12 +348,12 @@ export async function runCanwayFoundationProbe() {
     };
 
     const beforeCopy = changes.length;
-    result.copyReturned = engine.copySelection();
+    result.copyReturned = engine.executeCommand({ type: 'copy-selection', source: 'keyboard' });
     await raf(1);
     result.copyDelta = changes.length - beforeCopy;
     const beforePaste = changes.length;
     const idsBeforePaste = new Set(engine.model.nodes.map((node) => node.id));
-    engine.pasteClipboard('keyboard');
+    engine.executeCommand({ type: 'paste-clipboard', source: 'keyboard' });
     await raf(3);
     const pasteChange = changes.at(-1)?.change;
     const pastedNodes = engine.model.nodes.filter((node) => !idsBeforePaste.has(node.id));
@@ -371,7 +367,7 @@ export async function runCanwayFoundationProbe() {
     };
 
     const beforeMultiDelete = changes.length;
-    engine.deleteSelection('nonvisual');
+    engine.executeCommand({ type: 'delete-selection', source: 'nonvisual' });
     await raf(2);
     result.multiDelete = {
       delta: changes.length - beforeMultiDelete,
@@ -380,6 +376,31 @@ export async function runCanwayFoundationProbe() {
       selectionCount: statuses.at(-1)?.selectionCount,
     };
 
+    return result;
+  });
+
+  const commandExecutor = await withEngine(sampleModel, async ({ engine, changes }) => {
+    const result = {};
+    result.selectReturned = engine.executeCommand({ type: 'select-node', nodeId: 'source', mode: 'replace', source: 'ai' });
+    const beforeMove = changes.length;
+    result.moveReturned = engine.executeCommand({ type: 'move-selection', dx: SNAP_STEP, dy: 0, source: 'ai' });
+    const moved = engine.model.nodes.find((node) => node.id === 'source');
+    result.move = {
+      delta: changes.length - beforeMove,
+      change: changes.at(-1)?.change,
+      snapped: moved ? isSnapped(moved.x) && isSnapped(moved.y) : false,
+    };
+    const beforeResize = changes.length;
+    result.resizeReturned = engine.executeCommand({ type: 'resize-primary', dw: SNAP_STEP, dh: 0, source: 'ai' });
+    const resized = engine.model.nodes.find((node) => node.id === 'source');
+    result.resize = {
+      delta: changes.length - beforeResize,
+      change: changes.at(-1)?.change,
+      snapped: resized ? isSnapped(resized.w) : false,
+    };
+    const beforeNoop = changes.length;
+    result.noopReturned = engine.executeCommand({ type: 'move-selection', dx: 0, dy: 0, source: 'ai' });
+    result.noopDelta = changes.length - beforeNoop;
     return result;
   });
 
@@ -419,42 +440,6 @@ export async function runCanwayFoundationProbe() {
       node = engine.model.nodes[0];
       result.pointerResize = {
         delta: changes.length - beforeSnappedResize,
-        w: node.w,
-        h: node.h,
-        snapped: isSnapped(node.w) && isSnapped(node.h),
-      };
-
-      engine.setModel({ nodes: [{ id: 'snap', label: 'Snap Target', detail: 'grid snap probe', kind: 'task', x: 0, y: 0, w: 160, h: 96 }] });
-      await raf(3);
-      point = center();
-      const beforePrecisionMove = changes.length;
-      dispatchPointer(canvas, 'pointerdown', point.x, point.y, 703);
-      dispatchPointer(window, 'pointermove', point.x + 45, point.y + 45, 703, 'mouse', { altKey: true });
-      dispatchPointer(window, 'pointerup', point.x + 45, point.y + 45, 703);
-      await raf(3);
-      node = engine.model.nodes[0];
-      result.precisionMove = {
-        delta: changes.length - beforePrecisionMove,
-        x: node.x,
-        y: node.y,
-        snapped: isSnapped(node.x) && isSnapped(node.y),
-      };
-
-      engine.setModel({ nodes: [{ id: 'snap', label: 'Snap Target', detail: 'grid snap probe', kind: 'task', x: 0, y: 0, w: 160, h: 96 }] });
-      await raf(3);
-      point = center();
-      dispatchPointer(canvas, 'pointerdown', point.x, point.y, 704);
-      dispatchPointer(window, 'pointerup', point.x, point.y, 704);
-      await raf(2);
-      point = handle();
-      const beforePrecisionResize = changes.length;
-      dispatchPointer(canvas, 'pointerdown', point.x, point.y, 705);
-      dispatchPointer(window, 'pointermove', point.x + 23, point.y + 23, 705, 'mouse', { altKey: true });
-      dispatchPointer(window, 'pointerup', point.x + 23, point.y + 23, 705);
-      await raf(3);
-      node = engine.model.nodes[0];
-      result.precisionResize = {
-        delta: changes.length - beforePrecisionResize,
         w: node.w,
         h: node.h,
         snapped: isSnapped(node.w) && isSnapped(node.h),
@@ -944,6 +929,7 @@ export async function runCanwayFoundationProbe() {
     culling,
     keyboardContract,
     advancedEditing,
+    commandExecutor,
     snapContract,
     cancellation,
     touchPointerOwnership,

@@ -38,14 +38,13 @@ Automated evidence from `npm run probe:canvas`:
 
 ## Advanced Editing Contract
 
-Implemented engine commands:
+Implemented engine command API:
 
-- `selectNode(nodeId, source, mode)`;
-- `moveSelection(dx, dy, source)`;
-- `resizePrimarySelection(dw, dh, source)`;
-- `deleteSelection(source)`;
-- `copySelection()`;
-- `pasteClipboard(source)`.
+- `executeCommand(command)`;
+
+`executeCommand(command)` is the single committed edit path. Pointer, keyboard, nonvisual controls, and future AI actions all submit command objects into that executor instead of mutating model state through separate paths.
+
+Each command is planned into concrete operations before mutation, including selection changes, geometry changes, clipboard changes, pasted node creation, deletion, and paste-counter advancement.
 
 Selection behavior:
 
@@ -72,7 +71,7 @@ Snap-to-grid behavior:
 - the visible grid is the editing grid: `32` world units;
 - keyboard, nonvisual commands, and paste always snap edited coordinates or dimensions;
 - pointer drag and resize snap to the nearest grid coordinate or size;
-- holding Alt during pointer drag or resize bypasses snap for precision placement;
+- pointer drag and resize preview through the same command planner used for commit;
 - zero-delta pointer drag/resize keeps existing geometry instead of forcing legacy unsnapped nodes onto the grid.
 
 Clipboard contract:
@@ -87,7 +86,7 @@ Model-change metadata:
 - move and resize events include `nodeId`, `nodeIds`, and `source`;
 - delete emits `node-delete`;
 - paste emits `node-create`;
-- sources include `pointer`, `keyboard`, and `nonvisual`.
+- sources include `pointer`, `keyboard`, `nonvisual`, and `ai`.
 
 Automated evidence from `npm run probe:canvas`:
 
@@ -100,9 +99,10 @@ Automated evidence from `npm run probe:canvas`:
 - multi-paste emits one `node-create`, creates two collision-free ids, snaps pasted positions, and selects the pasted nodes;
 - multi-delete emits one `node-delete` with two node ids and clears selection;
 - keyboard resize emits `node-resize` with `source: "keyboard"` and snaps the edited dimension;
+- direct `executeCommand` calls with `source: "ai"` share selection, move, resize, snap, metadata, and no-op behavior;
 - pointer snap probe moves a node from `0,0` to `32,32` for a `45,45` raw drag;
 - pointer snap probe resizes a `160x96` node to `192x128` for a raw `183x119` resize;
-- Alt pointer probe preserves raw `45,45` move and raw `183x119` resize.
+- pointer preview and pointer commit use the same command planner and operation application path.
 
 ## Real-Device Touch Status
 
