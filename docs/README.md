@@ -4,11 +4,12 @@ Current status: **reliable enough at the canvas-foundation layer, not product-co
 
 Read these first:
 
-1. `nonvisual-touch-editing-completion-report.md` - latest closure report for nonvisual node access, advanced editing, pointer group-drag, render-only pointer preview, and real-device touch verification blocked/checklisted.
-2. `canvas-keyboard-touch-performance-completion-report.md` - closure report for keyboard editing, two-touch gestures, and 1k/2k node performance.
-3. `product-complete-remaining-dents-report.md` - product-completeness and residual-risk audit that identified the remaining dents.
-4. `canway-technical-dents-audit-report.md` - latest full technical-dents audit before the product-complete pass.
-5. `canvas-foundation-gap-closure-report.md` - earlier browser-probe automation, accessibility boundary, multi-touch policy, churn, and model-shape evidence.
+1. `architecture-software-kt.md` - continuous-development handoff for architecture, ownership boundaries, command/edit contracts, verification, and known limits.
+2. `nonvisual-touch-editing-completion-report.md` - latest closure report for nonvisual node access, advanced editing, pointer group-drag, render-only pointer preview, and real-device touch verification blocked/checklisted.
+3. `canvas-keyboard-touch-performance-completion-report.md` - closure report for keyboard editing, two-touch gestures, and 1k/2k node performance.
+4. `product-complete-remaining-dents-report.md` - product-completeness and residual-risk audit that identified the remaining dents.
+5. `canway-technical-dents-audit-report.md` - latest full technical-dents audit before the product-complete pass.
+6. `canvas-foundation-gap-closure-report.md` - earlier browser-probe automation, accessibility boundary, multi-touch policy, churn, and model-shape evidence.
 
 Historical audit reports and goal prompts in this directory are useful for provenance, but they may describe issues that were later fixed or reclassified. Treat them as audit history unless a latest report explicitly references them as current evidence.
 
