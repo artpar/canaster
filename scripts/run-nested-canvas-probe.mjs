@@ -199,6 +199,180 @@ function assertProbe(result, browserEvents) {
   assert(severeBrowserEvents.length === 0, `browser console/network events found: ${JSON.stringify(severeBrowserEvents)}`);
 }
 
+function assertReloadPersistenceProbe(result) {
+  assert(result.hasPersistChild, `reload did not restore persisted child canvas: ${JSON.stringify(result)}`);
+  assert(result.activeCanvasId === 'persist-child', `reload did not restore active canvas: ${JSON.stringify(result)}`);
+  assert(result.rootPortalChildCanvasId === 'persist-child', `reload did not restore portal child link: ${JSON.stringify(result)}`);
+  assert(result.childNodeX === 77 && result.childNodeY === 33, `reload did not restore child model position: ${JSON.stringify(result)}`);
+  assert(Math.abs(result.cameraScale - 1.73) < 0.001, `reload did not restore camera scale: ${JSON.stringify(result)}`);
+  assert(result.paneLeft === 123 && result.paneTop === 91, `reload did not restore pane layout: ${JSON.stringify(result)}`);
+  assert(result.undoStackLength > 0, `reload did not restore workspace undo history: ${JSON.stringify(result)}`);
+  assert(result.persistedHasChild, `reload overwrote IndexedDB snapshot after hydration: ${JSON.stringify(result)}`);
+}
+
+function assertImmediateReloadPersistenceProbe(result) {
+  assert(result.createdChildCanvasId, `immediate reload fixture did not create a child canvas: ${JSON.stringify(result)}`);
+  assert(result.restoredChildCanvasId === result.createdChildCanvasId, `immediate reload did not restore the newly created portal link: ${JSON.stringify(result)}`);
+  assert(result.restoredChildDocument, `immediate reload did not restore the newly created child document: ${JSON.stringify(result)}`);
+}
+
+async function evaluateRuntime(cdp, expression) {
+  const evaluation = await cdp.send('Runtime.evaluate', {
+    expression,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  if (evaluation.exceptionDetails) throw new Error(evaluation.exceptionDetails.exception?.description ?? evaluation.exceptionDetails.text);
+  return evaluation.result.value;
+}
+
+async function waitForLoadedPage(cdp) {
+  await evaluateRuntime(cdp, 'new Promise((resolve) => { if (document.readyState === "complete") resolve(true); else window.addEventListener("load", () => resolve(true), { once: true }); })');
+}
+
+async function runReloadPersistenceProbe(cdp) {
+  const seeded = await evaluateRuntime(cdp, `((async () => {
+    const { createInitialDocumentCollection, setCameraForCanvas, setPaneLayoutForCanvas, setSelectionForCanvas } = await import('/src/engine/documentModel.ts');
+    const { createWorkspaceHistory, createWorkspaceSnapshot, hydrateWorkspaceSnapshot, pushWorkspaceHistory } = await import('/src/engine/workspaceHistory.ts');
+    const card = (id, x, y, title = id) => ({
+      id,
+      type: 'card',
+      x,
+      y,
+      w: 180,
+      h: 96,
+      data: { title, detail: title + ' detail', accent: 'task' },
+    });
+    const rootModel = {
+      schemaVersion: 2,
+      nodes: [
+        {
+          id: 'persist-portal',
+          type: 'canvas',
+          x: 320,
+          y: 40,
+          w: 300,
+          h: 180,
+          data: { childCanvasId: 'persist-child', title: 'Persist Child', nodeCount: 1 },
+        },
+        card('persist-root-card', -140, -80, 'Persist Root Card'),
+      ],
+    };
+    const base = createInitialDocumentCollection({ schemaVersion: 2, nodes: [card('base-card', 0, 0, 'Base Card')] }, 'Base Root');
+    let collection = createInitialDocumentCollection(rootModel, 'Persist Root');
+    collection.documents['persist-child'] = {
+      id: 'persist-child',
+      title: 'Persist Child',
+      parentCanvasId: 'root',
+      parentNodeId: 'persist-portal',
+      model: { schemaVersion: 2, nodes: [card('persist-child-card', 77, 33, 'Persist Child Card')] },
+    };
+    collection.activeCanvasId = 'persist-child';
+    collection.view.activeCanvasId = 'persist-child';
+    collection.view.focusedEngineId = 'persist-child';
+    collection = setCameraForCanvas(collection, 'persist-child', { x: -123, y: 456, scale: 1.73 });
+    collection = setSelectionForCanvas(collection, 'persist-child', { selectedNodeIds: ['persist-child-card'], primarySelectedNodeId: 'persist-child-card', resizeMode: false });
+    collection = setPaneLayoutForCanvas(collection, 'persist-child', { left: 123, right: 80, top: 91, bottom: 70 });
+    const history = pushWorkspaceHistory(createWorkspaceHistory(base), collection);
+    const snapshot = hydrateWorkspaceSnapshot(createWorkspaceSnapshot(history, { kind: 'active-canvas-change', from: 'root', to: 'persist-child', source: 'nonvisual' }));
+    const record = {
+      id: 'default',
+      schemaVersion: 1,
+      updatedAt: Date.now(),
+      snapshot,
+    };
+    return {
+      activeCanvasId: snapshot?.history.present.activeCanvasId ?? null,
+      hasPersistChild: Boolean(snapshot?.history.present.documents['persist-child']),
+      undoStackLength: snapshot?.history.undoStack.length ?? 0,
+      recordJson: JSON.stringify(record),
+    };
+  })())`);
+  assert(seeded.activeCanvasId === 'persist-child' && seeded.hasPersistChild && seeded.undoStackLength > 0, `failed to seed reload persistence fixture: ${JSON.stringify(seeded)}`);
+
+  const initScript = await cdp.send('Page.addScriptToEvaluateOnNewDocument', {
+    source: `window.localStorage.setItem('canway-workspace-snapshot:default', ${JSON.stringify(seeded.recordJson)});`,
+  });
+  await cdp.send('Page.reload', { ignoreCache: true });
+  await waitForLoadedPage(cdp);
+  if (initScript.identifier) await cdp.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: initScript.identifier });
+
+  return evaluateRuntime(cdp, `((async () => {
+    const { loadWorkspaceSnapshot } = await import('/src/engine/workspaceStorage.ts');
+    const raf = async (count = 1) => {
+      for (let i = 0; i < count; i++) await new Promise((resolve) => requestAnimationFrame(resolve));
+    };
+    let collection = null;
+    let api = null;
+    for (let i = 0; i < 120; i++) {
+      api = window.__canwayNested;
+      collection = api?.getCollection?.() ?? null;
+      if (collection?.documents?.['persist-child'] && collection.activeCanvasId === 'persist-child') break;
+      await raf(1);
+    }
+    await raf(12);
+    api = window.__canwayNested;
+    collection = api?.getCollection?.() ?? collection;
+    const snapshot = api?.getWorkspaceSnapshot?.() ?? null;
+    const persisted = await loadWorkspaceSnapshot();
+    const rootPortal = collection?.documents?.root?.model.nodes.find((node) => node.id === 'persist-portal') ?? null;
+    const childNode = collection?.documents?.['persist-child']?.model.nodes.find((node) => node.id === 'persist-child-card') ?? null;
+    return {
+      activeCanvasId: collection?.activeCanvasId ?? null,
+      hasPersistChild: Boolean(collection?.documents?.['persist-child']),
+      rootPortalChildCanvasId: rootPortal?.data?.childCanvasId ?? null,
+      childNodeX: childNode?.x ?? null,
+      childNodeY: childNode?.y ?? null,
+      cameraScale: collection?.view?.cameras?.['persist-child']?.scale ?? null,
+      paneLeft: collection?.view?.paneLayouts?.['persist-child']?.left ?? null,
+      paneTop: collection?.view?.paneLayouts?.['persist-child']?.top ?? null,
+      undoStackLength: snapshot?.history?.undoStack?.length ?? 0,
+      persistedHasChild: Boolean(persisted?.history.present.documents['persist-child']),
+      persistedActiveCanvasId: persisted?.history.present.activeCanvasId ?? null,
+    };
+  })())`);
+}
+
+async function runImmediateReloadPersistenceProbe(cdp) {
+  const created = await evaluateRuntime(cdp, `(() => {
+    const api = window.__canwayNested;
+    if (!api) throw new Error('nested workspace debug API unavailable');
+    api.executeDocumentCommand({ type: 'select-canvas', canvasId: 'root', source: 'nonvisual' });
+    api.executeDocumentCommand({ type: 'create-child-canvas', parentCanvasId: 'root', nodeId: 'persist-root-card', source: 'nonvisual' });
+    const collection = api.getCollection();
+    const node = collection.documents.root.model.nodes.find((candidate) => candidate.id === 'persist-root-card');
+    return {
+      createdChildCanvasId: node?.data?.childCanvasId ?? null,
+      documentExists: Boolean(node?.data?.childCanvasId && collection.documents[node.data.childCanvasId]),
+    };
+  })()`);
+  assert(created.createdChildCanvasId && created.documentExists, `failed to create immediate reload fixture: ${JSON.stringify(created)}`);
+
+  await cdp.send('Page.reload', { ignoreCache: true });
+  await waitForLoadedPage(cdp);
+
+  const restored = await evaluateRuntime(cdp, `((async () => {
+    const raf = async (count = 1) => {
+      for (let i = 0; i < count; i++) await new Promise((resolve) => requestAnimationFrame(resolve));
+    };
+    let collection = null;
+    for (let i = 0; i < 120; i++) {
+      const api = window.__canwayNested;
+      collection = api?.getCollection?.() ?? null;
+      const node = collection?.documents?.root?.model.nodes.find((candidate) => candidate.id === 'persist-root-card');
+      if (node?.data?.childCanvasId === ${JSON.stringify(created.createdChildCanvasId)} && collection.documents[node.data.childCanvasId]) break;
+      await raf(1);
+    }
+    const node = collection?.documents?.root?.model.nodes.find((candidate) => candidate.id === 'persist-root-card') ?? null;
+    return {
+      restoredChildCanvasId: node?.data?.childCanvasId ?? null,
+      restoredChildDocument: Boolean(node?.data?.childCanvasId && collection?.documents?.[node.data.childCanvasId]),
+    };
+  })())`);
+
+  return { ...created, ...restored };
+}
+
 async function main() {
   assert(await fileExists(chromePath), `Chrome not found at ${chromePath}. Set CANWAY_CHROME_PATH or CHROME_PATH to a compatible Chrome/Chromium binary.`);
 
@@ -239,17 +413,14 @@ async function main() {
       awaitPromise: true,
     });
 
-    const evaluation = await cdp.send('Runtime.evaluate', {
-      expression: "(async () => { const probe = await import('/docs/nested-canvas-devtools-probe.js'); return await probe.runCanwayNestedProbe(); })()",
-      awaitPromise: true,
-      returnByValue: true,
-    });
-    if (evaluation.exceptionDetails) throw new Error(evaluation.exceptionDetails.exception?.description ?? evaluation.exceptionDetails.text);
-
-    const result = evaluation.result.value;
+    const result = await evaluateRuntime(cdp, "(async () => { const probe = await import('/docs/nested-canvas-devtools-probe.js'); return await probe.runCanwayNestedProbe(); })()");
     const browserEvents = summarizeBrowserEvents(cdp.events);
     assertProbe(result, browserEvents);
-    console.log(JSON.stringify({ appUrl, browserEvents, result }, null, 2));
+    const reloadPersistence = await runReloadPersistenceProbe(cdp);
+    assertReloadPersistenceProbe(reloadPersistence);
+    const immediateReloadPersistence = await runImmediateReloadPersistenceProbe(cdp);
+    assertImmediateReloadPersistenceProbe(immediateReloadPersistence);
+    console.log(JSON.stringify({ appUrl, browserEvents, result, reloadPersistence, immediateReloadPersistence }, null, 2));
     console.log('Nested canvas probe passed');
   } catch (error) {
     console.error('Nested canvas probe failed');

@@ -35,6 +35,7 @@ import type {
   CanvasDocumentCollection,
   CanvasDocumentId,
   CanvasWorkspaceHistory,
+  CanvasWorkspaceSnapshot,
   DocumentCommand,
   DocumentModelChange,
   ParentContextFieldShape,
@@ -47,7 +48,7 @@ import {
   replaceWorkspacePresent,
   undoWorkspaceHistory,
 } from '../workspaceHistory';
-import { DEFAULT_WORKSPACE_STORAGE_ID, loadWorkspaceSnapshot, saveWorkspaceSnapshot } from '../workspaceStorage';
+import { DEFAULT_WORKSPACE_STORAGE_ID, loadWorkspaceSnapshot, loadWorkspaceSnapshotMirror, saveWorkspaceSnapshot, saveWorkspaceSnapshotMirror } from '../workspaceStorage';
 import { ACTIVE_ENGINE_FRAME_BUDGET_MS, livePortalSlotsFor, MAX_LIVE_PORTAL_PREVIEWS, MAX_TOTAL_ENGINES } from './engineSlots';
 import {
   DEFAULT_PARENT_CONTEXT_PANE_LAYOUT,
@@ -119,7 +120,12 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
   { initialCollection, theme, animationEnabled = true, storageKey = DEFAULT_WORKSPACE_STORAGE_ID, onCollectionChange, onChromeStateChange },
   ref,
 ) {
+  const initialStorageSnapshotRef = useRef<CanvasWorkspaceSnapshot | null | undefined>(undefined);
+  if (initialStorageSnapshotRef.current === undefined) {
+    initialStorageSnapshotRef.current = loadWorkspaceSnapshotMirror(storageKey);
+  }
   const [history, setHistory] = useState<CanvasWorkspaceHistory>(() => {
+    if (initialStorageSnapshotRef.current) return initialStorageSnapshotRef.current.history;
     const next = cloneDocumentCollection(initialCollection);
     next.view.animationEnabled = animationEnabled;
     return createWorkspaceHistory(next);
@@ -127,13 +133,18 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
   const collection = history.present;
   const historyRef = useRef(history);
   const collectionRef = useRef(collection);
-  const lastModelChangeRef = useRef<DocumentModelChange | null>(null);
+  const lastModelChangeRef = useRef<DocumentModelChange | null>(initialStorageSnapshotRef.current?.lastModelChange ?? null);
   const storageReadyRef = useRef(false);
-  const changedBeforeStorageLoadRef = useRef(false);
+  const userMutationBeforeStorageReadyRef = useRef(false);
   const saveChainRef = useRef<Promise<void>>(Promise.resolve());
+  const saveRevisionRef = useRef(0);
   const activeEngineRef = useRef<CanvasEngine | null>(null);
-  const [status, setStatus] = useState<ViewportStatus>(initialViewportStatus);
-  const [lastModelChange, setLastModelChange] = useState<DocumentModelChange | null>(null);
+  const [status, setStatus] = useState<ViewportStatus>(() => (
+    initialStorageSnapshotRef.current
+      ? { ...initialViewportStatus, interaction: 'Workspace restored' }
+      : initialViewportStatus
+  ));
+  const [lastModelChange, setLastModelChange] = useState<DocumentModelChange | null>(() => initialStorageSnapshotRef.current?.lastModelChange ?? null);
   const [portalLayouts, setPortalLayouts] = useState<PortalLayout[]>([]);
   const [previewCapacity, setPreviewCapacity] = useState(MAX_LIVE_PORTAL_PREVIEWS);
   const activeFrameOverBudgetCount = useRef(0);
@@ -143,13 +154,23 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
   const activeStageRef = useRef<HTMLDivElement | null>(null);
 
   const persistWorkspaceSnapshot = useCallback((snapshot: ReturnType<typeof createWorkspaceSnapshot>) => {
+    const revision = ++saveRevisionRef.current;
+    saveWorkspaceSnapshotMirror(snapshot, storageKey);
     saveChainRef.current = saveChainRef.current
       .catch(() => undefined)
-      .then(() => saveWorkspaceSnapshot(snapshot, storageKey))
+      .then(() => {
+        if (revision !== saveRevisionRef.current) return;
+        return saveWorkspaceSnapshot(snapshot, storageKey);
+      })
       .catch((error) => {
         console.warn('Failed to save Canway workspace snapshot', error);
       });
     return saveChainRef.current;
+  }, [storageKey]);
+
+  const mirrorWorkspaceSnapshot = useCallback((snapshot: ReturnType<typeof createWorkspaceSnapshot>) => {
+    saveRevisionRef.current += 1;
+    saveWorkspaceSnapshotMirror(snapshot, storageKey);
   }, [storageKey]);
 
   useEffect(() => {
@@ -171,9 +192,11 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
 
   useEffect(() => {
     let canceled = false;
+    storageReadyRef.current = false;
+    userMutationBeforeStorageReadyRef.current = false;
     loadWorkspaceSnapshot(storageKey)
       .then((snapshot) => {
-        if (canceled || !snapshot || changedBeforeStorageLoadRef.current) return;
+        if (canceled || !snapshot || userMutationBeforeStorageReadyRef.current) return;
         historyRef.current = snapshot.history;
         collectionRef.current = snapshot.history.present;
         lastModelChangeRef.current = snapshot.lastModelChange;
@@ -186,7 +209,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
       })
       .finally(() => {
         storageReadyRef.current = true;
-        if (changedBeforeStorageLoadRef.current) {
+        if (userMutationBeforeStorageReadyRef.current) {
           persistWorkspaceSnapshot(createWorkspaceSnapshot(historyRef.current, lastModelChangeRef.current));
         }
       });
@@ -244,25 +267,34 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
   }, [livePortalNodeIds]);
 
   const commitCollection = useCallback((next: CanvasDocumentCollection, changes: DocumentModelChange[], options: { recordHistory?: boolean } = {}) => {
-    const nextHistory = (options.recordHistory ?? changes.length > 0)
+    const recordHistory = options.recordHistory ?? changes.length > 0;
+    const nextHistory = recordHistory
       ? pushWorkspaceHistory(historyRef.current, next)
       : replaceWorkspacePresent(historyRef.current, next);
-    changedBeforeStorageLoadRef.current = true;
+    const meaningfulMutation = recordHistory || changes.length > 0;
+    const nextLastModelChange = changes.length ? changes[changes.length - 1] : lastModelChangeRef.current;
+    if (!storageReadyRef.current && meaningfulMutation) {
+      userMutationBeforeStorageReadyRef.current = true;
+    }
+    if (storageReadyRef.current || meaningfulMutation) {
+      mirrorWorkspaceSnapshot(createWorkspaceSnapshot(nextHistory, nextLastModelChange));
+    }
     historyRef.current = nextHistory;
     collectionRef.current = nextHistory.present;
     setHistory(nextHistory);
     if (changes.length) setLastModelChange(changes[changes.length - 1]);
     onCollectionChange?.(nextHistory.present, changes);
-  }, [onCollectionChange]);
+  }, [mirrorWorkspaceSnapshot, onCollectionChange]);
 
   const commitWorkspaceHistory = useCallback((nextHistory: CanvasWorkspaceHistory, interaction: string) => {
-    changedBeforeStorageLoadRef.current = true;
+    if (!storageReadyRef.current) userMutationBeforeStorageReadyRef.current = true;
+    mirrorWorkspaceSnapshot(createWorkspaceSnapshot(nextHistory, lastModelChangeRef.current));
     historyRef.current = nextHistory;
     collectionRef.current = nextHistory.present;
     setHistory(nextHistory);
     setStatus((current) => ({ ...current, interaction }));
     onCollectionChange?.(nextHistory.present, []);
-  }, [onCollectionChange]);
+  }, [mirrorWorkspaceSnapshot, onCollectionChange]);
 
   const saveActiveViewport = useCallback((base: CanvasDocumentCollection) => {
     const engine = activeEngineRef.current;
@@ -325,6 +357,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     setStatus(nextStatus);
     const engine = activeEngineRef.current;
     if (!engine) return;
+    if (!storageReadyRef.current) return;
     const base = collectionRef.current;
     const withCamera = setCameraForCanvas(base, base.activeCanvasId, engine.getCamera());
     const withSelection = setSelectionForCanvas(withCamera, base.activeCanvasId, engine.getSelectionState());
@@ -332,6 +365,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
   }, [commitCollection]);
 
   const handleEmbeddedStatus = useCallback((canvasId: CanvasDocumentId, _status: ViewportStatus, engine: CanvasEngine) => {
+    if (!storageReadyRef.current) return;
     const base = collectionRef.current;
     if (!base.documents[canvasId]) return;
     const withCamera = setCameraForCanvas(base, canvasId, engine.getCamera());
