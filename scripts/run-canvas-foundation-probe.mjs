@@ -158,9 +158,10 @@ function assertProbe(result, browserEvents) {
   assert(Number(result.app.bitmap.w) >= Number(result.app.css.w), 'app bitmap width is not DPR-backed');
   assert(Number(result.app.bitmap.h) >= Number(result.app.css.h), 'app bitmap height is not DPR-backed');
   assert(result.app.rendered === result.app.total, 'sample model should be fully rendered at fit');
-  assert(result.app.tabIndex === -1, 'canvas must not be in sequential tab order');
+  assert(result.app.tabIndex === 0, 'canvas must be keyboard focusable');
   assert(result.app.statusRole === 'status' && result.app.statusLive === 'polite', 'statusbar live-region contract failed');
-  assert(!result.app.sequentialFocusables.some((entry) => entry.tag === 'canvas'), 'canvas is still sequentially focusable');
+  assert(result.app.sequentialFocusables.some((entry) => entry.tag === 'canvas'), 'canvas is not reachable in sequential keyboard focus');
+  assert(result.app.sequentialFocusables.at(-1)?.tag === 'canvas', 'toolbar controls should remain before canvas in tab order');
 
   const expectedDeltas = {
     hover: 0,
@@ -186,9 +187,19 @@ function assertProbe(result, browserEvents) {
   assert(result.culling.edge.rendered === '1' && result.culling.edge.total === '1', 'edge culling should render intersecting node');
   assert(result.culling.off.rendered === '0' && result.culling.off.total === '1', 'offscreen culling should skip fully offscreen node');
 
-  assert(result.keyboardContract.tabIndex === -1, 'probe canvas is sequentially focusable');
+  assert(result.keyboardContract.tabIndex === 0, 'probe canvas is not sequentially focusable');
   assert(result.keyboardContract.programmaticFocusWorks, 'probe canvas does not accept programmatic pointer-style focus');
-  assert(result.keyboardContract.keyModelChangeDelta === 0, 'undefined keyboard keys changed the model');
+  assert(result.keyboardContract.noSelectionDelta === 0, 'no-selection arrow keys changed the model');
+  assert(result.keyboardContract.selectedNodeId, 'Enter did not select a generic canvas node');
+  assert(result.keyboardContract.keyboardChanges.length === 2, 'keyboard movement did not emit two model changes');
+  assert(
+    result.keyboardContract.keyboardChanges.every((change) => change.kind === 'node-move' && change.source === 'keyboard'),
+    'keyboard movement change metadata is wrong',
+  );
+  assert(result.keyboardContract.movedBy?.x === 10 && result.keyboardContract.movedBy?.y === 40, 'keyboard movement distance mismatch');
+  assert(result.keyboardContract.movedBy?.w === 0 && result.keyboardContract.movedBy?.h === 0, 'keyboard movement resized the node');
+  assert(result.keyboardContract.escapeClearedSelection, 'Escape did not clear selection');
+  assert(result.keyboardContract.deleteBackspaceDelta === 0, 'Delete/Backspace changed the model without a deletion contract');
 
   for (const [name, entry] of Object.entries(result.cancellation)) {
     assert(entry.modelChangeDelta === 0, `${name} emitted a model change`);
@@ -199,12 +210,17 @@ function assertProbe(result, browserEvents) {
   assert(result.touchPointerOwnership.finalChanges.length === 1, 'active touch pointer did not commit exactly once');
   assert(result.touchPointerOwnership.finalChanges[0].kind === 'node-move', 'active touch commit kind mismatch');
 
-  assert(result.multiTouchPolicy.nodeIgnoresSecondPointerAndCommitsActive.modelChangeDelta === 1, 'touch node policy did not commit active pointer once');
-  assert(result.multiTouchPolicy.nodeIgnoresSecondPointerAndCommitsActive.lastChange?.kind === 'node-move', 'touch node policy kind mismatch');
-  assert(result.multiTouchPolicy.resizeIgnoresSecondPointerAndCommitsActive.modelChangeDelta === 1, 'touch resize policy did not commit active pointer once');
-  assert(result.multiTouchPolicy.resizeIgnoresSecondPointerAndCommitsActive.lastChange?.kind === 'node-resize', 'touch resize policy kind mismatch');
-  assert(result.multiTouchPolicy.panIgnoresSecondPointerAndCommitsActive.modelChangeDelta === 0, 'touch pan emitted model changes');
-  assert(result.multiTouchPolicy.panIgnoresSecondPointerAndCommitsActive.cameraMovedOnlyAfterActivePointer, 'touch pan second pointer affected camera');
+  assert(result.multiTouchPolicy.twoFingerPanMovesViewportOnly.modelChangeDelta === 0, 'two-finger pan emitted model changes');
+  assert(result.multiTouchPolicy.twoFingerPanMovesViewportOnly.cameraMoved, 'two-finger pan did not move the viewport');
+  assert(result.multiTouchPolicy.twoFingerPanMovesViewportOnly.scaleDelta < 0.01, 'two-finger pan changed zoom unexpectedly');
+  assert(result.multiTouchPolicy.pinchZoomMovesViewportOnly.modelChangeDelta === 0, 'pinch zoom emitted model changes');
+  assert(result.multiTouchPolicy.pinchZoomMovesViewportOnly.zoomedIn, 'pinch did not increase zoom');
+  assert(result.multiTouchPolicy.secondTouchCancelsNodeDragAndGestures.modelChangeDelta === 0, 'second-touch node drag emitted model changes');
+  assert(result.multiTouchPolicy.secondTouchCancelsNodeDragAndGestures.rolledBack, 'second-touch node drag did not roll back');
+  assert(result.multiTouchPolicy.secondTouchCancelsResizeAndGestures.modelChangeDelta === 0, 'second-touch resize emitted model changes');
+  assert(result.multiTouchPolicy.secondTouchCancelsResizeAndGestures.rolledBack, 'second-touch resize did not roll back');
+  assert(result.multiTouchPolicy.gestureCancelLeavesNoStuckState.modelChangeDelta === 0, 'canceled gesture emitted model changes');
+  assert(result.multiTouchPolicy.gestureCancelLeavesNoStuckState.cameraStableAfterCancel, 'canceled gesture left active state behind');
 
   assert(result.longRunChurn.error === null, `long-run churn error: ${result.longRunChurn.error}`);
   assert(
@@ -226,6 +242,13 @@ function assertProbe(result, browserEvents) {
     assert(entry.modelCallbackCount === 0, `future model render emitted model changes for ${entry.name}`);
     assert(entry.errors.length === 0, `future model errors for ${entry.name}: ${entry.errors.join('; ')}`);
   }
+
+  const perf1000 = result.largeGraphPerformance.find((entry) => entry.name === '1000-nodes');
+  const perf2000 = result.largeGraphPerformance.find((entry) => entry.name === '2000-nodes');
+  assert(perf1000?.rendered === 1000 && perf1000.total === 1000, '1000-node performance probe rendered incoherently');
+  assert(perf2000?.rendered === 2000 && perf2000.total === 2000, '2000-node performance probe rendered incoherently');
+  assert(perf1000.maxFrameMs < 100, `1000-node max frame exceeded target: ${perf1000.maxFrameMs}ms`);
+  assert(perf2000.maxFrameMs < 200, `2000-node max frame exceeded target: ${perf2000.maxFrameMs}ms`);
 
   const severeBrowserEvents = browserEvents.filter((event) => {
     if (event.method === 'Network.loadingFailed' && event.errorText === 'net::ERR_ABORTED') return false;
@@ -299,10 +322,12 @@ async function main() {
       browserEvents,
       app: result.app,
       modelBoundaryDeltas: result.modelBoundary.deltas,
+      keyboardContract: result.keyboardContract,
       cancellation: result.cancellation,
       multiTouchPolicy: result.multiTouchPolicy,
       longRunChurn: result.longRunChurn,
       futureModelShape: result.futureModelShape,
+      largeGraphPerformance: result.largeGraphPerformance,
       lifecycle: result.lifecycle,
     };
     console.log(JSON.stringify(summary, null, 2));

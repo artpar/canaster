@@ -19,6 +19,10 @@ const RESIZE_HANDLE = 12;
 const MIN_NODE_W = 140;
 const MIN_NODE_H = 76;
 const CULL_MARGIN_SCREEN = 96;
+const KEYBOARD_STEP = 10;
+const KEYBOARD_FAST_STEP = 40;
+const COMPACT_NODE_SCALE = 0.22;
+const COMPACT_NODE_COUNT = 350;
 
 type DragState =
   | { mode: 'pan'; pointerId: number; sx: number; sy: number; camX: number; camY: number; moved: boolean }
@@ -45,11 +49,23 @@ type VisibleWorldBounds = {
   y1: number;
 };
 
+type ScreenPoint = {
+  x: number;
+  y: number;
+};
+
 type NodeGeometry = {
   x: number;
   y: number;
   w: number;
   h: number;
+};
+
+type TouchGestureState = {
+  pointerIds: [number, number];
+  worldCenter: WorldPoint;
+  startDistance: number;
+  startScale: number;
 };
 
 export class CanvasEngine {
@@ -66,6 +82,8 @@ export class CanvasEngine {
   private hoverNodeId: string | null = null;
   private cursorWorld: WorldPoint | null = null;
   private drag: DragState = null;
+  private touchPoints = new Map<number, ScreenPoint>();
+  private gesture: TouchGestureState | null = null;
   private dpr = 1;
   private viewW = 1;
   private viewH = 1;
@@ -73,6 +91,7 @@ export class CanvasEngine {
   private frameQueued = false;
   private statusFrame: number | null = null;
   private lastRenderedNodes = 0;
+  private interaction = 'Idle';
   private disposed = false;
 
   constructor(canvas: HTMLCanvasElement, options: EngineOptions = {}) {
@@ -85,10 +104,13 @@ export class CanvasEngine {
     this.onModelChange = options.onModelChange;
     this.resizeObserver = new ResizeObserver(() => this.resize());
 
-    this.canvas.tabIndex = -1;
+    this.canvas.tabIndex = 0;
     this.canvas.addEventListener('pointerdown', this.onPointerDown);
     this.canvas.addEventListener('pointercancel', this.onPointerCancel);
     this.canvas.addEventListener('lostpointercapture', this.onLostPointerCapture);
+    this.canvas.addEventListener('keydown', this.onKeyDown);
+    this.canvas.addEventListener('focus', this.onFocus);
+    this.canvas.addEventListener('blur', this.onBlur);
     window.addEventListener('pointermove', this.onPointerMove);
     window.addEventListener('pointerup', this.onPointerUp);
     window.addEventListener('blur', this.onWindowBlur);
@@ -106,6 +128,9 @@ export class CanvasEngine {
     this.canvas.removeEventListener('pointerdown', this.onPointerDown);
     this.canvas.removeEventListener('pointercancel', this.onPointerCancel);
     this.canvas.removeEventListener('lostpointercapture', this.onLostPointerCapture);
+    this.canvas.removeEventListener('keydown', this.onKeyDown);
+    this.canvas.removeEventListener('focus', this.onFocus);
+    this.canvas.removeEventListener('blur', this.onBlur);
     window.removeEventListener('pointermove', this.onPointerMove);
     window.removeEventListener('pointerup', this.onPointerUp);
     window.removeEventListener('blur', this.onWindowBlur);
@@ -119,6 +144,7 @@ export class CanvasEngine {
     this.model = { nodes: model.nodes.map((node) => ({ ...node })) };
     this.selectedNodeId = selectedNodeId && this.model.nodes.some((node) => node.id === selectedNodeId) ? selectedNodeId : null;
     this.hoverNodeId = hoverNodeId && this.model.nodes.some((node) => node.id === hoverNodeId) ? hoverNodeId : null;
+    if (!this.selectedNodeId && this.interaction.startsWith('Keyboard')) this.interaction = 'Idle';
     this.markDirty();
     this.emitStatus();
   }
@@ -187,12 +213,14 @@ export class CanvasEngine {
 
     ctx.setTransform(dpr * camera.scale, 0, 0, dpr * camera.scale, camera.x * dpr, camera.y * dpr);
     const cullBounds = this.visibleWorldBounds();
-    let renderedNodes = 0;
+    const visibleNodes: CanvasNode[] = [];
     for (const node of this.model.nodes) {
       if (!intersectsNode(node, cullBounds)) continue;
-      this.drawNode(node);
-      renderedNodes++;
+      visibleNodes.push(node);
     }
+    const compact = this.shouldUseCompactNodes(visibleNodes.length);
+    for (const node of visibleNodes) this.drawNode(node, compact);
+    const renderedNodes = visibleNodes.length;
     this.lastRenderedNodes = renderedNodes;
     this.canvas.dataset.renderedNodes = String(renderedNodes);
     this.canvas.dataset.totalNodes = String(this.model.nodes.length);
@@ -227,20 +255,26 @@ export class CanvasEngine {
     }
   }
 
-  private drawNode(node: CanvasNode) {
+  private drawNode(node: CanvasNode, compact: boolean) {
     const { ctx, theme } = this;
     const selected = node.id === this.selectedNodeId;
     const hovered = node.id === this.hoverNodeId;
     const radius = NODE_RADIUS;
 
-    ctx.save();
-    ctx.shadowColor = theme.nodeShadow;
-    ctx.shadowBlur = selected ? 18 : 12;
-    ctx.shadowOffsetY = 6;
-    roundRectPath(ctx, node.x, node.y, node.w, node.h, radius);
-    ctx.fillStyle = theme.nodeBg;
-    ctx.fill();
-    ctx.restore();
+    if (!compact || selected || hovered) {
+      ctx.save();
+      ctx.shadowColor = theme.nodeShadow;
+      ctx.shadowBlur = selected ? 18 : 12;
+      ctx.shadowOffsetY = 6;
+      roundRectPath(ctx, node.x, node.y, node.w, node.h, radius);
+      ctx.fillStyle = theme.nodeBg;
+      ctx.fill();
+      ctx.restore();
+    } else {
+      roundRectPath(ctx, node.x, node.y, node.w, node.h, radius);
+      ctx.fillStyle = theme.nodeBg;
+      ctx.fill();
+    }
 
     roundRectPath(ctx, node.x, node.y, node.w, node.h, radius);
     ctx.strokeStyle = selected ? theme.selected : theme.nodeBorder;
@@ -251,6 +285,8 @@ export class CanvasEngine {
     ctx.fillStyle = accent;
     roundRectPath(ctx, node.x + 12, node.y + 12, 28, 6, 3);
     ctx.fill();
+
+    if (compact && !selected && !hovered) return;
 
     ctx.fillStyle = theme.headerText;
     ctx.font = '600 15px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
@@ -281,8 +317,18 @@ export class CanvasEngine {
   }
 
   private onPointerDown = (event: PointerEvent) => {
+    event.preventDefault();
     this.canvas.focus({ preventScroll: true });
     const point = this.eventPoint(event);
+    if (event.pointerType === 'touch') {
+      this.touchPoints.set(event.pointerId, point);
+      this.capturePointer(event.pointerId);
+      if (this.touchPoints.size >= 2) {
+        this.startTouchGesture();
+        return;
+      }
+    }
+
     const world = this.screenToWorld(point.x, point.y);
     const selectedNode = this.selectedNode();
 
@@ -296,6 +342,7 @@ export class CanvasEngine {
         moved: false,
         original: nodeGeometry(selectedNode),
       };
+      this.interaction = 'Resize node';
       this.capturePointer(event.pointerId);
       return;
     }
@@ -313,6 +360,7 @@ export class CanvasEngine {
         moved: false,
         original: nodeGeometry(node),
       };
+      this.interaction = 'Drag node';
       this.capturePointer(event.pointerId);
       this.markDirty();
       this.emitStatus();
@@ -329,6 +377,7 @@ export class CanvasEngine {
       camY: this.camera.y,
       moved: false,
     };
+    this.interaction = 'Pan viewport';
     this.capturePointer(event.pointerId);
     this.markDirty();
     this.emitStatus();
@@ -336,6 +385,14 @@ export class CanvasEngine {
 
   private onPointerMove = (event: PointerEvent) => {
     const point = this.eventPoint(event);
+    if (event.pointerType === 'touch' && this.touchPoints.has(event.pointerId)) {
+      this.touchPoints.set(event.pointerId, point);
+      if (this.gesture) {
+        this.updateTouchGesture();
+        return;
+      }
+    }
+
     const world = this.screenToWorld(point.x, point.y);
     this.cursorWorld = world;
 
@@ -364,25 +421,93 @@ export class CanvasEngine {
         this.markDirty();
       }
       this.canvas.style.cursor = this.cursorFor(world, node);
+      this.interaction = node ? 'Hover node' : 'Idle';
     }
 
     this.emitStatus();
   };
 
   private onPointerUp = (event: PointerEvent) => {
+    if (this.gesture && this.finishTouchPointer(event.pointerId)) return;
+    if (event.pointerType === 'touch') this.touchPoints.delete(event.pointerId);
     this.finishPointerInteraction(event.pointerId, true);
   };
 
   private onPointerCancel = (event: PointerEvent) => {
+    if (this.gesture && this.finishTouchPointer(event.pointerId)) return;
+    if (event.pointerType === 'touch') this.touchPoints.delete(event.pointerId);
     this.finishPointerInteraction(event.pointerId, false);
   };
 
   private onLostPointerCapture = (event: PointerEvent) => {
+    if (this.gesture && this.finishTouchPointer(event.pointerId)) return;
+    if (event.pointerType === 'touch') this.touchPoints.delete(event.pointerId);
     this.finishPointerInteraction(event.pointerId, false);
   };
 
   private onWindowBlur = () => {
+    this.finishTouchGesture();
+    this.touchPoints.clear();
     this.finishPointerInteraction(null, false);
+  };
+
+  private onFocus = () => {
+    this.interaction = this.selectedNodeId ? 'Canvas focused' : 'Canvas focused, no selection';
+    this.emitStatus();
+  };
+
+  private onBlur = () => {
+    if (!this.drag && !this.gesture) this.interaction = 'Idle';
+    this.emitStatus();
+  };
+
+  private onKeyDown = (event: KeyboardEvent) => {
+    const selectedNode = this.selectedNode();
+    const step = event.shiftKey ? KEYBOARD_FAST_STEP : KEYBOARD_STEP;
+    const movement = keyMovement(event.key, step);
+
+    if (movement) {
+      event.preventDefault();
+      if (!selectedNode) {
+        this.interaction = 'Keyboard no selection';
+        this.emitStatus();
+        return;
+      }
+      selectedNode.x += movement.x;
+      selectedNode.y += movement.y;
+      this.interaction = event.shiftKey ? 'Keyboard move fast' : 'Keyboard move';
+      this.markDirty();
+      this.emitModelChange({ kind: 'node-move', nodeId: selectedNode.id, source: 'keyboard' });
+      this.emitStatus();
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.finishPointerInteraction(null, false);
+      this.finishTouchGesture();
+      this.touchPoints.clear();
+      this.selectedNodeId = null;
+      this.interaction = 'Selection cleared';
+      this.markDirty();
+      this.emitStatus();
+      return;
+    }
+
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      if (!this.selectedNodeId) this.selectNearestNodeToViewportCenter();
+      this.interaction = this.selectedNodeId ? 'Keyboard selection' : 'Keyboard no target';
+      this.markDirty();
+      this.emitStatus();
+      return;
+    }
+
+    if (event.key === 'Delete' || event.key === 'Backspace') {
+      event.preventDefault();
+      this.interaction = 'Delete disabled';
+      this.emitStatus();
+    }
   };
 
   private onWheel = (event: WheelEvent) => {
@@ -405,6 +530,10 @@ export class CanvasEngine {
     this.camera.scale = next;
     this.markDirty();
     this.emitStatus();
+  }
+
+  private shouldUseCompactNodes(visibleCount: number) {
+    return this.camera.scale < COMPACT_NODE_SCALE || visibleCount > COMPACT_NODE_COUNT;
   }
 
   private screenToWorld(screenX: number, screenY: number): WorldPoint {
@@ -441,6 +570,22 @@ export class CanvasEngine {
   private selectedNode() {
     if (!this.selectedNodeId) return null;
     return this.model.nodes.find((node) => node.id === this.selectedNodeId) ?? null;
+  }
+
+  private selectNearestNodeToViewportCenter() {
+    const center = this.screenToWorld(this.viewW / 2, this.viewH / 2);
+    let nearest: CanvasNode | null = null;
+    let nearestDistance = Infinity;
+    for (const node of this.model.nodes) {
+      const nodeCenterX = node.x + node.w / 2;
+      const nodeCenterY = node.y + node.h / 2;
+      const distance = (nodeCenterX - center.x) ** 2 + (nodeCenterY - center.y) ** 2;
+      if (distance < nearestDistance) {
+        nearest = node;
+        nearestDistance = distance;
+      }
+    }
+    this.selectedNodeId = nearest?.id ?? null;
   }
 
   private resizeHandleRect(node: CanvasNode) {
@@ -494,12 +639,17 @@ export class CanvasEngine {
 
     if (commit) {
       if (drag.mode === 'node' && drag.moved) {
-        this.emitModelChange({ kind: 'node-move', nodeId: drag.node.id });
+        this.interaction = 'Pointer move';
+        this.emitModelChange({ kind: 'node-move', nodeId: drag.node.id, source: 'pointer' });
       } else if (drag.mode === 'resize' && drag.moved) {
-        this.emitModelChange({ kind: 'node-resize', nodeId: drag.node.id });
+        this.interaction = 'Pointer resize';
+        this.emitModelChange({ kind: 'node-resize', nodeId: drag.node.id, source: 'pointer' });
+      } else if (drag.mode === 'pan' && drag.moved) {
+        this.interaction = 'Pointer pan';
       }
     } else {
       this.rollbackInteraction(drag);
+      this.interaction = 'Interaction canceled';
     }
 
     this.canvas.style.cursor = this.hoverNodeId ? 'grab' : 'default';
@@ -515,6 +665,63 @@ export class CanvasEngine {
     }
 
     restoreNodeGeometry(drag.node, drag.original);
+  }
+
+  private startTouchGesture() {
+    const entries = [...this.touchPoints.entries()].slice(0, 2);
+    if (entries.length < 2) return;
+
+    if (this.drag) this.finishPointerInteraction(null, false);
+
+    const [first, second] = entries;
+    this.capturePointer(first[0]);
+    this.capturePointer(second[0]);
+    const center = midpoint(first[1], second[1]);
+    this.gesture = {
+      pointerIds: [first[0], second[0]],
+      worldCenter: this.screenToWorld(center.x, center.y),
+      startDistance: Math.max(1, distance(first[1], second[1])),
+      startScale: this.camera.scale,
+    };
+    this.cursorWorld = this.gesture.worldCenter;
+    this.interaction = 'Touch pan/zoom';
+    this.markDirty();
+    this.emitStatus();
+  }
+
+  private updateTouchGesture() {
+    if (!this.gesture) return;
+    const first = this.touchPoints.get(this.gesture.pointerIds[0]);
+    const second = this.touchPoints.get(this.gesture.pointerIds[1]);
+    if (!first || !second) return;
+
+    const center = midpoint(first, second);
+    const nextScale = clamp((distance(first, second) / this.gesture.startDistance) * this.gesture.startScale, MIN_SCALE, MAX_SCALE);
+    this.camera.scale = nextScale;
+    this.camera.x = center.x - this.gesture.worldCenter.x * nextScale;
+    this.camera.y = center.y - this.gesture.worldCenter.y * nextScale;
+    this.cursorWorld = this.screenToWorld(center.x, center.y);
+    this.interaction = Math.abs(nextScale - this.gesture.startScale) > 0.01 ? 'Touch pinch zoom' : 'Touch two-finger pan';
+    this.markDirty();
+    this.emitStatus();
+  }
+
+  private finishTouchPointer(pointerId: number) {
+    if (!this.touchPoints.has(pointerId) && !this.gesture?.pointerIds.includes(pointerId)) return false;
+    this.touchPoints.delete(pointerId);
+    this.releasePointer(pointerId);
+    if (this.gesture?.pointerIds.includes(pointerId)) this.finishTouchGesture();
+    return true;
+  }
+
+  private finishTouchGesture() {
+    if (!this.gesture) return;
+    const pointerIds = this.gesture.pointerIds;
+    this.gesture = null;
+    for (const pointerId of pointerIds) this.releasePointer(pointerId);
+    this.interaction = 'Touch gesture ended';
+    this.markDirty();
+    this.emitStatus();
   }
 
   private capturePointer(pointerId: number) {
@@ -548,6 +755,7 @@ export class CanvasEngine {
         cursorWorld: this.cursorWorld,
         renderedNodes: this.lastRenderedNodes,
         totalNodes: this.model.nodes.length,
+        interaction: this.interaction,
       });
     });
   }
@@ -570,6 +778,29 @@ function restoreNodeGeometry(node: CanvasNode, geometry: NodeGeometry) {
 
 function sameNodeGeometry(node: CanvasNode, geometry: NodeGeometry) {
   return node.x === geometry.x && node.y === geometry.y && node.w === geometry.w && node.h === geometry.h;
+}
+
+function keyMovement(key: string, step: number) {
+  switch (key) {
+    case 'ArrowUp':
+      return { x: 0, y: -step };
+    case 'ArrowDown':
+      return { x: 0, y: step };
+    case 'ArrowLeft':
+      return { x: -step, y: 0 };
+    case 'ArrowRight':
+      return { x: step, y: 0 };
+    default:
+      return null;
+  }
+}
+
+function midpoint(a: ScreenPoint, b: ScreenPoint) {
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+}
+
+function distance(a: ScreenPoint, b: ScreenPoint) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
 function intersectsNode(node: CanvasNode, bounds: VisibleWorldBounds) {

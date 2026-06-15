@@ -1,12 +1,13 @@
 # Canway Docs Status
 
-Current status: **reliable enough, not product-complete or perfect**.
+Current status: **reliable enough at the canvas-foundation layer, not product-complete**.
 
 Read these first:
 
-1. `product-complete-remaining-dents-report.md` - latest product-completeness and residual-risk audit.
-2. `canway-technical-dents-audit-report.md` - latest full technical-dents audit before the product-complete pass.
-3. `canvas-foundation-gap-closure-report.md` - browser-probe automation, keyboard policy, accessibility boundary, multi-touch policy, churn, and model-shape evidence.
+1. `canvas-keyboard-touch-performance-completion-report.md` - latest closure report for keyboard editing, two-touch gestures, and 1k/2k node performance.
+2. `product-complete-remaining-dents-report.md` - product-completeness and residual-risk audit that identified the remaining dents.
+3. `canway-technical-dents-audit-report.md` - latest full technical-dents audit before the product-complete pass.
+4. `canvas-foundation-gap-closure-report.md` - earlier browser-probe automation, accessibility boundary, multi-touch policy, churn, and model-shape evidence.
 
 Historical audit reports and goal prompts in this directory are useful for provenance, but they may describe issues that were later fixed or reclassified. Treat them as audit history unless a latest report explicitly references them as current evidence.
 

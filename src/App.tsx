@@ -10,6 +10,7 @@ const initialStatus: ViewportStatus = {
   cursorWorld: null,
   renderedNodes: 0,
   totalNodes: 0,
+  interaction: 'Idle',
 };
 
 const initialModel: CanvasModel = {
@@ -57,8 +58,6 @@ export function App() {
   return (
     <main className="app-shell">
       <section className="workspace" aria-label="Canvas workspace">
-        <canvas ref={canvasRef} className="canvas-surface" aria-label="Canway canvas" />
-
         <div className="topbar" aria-label="Canvas controls">
           <div className="brand">
             <span className="brand-mark" />
@@ -89,6 +88,8 @@ export function App() {
           </div>
         </div>
 
+        <canvas ref={canvasRef} className="canvas-surface" aria-label="Canway canvas" />
+
         <div className="statusbar" role="status" aria-live="polite">
           <span>{status.selectedNodeId ? `Selected ${status.selectedNodeId}` : 'No selection'}</span>
           <span>
@@ -99,7 +100,8 @@ export function App() {
           <span>
             Drawn {status.renderedNodes}/{status.totalNodes}
           </span>
-          <span>{lastModelChange ? `${lastModelChange.kind} ${lastModelChange.nodeId}` : 'No model changes'}</span>
+          <span>{status.interaction}</span>
+          <span>{lastModelChange ? `${lastModelChange.kind} ${lastModelChange.nodeId} ${lastModelChange.source}` : 'No model changes'}</span>
         </div>
       </section>
     </main>

@@ -207,20 +207,49 @@ export async function runCanwayFoundationProbe() {
     };
   })();
 
-  const keyboardContract = await withEngine(sampleModel, async ({ canvas, changes }) => {
-    const before = changes.length;
-    const keys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', '+', '-', 'Enter', 'Escape', ' '];
+  const keyboardContract = await withEngine(sampleModel, async ({ canvas, engine, changes, statuses }) => {
     canvas.focus({ preventScroll: true });
-    for (const key of keys) {
+
+    const noSelectionBefore = changes.length;
+    for (const key of ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']) {
       canvas.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key }));
       canvas.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, cancelable: true, key }));
     }
+    await raf(2);
+    const noSelectionDelta = changes.length - noSelectionBefore;
+
+    canvas.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
     await raf(3);
+    const selectedNodeId = statuses.at(-1)?.selectedNodeId;
+    const selectedBefore = engine.model.nodes.find((node) => node.id === selectedNodeId);
+    const beforeGeometry = selectedBefore ? { x: selectedBefore.x, y: selectedBefore.y, w: selectedBefore.w, h: selectedBefore.h } : null;
+
+    const keyboardBefore = changes.length;
+    canvas.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowRight' }));
+    canvas.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown', shiftKey: true }));
+    await raf(3);
+
+    const selectedAfter = engine.model.nodes.find((node) => node.id === selectedNodeId);
+    canvas.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }));
+    await raf(3);
+
+    const deleteBefore = changes.length;
+    canvas.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Delete' }));
+    canvas.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Backspace' }));
+    await raf(2);
+
     return {
       tabIndex: canvas.tabIndex,
       programmaticFocusWorks: document.activeElement === canvas,
-      keyModelChangeDelta: changes.length - before,
-      testedKeys: keys,
+      noSelectionDelta,
+      selectedNodeId,
+      keyboardChanges: changes.slice(keyboardBefore).map((entry) => entry.change),
+      movedBy:
+        beforeGeometry && selectedAfter
+          ? { x: selectedAfter.x - beforeGeometry.x, y: selectedAfter.y - beforeGeometry.y, w: selectedAfter.w - beforeGeometry.w, h: selectedAfter.h - beforeGeometry.h }
+          : null,
+      escapeClearedSelection: statuses.at(-1)?.selectedNodeId === null,
+      deleteBackspaceDelta: changes.length - deleteBefore,
     };
   });
 
@@ -323,11 +352,13 @@ export async function runCanwayFoundationProbe() {
     };
   });
 
-  const multiTouchPolicy = await withEngine(sampleModel, async ({ canvas, engine, changes, camera }) => {
+  const multiTouchPolicy = await withEngine(sampleModel, async ({ canvas, engine, changes }) => {
     const source = engine.model.nodes.find((node) => node.id === 'source');
-    const center = screen(camera, source.x + source.w / 2, source.y + source.h / 2);
-    const blank = screen(camera, source.x - 70, source.y - 70);
-    const activeHandle = () => screen(camera, source.x + source.w - 12, source.y + source.h - 12);
+    const originalSource = { x: source.x, y: source.y, w: source.w, h: source.h };
+    const screenPoint = (x, y) => ({ x: engine.camera.x + x * engine.camera.scale, y: engine.camera.y + y * engine.camera.scale });
+    const center = () => screenPoint(source.x + source.w / 2, source.y + source.h / 2);
+    const activeHandle = () => screenPoint(source.x + source.w - 12, source.y + source.h - 12);
+    const sameGeometry = (node, geometry) => node.x === geometry.x && node.y === geometry.y && node.w === geometry.w && node.h === geometry.h;
     const results = {};
 
     const record = async (name, run, check) => {
@@ -338,53 +369,90 @@ export async function runCanwayFoundationProbe() {
     };
 
     await record(
-      'nodeIgnoresSecondPointerAndCommitsActive',
+      'twoFingerPanMovesViewportOnly',
       async () => {
-        dispatchPointer(canvas, 'pointerdown', center.x, center.y, 401, 'touch');
-        dispatchPointer(window, 'pointermove', center.x + 60, center.y, 402, 'touch');
-        dispatchPointer(window, 'pointerup', center.x + 60, center.y, 402, 'touch');
-        dispatchPointer(canvas, 'pointercancel', center.x + 60, center.y, 402, 'touch');
-        dispatchPointer(canvas, 'lostpointercapture', center.x + 60, center.y, 402, 'touch');
-        dispatchPointer(window, 'pointermove', center.x + 70, center.y, 401, 'touch');
-        dispatchPointer(window, 'pointerup', center.x + 70, center.y, 401, 'touch');
-      },
-      () => ({ lastChange: changes.at(-1)?.change }),
-    );
-
-    await record(
-      'resizeIgnoresSecondPointerAndCommitsActive',
-      async () => {
-        const point = activeHandle();
-        dispatchPointer(canvas, 'pointerdown', point.x, point.y, 403, 'touch');
-        dispatchPointer(window, 'pointermove', point.x + 60, point.y, 404, 'touch');
-        dispatchPointer(window, 'pointerup', point.x + 60, point.y, 404, 'touch');
-        dispatchPointer(canvas, 'pointercancel', point.x + 60, point.y, 404, 'touch');
-        dispatchPointer(canvas, 'lostpointercapture', point.x + 60, point.y, 404, 'touch');
-        dispatchPointer(window, 'pointermove', point.x + 70, point.y + 30, 403, 'touch');
-        dispatchPointer(window, 'pointerup', point.x + 70, point.y + 30, 403, 'touch');
-      },
-      () => ({ lastChange: changes.at(-1)?.change }),
-    );
-
-    await record(
-      'panIgnoresSecondPointerAndCommitsActive',
-      async () => {
-        const beforeCamera = { ...engine.camera };
-        results.panBeforeCamera = beforeCamera;
-        dispatchPointer(canvas, 'pointerdown', blank.x, blank.y, 405, 'touch');
-        dispatchPointer(window, 'pointermove', blank.x + 80, blank.y, 406, 'touch');
-        dispatchPointer(window, 'pointerup', blank.x + 80, blank.y, 406, 'touch');
-        dispatchPointer(canvas, 'pointercancel', blank.x + 80, blank.y, 406, 'touch');
-        dispatchPointer(canvas, 'lostpointercapture', blank.x + 80, blank.y, 406, 'touch');
-        results.panAfterSecondPointerCamera = { ...engine.camera };
-        dispatchPointer(window, 'pointermove', blank.x + 70, blank.y + 30, 405, 'touch');
-        dispatchPointer(window, 'pointerup', blank.x + 70, blank.y + 30, 405, 'touch');
+        results.panBeforeCamera = { ...engine.camera };
+        dispatchPointer(canvas, 'pointerdown', 180, 180, 401, 'touch');
+        dispatchPointer(canvas, 'pointerdown', 300, 180, 402, 'touch');
+        dispatchPointer(window, 'pointermove', 220, 210, 401, 'touch');
+        dispatchPointer(window, 'pointermove', 340, 210, 402, 'touch');
+        dispatchPointer(window, 'pointerup', 220, 210, 401, 'touch');
+        dispatchPointer(window, 'pointerup', 340, 210, 402, 'touch');
       },
       () => ({
-        cameraMovedOnlyAfterActivePointer:
-          results.panBeforeCamera.x === results.panAfterSecondPointerCamera.x &&
-          results.panBeforeCamera.y === results.panAfterSecondPointerCamera.y &&
-          (engine.camera.x !== results.panBeforeCamera.x || engine.camera.y !== results.panBeforeCamera.y),
+        cameraMoved:
+          engine.camera.x !== results.panBeforeCamera.x ||
+          engine.camera.y !== results.panBeforeCamera.y ||
+          engine.camera.scale !== results.panBeforeCamera.scale,
+        scaleDelta: Math.abs(engine.camera.scale - results.panBeforeCamera.scale),
+      }),
+    );
+
+    await record(
+      'pinchZoomMovesViewportOnly',
+      async () => {
+        results.pinchBeforeCamera = { ...engine.camera };
+        dispatchPointer(canvas, 'pointerdown', 260, 320, 403, 'touch');
+        dispatchPointer(canvas, 'pointerdown', 360, 320, 404, 'touch');
+        dispatchPointer(window, 'pointermove', 210, 320, 403, 'touch');
+        dispatchPointer(window, 'pointermove', 410, 320, 404, 'touch');
+        dispatchPointer(window, 'pointerup', 210, 320, 403, 'touch');
+        dispatchPointer(window, 'pointerup', 410, 320, 404, 'touch');
+      },
+      () => ({ zoomedIn: engine.camera.scale > results.pinchBeforeCamera.scale }),
+    );
+
+    await record(
+      'secondTouchCancelsNodeDragAndGestures',
+      async () => {
+        const point = center();
+        dispatchPointer(canvas, 'pointerdown', point.x, point.y, 405, 'touch');
+        dispatchPointer(window, 'pointermove', point.x + 60, point.y, 405, 'touch');
+        dispatchPointer(canvas, 'pointerdown', point.x + 120, point.y, 406, 'touch');
+        dispatchPointer(window, 'pointermove', point.x + 20, point.y + 30, 405, 'touch');
+        dispatchPointer(window, 'pointermove', point.x + 150, point.y + 30, 406, 'touch');
+        dispatchPointer(window, 'pointerup', point.x + 20, point.y + 30, 405, 'touch');
+        dispatchPointer(window, 'pointerup', point.x + 150, point.y + 30, 406, 'touch');
+      },
+      () => ({ rolledBack: sameGeometry(source, originalSource) }),
+    );
+
+    await record(
+      'secondTouchCancelsResizeAndGestures',
+      async () => {
+        const point = center();
+        dispatchPointer(canvas, 'pointerdown', point.x, point.y, 407, 'touch');
+        dispatchPointer(window, 'pointerup', point.x, point.y, 407, 'touch');
+        await raf(2);
+        const handle = activeHandle();
+        dispatchPointer(canvas, 'pointerdown', handle.x, handle.y, 408, 'touch');
+        dispatchPointer(window, 'pointermove', handle.x + 80, handle.y + 30, 408, 'touch');
+        dispatchPointer(canvas, 'pointerdown', handle.x + 140, handle.y, 409, 'touch');
+        dispatchPointer(window, 'pointermove', handle.x + 20, handle.y + 40, 408, 'touch');
+        dispatchPointer(window, 'pointermove', handle.x + 160, handle.y + 40, 409, 'touch');
+        dispatchPointer(window, 'pointerup', handle.x + 20, handle.y + 40, 408, 'touch');
+        dispatchPointer(window, 'pointerup', handle.x + 160, handle.y + 40, 409, 'touch');
+      },
+      () => ({ rolledBack: sameGeometry(source, originalSource) }),
+    );
+
+    await record(
+      'gestureCancelLeavesNoStuckState',
+      async () => {
+        dispatchPointer(canvas, 'pointerdown', 240, 260, 410, 'touch');
+        dispatchPointer(canvas, 'pointerdown', 340, 260, 411, 'touch');
+        dispatchPointer(window, 'pointermove', 220, 270, 410, 'touch');
+        dispatchPointer(window, 'pointermove', 360, 270, 411, 'touch');
+        dispatchPointer(canvas, 'pointercancel', 220, 270, 410, 'touch');
+        results.cancelCamera = { ...engine.camera };
+        dispatchPointer(window, 'pointermove', 500, 500, 411, 'touch');
+        dispatchPointer(window, 'pointerup', 500, 500, 411, 'touch');
+      },
+      () => ({
+        cameraStableAfterCancel:
+          engine.camera.x === results.cancelCamera.x &&
+          engine.camera.y === results.cancelCamera.y &&
+          engine.camera.scale === results.cancelCamera.scale,
       }),
     );
 
@@ -571,6 +639,55 @@ export async function runCanwayFoundationProbe() {
     }
   })();
 
+  const largeGraphPerformance = await (async () => {
+    const makeNode = (id, x, y) => ({
+      id,
+      label: `Node ${id}`,
+      detail: `Dense render detail for ${id}`,
+      kind: 'task',
+      x,
+      y,
+      w: 160,
+      h: 96,
+    });
+    const grid = (count, columns, gap = 210) => ({
+      nodes: Array.from({ length: count }, (_, i) => makeNode(i, (i % columns) * gap, Math.floor(i / columns) * 140)),
+    });
+    const measure = async (name, model) =>
+      await withEngine(
+        model,
+        async ({ canvas, engine, changes }) => {
+          engine.setModel(cloneModel(model));
+          engine.fit();
+          const startedAt = performance.now();
+          await raf(1);
+          const firstFrameMs = performance.now() - startedAt;
+          const frameDeltas = [];
+          let last = performance.now();
+          for (let i = 0; i < 10; i++) {
+            await raf(1);
+            const now = performance.now();
+            frameDeltas.push(now - last);
+            last = now;
+          }
+          const maxFrameMs = Math.max(firstFrameMs, ...frameDeltas);
+          const avgFrameMs = [firstFrameMs, ...frameDeltas].reduce((sum, value) => sum + value, 0) / (frameDeltas.length + 1);
+          return {
+            name,
+            rendered: Number(canvas.dataset.renderedNodes ?? 0),
+            total: Number(canvas.dataset.totalNodes ?? 0),
+            firstFrameMs: Math.round(firstFrameMs * 10) / 10,
+            maxFrameMs: Math.round(maxFrameMs * 10) / 10,
+            avgFrameMs: Math.round(avgFrameMs * 10) / 10,
+            modelCallbackCount: changes.length,
+          };
+        },
+        { width: 1000, height: 720 },
+      );
+
+    return [await measure('1000-nodes', grid(1000, 40)), await measure('2000-nodes', grid(2000, 50))];
+  })();
+
   const lifecycle = await (async () => {
     const originalAdd = EventTarget.prototype.addEventListener;
     const originalRemove = EventTarget.prototype.removeEventListener;
@@ -619,6 +736,7 @@ export async function runCanwayFoundationProbe() {
     multiTouchPolicy,
     longRunChurn,
     futureModelShape,
+    largeGraphPerformance,
     lifecycle,
   };
 }

@@ -24,8 +24,8 @@ export type CanvasModel = {
 };
 
 export type CanvasModelChange =
-  | { kind: 'node-move'; nodeId: string }
-  | { kind: 'node-resize'; nodeId: string };
+  | { kind: 'node-move'; nodeId: string; source: 'pointer' | 'keyboard' }
+  | { kind: 'node-resize'; nodeId: string; source: 'pointer' | 'keyboard' };
 
 export type WorldPoint = {
   x: number;
@@ -38,6 +38,7 @@ export type ViewportStatus = {
   cursorWorld: WorldPoint | null;
   renderedNodes: number;
   totalNodes: number;
+  interaction: string;
 };
 
 export type EngineOptions = {
