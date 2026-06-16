@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "dev:cloud": "VITE_DAPTIN_ENDPOINT=https://canaster-vnlupz4kzq-el.a.run.app VITE_CANASTER_STORAGE_MODE=daptin vite --host 0.0.0.0",
+    "dev:cloud": "VITE_DAPTIN_ENDPOINT=https://api.canaster.in VITE_CANASTER_STORAGE_MODE=daptin vite --host 0.0.0.0",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "daptin:up": "docker compose -f docker-compose.daptin.yml up -d",
@@ -13,7 +13,7 @@
     "daptin:logs": "docker compose -f docker-compose.daptin.yml logs -f daptin",
     "daptin:smoke": "node scripts/daptin-smoke.mjs",
     "daptin:smoke:local": "DAPTIN_SMOKE_ENDPOINT=http://localhost:6336 DAPTIN_SMOKE_CLI_CONFIG=.tmp/daptin/local-site-cli.yaml node scripts/daptin-smoke.mjs",
-    "daptin:check:cloud": "curl -fsS 'https://canaster-vnlupz4kzq-el.a.run.app/api/world?page%5Bsize%5D=1' >/dev/null",
+    "daptin:check:cloud": "curl -fsS 'https://api.canaster.in/api/world?page%5Bsize%5D=1' >/dev/null",
     "probe:canvas": "node scripts/run-canvas-foundation-probe.mjs",
     "probe:nested": "node scripts/run-nested-canvas-probe.mjs"
   },

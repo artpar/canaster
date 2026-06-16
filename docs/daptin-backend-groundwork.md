@@ -125,7 +125,7 @@ Current production status as of 2026-06-16 20:25 IST:
 
 Current recurring production resources include Cloud SQL and the external HTTPS load balancer. Re-check live GCP pricing before relying on earlier monthly estimates.
 
-Public DNS, certificates, and hostname routing are now in the intended split state. `.env.production` should point `VITE_DAPTIN_ENDPOINT` at `https://api.canaster.in` for future frontend builds. `npm run dev:cloud` can continue using the direct Cloud Run hostname for LB-bypass verification.
+Public DNS, certificates, and hostname routing are now in the intended split state. `.env.production` and `npm run dev:cloud` point `VITE_DAPTIN_ENDPOINT` at `https://api.canaster.in` for frontend builds and cloud-backed local development. Use the direct Cloud Run hostname only for explicit load-balancer bypass checks.
 
 
 ## Production Image
@@ -550,6 +550,7 @@ daptin-cli context set prod
 daptin-cli execute user_account signup "email=$DAPTIN_ADMIN_EMAIL" "name=Canaster Admin" "password=$DAPTIN_ADMIN_PASSWORD" "passwordConfirm=$DAPTIN_ADMIN_PASSWORD"
 daptin-cli execute user_account signin "email=$DAPTIN_ADMIN_EMAIL" "password=$DAPTIN_ADMIN_PASSWORD"
 daptin-cli execute world become_an_administrator
+daptin-cli update action "$(daptin-cli --output json list action --filter action_name=signup --columns reference_id --page-size 1 | jq -r '.[0].reference_id // .[0].attributes.reference_id')" permission=2085152
 daptin-cli storage upload canaster-site:/canaster ./dist --recursive
 daptin-cli create site name=canaster-cloudrun hostname=canaster-vnlupz4kzq-el.a.run.app path=canaster enable=true site_type=static
 daptin-cli create site name=canaster-cloudrun-region hostname=canaster-740552849684.asia-south1.run.app path=canaster enable=true site_type=static
@@ -576,20 +577,35 @@ This is Daptin data/bootstrap work, not a Canaster schema addition.
 
 ## Production Admin State
 
-Current state as of 2026-06-16 15:13 IST:
+Current state as of 2026-06-16 22:20 IST:
 
 - The retained bootstrap administrator account is `admin@canaster.in`.
 - The account credentials are recorded in `production-admin-credentials.md`.
 - `world.become_an_administrator` has already been consumed by the retained bootstrap admin account; later calls from another user return `403`.
-- `artpar@gmail.com` exists as a normal user account and is related only to the `users` group.
+- Public `signin` remains enabled with action permission `561441`.
+- Public `signup` is intentionally re-enabled after admin lockdown with action permission `2085152`, which is `2085120 + GuestExecute(32)`.
+- Updating Daptin action permissions does not require a Daptin restart.
+- `artpar@gmail.com` was removed after bootstrap; production has only `admin@canaster.in` and `guest@cms.go` as retained accounts.
 - `admin@canaster.in` remains related to both `users` and `administrators`.
 
 Verified with:
 
 ```bash
-DAPTIN_CLI_CONFIG=.tmp/daptin/prod-cli.yaml daptin-cli related user_account "$ARTPAR_USER_REF" usergroup_id
 DAPTIN_CLI_CONFIG=.tmp/daptin/prod-cli.yaml daptin-cli related user_account "$ADMIN_USER_REF" usergroup_id
+DAPTIN_CLI_CONFIG=.tmp/daptin/prod-cli.yaml daptin-cli --output json list action --filter action_name=signup --page-size 1
+DAPTIN_CLI_CONFIG=.tmp/daptin/prod-cli.yaml daptin-cli --output json list action --filter action_name=signin --page-size 1
 ```
+
+Public auth verification:
+
+```bash
+curl -sS -o /tmp/canaster-signup-bad.json -w '%{http_code}\n' \
+  -X POST 'https://api.canaster.in/action/user_account/signup' \
+  -H 'Content-Type: application/json' \
+  --data '{"attributes":{"email":"bad"}}'
+```
+
+Expected result is `400`, not `403`; that proves the public `signup` action is executable and validation is reached. A valid temporary signup was also verified with `HTTP 200` and the smoke user was deleted immediately after.
 
 ## CI/CD
 
