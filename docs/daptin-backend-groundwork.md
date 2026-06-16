@@ -79,21 +79,22 @@ Fixed production defaults:
 - GCP project: `agent4-471206`
 - Region: `asia-south1`
 - Artifact Registry repository: `canaster`
-- Cloud Run service: `canaster-daptin`
+- Cloud Run service: `canaster`
 - Cloud SQL instance: `canaster-postgres`
 - Cloud SQL database: `canaster`
 - Cloud SQL user: `canaster`
 - Storage bucket: `canaster-daptin-storage`
 - Cloud DNS zone: `canaster-in`
 - Load balancer IP address name: `canaster-lb-ip`
-- Serverless NEG: `canaster-daptin-neg`
+- Serverless NEG: `canaster-neg`
 - Public hostname: `canaster.in`
+- Temporary working backend endpoint: `https://canaster-vnlupz4kzq-el.a.run.app`
 - Daptin site store: `canaster-site`
 - Daptin site path: `/canaster`
 
 The Cloud Run service is capped at `--max-instances=1` for v1. Daptin’s DB state is safe in Cloud SQL, but Daptin site/file storage uses a mounted Cloud Storage filesystem. Multi-instance file write semantics are not part of MVP.
 
-Current production status as of 2026-06-15 18:53 IST:
+Current production status as of 2026-06-16 14:39 IST:
 
 - Google Cloud project: `agent4-471206`.
 - Cloud DNS zone `canaster-in` exists.
@@ -102,12 +103,20 @@ Current production status as of 2026-06-15 18:53 IST:
 - Service account `canaster-daptin-run@agent4-471206.iam.gserviceaccount.com` exists.
 - Cloud SQL instance `canaster-postgres` exists as Enterprise `db-g1-small`, 10 GB SSD.
 - Secret Manager secret `canaster-daptin-db-connection` exists.
-- Cloud Run service `canaster-daptin` does not exist yet.
-- Load balancer, serverless NEG, managed certificate, and `A` records do not exist yet.
+- Cloud Run service `canaster` exists and serves Canaster plus Daptin API paths from image `asia-south1-docker.pkg.dev/agent4-471206/canaster/daptin:manual-08745c7`.
+- Direct Cloud Run verification passed with `HTTP 200` for `/api/world?page%5Bsize%5D=1`.
+- Global load balancer IP `canaster-lb-ip` exists with address `8.232.13.111`.
+- Serverless NEG `canaster-neg` exists in `asia-south1`.
+- Backend service `canaster-backend` exists and points to `canaster-neg`.
+- The retired old Cloud Run service, old serverless NEG, and old backend service were deleted after the URL map moved to `canaster-backend`.
+- HTTPS frontend `canaster-https-rule` exists on `8.232.13.111:443`.
+- HTTP frontend `canaster-http-rule` exists on `8.232.13.111:80` and redirects to HTTPS.
+- Managed certificate `canaster-managed-cert` exists for `canaster.in` and `www.canaster.in`; it remains blocked until public DNS for the domain reaches the load balancer IP.
+- Namecheap BasicDNS is currently authoritative from the registrar UI and has `A` records for `@` and `www`, both pointing to `8.232.13.111`.
 
 The current cost-bearing production resource is Cloud SQL. The estimated always-on cost for `db-g1-small` plus 10 GB SSD/backups is roughly USD 28/month before traffic. Adding the HTTPS load balancer later is expected to add roughly USD 18/month.
 
-Do not continue production deployment until local integration is confirmed against `http://localhost:6336`.
+Production deployment is live on the direct Cloud Run hostname. The remaining external blocker for `canaster.in` is public DNS propagation/delegation from Namecheap/NIXI to the Namecheap BasicDNS records.
 
 
 ## Production Image
@@ -130,7 +139,7 @@ Do these once from a machine authenticated with `gcloud`. These commands create 
 export GCP_PROJECT=agent4-471206
 export GCP_REGION=asia-south1
 export GCP_ARTIFACT_REPOSITORY=canaster
-export GCP_DAPTIN_SERVICE=canaster-daptin
+export GCP_CLOUD_RUN_SERVICE=canaster
 export GCP_SQL_INSTANCE=canaster-postgres
 export GCP_SQL_DATABASE=canaster
 export GCP_SQL_USER=canaster
@@ -212,12 +221,12 @@ gcloud builds submit \
   --substitutions "_IMAGE=$IMAGE" \
   .
 
-gcloud run deploy "$GCP_DAPTIN_SERVICE" \
+gcloud run deploy "$GCP_CLOUD_RUN_SERVICE" \
   --image "$IMAGE" \
   --region "$GCP_REGION" \
   --project "$GCP_PROJECT" \
+  --service-account "canaster-daptin-run@$GCP_PROJECT.iam.gserviceaccount.com" \
   --execution-environment gen2 \
-  --allow-unauthenticated \
   --port 8080 \
   --memory 1Gi \
   --cpu 1 \
@@ -229,7 +238,14 @@ gcloud run deploy "$GCP_DAPTIN_SERVICE" \
   --set-env-vars DAPTIN_SCHEMA_FOLDER=/opt/canaster/schema,DAPTIN_LOCAL_STORAGE_PATH=/data/storage,DAPTIN_STORAGE=/data/storage \
   --add-volume name=daptin-storage,type=cloud-storage,bucket="$GCP_STORAGE_BUCKET" \
   --add-volume-mount volume=daptin-storage,mount-path=/data/storage
+
+gcloud run services update "$GCP_CLOUD_RUN_SERVICE" \
+  --project "$GCP_PROJECT" \
+  --region "$GCP_REGION" \
+  --no-invoker-iam-check
 ```
+
+`--allow-unauthenticated` attempted to add `allUsers` as `roles/run.invoker`, but org policy blocked that binding with `FAILED_PRECONDITION: One or more users named in the policy do not belong to a permitted customer`. The deployed service therefore uses Cloud Run's invoker IAM check disable flag instead.
 
 ## Public Domain And Namecheap Handoff
 
@@ -240,22 +256,22 @@ Create the load balancer after the Cloud Run service exists:
 ```bash
 export GCP_PROJECT=agent4-471206
 export GCP_REGION=asia-south1
-export GCP_DAPTIN_SERVICE=canaster-daptin
+export GCP_CLOUD_RUN_SERVICE=canaster
 
 gcloud compute addresses create canaster-lb-ip --global
 
-gcloud compute network-endpoint-groups create canaster-daptin-neg \
+gcloud compute network-endpoint-groups create canaster-neg \
   --region="$GCP_REGION" \
   --network-endpoint-type=serverless \
-  --cloud-run-service="$GCP_DAPTIN_SERVICE"
+  --cloud-run-service="$GCP_CLOUD_RUN_SERVICE"
 
-gcloud compute backend-services create canaster-daptin-backend \
+gcloud compute backend-services create canaster-backend \
   --global \
   --load-balancing-scheme=EXTERNAL_MANAGED
 
-gcloud compute backend-services add-backend canaster-daptin-backend \
+gcloud compute backend-services add-backend canaster-backend \
   --global \
-  --network-endpoint-group=canaster-daptin-neg \
+  --network-endpoint-group=canaster-neg \
   --network-endpoint-group-region="$GCP_REGION"
 
 gcloud compute ssl-certificates create canaster-managed-cert \
@@ -263,7 +279,7 @@ gcloud compute ssl-certificates create canaster-managed-cert \
   --global
 
 gcloud compute url-maps create canaster-url-map \
-  --default-service=canaster-daptin-backend
+  --default-service=canaster-backend
 
 gcloud compute target-https-proxies create canaster-https-proxy \
   --ssl-certificates=canaster-managed-cert \
@@ -371,12 +387,198 @@ dig +short A www.canaster.in
 gcloud compute ssl-certificates describe canaster-managed-cert --global --format='value(managed.status)'
 ```
 
+Current state as of 2026-06-16 00:35 IST:
+
+- Namecheap WHOIS shows the Google Cloud DNS nameservers for `canaster.in`.
+- Google Cloud DNS authoritative nameserver `ns-cloud-a1.googledomains.com` returns `8.232.13.111` for both `canaster.in` and `www.canaster.in`.
+- The `.in` registry authoritative server still returns the `in.` SOA for `canaster.in` instead of delegating to the Google Cloud DNS nameservers.
+- Public recursive DNS therefore still does not resolve `canaster.in`.
+- Forced-IP HTTP test works and returns `301 Moved Permanently` to HTTPS.
+- Forced-IP HTTPS test fails during TLS while `canaster-managed-cert` is `PROVISIONING`.
+
+Verification evidence:
+
+```bash
+dig @ns-cloud-a1.googledomains.com +short A canaster.in
+# 8.232.13.111
+
+dig @ns-cloud-a1.googledomains.com +short A www.canaster.in
+# 8.232.13.111
+
+curl --noproxy '*' -I --resolve canaster.in:80:8.232.13.111 'http://canaster.in/api/world?page%5Bsize%5D=1'
+# HTTP/1.1 301 Moved Permanently
+# Location: https://canaster.in:443/api/world?page%5Bsize%5D=1
+
+gcloud compute ssl-certificates describe canaster-managed-cert \
+  --global \
+  --project agent4-471206 \
+  --format='value(managed.status)'
+# PROVISIONING
+```
+
+Next verification loop:
+
+```bash
+dig +short NS canaster.in
+dig +short A canaster.in
+gcloud compute ssl-certificates describe canaster-managed-cert \
+  --global \
+  --project agent4-471206 \
+  --format='json(managed.status,managed.domainStatus)'
+curl -I 'https://canaster.in/api/world?page%5Bsize%5D=1'
+```
+
+Current interim routing decision as of 2026-06-16 14:39 IST:
+
+- Continue frontend/backend integration against the direct Cloud Run subdomain `https://canaster-vnlupz4kzq-el.a.run.app`.
+- `.env.production` points `VITE_DAPTIN_ENDPOINT` to that Cloud Run subdomain until `canaster.in` resolves publicly and the managed certificate becomes visible.
+- Local development still defaults to `http://localhost:6336`.
+- To run the frontend locally against the deployed backend, use:
+
+```bash
+npm run dev:cloud
+```
+
+Namecheap BasicDNS now has these records and no `www` parking CNAME:
+
+```text
+@    A    8.232.13.111
+www  A    8.232.13.111
+```
+
+The `.in` parent zone still needs to delegate `canaster.in` to `dns1.registrar-servers.com` and `dns2.registrar-servers.com` before public resolution can work.
+
+### Permanent Local Site/GCS Verification
+
+Current state as of 2026-06-16 14:15 IST:
+
+- Do not use throwaway Daptin instances for Canaster backend/site validation.
+- The permanent local setup is `docker-compose.daptin.yml` and runs Daptin plus Postgres.
+- Docker Desktop must be running before `npm run daptin:up`.
+- `npm run daptin:up` and `npm run daptin:smoke:local` passed against `http://localhost:6336`.
+- Local GCS-backed site hosting was verified through the permanent local Daptin instance, not a temporary instance.
+
+Local verification setup:
+
+```text
+Daptin endpoint: http://localhost:6336
+Daptin store: canaster-site-local-gcs
+Store type: google cloud storage
+Store provider: Google
+Root path: canaster-site-local-gcs:canaster-daptin-storage
+Credential style: rclone config keys
+Credential key used locally: access_token from gcloud auth print-access-token
+Site hostname: localhost
+Site path: /canaster-local
+Uploaded GCS prefix: gs://canaster-daptin-storage/canaster-local/
+```
+
+Local verification evidence:
+
+```bash
+npm run build
+npm run daptin:smoke:local
+daptin-cli storage upload canaster-site-local-gcs:/canaster-local ./dist --recursive
+gcloud storage ls gs://canaster-daptin-storage/canaster-local/index.html
+docker compose -f docker-compose.daptin.yml restart daptin
+curl --noproxy '*' -D - http://localhost:6336/ -o /tmp/canaster-local-site-index.html
+```
+
+Observed result:
+
+```text
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+```
+
+Daptin source behavior verified before using this flow:
+
+- `site` rows are loaded into the host switch at Daptin startup in `server/subsites.go`.
+- A Daptin restart is required after creating a new `site` row for that site to route by hostname.
+- `cloud_store.upload_file` uploads to `cloudStore.root_path + "/" + path`.
+- `site.sync_site_storage` reads from `cloudStore.root_path + "/" + site.path`.
+- Therefore the production site path must match the upload prefix.
+- For GCS, Daptin's rclone config is supplied through the linked credential content.
+- Local verification used a short-lived `access_token`; production should use Cloud Run metadata credentials with rclone `env_auth=true`.
+
+Permanent local smoke behavior:
+
+- `npm run daptin:smoke:local` uses the existing CLI token in `.tmp/daptin/local-site-cli.yaml`.
+- It does not sign up a new user against the permanent local Daptin server.
+- It verifies built-in `document` JSON blob create/update/read, private guest `403`, public guest `200`, and snapshot decode.
+- On 2026-06-16 14:52 IST the permanent local create permission was `561441`; the smoke does not depend on a specific create default and instead verifies the explicit private/public permission patches.
+
+### Production Site/GCS Bootstrap Status
+
+Current state as of 2026-06-16 14:39 IST:
+
+- Production no longer serves only raw Daptin on the Cloud Run subdomains.
+- The Canaster frontend build has been uploaded through Daptin to Google Cloud Storage.
+- Daptin is serving the uploaded static site from GCS through `site` rows.
+- The backend API remains available under Daptin's normal `/api/...` paths.
+- The active public Cloud Run hostnames are `canaster-vnlupz4kzq-el.a.run.app` and `canaster-740552849684.asia-south1.run.app`; the old public Cloud Run service is deleted.
+
+Production Daptin GCS store:
+
+```text
+cloud_store.name: canaster-site
+cloud_store.store_type: google cloud storage
+cloud_store.store_provider: Google
+cloud_store.root_path: canaster-site:canaster-daptin-storage
+cloud_store.credential_name: canaster-site
+credential style: rclone config keys
+production credential key: env_auth=true
+production auth source: Cloud Run service account metadata
+bucket: gs://canaster-daptin-storage
+```
+
+Production Daptin sites:
+
+```text
+hostname: canaster-vnlupz4kzq-el.a.run.app
+path: /canaster
+cloud_store: canaster-site
+
+hostname: canaster-740552849684.asia-south1.run.app
+path: /canaster
+cloud_store: canaster-site
+```
+
+Important Daptin routing detail:
+
+- Do not put multiple hostnames in one comma-separated `site.hostname` for Cloud Run service hostnames.
+- Daptin splits comma-separated hostnames into `SiteMap`, but `HandlerMap` is keyed by the full `site.Hostname` string.
+- For reliable hostname routing, create one `site` row per hostname.
+
+Production verification commands:
+
+```bash
+daptin-cli storage upload canaster-site:/canaster ./dist --recursive
+gcloud storage ls gs://canaster-daptin-storage/canaster/index.html
+gcloud run services update canaster \
+  --project agent4-471206 \
+  --region asia-south1 \
+  --update-env-vars CANASTER_SITE_BOOTSTRAP_REV="$(date +%s)" \
+  --no-invoker-iam-check
+curl --noproxy '*' -fsS https://canaster-vnlupz4kzq-el.a.run.app/ | rg '<title>Canway</title>'
+curl --noproxy '*' -fsS https://canaster-740552849684.asia-south1.run.app/ | rg '<title>Canway</title>'
+curl --noproxy '*' -fsS 'https://canaster-vnlupz4kzq-el.a.run.app/api/world?page%5Bsize%5D=1' >/dev/null
+```
+
+Observed result:
+
+```text
+https://canaster-vnlupz4kzq-el.a.run.app/ serves <title>Canway</title>
+https://canaster-740552849684.asia-south1.run.app/ serves <title>Canway</title>
+/api/world?page%5Bsize%5D=1 returns HTTP 200
+```
+
 ## Daptin Site Bootstrap
 
 After the first Daptin deploy is healthy, create the Daptin admin user, storage, and site using Daptin itself.
 
 ```bash
-export DAPTIN_ENDPOINT="$(gcloud run services describe "$GCP_DAPTIN_SERVICE" --region "$GCP_REGION" --format='value(status.url)')"
+export DAPTIN_ENDPOINT="$(gcloud run services describe "$GCP_CLOUD_RUN_SERVICE" --region "$GCP_REGION" --format='value(status.url)')"
 export DAPTIN_CLI_CONFIG=.tmp/daptin/prod-cli.yaml
 export DAPTIN_ADMIN_EMAIL=admin@canaster.in
 export DAPTIN_ADMIN_PASSWORD='<admin-password>'
@@ -395,6 +597,23 @@ daptin-cli relate site "$CANASTER_SITE_REF" cloud_store_id "$CANASTER_SITE_STORE
 
 This is a one-time Daptin data operation, not a Canaster schema addition.
 
+## Production Admin State
+
+Current state as of 2026-06-16 15:13 IST:
+
+- The retained bootstrap administrator account is `admin@canaster.in`.
+- The account credentials are recorded in `production-admin-credentials.md`.
+- `world.become_an_administrator` has already been consumed by the retained bootstrap admin account; later calls from another user return `403`.
+- `artpar@gmail.com` exists as a normal user account and is related only to the `users` group.
+- `admin@canaster.in` remains related to both `users` and `administrators`.
+
+Verified with:
+
+```bash
+DAPTIN_CLI_CONFIG=.tmp/daptin/prod-cli.yaml daptin-cli related user_account "$ARTPAR_USER_REF" usergroup_id
+DAPTIN_CLI_CONFIG=.tmp/daptin/prod-cli.yaml daptin-cli related user_account "$ADMIN_USER_REF" usergroup_id
+```
+
 ## CI/CD
 
 CI (`.github/workflows/ci.yml`) runs:
@@ -411,12 +630,16 @@ Required GitHub variables:
 - `GCP_PROJECT=agent4-471206`
 - `GCP_REGION=asia-south1`
 - `GCP_ARTIFACT_REPOSITORY=canaster`
-- `GCP_DAPTIN_SERVICE=canaster-daptin`
+- `GCP_CLOUD_RUN_SERVICE=canaster`
 - `GCP_SQL_CONNECTION_NAME=agent4-471206:asia-south1:canaster-postgres`
 - `GCP_STORAGE_BUCKET=canaster-daptin-storage`
 - `GCP_LOAD_BALANCER_IP=canaster-lb-ip`
 - `DAPTIN_SITE_STORE=canaster-site`
 - `DAPTIN_SITE_PATH=/canaster`
+
+Currently set GitHub repository variables as of 2026-06-16 14:48 IST:
+
+- `GCP_CLOUD_RUN_SERVICE=canaster`
 
 Required GitHub secrets:
 

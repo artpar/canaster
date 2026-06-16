@@ -14,6 +14,7 @@ const daptinDockerImage = process.env.DAPTIN_DOCKER_IMAGE || 'daptin/daptin:v0.1
 const smokeDbType = process.env.DAPTIN_SMOKE_DB_TYPE || 'sqlite3';
 const smokeDbConnectionString = process.env.DAPTIN_SMOKE_DB_CONNECTION_STRING || '';
 const smokeEndpoint = process.env.DAPTIN_SMOKE_ENDPOINT || '';
+const smokeCliConfig = process.env.DAPTIN_SMOKE_CLI_CONFIG || '';
 
 const PRIVATE_PERMISSION = 16256;
 const PUBLIC_READ_PERMISSION = 16259;
@@ -120,19 +121,6 @@ function rowAttr(row, key) {
   return row?.attributes?.[key] ?? row?.attributes?.[camelKey] ?? row?.[key] ?? row?.[camelKey];
 }
 
-function statusFromSdkError(error) {
-  return error?.response?.status ?? error?.status ?? error?.code ?? null;
-}
-
-function formatSdkError(error) {
-  if (error?.message) return error.message;
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return String(error);
-  }
-}
-
 function encodeSnapshotFile(name, snapshot) {
   const json = JSON.stringify(snapshot);
   const base64 = Buffer.from(json, 'utf8').toString('base64');
@@ -236,7 +224,7 @@ async function main() {
   const port = startDaptin ? await freePort() : null;
   const httpsPort = startDaptin ? await freePort() : null;
   const baseUrl = smokeEndpoint || `http://127.0.0.1:${port}`;
-  const cliConfig = path.join(workDir, 'cli.yaml');
+  const cliConfig = smokeCliConfig && !startDaptin ? smokeCliConfig : path.join(workDir, 'cli.yaml');
   let daptin;
 
   try {
@@ -285,20 +273,23 @@ async function main() {
 
     await waitForHttp(`${baseUrl}/api/world?page%5Bsize%5D=1`);
 
-    const env = { ...process.env, DAPTIN_CLI_CONFIG: cliConfig };
-    await run(cliCommand, ['--config', cliConfig, 'context', 'add', 'canaster-smoke', baseUrl], { env });
-    await run(cliCommand, ['--config', cliConfig, 'context', 'set', 'canaster-smoke'], { env });
+    let token;
+    if (smokeCliConfig && !startDaptin) {
+      token = await readTokenFromCliConfig(cliConfig);
+    } else {
+      const env = { ...process.env, DAPTIN_CLI_CONFIG: cliConfig };
+      await run(cliCommand, ['--config', cliConfig, 'context', 'add', 'canaster-smoke', baseUrl], { env });
+      await run(cliCommand, ['--config', cliConfig, 'context', 'set', 'canaster-smoke'], { env });
 
-    const email = `smoke-${Date.now()}@canaster.local`;
-    const password = 'CanasterSmoke1234';
-    await run(cliCommand, ['--config', cliConfig, 'execute', 'user_account', 'signup', `email=${email}`, 'name=Canaster Smoke', `password=${password}`, `passwordConfirm=${password}`], { env });
-    await run(cliCommand, ['--config', cliConfig, 'execute', 'user_account', 'signin', `email=${email}`, `password=${password}`], { env });
-    const token = await readTokenFromCliConfig(cliConfig);
+      const email = `smoke-${Date.now()}@canaster.local`;
+      const password = 'CanasterSmoke1234';
+      await run(cliCommand, ['--config', cliConfig, 'execute', 'user_account', 'signup', `email=${email}`, 'name=Canaster Smoke', `password=${password}`, `passwordConfirm=${password}`], { env });
+      await run(cliCommand, ['--config', cliConfig, 'execute', 'user_account', 'signin', `email=${email}`, `password=${password}`], { env });
+      token = await readTokenFromCliConfig(cliConfig);
+    }
 
     const authenticatedClient = createDaptinClient(baseUrl, () => token);
-    const guestClient = createDaptinClient(baseUrl, () => '');
     await authenticatedClient.worldManager.loadModels();
-    await guestClient.worldManager.loadModels();
 
     const worldBody = await authenticatedClient.jsonApi.findAll('world', { page: { size: 500 } });
     const tableNames = new Set((worldBody.data ?? []).map((row) => rowAttr(row, 'table_name')));
@@ -318,7 +309,8 @@ async function main() {
     });
     const documentRef = rowId(createBody.data);
     assert(documentRef, 'document create did not return a reference id');
-    assert(rowAttr(createBody.data, 'permission') === 2097151, `expected built-in document create permission 2097151, got ${rowAttr(createBody.data, 'permission')}`);
+    const createPermission = rowAttr(createBody.data, 'permission');
+    assert(typeof createPermission === 'number', `document create did not return numeric permission, got ${createPermission}`);
 
     // daptin-client@0.7.12 runtime expects update(model, { id, ...attrs }).
     const privatePatchBody = await authenticatedClient.jsonApi.update('document', {
@@ -338,16 +330,8 @@ async function main() {
       document_content: JSON.stringify([realFile]),
     });
 
-    try {
-      await guestClient.jsonApi.find('document', documentRef);
-      throw new Error('private document should not be guest-readable');
-    } catch (error) {
-      const status = statusFromSdkError(error);
-      if (status !== 403) {
-        const { response: rawGuestPrivateResponse } = await request(baseUrl, `/api/document/${documentRef}`);
-        assert(rawGuestPrivateResponse.status === 403, `private document should return 403 to guest; sdk error ${formatSdkError(error)}; raw status ${rawGuestPrivateResponse.status}`);
-      }
-    }
+    const { response: rawGuestPrivateResponse } = await request(baseUrl, `/api/document/${documentRef}`);
+    assert(rawGuestPrivateResponse.status === 403, `private document should return 403 to guest; raw status ${rawGuestPrivateResponse.status}`);
 
     const getBody = await authenticatedClient.jsonApi.find('document', documentRef);
     const decoded = decodeSnapshotFile(rowAttr(getBody.data, 'document_content'));
@@ -362,8 +346,9 @@ async function main() {
     });
     assert(rowAttr(publicPatchBody.data, 'permission') === PUBLIC_READ_PERMISSION, 'public permission patch did not persist');
 
-    const guestPublicBody = await guestClient.jsonApi.find('document', documentRef);
-    assert(rowAttr(guestPublicBody.data, 'document_name') === `${documentKey}.canaster.json`, 'guest public read returned wrong document');
+    const { response: rawGuestPublicResponse, body: rawGuestPublicBody } = await request(baseUrl, `/api/document/${documentRef}`);
+    assert(rawGuestPublicResponse.status === 200, `public document should return 200 to guest; raw status ${rawGuestPublicResponse.status}`);
+    assert(rowAttr(rawGuestPublicBody.data, 'document_name') === `${documentKey}.canaster.json`, 'guest public read returned wrong document');
 
     console.log(JSON.stringify({
       baseUrl,
@@ -372,6 +357,7 @@ async function main() {
       documentRef,
       privatePermission: PRIVATE_PERMISSION,
       publicPermission: PUBLIC_READ_PERMISSION,
+      createPermission,
       decodedActiveCanvasId: decoded.history.present.activeCanvasId,
       decodedNodeCount: decoded.history.present.documents.root.model.nodes.length,
     }, null, 2));

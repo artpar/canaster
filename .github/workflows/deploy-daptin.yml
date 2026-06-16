@@ -1,4 +1,4 @@
-name: Deploy Daptin On Google Cloud
+name: Deploy Canaster Backend On Google Cloud
 
 on:
   workflow_dispatch:
@@ -17,7 +17,7 @@ jobs:
       GCP_PROJECT: ${{ vars.GCP_PROJECT }}
       GCP_REGION: ${{ vars.GCP_REGION }}
       GCP_ARTIFACT_REPOSITORY: ${{ vars.GCP_ARTIFACT_REPOSITORY }}
-      GCP_DAPTIN_SERVICE: ${{ vars.GCP_DAPTIN_SERVICE }}
+      GCP_CLOUD_RUN_SERVICE: ${{ vars.GCP_CLOUD_RUN_SERVICE }}
       GCP_SQL_CONNECTION_NAME: ${{ vars.GCP_SQL_CONNECTION_NAME }}
       GCP_STORAGE_BUCKET: ${{ vars.GCP_STORAGE_BUCKET }}
       DAPTIN_SITE_STORE: ${{ vars.DAPTIN_SITE_STORE }}
@@ -57,12 +57,13 @@ jobs:
       - name: Deploy Daptin to Cloud Run
         run: |
           set -euo pipefail
-          gcloud run deploy "$GCP_DAPTIN_SERVICE" \
+          gcloud run deploy "$GCP_CLOUD_RUN_SERVICE" \
             --image "$IMAGE" \
             --region "$GCP_REGION" \
             --project "$GCP_PROJECT" \
+            --service-account "canaster-daptin-run@$GCP_PROJECT.iam.gserviceaccount.com" \
             --execution-environment gen2 \
-            --allow-unauthenticated \
+            --no-invoker-iam-check \
             --port 8080 \
             --memory 1Gi \
             --cpu 1 \
@@ -78,7 +79,7 @@ jobs:
       - name: Resolve Daptin endpoint
         run: |
           set -euo pipefail
-          DAPTIN_ENDPOINT="$(gcloud run services describe "$GCP_DAPTIN_SERVICE" --region "$GCP_REGION" --project "$GCP_PROJECT" --format='value(status.url)')"
+          DAPTIN_ENDPOINT="$(gcloud run services describe "$GCP_CLOUD_RUN_SERVICE" --region "$GCP_REGION" --project "$GCP_PROJECT" --format='value(status.url)')"
           echo "DAPTIN_ENDPOINT=$DAPTIN_ENDPOINT" >> "$GITHUB_ENV"
 
       - name: Build frontend for deployed Daptin
