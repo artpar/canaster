@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-15T20:48:12Z",
+  "title": "Design System: Canaster",
+  "extensions": {
+    "colorMeta": {
+      "canvas-night": {
+        "role": "neutral",
+        "displayName": "Canvas Night",
+        "canonical": "#101217",
+        "tonalRamp": ["oklch(15% 0.012 260)", "oklch(23% 0.014 260)", "oklch(31% 0.015 260)", "oklch(43% 0.014 260)", "oklch(56% 0.012 260)", "oklch(70% 0.009 260)", "oklch(84% 0.006 260)", "oklch(95% 0.003 260)"]
+      },
+      "canvas-light": {
+        "role": "neutral",
+        "displayName": "Canvas Light",
+        "canonical": "#f4f6f8",
+        "tonalRamp": ["oklch(15% 0.006 250)", "oklch(28% 0.007 250)", "oklch(42% 0.007 250)", "oklch(56% 0.006 250)", "oklch(70% 0.005 250)", "oklch(82% 0.004 250)", "oklch(91% 0.003 250)", "oklch(97% 0.002 250)"]
+      },
+      "action-blue": {
+        "role": "primary",
+        "displayName": "Working Blue",
+        "canonical": "#5aa7ff",
+        "tonalRamp": ["oklch(18% 0.05 255)", "oklch(30% 0.08 255)", "oklch(42% 0.11 255)", "oklch(55% 0.14 255)", "oklch(68% 0.13 255)", "oklch(78% 0.10 255)", "oklch(88% 0.06 255)", "oklch(96% 0.025 255)"]
+      },
+      "work-green": {
+        "role": "secondary",
+        "displayName": "Work Green",
+        "canonical": "#42c987",
+        "tonalRamp": ["oklch(18% 0.045 155)", "oklch(30% 0.07 155)", "oklch(42% 0.095 155)", "oklch(55% 0.12 155)", "oklch(68% 0.115 155)", "oklch(78% 0.08 155)", "oklch(88% 0.045 155)", "oklch(96% 0.02 155)"]
+      },
+      "system-amber": {
+        "role": "tertiary",
+        "displayName": "System Amber",
+        "canonical": "#f2a65a",
+        "tonalRamp": ["oklch(18% 0.045 60)", "oklch(30% 0.07 60)", "oklch(42% 0.095 60)", "oklch(55% 0.12 60)", "oklch(68% 0.115 60)", "oklch(78% 0.08 60)", "oklch(88% 0.045 60)", "oklch(96% 0.02 60)"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Dialog Title",
+        "purpose": "Blocking confirmation titles and rare panel-leading text."
+      },
+      "title": {
+        "displayName": "Canvas Node Title",
+        "purpose": "Node titles and canvas portal labels."
+      },
+      "body": {
+        "displayName": "Operational Body",
+        "purpose": "Node details and compact explanatory text."
+      },
+      "label": {
+        "displayName": "Chrome Label",
+        "purpose": "Toolbar, form, status, and row-level labels."
+      }
+    },
+    "shadows": [
+      {
+        "name": "chrome-float",
+        "value": "0 10px 30px rgba(0, 0, 0, 0.2)",
+        "purpose": "Topbar groups, brand block, statusbar, and node access panel in dark theme."
+      },
+      {
+        "name": "chrome-float-light",
+        "value": "0 12px 28px rgba(38, 50, 68, 0.14)",
+        "purpose": "Light-theme floating chrome."
+      },
+      {
+        "name": "node-selected",
+        "value": "0 6px 18px rgba(0, 0, 0, 0.38)",
+        "purpose": "Selected canvas nodes; selection remains stroke-led."
+      },
+      {
+        "name": "confirmation-modal",
+        "value": "0 18px 48px rgba(0, 0, 0, 0.34)",
+        "purpose": "Blocking destructive confirmations only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-fast",
+        "value": "160ms cubic-bezier(0.2, 0, 0.2, 1)",
+        "purpose": "Stack plane transform and opacity state transitions."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "transition-duration: 0ms when data-animation='off'",
+        "purpose": "Canvas stack animation shutdown path."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "mobile-wrap",
+        "value": "640px",
+        "purpose": "Wrap topbar groups, reduce icon buttons to 28px, and convert statusbar to two columns."
+      }
+    ],
+    "narrative": {
+      "northStar": "The Field Desk",
+      "overview": "Canaster should feel like a dependable work surface carried between office, site, and shared screen: compact, readable, sturdy, and ready for interruption. The current visual system is a restrained product interface with a dark canvas-first default, a light operational fallback, floating utility chrome, and precise blue selection feedback.\n\nThe system is not decorative. Panels float because they must stay available over the canvas; blur is an overlay legibility tool, not a visual theme. Color is sparse and functional: blue identifies selection and primary action, green marks successful or data-oriented state, amber marks system or pending state, and red is reserved for failure.",
+      "keyCharacteristics": [
+        "Canvas-first, chrome-second hierarchy.",
+        "Compact controls with stable dimensions.",
+        "Functional color only; no ornamental accents.",
+        "Clear focus, selection, sync, and disabled states.",
+        "Direct manipulation vocabulary for non-technical professionals."
+      ],
+      "rules": [
+        {
+          "name": "The State Owns Color Rule",
+          "body": "Blue, green, amber, gold, and red are state and type colors. Never use them as decoration.",
+          "section": "colors"
+        },
+        {
+          "name": "The Canvas Leads Rule",
+          "body": "The canvas background and grid establish the product atmosphere; panels must support the work surface, not compete with it.",
+          "section": "colors"
+        },
+        {
+          "name": "The No Hero Type Rule",
+          "body": "Canaster is a working tool, not a landing page. Do not introduce clamp-sized display headings, decorative type, or display fonts in app chrome.",
+          "section": "typography"
+        },
+        {
+          "name": "The Overlay Is Earned Rule",
+          "body": "Backdrop blur and shadows are allowed only for UI that must float above the canvas: toolbars, status, panels, previews, and blocking confirmation.",
+          "section": "elevation"
+        },
+        {
+          "name": "The Stroke Beats Glow Rule",
+          "body": "Selection is a blue stroke and focus outline first. Shadows may support state, but must not become the state indicator.",
+          "section": "elevation"
+        }
+      ],
+      "dos": [
+        "Do keep the canvas as the primary surface and let chrome float only where the user needs immediate control.",
+        "Do use Working Blue for selection, focus, and active affordances only.",
+        "Do preserve the 6px control radius and 8px panel/node radius unless a new component has a strong usability reason.",
+        "Do keep toolbar controls stable at 32px desktop and 28px mobile so icons never shift layout.",
+        "Do make sync, selection, disabled, loading, and error states visible through text, shape, icon, or stroke, not color alone.",
+        "Do use practical labels for non-technical professionals; object names should sound like work items, not graph/database primitives."
+      ],
+      "donts": [
+        "Don't make this feel like a developer diagramming tool, a BI dashboard, a generic whiteboard, or a novelty mind-map app.",
+        "Don't use terminal aesthetics, engineering jargon, dense admin-console chrome, overplayful collaboration cues, ornamental gradients, decorative canvas flourishes, or graph/database assumptions.",
+        "Don't introduce gradient text, decorative bokeh/orbs, diagonal stripe backgrounds, or oversized marketing typography.",
+        "Don't use side-stripe borders greater than 1px on cards, nodes, callouts, or alerts. Canvas node accent marks must remain small internal markers.",
+        "Don't pair a 1px decorative border with a wide soft shadow on generic cards. Shadows are for floating chrome, nodes, overlays, and blocking panels.",
+        "Don't use modal dialogs as the first solution for routine actions. Prefer inline panel states and direct manipulation unless the action blocks or destroys work."
+      ]
+    }
+  },
+  "components": [
+    {
+      "name": "Toolbar Icon Button",
+      "kind": "button",
+      "refersTo": "icon-button",
+      "description": "Compact square icon action used in the topbar.",
+      "html": "<button class=\"ds-icon-button\" aria-label=\"Fit view\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/></svg></button>",
+      "css": ".ds-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 0; border-radius: 6px; color: #c6ced8; background: transparent; cursor: pointer; } .ds-icon-button svg { width: 17px; height: 17px; } .ds-icon-button:hover { color: #eef2f6; background: rgba(90, 167, 255, 0.16); } .ds-icon-button:focus-visible { outline: 2px solid #5aa7ff; outline-offset: 2px; } .ds-icon-button:disabled { opacity: 0.42; cursor: default; }"
+    },
+    {
+      "name": "Floating Toolbar Group",
+      "kind": "nav",
+      "refersTo": "toolbar-panel",
+      "description": "Functional overlay shell for related canvas controls.",
+      "html": "<div class=\"ds-toolbar-group\"><button class=\"ds-mini-button\">-</button><span class=\"ds-toolbar-readout\">Canvas</span><button class=\"ds-mini-button\">+</button></div>",
+      "css": ".ds-toolbar-group { display: flex; align-items: center; gap: 4px; height: 40px; padding: 4px; border: 1px solid rgba(139, 150, 165, 0.22); border-radius: 8px; color: #eef2f6; background: rgba(24, 29, 37, 0.84); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2); backdrop-filter: blur(16px); } .ds-mini-button { width: 32px; height: 32px; border: 0; border-radius: 6px; color: #c6ced8; background: transparent; } .ds-mini-button:hover { color: #eef2f6; background: rgba(90, 167, 255, 0.16); } .ds-toolbar-readout { min-width: 48px; text-align: center; color: #c6ced8; font: 13px Inter, ui-sans-serif, system-ui, sans-serif; font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Compact Field",
+      "kind": "input",
+      "refersTo": "field-compact",
+      "description": "Document/auth field used inside the floating topbar.",
+      "html": "<input class=\"ds-compact-field\" value=\"Canaster Workspace\" aria-label=\"Document title\" />",
+      "css": ".ds-compact-field { width: 142px; height: 30px; min-width: 0; padding: 0 8px; border: 1px solid rgba(139, 150, 165, 0.22); border-radius: 6px; color: #c6ced8; background: rgba(255, 255, 255, 0.04); font: 12px Inter, ui-sans-serif, system-ui, sans-serif; outline: none; } .ds-compact-field:focus { border-color: #5aa7ff; } .ds-compact-field::placeholder { color: #8b96a5; }"
+    },
+    {
+      "name": "Status Bar",
+      "kind": "custom",
+      "refersTo": "toolbar-panel",
+      "description": "Bottom-left live readout for selection, pointer mode, render count, interaction, and canvas path.",
+      "html": "<div class=\"ds-statusbar\" role=\"status\"><span>No selection</span><span>Move over canvas</span><span>Drawn 5/5</span><span>Idle</span><span>Canvas root</span></div>",
+      "css": ".ds-statusbar { display: grid; grid-template-columns: 92px 92px 70px 112px minmax(0, 1fr); align-items: center; gap: 14px; width: min(520px, calc(100% - 28px)); height: 34px; padding: 0 12px; border: 1px solid rgba(139, 150, 165, 0.22); border-radius: 8px; color: #8b96a5; background: rgba(24, 29, 37, 0.84); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2); backdrop-filter: blur(16px); font: 12px Inter, ui-sans-serif, system-ui, sans-serif; font-variant-numeric: tabular-nums; } .ds-statusbar span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }"
+    },
+    {
+      "name": "Node Access Row",
+      "kind": "custom",
+      "refersTo": "field-compact",
+      "description": "Selectable row inside the node access panel.",
+      "html": "<div class=\"ds-node-row\"><button class=\"ds-node-select\" aria-pressed=\"true\"><span>Planning Surface</span><span>Card</span></button><button class=\"ds-node-toggle\" aria-pressed=\"false\">+</button><span class=\"ds-node-meta\">x -112, y -64, size 224x112</span></div>",
+      "css": ".ds-node-row { display: grid; grid-template-columns: minmax(0, 1fr) 30px; gap: 4px 6px; width: 290px; } .ds-node-select, .ds-node-toggle { height: 30px; border: 1px solid rgba(139, 150, 165, 0.22); border-radius: 6px; color: #c6ced8; background: rgba(255, 255, 255, 0.04); cursor: pointer; } .ds-node-select { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; padding: 0 8px; font: 12px Inter, ui-sans-serif, system-ui, sans-serif; } .ds-node-select span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-node-select span:last-child, .ds-node-meta { color: #8b96a5; font: 11px Inter, ui-sans-serif, system-ui, sans-serif; } .ds-node-select[aria-pressed='true'] { border-color: #5aa7ff; color: #eef2f6; background: rgba(90, 167, 255, 0.16); } .ds-node-toggle { font: 700 16px Inter, ui-sans-serif, system-ui, sans-serif; } .ds-node-meta { grid-column: 1 / -1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }"
+    },
+    {
+      "name": "Canvas Node",
+      "kind": "card",
+      "refersTo": "canvas-node",
+      "description": "Representative visual object on the canvas.",
+      "html": "<article class=\"ds-canvas-node\"><span class=\"ds-node-accent\"></span><h3>Nested Canvas</h3><p>This child canvas is live before the first click.</p><span class=\"ds-type-badge\">SYSTEM</span></article>",
+      "css": ".ds-canvas-node { position: relative; width: 256px; min-height: 128px; padding: 12px; border: 1.2px solid #303946; border-radius: 8px; color: #eef2f6; background: #1f2630; box-shadow: 0 6px 12px rgba(0, 0, 0, 0.38); font-family: Inter, ui-sans-serif, system-ui, sans-serif; } .ds-node-accent { display: block; width: 28px; height: 6px; border-radius: 3px; background: #f2a65a; } .ds-canvas-node h3 { margin: 10px 0 10px 4px; color: #eef2f6; font-size: 15px; line-height: 1.2; font-weight: 600; } .ds-canvas-node p { margin: 0 4px; color: #c6ced8; font-size: 13px; line-height: 18px; } .ds-type-badge { position: absolute; right: 12px; bottom: 12px; color: #8b96a5; font-size: 10px; font-weight: 600; letter-spacing: 0; }"
+    },
+    {
+      "name": "Confirmation Panel",
+      "kind": "custom",
+      "refersTo": "toolbar-panel",
+      "description": "Blocking confirmation shell for destructive actions.",
+      "html": "<section class=\"ds-confirmation\"><h2>Delete node?</h2><p>This removes the selected work item from the canvas.</p><div><button>Cancel</button><button>Delete</button></div></section>",
+      "css": ".ds-confirmation { width: min(360px, calc(100% - 32px)); padding: 18px; border: 1px solid rgba(139, 150, 165, 0.28); border-radius: 8px; color: #eef2f6; background: rgba(24, 29, 37, 0.96); box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34); font-family: Inter, ui-sans-serif, system-ui, sans-serif; } .ds-confirmation h2 { margin: 0 0 8px; font-size: 17px; line-height: 1.2; } .ds-confirmation p { margin: 0 0 14px; color: #8b96a5; font-size: 13px; line-height: 1.38; } .ds-confirmation div { display: flex; justify-content: flex-end; gap: 8px; } .ds-confirmation button { height: 32px; padding: 0 12px; border: 1px solid rgba(139, 150, 165, 0.24); border-radius: 6px; color: #c6ced8; background: rgba(24, 29, 37, 0.84); cursor: pointer; } .ds-confirmation button:focus-visible { outline: 2px solid #5aa7ff; outline-offset: 2px; }"
+    }
+  ]
+}

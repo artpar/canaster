@@ -3,6 +3,7 @@ export async function runCanwayNestedProbe() {
   const { planDocumentCommand, stripPortalChildReferenceOnPaste } = await import('/src/engine/documentCommands.ts');
   const { regionForContextVector } = await import('/src/engine/nested/parentContextField.ts');
   const { loadWorkspaceSnapshot } = await import('/src/engine/workspaceStorage.ts');
+  const starterWorkspaceStorageKey = 'starter:service-work-v2';
 
   const raf = async (count = 1) => {
     for (let i = 0; i < count; i++) await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -180,7 +181,7 @@ export async function runCanwayNestedProbe() {
   const historyAfterRedo = api.getWorkspaceSnapshot();
   await api.flushWorkspaceSnapshot();
   await raf(2);
-  const persistedSnapshot = await loadWorkspaceSnapshot();
+  const persistedSnapshot = await loadWorkspaceSnapshot(starterWorkspaceStorageKey);
   const persistedChild = persistedSnapshot?.history.present.documents[childCanvasId]?.model.nodes.find((node) => node.id === 'child-card');
 
   const contextFixture = makeContextFixture(createInitialDocumentCollection, planDocumentCommand, card, portal);

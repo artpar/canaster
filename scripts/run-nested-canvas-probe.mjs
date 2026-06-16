@@ -6,6 +6,7 @@ import net from 'node:net';
 
 const defaultChromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const chromePath = process.env.CANWAY_CHROME_PATH || process.env.CHROME_PATH || defaultChromePath;
+const STARTER_WORKSPACE_STORAGE_KEY = 'starter:service-work-v2';
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -276,7 +277,7 @@ async function runReloadPersistenceProbe(cdp) {
     const history = pushWorkspaceHistory(createWorkspaceHistory(base), collection);
     const snapshot = hydrateWorkspaceSnapshot(createWorkspaceSnapshot(history, { kind: 'active-canvas-change', from: 'root', to: 'persist-child', source: 'nonvisual' }));
     const record = {
-      id: 'default',
+      id: ${JSON.stringify(STARTER_WORKSPACE_STORAGE_KEY)},
       schemaVersion: 1,
       updatedAt: Date.now(),
       snapshot,
@@ -291,7 +292,7 @@ async function runReloadPersistenceProbe(cdp) {
   assert(seeded.activeCanvasId === 'persist-child' && seeded.hasPersistChild && seeded.undoStackLength > 0, `failed to seed reload persistence fixture: ${JSON.stringify(seeded)}`);
 
   const initScript = await cdp.send('Page.addScriptToEvaluateOnNewDocument', {
-    source: `window.localStorage.setItem('canway-workspace-snapshot:default', ${JSON.stringify(seeded.recordJson)});`,
+    source: `window.localStorage.setItem('canway-workspace-snapshot:${STARTER_WORKSPACE_STORAGE_KEY}', ${JSON.stringify(seeded.recordJson)});`,
   });
   await cdp.send('Page.reload', { ignoreCache: true });
   await waitForLoadedPage(cdp);
@@ -314,7 +315,7 @@ async function runReloadPersistenceProbe(cdp) {
     api = window.__canwayNested;
     collection = api?.getCollection?.() ?? collection;
     const snapshot = api?.getWorkspaceSnapshot?.() ?? null;
-    const persisted = await loadWorkspaceSnapshot();
+    const persisted = await loadWorkspaceSnapshot(${JSON.stringify(STARTER_WORKSPACE_STORAGE_KEY)});
     const rootPortal = collection?.documents?.root?.model.nodes.find((node) => node.id === 'persist-portal') ?? null;
     const childNode = collection?.documents?.['persist-child']?.model.nodes.find((node) => node.id === 'persist-child-card') ?? null;
     return {

@@ -24,6 +24,8 @@ import { sampleModel } from './engine/sampleModel';
 import type { CanvasCommand, CanvasModel, ThemeName } from './engine/types';
 import type { DocumentCommand } from './engine/documentTypes';
 
+const STARTER_WORKSPACE_STORAGE_KEY = 'starter:service-work-v2';
+
 export function App() {
   const workspaceRef = useRef<NestedCanvasWorkspaceHandle | null>(null);
   const ignoreDirtyUntilRef = useRef(0);
@@ -40,7 +42,7 @@ export function App() {
   const [syncStatus, setSyncStatus] = useState<'anonymous' | 'loading' | 'clean' | 'dirty' | 'saving' | 'error'>(() => (getToken() ? 'loading' : 'anonymous'));
   const [syncMessage, setSyncMessage] = useState(() => (getToken() ? 'Restoring session' : 'Local draft'));
   const initialCollection = useMemo(() => createSampleDocumentCollection(), []);
-  const workspaceStorageKey = activeDocumentId ? `daptin:${activeDocumentId}` : undefined;
+  const workspaceStorageKey = activeDocumentId ? `daptin:${activeDocumentId}` : STARTER_WORKSPACE_STORAGE_KEY;
   const [chromeState, setChromeState] = useState<NestedCanvasWorkspaceChromeState>(() => ({
     collection: initialCollection,
     status: initialViewportStatus,
@@ -384,34 +386,60 @@ const sampleNestedCanvasModel: CanvasModel = {
   schemaVersion: 2,
   nodes: [
     {
-      id: 'nested-brief',
+      id: 'site-summary',
       type: 'card',
-      x: -112,
-      y: -64,
-      w: 224,
+      x: -120,
+      y: -72,
+      w: 248,
       h: 112,
       data: {
-        title: 'Nested Canvas',
-        detail: 'This child canvas is live before the first click',
+        title: 'Customer and site',
+        detail: 'Address, contact, access notes, and arrival window',
+        accent: 'data',
+      },
+    },
+    {
+      id: 'work-checklist',
+      type: 'card',
+      x: 168,
+      y: -64,
+      w: 248,
+      h: 112,
+      data: {
+        title: 'Work checklist',
+        detail: 'Inspect, repair, test, clean up, and get sign-off',
+        accent: 'task',
+      },
+    },
+    {
+      id: 'parts-tools',
+      type: 'card',
+      x: -96,
+      y: 88,
+      w: 252,
+      h: 112,
+      data: {
+        title: 'Parts and tools',
+        detail: 'Items to bring, missing supplies, and return stock',
         accent: 'system',
       },
     },
     {
-      id: 'nested-note',
+      id: 'site-note',
       type: 'text',
-      x: 160,
-      y: 32,
-      w: 220,
+      x: 196,
+      y: 96,
+      w: 236,
       h: 120,
       data: {
-        text: 'Parent context stays visible around this plane.',
+        text: 'Keep notes here while the full day stays visible one level up.',
       },
     },
   ],
 };
 
 function createSampleDocumentCollection() {
-  const collectionWithRoot = createInitialDocumentCollection(sampleModel, 'Root');
+  const collectionWithRoot = createInitialDocumentCollection(sampleModel, 'Work board');
   const collectionWithChild = createChildCanvasForNode(collectionWithRoot, 'root', 'planning-canvas');
   const portal = collectionWithChild.documents.root.model.nodes.find((node) => node.id === 'planning-canvas');
   const childCanvasId = typeof portal?.data.childCanvasId === 'string' ? portal.data.childCanvasId : null;

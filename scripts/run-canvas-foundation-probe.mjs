@@ -164,7 +164,7 @@ function assertProbe(result, browserEvents) {
   assert(result.app.sequentialFocusables.findIndex((entry) => entry.tag === 'canvas') >= 5, 'toolbar controls should remain before canvas in tab order');
   assert(result.app.nodeAccess.label === 'Canvas nodes', 'node access panel is missing');
   assert(result.app.nodeAccess.nodeCount === 5, 'node access panel does not expose all sample nodes');
-  assert(result.app.nodeAccess.nodeLabels.some((label) => label.includes('Source Model')), 'node access panel missing Source Model');
+  assert(result.app.nodeAccess.nodeLabels.some((label) => label.includes('New requests')), 'node access panel missing New requests');
   assert(result.app.nodeAccess.actionLabels.includes('Move selection right'), 'node access move command missing');
   assert(result.app.nodeAccess.actionLabels.includes('Delete selection'), 'node access delete command missing');
 

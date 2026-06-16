@@ -597,6 +597,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
           theme={theme}
           stageRect={stageRect}
           paneLayout={paneLayout}
+          currentView
           onPaneLayoutChange={(nextLayout) => {
             const current = collectionRef.current.view.paneLayouts[collectionRef.current.activeCanvasId] ?? DEFAULT_PARENT_CONTEXT_PANE_LAYOUT;
             const resolved = typeof nextLayout === 'function' ? nextLayout(current) : nextLayout;
@@ -835,12 +836,15 @@ function EmbeddedNestedViewport({
     () => paneLayoutForCenterRatio(stageRect, EMBEDDED_FIELD_CENTER_RATIO, EMBEDDED_PARENT_CONTEXT_CONSTRAINTS),
     [stageRect],
   );
-  const paneLayout = collection.view.paneLayouts[canvasId] ?? defaultPaneLayout;
+  const savedPaneLayout = collection.view.paneLayouts[canvasId];
+  const paneLayout = useMemo(
+    () => embeddedPaneLayoutFor(stageRect, savedPaneLayout, defaultPaneLayout),
+    [defaultPaneLayout, savedPaneLayout, stageRect],
+  );
   const setEmbeddedPaneLayout: Dispatch<SetStateAction<ParentContextPaneLayout>> = useCallback((next) => {
-    const base = collection.view.paneLayouts[canvasId] ?? defaultPaneLayout;
-    const resolved = typeof next === 'function' ? next(base) : next;
+    const resolved = typeof next === 'function' ? next(paneLayout) : next;
     onPaneLayoutChange(canvasId, normalizeParentContextPaneLayout(stageRect, resolved, EMBEDDED_PARENT_CONTEXT_CONSTRAINTS));
-  }, [canvasId, collection.view.paneLayouts, defaultPaneLayout, onPaneLayoutChange, stageRect]);
+  }, [canvasId, onPaneLayoutChange, paneLayout, stageRect]);
   const contextField = useMemo(
     () => buildParentContextField(collection, stageRect, canvasId, paneLayout, EMBEDDED_PARENT_CONTEXT_CONSTRAINTS),
     [collection, stageRect, canvasId, paneLayout],
@@ -912,6 +916,7 @@ function EmbeddedNestedViewport({
           theme={theme}
           stageRect={stageRect}
           paneLayout={paneLayout}
+          currentView={false}
           onPaneLayoutChange={setEmbeddedPaneLayout}
           paneLayoutConstraints={EMBEDDED_PARENT_CONTEXT_CONSTRAINTS}
           liveCanvasCapacity={contextCapacity}
@@ -1050,6 +1055,7 @@ function ParentContextField({
   theme,
   stageRect,
   paneLayout,
+  currentView = false,
   onPaneLayoutChange,
   liveCanvasCapacity,
   onStatus,
@@ -1065,6 +1071,7 @@ function ParentContextField({
   theme: ThemeName;
   stageRect: DOMRect;
   paneLayout: ParentContextPaneLayout;
+  currentView?: boolean;
   onPaneLayoutChange: Dispatch<SetStateAction<ParentContextPaneLayout>>;
   paneLayoutConstraints?: ParentContextPaneLayoutConstraints;
   liveCanvasCapacity: number;
@@ -1133,6 +1140,7 @@ function ParentContextField({
         stageRect={stageRect}
         paneLayout={normalizedPaneLayout}
         paneLayoutConstraints={paneLayoutConstraints}
+        currentView={currentView}
         onPaneLayoutChange={onPaneLayoutChange}
       />
       <svg className="parent-context-field" viewBox={`0 0 ${stageRect.width} ${stageRect.height}`} role="group">
@@ -1196,11 +1204,13 @@ function ParentContextResizers({
   stageRect,
   paneLayout,
   paneLayoutConstraints,
+  currentView,
   onPaneLayoutChange,
 }: {
   stageRect: DOMRect;
   paneLayout: ParentContextPaneLayout;
   paneLayoutConstraints: ParentContextPaneLayoutConstraints;
+  currentView: boolean;
   onPaneLayoutChange: Dispatch<SetStateAction<ParentContextPaneLayout>>;
 }) {
   const dragRef = useRef<{ handle: ParentContextResizeHandle; startX: number; startY: number; startLayout: ParentContextPaneLayout } | null>(null);
@@ -1257,7 +1267,7 @@ function ParentContextResizers({
   });
 
   return (
-    <div className="parent-context-resizers" aria-label="Resize parent context panes">
+    <div className="parent-context-resizers" aria-label="Resize parent context panes" data-current-view={currentView ? 'true' : 'false'}>
       <button {...handleProps('left', 'Resize west panes', { left: paneLayout.left - 3, top: paneLayout.top, width: 6, height: centerH })} />
       <button {...handleProps('right', 'Resize east panes', { left: rightX - 3, top: paneLayout.top, width: 6, height: centerH })} />
       <button {...handleProps('top', 'Resize north panes', { left: paneLayout.left, top: paneLayout.top - 3, width: centerW, height: 6 })} />
@@ -1303,6 +1313,27 @@ function parentContextGridStyle(paneLayout: ParentContextPaneLayout): CSSPropert
     gridTemplateColumns: `${paneLayout.left}px minmax(0, 1fr) ${paneLayout.right}px`,
     gridTemplateRows: `${paneLayout.top}px minmax(0, 1fr) ${paneLayout.bottom}px`,
   };
+}
+
+function embeddedPaneLayoutFor(
+  stageRect: DOMRect,
+  savedLayout: ParentContextPaneLayout | undefined,
+  compactLayout: ParentContextPaneLayout,
+): ParentContextPaneLayout {
+  if (!savedLayout) return compactLayout;
+  const width = Math.max(1, stageRect.width);
+  const height = Math.max(1, stageRect.height);
+  const normalized = normalizeParentContextPaneLayout(stageRect, savedLayout, EMBEDDED_PARENT_CONTEXT_CONSTRAINTS);
+  const centerW = Math.max(1, width - normalized.left - normalized.right);
+  const centerH = Math.max(1, height - normalized.top - normalized.bottom);
+  const panesDominatePreview =
+    centerW / width < EMBEDDED_FIELD_CENTER_RATIO * 0.78 ||
+    centerH / height < EMBEDDED_FIELD_CENTER_RATIO * 0.78 ||
+    normalized.left > width * 0.22 ||
+    normalized.right > width * 0.22 ||
+    normalized.top > height * 0.22 ||
+    normalized.bottom > height * 0.22;
+  return panesDominatePreview ? compactLayout : normalized;
 }
 
 function parentContextCanvasStyle(shape: ParentContextFieldShape): CSSProperties {
