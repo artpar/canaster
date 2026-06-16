@@ -70,6 +70,7 @@ export type NestedCanvasWorkspaceProps = {
   initialCollection: CanvasDocumentCollection;
   theme: ThemeName;
   animationEnabled?: boolean;
+  fitOnFirstLoad?: boolean;
   storageKey?: string;
   onCollectionChange?: (collection: CanvasDocumentCollection, changes: DocumentModelChange[]) => void;
   onChromeStateChange?: (state: NestedCanvasWorkspaceChromeState) => void;
@@ -120,8 +121,18 @@ const EMBEDDED_PARENT_CONTEXT_CONSTRAINTS = {
   minCenterBand: EMBEDDED_FIELD_MIN_CENTER_BAND,
 };
 
+function sameCamera(a: Camera, b: Camera): boolean {
+  return a.x === b.x && a.y === b.y && a.scale === b.scale;
+}
+
+function sameSelectionState(a: CanvasSelectionState, b: CanvasSelectionState): boolean {
+  if (a.primarySelectedNodeId !== b.primarySelectedNodeId || a.resizeMode !== b.resizeMode) return false;
+  if (a.selectedNodeIds.length !== b.selectedNodeIds.length) return false;
+  return a.selectedNodeIds.every((nodeId, index) => nodeId === b.selectedNodeIds[index]);
+}
+
 export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, NestedCanvasWorkspaceProps>(function NestedCanvasWorkspace(
-  { initialCollection, theme, animationEnabled = true, storageKey = DEFAULT_WORKSPACE_STORAGE_ID, onCollectionChange, onChromeStateChange },
+  { initialCollection, theme, animationEnabled = true, fitOnFirstLoad = false, storageKey = DEFAULT_WORKSPACE_STORAGE_ID, onCollectionChange, onChromeStateChange },
   ref,
 ) {
   const initialStorageSnapshotRef = useRef<CanvasWorkspaceSnapshot | null | undefined>(undefined);
@@ -140,9 +151,12 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
   const lastModelChangeRef = useRef<DocumentModelChange | null>(initialStorageSnapshotRef.current?.lastModelChange ?? null);
   const storageReadyRef = useRef(false);
   const userMutationBeforeStorageReadyRef = useRef(false);
+  const restoredFromStorageRef = useRef(Boolean(initialStorageSnapshotRef.current));
+  const didAutoFitInitialViewRef = useRef(false);
   const saveChainRef = useRef<Promise<void>>(Promise.resolve());
   const saveRevisionRef = useRef(0);
   const activeEngineRef = useRef<CanvasEngine | null>(null);
+  const [storageSettled, setStorageSettled] = useState(false);
   const [status, setStatus] = useState<ViewportStatus>(() => (
     initialStorageSnapshotRef.current
       ? { ...initialViewportStatus, interaction: 'Workspace restored' }
@@ -198,8 +212,12 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     let canceled = false;
     storageReadyRef.current = false;
     userMutationBeforeStorageReadyRef.current = false;
+    restoredFromStorageRef.current = Boolean(loadWorkspaceSnapshotMirror(storageKey));
+    didAutoFitInitialViewRef.current = false;
+    setStorageSettled(false);
     loadWorkspaceSnapshot(storageKey)
       .then((snapshot) => {
+        if (snapshot) restoredFromStorageRef.current = true;
         if (canceled || !snapshot || userMutationBeforeStorageReadyRef.current) return;
         historyRef.current = snapshot.history;
         collectionRef.current = snapshot.history.present;
@@ -213,6 +231,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
       })
       .finally(() => {
         storageReadyRef.current = true;
+        setStorageSettled(true);
         if (userMutationBeforeStorageReadyRef.current) {
           persistWorkspaceSnapshot(createWorkspaceSnapshot(historyRef.current, lastModelChangeRef.current));
         }
@@ -289,6 +308,27 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     if (changes.length) setLastModelChange(changes[changes.length - 1]);
     onCollectionChange?.(nextHistory.present, changes);
   }, [mirrorWorkspaceSnapshot, onCollectionChange]);
+
+  useEffect(() => {
+    if (!fitOnFirstLoad) return;
+    if (!storageSettled) return;
+    if (restoredFromStorageRef.current) return;
+    if (didAutoFitInitialViewRef.current) return;
+    if (collection.activeCanvasId !== collection.rootCanvasId) return;
+    if (activeStageRect.width <= 1 || activeStageRect.height <= 1) return;
+    if (!activeEngineRef.current) return;
+    didAutoFitInitialViewRef.current = true;
+    const frame = window.requestAnimationFrame(() => {
+      const engine = activeEngineRef.current;
+      if (!engine) return;
+      engine.fit();
+      const base = collectionRef.current;
+      const fitted = setCameraForCanvas(base, base.activeCanvasId, engine.getCamera());
+      commitCollection(fitted, [], { recordHistory: false });
+      setStatus((current) => ({ ...current, interaction: 'Fit view' }));
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeStageRect.height, activeStageRect.width, collection.activeCanvasId, collection.rootCanvasId, commitCollection, fitOnFirstLoad, storageSettled]);
 
   const commitWorkspaceHistory = useCallback((nextHistory: CanvasWorkspaceHistory, interaction: string) => {
     if (!storageReadyRef.current) userMutationBeforeStorageReadyRef.current = true;
@@ -386,8 +426,17 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     if (!engine) return;
     if (!storageReadyRef.current) return;
     const base = collectionRef.current;
-    const withCamera = setCameraForCanvas(base, base.activeCanvasId, engine.getCamera());
-    const withSelection = setSelectionForCanvas(withCamera, base.activeCanvasId, engine.getSelectionState());
+    const nextCamera = engine.getCamera();
+    const nextSelection = engine.getSelectionState();
+    const currentCamera = cameraForCanvas(base, base.activeCanvasId);
+    const currentSelection = selectionForCanvas(base, base.activeCanvasId);
+    if (sameCamera(currentCamera, nextCamera) && sameSelectionState(currentSelection, nextSelection)) return;
+    const withCamera = sameCamera(currentCamera, nextCamera)
+      ? base
+      : setCameraForCanvas(base, base.activeCanvasId, nextCamera);
+    const withSelection = sameSelectionState(currentSelection, nextSelection)
+      ? withCamera
+      : setSelectionForCanvas(withCamera, base.activeCanvasId, nextSelection);
     commitCollection(withSelection, [], { recordHistory: false });
   }, [commitCollection]);
 
@@ -395,8 +444,17 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     if (!storageReadyRef.current) return;
     const base = collectionRef.current;
     if (!base.documents[canvasId]) return;
-    const withCamera = setCameraForCanvas(base, canvasId, engine.getCamera());
-    const withSelection = setSelectionForCanvas(withCamera, canvasId, engine.getSelectionState());
+    const nextCamera = engine.getCamera();
+    const nextSelection = engine.getSelectionState();
+    const currentCamera = cameraForCanvas(base, canvasId);
+    const currentSelection = selectionForCanvas(base, canvasId);
+    if (sameCamera(currentCamera, nextCamera) && sameSelectionState(currentSelection, nextSelection)) return;
+    const withCamera = sameCamera(currentCamera, nextCamera)
+      ? base
+      : setCameraForCanvas(base, canvasId, nextCamera);
+    const withSelection = sameSelectionState(currentSelection, nextSelection)
+      ? withCamera
+      : setSelectionForCanvas(withCamera, canvasId, nextSelection);
     commitCollection(withSelection, [], { recordHistory: false });
   }, [commitCollection]);
 

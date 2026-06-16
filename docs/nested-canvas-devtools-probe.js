@@ -3,7 +3,7 @@ export async function runCanwayNestedProbe() {
   const { planDocumentCommand, stripPortalChildReferenceOnPaste } = await import('/src/engine/documentCommands.ts');
   const { regionForContextVector } = await import('/src/engine/nested/parentContextField.ts');
   const { loadWorkspaceSnapshot } = await import('/src/engine/workspaceStorage.ts');
-  const starterWorkspaceStorageKey = 'starter:service-work-v2';
+  const starterWorkspaceStorageKey = 'starter:service-business-atlas-v3';
 
   const raf = async (count = 1) => {
     for (let i = 0; i < count; i++) await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -86,6 +86,15 @@ export async function runCanwayNestedProbe() {
     statusbarOutsideNestedWorkspace: Boolean(document.querySelector('.workspace > .statusbar')),
   };
 
+  const probeRoot = {
+    schemaVersion: 2,
+    nodes: [
+      portal('planning-canvas', 0, 0, null, 'Planning Canvas'),
+      card('root-card', 360, 24, 'Root Card'),
+    ],
+  };
+  api.replaceCollection(createInitialDocumentCollection(probeRoot, 'Nested Probe Root'));
+  await raf(12);
   const initial = api.getCollection();
   const schema = {
     collection: initial.schemaVersion,
@@ -110,6 +119,10 @@ export async function runCanwayNestedProbe() {
         height: childCenterRect.height / childViewportRect.height,
       }
     : null;
+  const childViewportSize = {
+    width: childViewportRect.width,
+    height: childViewportRect.height,
+  };
   const transparentActivationCount = document.querySelectorAll('.portal-activation').length;
 
   const withChildChange = cloneDocumentCollection(afterCreate);
@@ -341,6 +354,7 @@ export async function runCanwayNestedProbe() {
       mounted: Boolean(previewCanvas),
       transparentActivationCount,
       update: previewUpdate,
+      childViewportSize,
       childCenterPaneRatio,
       pointerDidNotEnter: activeBeforePointer === activeAfterPointer,
       wheelChangedChildCamera: afterEmbeddedWheel.view.cameras[childCanvasId]?.scale !== beforeEmbeddedWheel.view.cameras[childCanvasId]?.scale,

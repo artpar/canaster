@@ -6,7 +6,7 @@ import net from 'node:net';
 
 const defaultChromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const chromePath = process.env.CANWAY_CHROME_PATH || process.env.CHROME_PATH || defaultChromePath;
-const STARTER_WORKSPACE_STORAGE_KEY = 'starter:service-work-v2';
+const STARTER_WORKSPACE_STORAGE_KEY = 'starter:service-business-atlas-v3';
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -137,9 +137,12 @@ function assertProbe(result, browserEvents) {
   assert(result.preview.mounted, 'embedded child canvas missing');
   assert(result.preview.transparentActivationCount === 0, 'transparent portal activation overlay still blocks pointer interaction');
   assert(result.preview.update.total === '1', 'preview canvas did not reflect child model update');
+  const expectedEmbeddedWidth = expectedEmbeddedCenterRatio(result.preview.childViewportSize?.width ?? 0);
+  const expectedEmbeddedHeight = expectedEmbeddedCenterRatio(result.preview.childViewportSize?.height ?? 0);
   assert(
-    Math.abs(result.preview.childCenterPaneRatio?.width - 0.8) <= 0.04 && Math.abs(result.preview.childCenterPaneRatio?.height - 0.8) <= 0.04,
-    `embedded child center pane is not 80% of its panel: ${JSON.stringify(result.preview.childCenterPaneRatio)}`,
+    Math.abs(result.preview.childCenterPaneRatio?.width - expectedEmbeddedWidth) <= 0.04 &&
+      Math.abs(result.preview.childCenterPaneRatio?.height - expectedEmbeddedHeight) <= 0.04,
+    `embedded child center pane ratio mismatch: ${JSON.stringify({ actual: result.preview.childCenterPaneRatio, expected: { width: expectedEmbeddedWidth, height: expectedEmbeddedHeight }, viewport: result.preview.childViewportSize })}`,
   );
   assert(result.preview.pointerDidNotEnter, 'single pointer interaction entered child canvas');
   assert(result.preview.wheelChangedChildCamera && result.preview.wheelKeptParentCamera, 'embedded portal wheel did not target only the child canvas camera');
@@ -198,6 +201,16 @@ function assertProbe(result, browserEvents) {
     return true;
   });
   assert(severeBrowserEvents.length === 0, `browser console/network events found: ${JSON.stringify(severeBrowserEvents)}`);
+}
+
+function expectedEmbeddedCenterRatio(total) {
+  const size = Math.max(1, Number(total) || 1);
+  const minPane = Math.min(8, Math.max(1, size / 4));
+  const minCenter = Math.min(32, Math.max(1, size - minPane * 2));
+  const desiredPane = size * 0.1;
+  const maxPane = Math.max(minPane, (size - minCenter) / 2);
+  const pane = Math.max(minPane, Math.min(desiredPane, maxPane));
+  return (size - pane * 2) / size;
 }
 
 function assertReloadPersistenceProbe(result) {

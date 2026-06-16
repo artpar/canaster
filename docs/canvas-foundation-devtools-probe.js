@@ -1,7 +1,6 @@
 export async function runCanwayFoundationProbe() {
   const { CanvasEngine } = await import('/src/engine/CanvasEngine.ts');
   const { describeNode } = await import('/src/engine/nodeTypes/registry.ts');
-  const { sampleModel } = await import('/src/engine/sampleModel.ts');
   const SNAP_STEP = 32;
 
   const raf = async (count = 1) => {
@@ -47,6 +46,13 @@ export async function runCanwayFoundationProbe() {
     h: 180,
     data,
   });
+  const probeModel = modelOf([
+    makeCardNode('source', 128, 128, 272, 128, 'Probe source', 'Primary fixture node for pointer and command checks', 'data'),
+    makeCardNode('planner', 448, 96, 280, 128, 'Probe planner', 'Second fixture node for multi-selection checks', 'task'),
+    makeCardNode('renderer', 256, 352, 296, 128, 'Probe renderer', 'Lower fixture node for culling and fit balance', 'data'),
+    makeCardNode('extensions', 640, 416, 296, 128, 'Probe extension', 'Wide fixture node for navigation coverage', 'system'),
+    makeCanvasNode('planning-canvas', 800, 160, { childCanvasId: null, title: 'Probe canvas', nodeCount: 0 }),
+  ]);
   const modelBounds = (model) => {
     if (!model.nodes.length) return null;
     let x0 = Infinity;
@@ -165,8 +171,8 @@ export async function runCanwayFoundationProbe() {
       }
     : null;
 
-  const modelBoundary = await withEngine(sampleModel, async ({ canvas, engine, changes, camera }) => {
-    const source = sampleModel.nodes.find((node) => node.id === 'source');
+  const modelBoundary = await withEngine(probeModel, async ({ canvas, engine, changes, camera }) => {
+    const source = probeModel.nodes.find((node) => node.id === 'source');
     const center = screen(camera, source.x + source.w / 2, source.y + source.h / 2);
     const deltas = {};
     const mark = async (name, action) => {
@@ -219,8 +225,8 @@ export async function runCanwayFoundationProbe() {
     return { deltas, changes: changes.map((entry) => entry.change) };
   });
 
-  const overlappingResize = await withEngine(sampleModel, async ({ canvas, changes, camera }) => {
-    let source = sampleModel.nodes.find((node) => node.id === 'source');
+  const overlappingResize = await withEngine(probeModel, async ({ canvas, changes, camera }) => {
+    let source = probeModel.nodes.find((node) => node.id === 'source');
     const center = screen(camera, source.x + source.w / 2, source.y + source.h / 2);
     dispatchPointer(canvas, 'pointerdown', center.x, center.y, 200);
     dispatchPointer(window, 'pointerup', center.x, center.y, 200);
@@ -240,7 +246,7 @@ export async function runCanwayFoundationProbe() {
     return { counts, changes: changes.map((entry) => entry.change), finalSource: source };
   });
 
-  const navigationContract = await withEngine(sampleModel, async ({ canvas, engine, changes }) => {
+  const navigationContract = await withEngine(probeModel, async ({ canvas, engine, changes }) => {
     const worldAt = (x, y) => ({ x: (x - engine.camera.x) / engine.camera.scale, y: (y - engine.camera.y) / engine.camera.scale });
     const result = {};
 
@@ -378,7 +384,7 @@ export async function runCanwayFoundationProbe() {
     { width: 1500, height: 700, fit: false },
   );
 
-  const keyboardContract = await withEngine(sampleModel, async ({ canvas, engine, changes, statuses }) => {
+  const keyboardContract = await withEngine(probeModel, async ({ canvas, engine, changes, statuses }) => {
     canvas.focus({ preventScroll: true });
 
     const noSelectionBefore = changes.length;
@@ -439,7 +445,7 @@ export async function runCanwayFoundationProbe() {
     };
   });
 
-  const advancedEditing = await withEngine(sampleModel, async ({ canvas, engine, changes, statuses }) => {
+  const advancedEditing = await withEngine(probeModel, async ({ canvas, engine, changes, statuses }) => {
     const result = {};
     const beforeNoop = changes.length;
     result.noSelectionDelete = engine.executeCommand({ type: 'delete-selection', source: 'keyboard' }) === false;
@@ -485,7 +491,7 @@ export async function runCanwayFoundationProbe() {
       selectionCount: statuses.at(-1)?.selectionCount,
     };
 
-    engine.setModel(cloneModel(sampleModel));
+    engine.setModel(cloneModel(probeModel));
     await raf(2);
     engine.executeCommand({ type: 'select-node', nodeId: 'source', source: 'nonvisual' });
     engine.executeCommand({ type: 'select-node', nodeId: 'planner', mode: 'toggle', source: 'nonvisual' });
@@ -536,7 +542,7 @@ export async function runCanwayFoundationProbe() {
       selectionCount: statuses.at(-1)?.selectionCount,
     };
 
-    engine.setModel(cloneModel(sampleModel));
+    engine.setModel(cloneModel(probeModel));
     await raf(2);
     engine.executeCommand({ type: 'select-node', nodeId: 'source', source: 'nonvisual' });
     engine.executeCommand({ type: 'select-node', nodeId: 'planner', mode: 'toggle', source: 'nonvisual' });
@@ -566,7 +572,7 @@ export async function runCanwayFoundationProbe() {
     return result;
   });
 
-  const commandExecutor = await withEngine(sampleModel, async ({ engine, changes }) => {
+  const commandExecutor = await withEngine(probeModel, async ({ engine, changes }) => {
     const result = {};
     result.selectReturned = engine.executeCommand({ type: 'select-node', nodeId: 'source', mode: 'replace', source: 'ai' });
     const beforeMove = changes.length;
@@ -673,7 +679,7 @@ export async function runCanwayFoundationProbe() {
     { width: 420, height: 320, fit: false },
   );
 
-  const cancellation = await withEngine(sampleModel, async ({ canvas, engine, changes, camera }) => {
+  const cancellation = await withEngine(probeModel, async ({ canvas, engine, changes, camera }) => {
     const source = engine.model.nodes.find((node) => node.id === 'source');
     const original = { x: source.x, y: source.y, w: source.w, h: source.h };
     const center = screen(camera, source.x + source.w / 2, source.y + source.h / 2);
@@ -752,8 +758,8 @@ export async function runCanwayFoundationProbe() {
     return results;
   });
 
-  const touchPointerOwnership = await withEngine(sampleModel, async ({ canvas, changes, camera }) => {
-    const source = sampleModel.nodes.find((node) => node.id === 'source');
+  const touchPointerOwnership = await withEngine(probeModel, async ({ canvas, changes, camera }) => {
+    const source = probeModel.nodes.find((node) => node.id === 'source');
     const center = screen(camera, source.x + source.w / 2, source.y + source.h / 2);
 
     dispatchPointer(canvas, 'pointerdown', center.x, center.y, 21, 'touch');
@@ -772,7 +778,7 @@ export async function runCanwayFoundationProbe() {
     };
   });
 
-  const multiTouchPolicy = await withEngine(sampleModel, async ({ canvas, engine, changes }) => {
+  const multiTouchPolicy = await withEngine(probeModel, async ({ canvas, engine, changes }) => {
     const source = engine.model.nodes.find((node) => node.id === 'source');
     const originalSource = { x: source.x, y: source.y, w: source.w, h: source.h };
     const screenPoint = (x, y) => ({ x: engine.camera.x + x * engine.camera.scale, y: engine.camera.y + y * engine.camera.scale });
@@ -913,11 +919,11 @@ export async function runCanwayFoundationProbe() {
           onStatus: () => statusCallbackCount++,
           onModelChange: () => modelCallbackCount++,
         });
-        engine.setModel(cloneModel(sampleModel));
+        engine.setModel(cloneModel(probeModel));
         engine.fit();
         await raf(2);
-        const camera = fitCamera(sampleModel, 640, 420);
-        const source = sampleModel.nodes.find((node) => node.id === 'source');
+        const camera = fitCamera(probeModel, 640, 420);
+        const source = probeModel.nodes.find((node) => node.id === 'source');
         const center = screen(camera, source.x + source.w / 2, source.y + source.h / 2);
         const blank = screen(camera, source.x - 70, source.y - 70);
         const handle = screen(camera, source.x + source.w - 12, source.y + source.h - 12);
@@ -1103,7 +1109,7 @@ export async function runCanwayFoundationProbe() {
     try {
       const canvas = makeCanvas(400, 300);
       const engine = new CanvasEngine(canvas, { onModelChange: (_model, change) => changes.push(change) });
-      engine.setModel(cloneModel(sampleModel));
+      engine.setModel(cloneModel(probeModel));
       engine.fit();
       await raf(1);
       engine.dispose();

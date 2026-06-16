@@ -11,7 +11,7 @@ import {
   type CanasterDocumentSummary,
 } from './backend/canasterDocuments';
 import { DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY, DAPTIN_LAST_EMAIL_STORAGE_KEY, getToken } from './backend/daptinClient';
-import { createChildCanvasForNode, createInitialDocumentCollection, updateCanvasModel } from './engine/documentModel';
+import { defaultStarterCollection, STARTER_WORKSPACE_STORAGE_KEY } from './catalog/starterCatalog';
 import {
   NestedCanvasWorkspace,
   NodeAccessPanel,
@@ -20,11 +20,8 @@ import {
   type NestedCanvasWorkspaceChromeState,
   type NestedCanvasWorkspaceHandle,
 } from './engine/nested/NestedCanvasWorkspace';
-import { sampleModel } from './engine/sampleModel';
-import type { CanvasCommand, CanvasModel, ThemeName } from './engine/types';
+import type { CanvasCommand, ThemeName } from './engine/types';
 import type { DocumentCommand } from './engine/documentTypes';
-
-const STARTER_WORKSPACE_STORAGE_KEY = 'starter:service-work-v2';
 
 export function App() {
   const workspaceRef = useRef<NestedCanvasWorkspaceHandle | null>(null);
@@ -41,7 +38,7 @@ export function App() {
   const [documentTitle, setDocumentTitle] = useState('Canaster Workspace');
   const [syncStatus, setSyncStatus] = useState<'anonymous' | 'loading' | 'clean' | 'dirty' | 'saving' | 'error'>(() => (getToken() ? 'loading' : 'anonymous'));
   const [syncMessage, setSyncMessage] = useState(() => (getToken() ? 'Restoring session' : 'Local draft'));
-  const initialCollection = useMemo(() => createSampleDocumentCollection(), []);
+  const initialCollection = useMemo(() => defaultStarterCollection(), []);
   const workspaceStorageKey = activeDocumentId ? `daptin:${activeDocumentId}` : STARTER_WORKSPACE_STORAGE_KEY;
   const [chromeState, setChromeState] = useState<NestedCanvasWorkspaceChromeState>(() => ({
     collection: initialCollection,
@@ -346,6 +343,7 @@ export function App() {
           ref={workspaceRef}
           initialCollection={initialCollection}
           theme={theme}
+          fitOnFirstLoad={!activeDocumentId}
           storageKey={workspaceStorageKey}
           onCollectionChange={handleWorkspaceCollectionChange}
           onChromeStateChange={handleChromeStateChange}
@@ -380,70 +378,6 @@ function userFacingError(message: string): string {
 
 function snapshotSignature(snapshot: unknown): string {
   return JSON.stringify(snapshot);
-}
-
-const sampleNestedCanvasModel: CanvasModel = {
-  schemaVersion: 2,
-  nodes: [
-    {
-      id: 'site-summary',
-      type: 'card',
-      x: -120,
-      y: -72,
-      w: 248,
-      h: 112,
-      data: {
-        title: 'Customer and site',
-        detail: 'Address, contact, access notes, and arrival window',
-        accent: 'data',
-      },
-    },
-    {
-      id: 'work-checklist',
-      type: 'card',
-      x: 168,
-      y: -64,
-      w: 248,
-      h: 112,
-      data: {
-        title: 'Work checklist',
-        detail: 'Inspect, repair, test, clean up, and get sign-off',
-        accent: 'task',
-      },
-    },
-    {
-      id: 'parts-tools',
-      type: 'card',
-      x: -96,
-      y: 88,
-      w: 252,
-      h: 112,
-      data: {
-        title: 'Parts and tools',
-        detail: 'Items to bring, missing supplies, and return stock',
-        accent: 'system',
-      },
-    },
-    {
-      id: 'site-note',
-      type: 'text',
-      x: 196,
-      y: 96,
-      w: 236,
-      h: 120,
-      data: {
-        text: 'Keep notes here while the full day stays visible one level up.',
-      },
-    },
-  ],
-};
-
-function createSampleDocumentCollection() {
-  const collectionWithRoot = createInitialDocumentCollection(sampleModel, 'Work board');
-  const collectionWithChild = createChildCanvasForNode(collectionWithRoot, 'root', 'planning-canvas');
-  const portal = collectionWithChild.documents.root.model.nodes.find((node) => node.id === 'planning-canvas');
-  const childCanvasId = typeof portal?.data.childCanvasId === 'string' ? portal.data.childCanvasId : null;
-  return childCanvasId ? updateCanvasModel(collectionWithChild, childCanvasId, sampleNestedCanvasModel) : collectionWithChild;
 }
 
 type IconButtonProps = {

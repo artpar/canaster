@@ -1,0 +1,682 @@
+{
+  "id": "service-business-atlas",
+  "title": "Field Service Knowledge Atlas",
+  "summary": "A starter knowledge map for teams that receive requests, schedule people, visit sites, record evidence, and close the money loop.",
+  "audience": "Non-technical white- and blue-collar professionals who need shared operating clarity without spreadsheet or ticket-system framing.",
+  "tags": ["field-service", "operations", "knowledge-map", "starter"],
+  "storageKey": "starter:service-business-atlas-v3",
+  "collection": {
+    "schemaVersion": 1,
+    "rootCanvasId": "root",
+    "activeCanvasId": "root",
+    "documents": {
+      "root": {
+        "id": "root",
+        "title": "Field Service Knowledge Atlas",
+        "parentCanvasId": null,
+        "parentNodeId": null,
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "source",
+              "type": "card",
+              "x": 48,
+              "y": 72,
+              "w": 236,
+              "h": 136,
+              "data": {
+                "title": "Intake",
+                "detail": "Symptoms, urgency, access limits, and customer promises arrive before the day has any shape.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "planner",
+              "type": "card",
+              "x": 48,
+              "y": 280,
+              "w": 236,
+              "h": 136,
+              "data": {
+                "title": "Crew",
+                "detail": "Dispatch, field, supervisor, and office handoffs decide whether the visit stays controlled.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "renderer",
+              "type": "card",
+              "x": 812,
+              "y": 72,
+              "w": 236,
+              "h": 136,
+              "data": {
+                "title": "Site",
+                "detail": "Site memory, asset history, and risk context change the right move before work begins.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "extensions",
+              "type": "card",
+              "x": 812,
+              "y": 280,
+              "w": 236,
+              "h": 136,
+              "data": {
+                "title": "Proof",
+                "detail": "Photos, approvals, parts used, and invoice evidence become the record the next person trusts.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "planning-canvas",
+              "type": "canvas",
+              "x": 324,
+              "y": 72,
+              "w": 452,
+              "h": 344,
+              "data": {
+                "childCanvasId": "visit-canvas",
+                "title": "One job, four views",
+                "nodeCount": 4
+              }
+            }
+          ]
+        }
+      },
+      "people-canvas": {
+        "id": "people-canvas",
+        "title": "Crew Flow",
+        "parentCanvasId": "visit-canvas",
+        "parentNodeId": "people-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "dispatcher",
+              "type": "card",
+              "x": -128,
+              "y": -92,
+              "w": 264,
+              "h": 124,
+              "data": {
+                "title": "Dispatcher",
+                "detail": "Turns demand into a route, guards the calendar, and keeps customers informed when reality changes.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "crew",
+              "type": "card",
+              "x": 184,
+              "y": -92,
+              "w": 272,
+              "h": 124,
+              "data": {
+                "title": "Crew",
+                "detail": "Carries skills, tools, safety habits, photos, measurements, and judgment from site to site.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "supervisor",
+              "type": "card",
+              "x": -108,
+              "y": 92,
+              "w": 268,
+              "h": 124,
+              "data": {
+                "title": "Supervisor",
+                "detail": "Resolves ambiguity, approves exceptions, and decides when a field note becomes a policy change.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "handoff-canvas-portal",
+              "type": "canvas",
+              "x": 212,
+              "y": 104,
+              "w": 284,
+              "h": 172,
+              "data": {
+                "childCanvasId": "handoff-canvas",
+                "title": "Shift Handoffs",
+                "nodeCount": 4
+              }
+            },
+            {
+              "id": "people-note",
+              "type": "text",
+              "x": 548,
+              "y": -36,
+              "w": 256,
+              "h": 148,
+              "data": {
+                "text": "The work is not only assigned. It is carried by people with limits, habits, and local knowledge."
+              }
+            }
+          ]
+        }
+      },
+      "handoff-canvas": {
+        "id": "handoff-canvas",
+        "title": "Shift Handoffs",
+        "parentCanvasId": "people-canvas",
+        "parentNodeId": "handoff-canvas-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "handoff-open-work",
+              "type": "card",
+              "x": -120,
+              "y": -80,
+              "w": 248,
+              "h": 116,
+              "data": {
+                "title": "Open Work",
+                "detail": "What is waiting, what is blocked, what is promised, and what has already been tried.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "handoff-site-memory",
+              "type": "card",
+              "x": 176,
+              "y": -80,
+              "w": 256,
+              "h": 116,
+              "data": {
+                "title": "Site Memory",
+                "detail": "Gate codes, access limits, customer preferences, risky equipment, and recurring patterns.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "handoff-decisions",
+              "type": "card",
+              "x": -88,
+              "y": 112,
+              "w": 264,
+              "h": 116,
+              "data": {
+                "title": "Decisions",
+                "detail": "What was approved, declined, quoted, escalated, or left for the next responsible person.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "handoff-note",
+              "type": "text",
+              "x": 232,
+              "y": 120,
+              "w": 280,
+              "h": 120,
+              "data": {
+                "text": "Good handoffs reduce phone calls, repeat visits, and the quiet loss of responsibility."
+              }
+            }
+          ]
+        }
+      },
+      "assets-canvas": {
+        "id": "assets-canvas",
+        "title": "Site Memory",
+        "parentCanvasId": "visit-canvas",
+        "parentNodeId": "assets-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "site-profile",
+              "type": "card",
+              "x": -120,
+              "y": -84,
+              "w": 268,
+              "h": 124,
+              "data": {
+                "title": "Site Profile",
+                "detail": "Location, contact path, access windows, hazards, parking, keys, and who can authorize work.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "asset-history",
+              "type": "card",
+              "x": 196,
+              "y": -84,
+              "w": 276,
+              "h": 124,
+              "data": {
+                "title": "Asset History",
+                "detail": "Install date, model, warranty, last service, common faults, and parts that should be stocked.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "access-risk",
+              "type": "card",
+              "x": -104,
+              "y": 104,
+              "w": 268,
+              "h": 124,
+              "data": {
+                "title": "Access and Risk",
+                "detail": "What can delay the visit before the crew even starts: safety, permits, locks, weather, pets, shutdowns.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "asset-logic-portal",
+              "type": "canvas",
+              "x": 220,
+              "y": 112,
+              "w": 292,
+              "h": 172,
+              "data": {
+                "childCanvasId": "asset-logic-canvas",
+                "title": "Asset Logic",
+                "nodeCount": 4
+              }
+            },
+            {
+              "id": "asset-note",
+              "type": "text",
+              "x": 556,
+              "y": -20,
+              "w": 260,
+              "h": 132,
+              "data": {
+                "text": "Every site has memory. The map should make that memory visible before the truck rolls."
+              }
+            }
+          ]
+        }
+      },
+      "asset-logic-canvas": {
+        "id": "asset-logic-canvas",
+        "title": "Asset Logic",
+        "parentCanvasId": "assets-canvas",
+        "parentNodeId": "asset-logic-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "asset-symptoms",
+              "type": "card",
+              "x": -128,
+              "y": -80,
+              "w": 248,
+              "h": 116,
+              "data": {
+                "title": "Symptoms",
+                "detail": "What the customer notices, what the asset reports, and what the crew can reproduce.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "asset-constraints",
+              "type": "card",
+              "x": 168,
+              "y": -80,
+              "w": 264,
+              "h": 116,
+              "data": {
+                "title": "Constraints",
+                "detail": "Access, downtime, required parts, certifications, and whether temporary service is acceptable.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "asset-remedy",
+              "type": "card",
+              "x": -92,
+              "y": 112,
+              "w": 256,
+              "h": 116,
+              "data": {
+                "title": "Likely Remedy",
+                "detail": "Repair, replace, monitor, escalate, or quote a broader job with clear customer consent.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "asset-pattern-note",
+              "type": "text",
+              "x": 220,
+              "y": 116,
+              "w": 288,
+              "h": 124,
+              "data": {
+                "text": "A good record turns one visit into better odds for every future visit."
+              }
+            }
+          ]
+        }
+      },
+      "records-canvas": {
+        "id": "records-canvas",
+        "title": "Proof Pack",
+        "parentCanvasId": "visit-canvas",
+        "parentNodeId": "records-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "estimate",
+              "type": "card",
+              "x": -128,
+              "y": -96,
+              "w": 264,
+              "h": 124,
+              "data": {
+                "title": "Estimate",
+                "detail": "Scope, assumptions, exclusions, labor, parts, time window, and what happens if the site differs.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "inventory",
+              "type": "card",
+              "x": 184,
+              "y": -96,
+              "w": 268,
+              "h": 124,
+              "data": {
+                "title": "Inventory",
+                "detail": "Truck stock, warehouse stock, ordered parts, substitutions, and returns after the job is done.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "invoice",
+              "type": "card",
+              "x": -104,
+              "y": 96,
+              "w": 264,
+              "h": 124,
+              "data": {
+                "title": "Invoice",
+                "detail": "What was approved, what was delivered, photos, signatures, tax, and payment status.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "cashflow-portal",
+              "type": "canvas",
+              "x": 212,
+              "y": 108,
+              "w": 292,
+              "h": 172,
+              "data": {
+                "childCanvasId": "cashflow-canvas",
+                "title": "Cash Flow",
+                "nodeCount": 4
+              }
+            },
+            {
+              "id": "records-note",
+              "type": "text",
+              "x": 548,
+              "y": -24,
+              "w": 276,
+              "h": 136,
+              "data": {
+                "text": "A record is useful when a customer, dispatcher, technician, manager, and bookkeeper can all trust it."
+              }
+            }
+          ]
+        }
+      },
+      "cashflow-canvas": {
+        "id": "cashflow-canvas",
+        "title": "Cash Flow",
+        "parentCanvasId": "records-canvas",
+        "parentNodeId": "cashflow-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "authorized-work",
+              "type": "card",
+              "x": -120,
+              "y": -80,
+              "w": 252,
+              "h": 116,
+              "data": {
+                "title": "Authorized Work",
+                "detail": "The customer clearly agreed to the scope, price basis, and any required follow-up.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "proof",
+              "type": "card",
+              "x": 180,
+              "y": -80,
+              "w": 256,
+              "h": 116,
+              "data": {
+                "title": "Proof",
+                "detail": "Photos, readings, used parts, time on site, exceptions, and sign-off connect work to billing.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "payment-path",
+              "type": "card",
+              "x": -88,
+              "y": 112,
+              "w": 260,
+              "h": 116,
+              "data": {
+                "title": "Payment Path",
+                "detail": "Deposit, card, account terms, purchase order, warranty, retention, or disputed balance.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "cashflow-note",
+              "type": "text",
+              "x": 232,
+              "y": 120,
+              "w": 284,
+              "h": 120,
+              "data": {
+                "text": "Money follows clarity. Vague field records become slow invoices and uncomfortable calls."
+              }
+            }
+          ]
+        }
+      },
+      "visit-canvas": {
+        "id": "visit-canvas",
+        "title": "One job, four views",
+        "parentCanvasId": "root",
+        "parentNodeId": "planning-canvas",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "people-portal",
+              "type": "canvas",
+              "x": 16,
+              "y": 20,
+              "w": 184,
+              "h": 132,
+              "data": {
+                "childCanvasId": "people-canvas",
+                "title": "Crew Flow",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "assets-portal",
+              "type": "canvas",
+              "x": 216,
+              "y": 20,
+              "w": 184,
+              "h": 132,
+              "data": {
+                "childCanvasId": "assets-canvas",
+                "title": "Site Memory",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "diagnosis-portal",
+              "type": "canvas",
+              "x": 16,
+              "y": 172,
+              "w": 184,
+              "h": 132,
+              "data": {
+                "childCanvasId": "diagnosis-canvas",
+                "title": "Repair Logic",
+                "nodeCount": 6
+              }
+            },
+            {
+              "id": "records-portal",
+              "type": "canvas",
+              "x": 216,
+              "y": 172,
+              "w": 184,
+              "h": 132,
+              "data": {
+                "childCanvasId": "records-canvas",
+                "title": "Proof Pack",
+                "nodeCount": 5
+              }
+            }
+          ]
+        }
+      },
+      "diagnosis-canvas": {
+        "id": "diagnosis-canvas",
+        "title": "Repair Logic",
+        "parentCanvasId": "visit-canvas",
+        "parentNodeId": "diagnosis-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "observed-symptom",
+              "type": "card",
+              "x": -160,
+              "y": -116,
+              "w": 268,
+              "h": 116,
+              "data": {
+                "title": "Observed Symptom",
+                "detail": "What failed, when it fails, who saw it, and what conditions make it better or worse.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "quick-checks",
+              "type": "card",
+              "x": 160,
+              "y": -116,
+              "w": 264,
+              "h": 116,
+              "data": {
+                "title": "Quick Checks",
+                "detail": "Power, supply, settings, blockage, leaks, worn parts, safety lockouts, and obvious misuse.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "likely-cause",
+              "type": "card",
+              "x": -132,
+              "y": 72,
+              "w": 268,
+              "h": 116,
+              "data": {
+                "title": "Likely Cause",
+                "detail": "Best current explanation with confidence level and what evidence would change the answer.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "repair-or-quote",
+              "type": "card",
+              "x": 188,
+              "y": 76,
+              "w": 268,
+              "h": 116,
+              "data": {
+                "title": "Repair or Quote",
+                "detail": "Do the approved fix now, stabilize temporarily, or quote a larger job before touching more.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "confidence-note",
+              "type": "text",
+              "x": 520,
+              "y": -92,
+              "w": 292,
+              "h": 136,
+              "data": {
+                "text": "A useful diagnosis says what is known, what is assumed, and what would make the team change course."
+              }
+            },
+            {
+              "id": "learning-loop",
+              "type": "card",
+              "x": 528,
+              "y": 96,
+              "w": 276,
+              "h": 116,
+              "data": {
+                "title": "Learning Loop",
+                "detail": "If this issue repeats, update site memory, truck stock, training, or the standard checklist.",
+                "accent": "data"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "view": {
+      "cameras": {
+        "root": { "x": -16, "y": 59, "scale": 0.72 },
+        "people-canvas": { "x": 156, "y": 173, "scale": 0.65 },
+        "handoff-canvas": { "x": 202, "y": 162, "scale": 0.9 },
+        "assets-canvas": { "x": 156, "y": 173, "scale": 0.65 },
+        "asset-logic-canvas": { "x": 202, "y": 162, "scale": 0.9 },
+        "records-canvas": { "x": 156, "y": 173, "scale": 0.65 },
+        "cashflow-canvas": { "x": 202, "y": 162, "scale": 0.9 },
+        "visit-canvas": { "x": -7, "y": 32, "scale": 0.5 },
+        "diagnosis-canvas": { "x": 173, "y": 204, "scale": 0.63 }
+      },
+      "selections": {
+        "root": { "selectedNodeIds": [], "primarySelectedNodeId": null, "resizeMode": false },
+        "people-canvas": { "selectedNodeIds": [], "primarySelectedNodeId": null, "resizeMode": false },
+        "handoff-canvas": { "selectedNodeIds": [], "primarySelectedNodeId": null, "resizeMode": false },
+        "assets-canvas": { "selectedNodeIds": [], "primarySelectedNodeId": null, "resizeMode": false },
+        "asset-logic-canvas": { "selectedNodeIds": [], "primarySelectedNodeId": null, "resizeMode": false },
+        "records-canvas": { "selectedNodeIds": [], "primarySelectedNodeId": null, "resizeMode": false },
+        "cashflow-canvas": { "selectedNodeIds": [], "primarySelectedNodeId": null, "resizeMode": false },
+        "visit-canvas": { "selectedNodeIds": [], "primarySelectedNodeId": null, "resizeMode": false },
+        "diagnosis-canvas": { "selectedNodeIds": [], "primarySelectedNodeId": null, "resizeMode": false }
+      },
+      "paneLayouts": {},
+      "activeCanvasId": "root",
+      "focusedEngineId": "root",
+      "previewFocus": null,
+      "stackPath": [],
+      "parentContext": {
+        "sourceCanvasId": null,
+        "sourcePortalNodeId": null,
+        "shapes": []
+      },
+      "animationEnabled": true,
+      "deleteConfirmation": null
+    }
+  }
+}

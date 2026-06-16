@@ -28,10 +28,11 @@ What is not complete:
 
 Primary authored files:
 
-- `src/App.tsx`: React shell, engine lifecycle, toolbar, node access panel, status bar, model/theme state.
+- `src/App.tsx`: React shell, document loading, toolbar, node access panel, status bar, theme state.
+- `src/catalog/service-business-atlas.json`: static starter document used for new local workspaces.
+- `src/catalog/starterCatalog.ts`: starter catalog adapter that hydrates static document data for runtime use.
 - `src/engine/CanvasEngine.ts`: canvas rendering, camera, selection, command planning, command execution, pointer/keyboard/touch interaction, lifecycle cleanup.
 - `src/engine/types.ts`: public model, command, operation, model-change, status, and engine option types.
-- `src/engine/sampleModel.ts`: sample model used by app and probes.
 - `src/engine/theme.ts`: canvas render colors.
 - `src/styles.css`: app layout, overlays, toolbar, node access panel, status bar.
 - `docs/canvas-foundation-devtools-probe.js`: browser-side probe logic imported by the probe runner.
