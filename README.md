@@ -6,10 +6,11 @@ Canaster is a nested visual canvas workspace. The frontend owns the canvas exper
 
 The backend setup is defined in:
 
-- `daptin/schema_canaster.yaml`
 - `docker-compose.daptin.yml`
 - `deploy/daptin/Dockerfile`
+- `daptin/README.md`
 - `docs/daptin-backend-groundwork.md`
+- `docs/daptin-canaster-architecture-plan.md`
 
 Local backend:
 

@@ -87,14 +87,16 @@ Fixed production defaults:
 - Cloud DNS zone: `canaster-in`
 - Load balancer IP address name: `canaster-lb-ip`
 - Serverless NEG: `canaster-neg`
-- Public hostname: `canaster.in`
-- Temporary working backend endpoint: `https://canaster-vnlupz4kzq-el.a.run.app`
+- Public frontend hostname target: `canaster.in`
+- Public admin/API hostname target: `api.canaster.in`
+- Direct Cloud Run frontend hostname: `https://canaster-vnlupz4kzq-el.a.run.app`
+- Preferred frontend build backend endpoint: `https://api.canaster.in`
 - Daptin site store: `canaster-site`
 - Daptin site path: `/canaster`
 
 The Cloud Run service is capped at `--max-instances=1` for v1. Daptin’s DB state is safe in Cloud SQL, but Daptin site/file storage uses a mounted Cloud Storage filesystem. Multi-instance file write semantics are not part of MVP.
 
-Current production status as of 2026-06-16 14:39 IST:
+Current production status as of 2026-06-16 20:25 IST:
 
 - Google Cloud project: `agent4-471206`.
 - Cloud DNS zone `canaster-in` exists.
@@ -104,19 +106,26 @@ Current production status as of 2026-06-16 14:39 IST:
 - Cloud SQL instance `canaster-postgres` exists as Enterprise `db-g1-small`, 10 GB SSD.
 - Secret Manager secret `canaster-daptin-db-connection` exists.
 - Cloud Run service `canaster` exists and serves Canaster plus Daptin API paths from image `asia-south1-docker.pkg.dev/agent4-471206/canaster/daptin:manual-08745c7`.
-- Direct Cloud Run verification passed with `HTTP 200` for `/api/world?page%5Bsize%5D=1`.
+- Direct Cloud Run verification passed with `HTTP 200` for `/api/world?page%5Bsize%5D=1`, and `https://canaster-vnlupz4kzq-el.a.run.app/` serves `<title>Canway</title>`.
 - Global load balancer IP `canaster-lb-ip` exists with address `8.232.13.111`.
 - Serverless NEG `canaster-neg` exists in `asia-south1`.
 - Backend service `canaster-backend` exists and points to `canaster-neg`.
 - The retired old Cloud Run service, old serverless NEG, and old backend service were deleted after the URL map moved to `canaster-backend`.
 - HTTPS frontend `canaster-https-rule` exists on `8.232.13.111:443`.
 - HTTP frontend `canaster-http-rule` exists on `8.232.13.111:80` and redirects to HTTPS.
-- Managed certificate `canaster-managed-cert` exists for `canaster.in` and `www.canaster.in`; it remains blocked until public DNS for the domain reaches the load balancer IP.
-- Namecheap BasicDNS is currently authoritative from the registrar UI and has `A` records for `@` and `www`, both pointing to `8.232.13.111`.
+- Public DNS is currently authoritative on Namecheap BasicDNS at `dns1.registrar-servers.com` and `dns2.registrar-servers.com`; the `canaster-in` Google Cloud DNS zone still exists in GCP but is not delegated publicly.
+- Namecheap `A` records for `@`, `www`, and wildcard `*` point to `8.232.13.111`.
+- `canaster.in`, `www.canaster.in`, `api.canaster.in`, and wildcard subdomains now resolve publicly to the load balancer IP.
+- Managed certificate `canaster-managed-cert` is `ACTIVE` for `canaster.in` and `www.canaster.in`.
+- Daptin issued the `api.canaster.in` certificate through ACME, and GCP now serves that material from self-managed certificate resource `canaster-api-self-cert`.
+- Target HTTPS proxy `canaster-https-proxy` is attached to both `canaster-managed-cert` and `canaster-api-self-cert`.
+- `https://canaster.in` and `https://www.canaster.in` now serve the Canway frontend after public-hostname `site` rows were added and Daptin was restarted.
+- `https://api.canaster.in` returns `HTTP 200` and remains the Daptin admin/API hostname.
+- Daptin `/_config` is still broken upstream on this deployment and returns dashboard HTML instead of the config handler. Upstream tracking issue: `daptin/daptin#216`.
 
-The current cost-bearing production resource is Cloud SQL. The estimated always-on cost for `db-g1-small` plus 10 GB SSD/backups is roughly USD 28/month before traffic. Adding the HTTPS load balancer later is expected to add roughly USD 18/month.
+Current recurring production resources include Cloud SQL and the external HTTPS load balancer. Re-check live GCP pricing before relying on earlier monthly estimates.
 
-Production deployment is live on the direct Cloud Run hostname. The remaining external blocker for `canaster.in` is public DNS propagation/delegation from Namecheap/NIXI to the Namecheap BasicDNS records.
+Public DNS, certificates, and hostname routing are now in the intended split state. `.env.production` should point `VITE_DAPTIN_ENDPOINT` at `https://api.canaster.in` for future frontend builds. `npm run dev:cloud` can continue using the direct Cloud Run hostname for LB-bypass verification.
 
 
 ## Production Image
@@ -315,138 +324,79 @@ gcloud compute forwarding-rules create canaster-http-rule \
   --ports=80
 ```
 
-Then create Cloud DNS records pointing to the load balancer:
+The setup above creates the apex certificate resource `canaster-managed-cert` for `canaster.in` and `www.canaster.in`.
 
-```bash
-export CANASTER_LB_IP="$(gcloud compute addresses describe canaster-lb-ip --global --format='value(address)')"
-
-gcloud dns record-sets create canaster.in. \
-  --zone=canaster-in \
-  --type=A \
-  --ttl=300 \
-  --rrdatas="$CANASTER_LB_IP"
-
-gcloud dns record-sets create www.canaster.in. \
-  --zone=canaster-in \
-  --type=A \
-  --ttl=300 \
-  --rrdatas="$CANASTER_LB_IP"
-
-gcloud dns managed-zones describe canaster-in --format='value(nameServers)'
-```
-
-Give the output name servers to Namecheap. In Namecheap, set `canaster.in` to Custom DNS and replace the Namecheap nameservers with the Google Cloud DNS nameservers returned by the last command. Do not add separate Namecheap host records if Cloud DNS is authoritative.
-
-### DNS Delegation Status
-
-Current state as of 2026-06-15 18:36 IST:
-
-- Google Cloud DNS API is enabled for `agent4-471206`.
-- Google Cloud DNS managed zone `canaster-in` exists and is authoritative for `canaster.in.`.
-- The owner updated Namecheap to use Google Cloud DNS custom nameservers.
-- Google Cloud DNS authoritative servers already answer for the zone:
-
-```bash
-dig @ns-cloud-a1.googledomains.com +short SOA canaster.in
-dig @ns-cloud-a1.googledomains.com +short NS canaster.in
-```
-
-Expected authoritative nameservers:
-
-```text
-ns-cloud-a1.googledomains.com
-ns-cloud-a2.googledomains.com
-ns-cloud-a3.googledomains.com
-ns-cloud-a4.googledomains.com
-```
-
-Observed immediately after the Namecheap update:
-
-```bash
-dig +short NS canaster.in
-dig @8.8.8.8 +short NS canaster.in
-dig @1.1.1.1 +short NS canaster.in
-dig @ns1.registry.in. +norecurse NS canaster.in
-```
-
-The public recursive resolvers returned no NS records, and the `.in` registry server returned `NXDOMAIN`. That means Namecheap has not yet propagated the delegation to the `.in` registry from the perspective of those resolvers. This is not a Google Cloud DNS zone problem; the Google authoritative zone exists and responds.
-
-After the Namecheap nameserver change propagates, these commands must return the Google nameservers:
-
-```bash
-dig +short NS canaster.in
-dig @8.8.8.8 +short NS canaster.in
-dig @1.1.1.1 +short NS canaster.in
-```
-
-The `A` records for `canaster.in` and `www.canaster.in` should not be expected until the global load balancer IP is created and the Cloud DNS `A` records are added. After those records are created, verify:
-
-```bash
-dig +short A canaster.in
-dig +short A www.canaster.in
-gcloud compute ssl-certificates describe canaster-managed-cert --global --format='value(managed.status)'
-```
-
-Current state as of 2026-06-16 00:35 IST:
-
-- Namecheap WHOIS shows the Google Cloud DNS nameservers for `canaster.in`.
-- Google Cloud DNS authoritative nameserver `ns-cloud-a1.googledomains.com` returns `8.232.13.111` for both `canaster.in` and `www.canaster.in`.
-- The `.in` registry authoritative server still returns the `in.` SOA for `canaster.in` instead of delegating to the Google Cloud DNS nameservers.
-- Public recursive DNS therefore still does not resolve `canaster.in`.
-- Forced-IP HTTP test works and returns `301 Moved Permanently` to HTTPS.
-- Forced-IP HTTPS test fails during TLS while `canaster-managed-cert` is `PROVISIONING`.
-
-Verification evidence:
-
-```bash
-dig @ns-cloud-a1.googledomains.com +short A canaster.in
-# 8.232.13.111
-
-dig @ns-cloud-a1.googledomains.com +short A www.canaster.in
-# 8.232.13.111
-
-curl --noproxy '*' -I --resolve canaster.in:80:8.232.13.111 'http://canaster.in/api/world?page%5Bsize%5D=1'
-# HTTP/1.1 301 Moved Permanently
-# Location: https://canaster.in:443/api/world?page%5Bsize%5D=1
-
-gcloud compute ssl-certificates describe canaster-managed-cert \
-  --global \
-  --project agent4-471206 \
-  --format='value(managed.status)'
-# PROVISIONING
-```
-
-Next verification loop:
-
-```bash
-dig +short NS canaster.in
-dig +short A canaster.in
-gcloud compute ssl-certificates describe canaster-managed-cert \
-  --global \
-  --project agent4-471206 \
-  --format='json(managed.status,managed.domainStatus)'
-curl -I 'https://canaster.in/api/world?page%5Bsize%5D=1'
-```
-
-Current interim routing decision as of 2026-06-16 14:39 IST:
-
-- Continue frontend/backend integration against the direct Cloud Run subdomain `https://canaster-vnlupz4kzq-el.a.run.app`.
-- `.env.production` points `VITE_DAPTIN_ENDPOINT` to that Cloud Run subdomain until `canaster.in` resolves publicly and the managed certificate becomes visible.
-- Local development still defaults to `http://localhost:6336`.
-- To run the frontend locally against the deployed backend, use:
-
-```bash
-npm run dev:cloud
-```
-
-Namecheap BasicDNS now has these records and no `www` parking CNAME:
+Public DNS is currently managed in Namecheap BasicDNS, not the GCP Cloud DNS zone. Keep these Namecheap records in place:
 
 ```text
 @    A    8.232.13.111
 www  A    8.232.13.111
+*    A    8.232.13.111
 ```
 
-The `.in` parent zone still needs to delegate `canaster.in` to `dns1.registrar-servers.com` and `dns2.registrar-servers.com` before public resolution can work.
+If the deployment is later moved back to delegated Google Cloud DNS, switch the registrar nameservers fully. Do not try to keep Google Cloud DNS and Namecheap BasicDNS partially authoritative at the same time.
+
+For `api.canaster.in`, Daptin issues the ACME certificate and GCP imports that certificate so the public load balancer can serve it:
+
+```bash
+gcloud compute ssl-certificates create canaster-api-self-cert \
+  --global \
+  --certificate=/path/to/api.canaster.in.cert.pem \
+  --private-key=/path/to/api.canaster.in.key.pem
+
+gcloud compute target-https-proxies update canaster-https-proxy \
+  --global \
+  --project "$GCP_PROJECT" \
+  --ssl-certificates=canaster-api-self-cert,canaster-managed-cert \
+  --global-ssl-certificates
+```
+
+`self-managed` is GCP's term for "uploaded certificate." The certificate material still comes from Daptin ACME, not from Google-managed issuance.
+
+Current DNS and TLS state as of 2026-06-16 20:25 IST:
+
+- Public authoritative nameservers are `dns1.registrar-servers.com` and `dns2.registrar-servers.com`.
+- `canaster.in`, `www.canaster.in`, `api.canaster.in`, and wildcard subdomains resolve to `8.232.13.111`.
+- `canaster-managed-cert` is `ACTIVE` for `canaster.in` and `www.canaster.in`.
+- `canaster-api-self-cert` is attached to `canaster-https-proxy` and serves `CN=api.canaster.in` with SAN `DNS:api.canaster.in`.
+- `canaster-in` Cloud DNS zone still exists in GCP, but it is not publicly delegated.
+
+Current routing state as of 2026-06-16 20:25 IST:
+
+- `https://canaster-vnlupz4kzq-el.a.run.app/` serves the Canway frontend.
+- `https://canaster.in` and `https://www.canaster.in` now serve the Canway static site.
+- `https://api.canaster.in` serves the Daptin admin/API surface.
+- The intended public frontend/admin split is now active:
+  - `canaster.in` and `www.canaster.in` -> Canway static site
+  - `api.canaster.in` -> Daptin admin/API
+- Do not create a static Daptin `site` row for `api.canaster.in` if that hostname should remain the admin/API surface.
+- The broken Daptin `/_config` route still blocks dashboard-driven backend hostname configuration. Track that separately from TLS.
+
+Verification loop:
+
+```bash
+dig +short NS canaster.in
+dig +short A canaster.in
+dig +short A api.canaster.in
+gcloud compute ssl-certificates describe canaster-managed-cert \
+  --global \
+  --project agent4-471206 \
+  --format='json(managed.status,managed.domainStatus)'
+gcloud compute ssl-certificates describe canaster-api-self-cert \
+  --global \
+  --project agent4-471206 \
+  --format='json(type,subjectAlternativeNames,expireTime)'
+openssl s_client -connect api.canaster.in:443 -servername api.canaster.in </dev/null 2>/dev/null | \
+  openssl x509 -noout -subject -issuer -ext subjectAltName
+curl -I https://canaster.in
+curl -I https://api.canaster.in
+```
+
+To run the frontend locally against the deployed backend, use:
+
+```bash
+npm run dev:cloud
+```
 
 ### Permanent Local Site/GCS Verification
 
@@ -510,11 +460,10 @@ Permanent local smoke behavior:
 
 ### Production Site/GCS Bootstrap Status
 
-Current state as of 2026-06-16 14:39 IST:
+Current state as of 2026-06-16 20:25 IST:
 
-- Production no longer serves only raw Daptin on the Cloud Run subdomains.
 - The Canaster frontend build has been uploaded through Daptin to Google Cloud Storage.
-- Daptin is serving the uploaded static site from GCS through `site` rows.
+- Daptin serves the uploaded static site from GCS for the two direct Cloud Run hostnames and for the public frontend hostnames `canaster.in` and `www.canaster.in`.
 - The backend API remains available under Daptin's normal `/api/...` paths.
 - The active public Cloud Run hostnames are `canaster-vnlupz4kzq-el.a.run.app` and `canaster-740552849684.asia-south1.run.app`; the old public Cloud Run service is deleted.
 
@@ -542,13 +491,24 @@ cloud_store: canaster-site
 hostname: canaster-740552849684.asia-south1.run.app
 path: /canaster
 cloud_store: canaster-site
+
+hostname: canaster.in
+path: /canaster
+cloud_store: canaster-site
+
+hostname: www.canaster.in
+path: /canaster
+cloud_store: canaster-site
 ```
+
+There is intentionally no static `site` row for `api.canaster.in`.
 
 Important Daptin routing detail:
 
 - Do not put multiple hostnames in one comma-separated `site.hostname` for Cloud Run service hostnames.
 - Daptin splits comma-separated hostnames into `SiteMap`, but `HandlerMap` is keyed by the full `site.Hostname` string.
 - For reliable hostname routing, create one `site` row per hostname.
+- Daptin loads site rows at startup, so adding or changing public hostnames requires a controlled restart before the new routing can take effect.
 
 Production verification commands:
 
@@ -561,21 +521,23 @@ gcloud run services update canaster \
   --update-env-vars CANASTER_SITE_BOOTSTRAP_REV="$(date +%s)" \
   --no-invoker-iam-check
 curl --noproxy '*' -fsS https://canaster-vnlupz4kzq-el.a.run.app/ | rg '<title>Canway</title>'
-curl --noproxy '*' -fsS https://canaster-740552849684.asia-south1.run.app/ | rg '<title>Canway</title>'
-curl --noproxy '*' -fsS 'https://canaster-vnlupz4kzq-el.a.run.app/api/world?page%5Bsize%5D=1' >/dev/null
+curl --noproxy '*' -fsS https://canaster.in/ | rg '<title>Canway</title>'
+curl --noproxy '*' -fsS https://api.canaster.in/ | rg '<title>Daptin Admin</title>'
+curl --noproxy '*' -fsS 'https://api.canaster.in/api/world?page%5Bsize%5D=1' >/dev/null
 ```
 
 Observed result:
 
 ```text
 https://canaster-vnlupz4kzq-el.a.run.app/ serves <title>Canway</title>
-https://canaster-740552849684.asia-south1.run.app/ serves <title>Canway</title>
+https://canaster.in/ serves <title>Canway</title>
+https://api.canaster.in/ serves <title>Daptin Admin</title>
 /api/world?page%5Bsize%5D=1 returns HTTP 200
 ```
 
 ## Daptin Site Bootstrap
 
-After the first Daptin deploy is healthy, create the Daptin admin user, storage, and site using Daptin itself.
+After the first Daptin deploy is healthy, bootstrap the admin account, GCS-backed `cloud_store`, and hostname-specific `site` rows through Daptin itself.
 
 ```bash
 export DAPTIN_ENDPOINT="$(gcloud run services describe "$GCP_CLOUD_RUN_SERVICE" --region "$GCP_REGION" --format='value(status.url)')"
@@ -588,14 +550,29 @@ daptin-cli context set prod
 daptin-cli execute user_account signup "email=$DAPTIN_ADMIN_EMAIL" "name=Canaster Admin" "password=$DAPTIN_ADMIN_PASSWORD" "passwordConfirm=$DAPTIN_ADMIN_PASSWORD"
 daptin-cli execute user_account signin "email=$DAPTIN_ADMIN_EMAIL" "password=$DAPTIN_ADMIN_PASSWORD"
 daptin-cli execute world become_an_administrator
-daptin-cli storage add canaster-site --type local --store-provider local --root-path /data/storage --restart
-daptin-cli create site name=canaster hostname=canaster.in path=canaster enable=true site_type=static
-export CANASTER_SITE_REF="$(daptin-cli --output json list site --filter name=canaster --columns reference_id --page-size 1 | jq -r '.[0].reference_id // .[0].attributes.reference_id')"
+daptin-cli storage upload canaster-site:/canaster ./dist --recursive
+daptin-cli create site name=canaster-cloudrun hostname=canaster-vnlupz4kzq-el.a.run.app path=canaster enable=true site_type=static
+daptin-cli create site name=canaster-cloudrun-region hostname=canaster-740552849684.asia-south1.run.app path=canaster enable=true site_type=static
+export CANASTER_SITE_REF="$(daptin-cli --output json list site --filter name=canaster-cloudrun --columns reference_id --page-size 1 | jq -r '.[0].reference_id // .[0].attributes.reference_id')"
 export CANASTER_SITE_STORE_REF="$(daptin-cli --output json list cloud_store --filter name=canaster-site --columns reference_id --page-size 1 | jq -r '.[0].reference_id // .[0].attributes.reference_id')"
 daptin-cli relate site "$CANASTER_SITE_REF" cloud_store_id "$CANASTER_SITE_STORE_REF"
 ```
 
-This is a one-time Daptin data operation, not a Canaster schema addition.
+Use the `Production Daptin GCS store` field values above when creating `canaster-site`. The production store is Google Cloud Storage-backed, not local disk-backed.
+Repeat the same `site -> cloud_store` relation step for every additional site row, including `canaster-cloudrun-region`, `canaster-apex`, and `canaster-www`.
+
+For public routing, add one `site` row per public frontend hostname:
+
+```bash
+daptin-cli create site name=canaster-apex hostname=canaster.in path=canaster enable=true site_type=static
+daptin-cli create site name=canaster-www hostname=www.canaster.in path=canaster enable=true site_type=static
+```
+
+Do not comma-join hostnames into one `site.hostname`, and do not create a static site row for `api.canaster.in` if that hostname should remain the Daptin admin/API surface.
+
+After adding or changing production `site` rows, restart Daptin in a controlled deploy window so the host switch reloads the new hostname routing. This restart has already been performed for `canaster.in` and `www.canaster.in`.
+
+This is Daptin data/bootstrap work, not a Canaster schema addition.
 
 ## Production Admin State
 

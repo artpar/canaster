@@ -61,9 +61,16 @@ The production Daptin instance runs on Google Cloud Run and owns both API and st
 2. Mount a Cloud Storage bucket at `/data/storage`.
 3. Start with an empty Canaster schema folder for MVP app state; use Daptin's built-in `document`.
 4. Create an admin user and run the smoke test.
-5. Create/link a Daptin `cloud_store` for static site files.
-6. Create a `site` row for `canaster.in`.
-7. CI builds the Daptin image, deploys Cloud Run, builds `dist/`, uploads it through `daptin-cli storage upload`, and probes the deployed runtime.
+5. Create/link a GCS-backed Daptin `cloud_store` for static site files.
+6. Create one Daptin `site` row per hostname. The currently working site rows are the two direct Cloud Run hostnames; `canaster.in` and `www.canaster.in` need their own site rows if they should serve the Canway frontend.
+7. Keep `api.canaster.in` as the Daptin admin/API hostname and do not create a static site row for it.
+8. CI builds the Daptin image, deploys Cloud Run, builds `dist/`, uploads it through `daptin-cli storage upload`, and probes the deployed runtime.
+
+Current public TLS shape:
+
+- `canaster.in` and `www.canaster.in` terminate on GCP managed certificate `canaster-managed-cert`.
+- `api.canaster.in` terminates on GCP certificate resource `canaster-api-self-cert`, but that certificate material is issued by Daptin ACME and uploaded into GCP.
+- As of 2026-06-16, `canaster.in` and `www.canaster.in` serve the Canway frontend, while `api.canaster.in` remains the Daptin admin/API hostname.
 
 See `docs/daptin-backend-groundwork.md` for the exact GCP commands and required CI/CD variables.
 
