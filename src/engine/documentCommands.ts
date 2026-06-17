@@ -6,6 +6,7 @@ import {
   portalDataForNode,
   selectNodeInCanvas,
   setSelectionForCanvas,
+  syncDerivedView,
   syncPortalSummaries,
   updateNodeData,
 } from './documentModel';
@@ -105,7 +106,7 @@ export function openDeleteConfirmation(collection: CanvasDocumentCollection, can
 function selectCanvas(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId, source: CanvasEditSource): DocumentCommandPlan {
   if (!collection.documents[canvasId]) return noChange(collection, 'Canvas unavailable');
   if (collection.activeCanvasId === canvasId) return noChange(collection, 'Canvas already active');
-  const next = cloneDocumentCollection(collection);
+  const next = cloneCollectionForNavigation(collection);
   const from = next.activeCanvasId;
   next.activeCanvasId = canvasId;
   next.view.activeCanvasId = canvasId;
@@ -113,7 +114,7 @@ function selectCanvas(collection: CanvasDocumentCollection, canvasId: CanvasDocu
   next.view.previewFocus = null;
   next.view.deleteConfirmation = null;
   return {
-    collection: syncPortalSummaries(next),
+    collection: syncDerivedView(next),
     changes: [{ kind: 'active-canvas-change', from, to: canvasId, source }],
     interaction: 'Canvas activated',
   };
@@ -124,7 +125,7 @@ function enterChildCanvas(collection: CanvasDocumentCollection, parentCanvasId: 
   const node = parent?.model.nodes.find((candidate) => candidate.id === portalNodeId);
   const data = node ? portalDataForNode(node) : null;
   if (!parent || !node || !data?.childCanvasId || !collection.documents[data.childCanvasId]) return noChange(collection, 'Child canvas unavailable');
-  const next = cloneDocumentCollection(collection);
+  const next = cloneCollectionForNavigation(collection);
   const from = next.activeCanvasId;
   next.activeCanvasId = data.childCanvasId;
   next.view.activeCanvasId = data.childCanvasId;
@@ -132,7 +133,7 @@ function enterChildCanvas(collection: CanvasDocumentCollection, parentCanvasId: 
   next.view.previewFocus = null;
   next.view.deleteConfirmation = null;
   return {
-    collection: syncPortalSummaries(next),
+    collection: syncDerivedView(next),
     changes: [{ kind: 'active-canvas-change', from, to: data.childCanvasId, source }],
     interaction: 'Entered child canvas',
   };
@@ -142,7 +143,7 @@ function goToParentCanvas(collection: CanvasDocumentCollection, source: CanvasEd
   const active = collection.documents[collection.activeCanvasId];
   if (!active?.parentCanvasId || !active.parentNodeId) return noChange(collection, 'No parent canvas');
   const selected = selectNodeInCanvas(collection, active.parentCanvasId, active.parentNodeId);
-  const next = cloneDocumentCollection(selected);
+  const next = cloneCollectionForNavigation(selected);
   const from = next.activeCanvasId;
   next.activeCanvasId = active.parentCanvasId;
   next.view.activeCanvasId = active.parentCanvasId;
@@ -150,9 +151,31 @@ function goToParentCanvas(collection: CanvasDocumentCollection, source: CanvasEd
   next.view.previewFocus = null;
   next.view.deleteConfirmation = null;
   return {
-    collection: syncPortalSummaries(next),
+    collection: syncDerivedView(next),
     changes: [{ kind: 'active-canvas-change', from, to: active.parentCanvasId, source }],
     interaction: 'Returned to parent canvas',
+  };
+}
+
+function cloneCollectionForNavigation(collection: CanvasDocumentCollection): CanvasDocumentCollection {
+  return {
+    ...collection,
+    documents: collection.documents,
+    view: {
+      ...collection.view,
+      cameras: { ...collection.view.cameras },
+      selections: { ...collection.view.selections },
+      paneLayouts: { ...collection.view.paneLayouts },
+      stackPath: collection.view.stackPath.map((frame) => ({ ...frame })),
+      previewFocus: collection.view.previewFocus ? { ...collection.view.previewFocus } : null,
+      parentContext: {
+        ...collection.view.parentContext,
+        shapes: collection.view.parentContext.shapes.map((shape) => ({ ...shape, projectedRect: { ...shape.projectedRect }, node: cloneNode(shape.node) })),
+      },
+      deleteConfirmation: collection.view.deleteConfirmation
+        ? { ...collection.view.deleteConfirmation, nodeIds: [...collection.view.deleteConfirmation.nodeIds] }
+        : null,
+    },
   };
 }
 

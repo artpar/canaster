@@ -5,6 +5,9 @@ import type { CanvasWorkspaceSnapshot } from './documentTypes';
 export const DEFAULT_WORKSPACE_STORAGE_ID = 'default';
 const DATABASE_NAME = 'canway-workspaces';
 const LOCAL_STORAGE_PREFIX = 'canway-workspace-snapshot:';
+const LOCAL_STORAGE_DOCUMENT_LIMIT = 120;
+const LOCAL_STORAGE_NODE_LIMIT = 1500;
+const skippedLocalMirrorWarnings = new Set<string>();
 
 type StoredWorkspaceSnapshot = {
   id: string;
@@ -94,11 +97,32 @@ function readLocalWorkspaceSnapshot(id: string): StoredWorkspaceSnapshot | null 
 }
 
 function writeLocalWorkspaceSnapshot(record: StoredWorkspaceSnapshot): void {
+  if (shouldSkipLocalMirror(record.snapshot)) {
+    window.localStorage.removeItem(localStorageKey(record.id));
+    if (!skippedLocalMirrorWarnings.has(record.id)) {
+      skippedLocalMirrorWarnings.add(record.id);
+      console.info('Skipping localStorage workspace mirror; workspace is stored in IndexedDB only', {
+        id: record.id,
+        documents: Object.keys(record.snapshot.history.present.documents).length,
+        nodes: totalSnapshotNodes(record.snapshot),
+      });
+    }
+    return;
+  }
   try {
     window.localStorage.setItem(localStorageKey(record.id), JSON.stringify(record));
   } catch (error) {
     console.warn('Failed to mirror Canway workspace snapshot to localStorage', error);
   }
+}
+
+function shouldSkipLocalMirror(snapshot: CanvasWorkspaceSnapshot): boolean {
+  const documents = Object.keys(snapshot.history.present.documents).length;
+  return documents > LOCAL_STORAGE_DOCUMENT_LIMIT || totalSnapshotNodes(snapshot) > LOCAL_STORAGE_NODE_LIMIT;
+}
+
+function totalSnapshotNodes(snapshot: CanvasWorkspaceSnapshot): number {
+  return Object.values(snapshot.history.present.documents).reduce((sum, document) => sum + document.model.nodes.length, 0);
 }
 
 function removeLocalWorkspaceSnapshot(id: string): void {

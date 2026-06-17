@@ -95,7 +95,7 @@ type CommandPlan = {
 export class CanvasEngine {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
-  private readonly canvasId: string;
+  private canvasId: string;
   private readonly beforeCommand?: (command: CanvasCommand) => CanvasCommand | false;
   private readonly onNodeAction?: (nodeId: string, actionId: string, source: CanvasEditSource) => boolean;
   private readonly onCanvasDoubleClick?: (canvasId: string, event: MouseEvent) => boolean;
@@ -182,6 +182,13 @@ export class CanvasEngine {
     this.reconcileSelection(selectedNodeIds, primarySelectedNodeId);
     this.hoverNodeId = hoverNodeId && this.model.nodes.some((node) => node.id === hoverNodeId) ? hoverNodeId : null;
     if (!this.primarySelectedNodeId && this.interaction.startsWith('Keyboard')) this.interaction = 'Idle';
+    this.markDirty();
+    this.emitStatus();
+  }
+
+  setCanvasId(canvasId: string) {
+    if (this.canvasId === canvasId) return;
+    this.canvasId = canvasId;
     this.markDirty();
     this.emitStatus();
   }
@@ -696,7 +703,6 @@ export class CanvasEngine {
       return;
     }
 
-    this.executeCommand({ type: 'clear-selection', source: 'pointer' });
     this.drag = {
       mode: 'pan',
       pointerId: event.pointerId,
@@ -1092,6 +1098,8 @@ export class CanvasEngine {
         commandCommitted = drag.command ? this.executeCommand(drag.command) : false;
       } else if (drag.mode === 'pan' && drag.moved) {
         this.interaction = 'Pointer pan';
+      } else if (drag.mode === 'pan' && !drag.moved) {
+        commandCommitted = this.executeCommand({ type: 'clear-selection', source: 'pointer' });
       }
     } else {
       if (drag.mode === 'pan') this.rollbackPan(drag);

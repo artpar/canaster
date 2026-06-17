@@ -15,7 +15,7 @@ Read these first:
 
 Historical audit reports and goal prompts in this directory are useful for provenance, but they may describe issues that were later fixed or reclassified. Treat them as audit history unless a latest report explicitly references them as current evidence.
 
-Source-owned project surface is the React/Vite frontend, canvas engine, checked-in probe runner, and docs. `dist/` is generated build output and `node_modules/` is installed dependency output; neither should be treated as authored source.
+Source-owned project surface is the React/Vite frontend, canvas engine, native nested-canvas runtime, fixture/profile tooling, and docs. `dist/` is generated build output and `node_modules/` is installed dependency output; neither should be treated as authored source.
 
 Out of scope for the current repo: ER diagrams, database schema, backend API, auth, persistence architecture, routing, collaboration, and export implementation. Those are product-layer tasks unless corresponding code is added.
 
@@ -24,7 +24,7 @@ Local verification gate:
 ```bash
 npm run build
 npm audit --omit=dev
-npm run probe:canvas
+npm run fixture:nested
 ```
 
-`npm run probe:canvas` uses Chrome/Chromium through CDP. On machines where Chrome is not at the macOS default path, set `CANWAY_CHROME_PATH` or `CHROME_PATH` to a compatible binary.
+`npm run profile:nested` uses Chrome/Chromium through CDP against a running dev server, defaulting to `http://127.0.0.1:5175/`. On machines where Chrome is not at the macOS default path, set `CANWAY_CHROME_PATH` or `CHROME_PATH` to a compatible binary.

@@ -39,7 +39,7 @@ export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = {
         ctx.fillText('No child canvas', previewX + 10, previewY + 10);
       } else if (state.portalPreview === 'unavailable') {
         ctx.fillText('Live preview unavailable', previewX + 10, previewY + 10);
-        ctx.fillText(`${data.nodeCount} child node${data.nodeCount === 1 ? '' : 's'}`, previewX + 10, previewY + 10);
+        ctx.fillText(`${data.nodeCount} child node${data.nodeCount === 1 ? '' : 's'}`, previewX + 10, previewY + 28);
       } else if (state.portalPreview === 'none') {
         ctx.fillText(`${data.nodeCount} child node${data.nodeCount === 1 ? '' : 's'}`, previewX + 10, previewY + 10);
         ctx.fillText(clipText(ctx, data.childCanvasId, Math.max(0, previewW - 20)), previewX + 10, previewY + 28);

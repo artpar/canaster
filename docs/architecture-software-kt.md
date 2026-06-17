@@ -15,7 +15,8 @@ What is solid now:
 - Pointer, keyboard, nonvisual, and future AI edits share the same command planning path.
 - Pointer preview is render-only geometry derived from command plans; it does not mutate committed model geometry.
 - Pointer group drag preserves multi-selection and moves selected nodes together.
-- Checked-in Chrome/CDP probe covers the main engine contracts.
+- Native nested-canvas runtime owns recursive canvas layout outside React.
+- Deterministic nested fixture generation covers the large recursive workspace shape.
 
 What is not complete:
 
@@ -32,11 +33,12 @@ Primary authored files:
 - `src/catalog/service-business-atlas.json`: static starter document used for new local workspaces.
 - `src/catalog/starterCatalog.ts`: starter catalog adapter that hydrates static document data for runtime use.
 - `src/engine/CanvasEngine.ts`: canvas rendering, camera, selection, command planning, command execution, pointer/keyboard/touch interaction, lifecycle cleanup.
+- `src/engine/nested/NativeNestedCanvasController.ts`: native DOM/canvas controller for recursive nested-canvas rendering, overlay reuse, parent-context panes, storage, and debug hooks.
+- `scripts/generate-nested-grid-fixture.mjs`: deterministic deep nested workspace fixture generator.
+- `scripts/profile-nested-grid-fixture.mjs`: Chrome/CDP profiling harness for the generated nested workspace against a running dev server.
 - `src/engine/types.ts`: public model, command, operation, model-change, status, and engine option types.
 - `src/engine/theme.ts`: canvas render colors.
 - `src/styles.css`: app layout, overlays, toolbar, node access panel, status bar.
-- `docs/canvas-foundation-devtools-probe.js`: browser-side probe logic imported by the probe runner.
-- `scripts/run-canvas-foundation-probe.mjs`: starts Vite/Chrome CDP, runs the probe, asserts contracts.
 - `docs/README.md`: docs entry point and current status index.
 
 Generated or installed output:
@@ -233,7 +235,7 @@ Run this before saying a foundation change is complete:
 ```bash
 npm run build
 npm audit --omit=dev
-npm run probe:canvas
+npm run fixture:nested
 git diff --check
 ```
 
@@ -241,7 +243,7 @@ What the gate proves:
 
 - TypeScript compiles and Vite builds.
 - Production dependency audit has no known vulnerabilities.
-- Browser/CDP probe passes canvas contracts.
+- Nested fixture generation produces the deterministic 820-document recursive workspace.
 - No whitespace/conflict-marker diff problems.
 
 What the gate does not prove:
@@ -295,9 +297,8 @@ For a new edit action:
 4. Apply the operation in `CanvasEngine.applyOperations`.
 5. Emit a precise `CanvasModelChange` only for committed model changes.
 6. Route pointer/keyboard/nonvisual/AI entry points through `executeCommand`.
-7. Add probe coverage in `docs/canvas-foundation-devtools-probe.js`.
-8. Add runner assertions in `scripts/run-canvas-foundation-probe.mjs`.
-9. Update this KT doc or the current status report if the contract changes.
+7. Extend `scripts/generate-nested-grid-fixture.mjs` or `scripts/profile-nested-grid-fixture.mjs` when the recursive runtime contract changes.
+8. Update this KT doc or the current status report if the contract changes.
 
 Do not:
 
@@ -346,7 +347,7 @@ If you are resuming work cold:
 3. Read this file.
 4. Read `src/engine/types.ts`.
 5. Read `CanvasEngine.executeCommand`, `planCommand`, `applyOperations`, pointer handlers, and keyboard handler.
-6. Read `docs/canvas-foundation-devtools-probe.js` around the behavior you are touching.
-7. Run `npm run build` and `npm run probe:canvas` after changes.
+6. Read `src/engine/nested/NativeNestedCanvasController.ts` around recursive rendering or parent-context behavior you are touching.
+7. Run `npm run build` and `npm run fixture:nested` after changes.
 
 The main architectural rule is simple: one command/operation path for all committed edits, with render-only preview for pointer interactions.

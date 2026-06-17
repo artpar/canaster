@@ -248,13 +248,6 @@ export function setSelectionForCanvas(collection: CanvasDocumentCollection, canv
   return syncDerivedView(next);
 }
 
-export function setPaneLayoutForCanvas(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId, paneLayout: ParentContextPaneLayout): CanvasDocumentCollection {
-  const next = cloneDocumentCollection(collection);
-  canvasDocumentFor(next, canvasId);
-  next.view.paneLayouts[canvasId] = { ...paneLayout };
-  return syncDerivedView(next);
-}
-
 export function selectNodeInCanvas(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId, nodeId: string): CanvasDocumentCollection {
   return setSelectionForCanvas(collection, canvasId, { selectedNodeIds: [nodeId], primarySelectedNodeId: nodeId, resizeMode: false });
 }
@@ -299,7 +292,7 @@ export function cloneNode(node: CanvasNode): CanvasNode {
   return { ...node, data: cloneNodeData(node.data) };
 }
 
-function syncDerivedView(collection: CanvasDocumentCollection): CanvasDocumentCollection {
+export function syncDerivedView(collection: CanvasDocumentCollection): CanvasDocumentCollection {
   const activeCanvasId = collection.documents[collection.activeCanvasId] ? collection.activeCanvasId : collection.rootCanvasId;
   return {
     ...collection,
