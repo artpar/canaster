@@ -48,12 +48,30 @@ jobs:
           set -euo pipefail
           IMAGE="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT/$GCP_ARTIFACT_REPOSITORY/daptin:${GITHUB_SHA}"
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
-          gcloud builds submit \
+          BUILD_ID="$(gcloud builds submit \
             --project "$GCP_PROJECT" \
             --config deploy/gcp/cloudbuild-daptin.yaml \
             --substitutions "_IMAGE=$IMAGE" \
+            --async \
+            --format='value(id)' \
             --suppress-logs \
-            .
+            .)"
+          echo "Cloud Build ID: $BUILD_ID"
+          while true; do
+            STATUS="$(gcloud builds describe "$BUILD_ID" --project "$GCP_PROJECT" --format='value(status)')"
+            echo "Cloud Build status: $STATUS"
+            case "$STATUS" in
+              SUCCESS)
+                break
+                ;;
+              FAILURE|INTERNAL_ERROR|TIMEOUT|CANCELLED|EXPIRED)
+                exit 1
+                ;;
+              *)
+                sleep 5
+                ;;
+            esac
+          done
 
       - name: Deploy Daptin to Cloud Run
         run: |
