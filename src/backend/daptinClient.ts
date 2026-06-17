@@ -35,7 +35,12 @@ export function getDaptinClient(): DaptinClient {
 
 export async function ensureDaptinModelsLoaded(): Promise<void> {
   if (!modelsLoadPromise) {
-    modelsLoadPromise = getDaptinClient().worldManager.loadModels(false).then(() => undefined);
+    modelsLoadPromise = getDaptinClient().worldManager.loadModel('document', false)
+      .then(() => undefined)
+      .catch((error) => {
+        modelsLoadPromise = null;
+        throw error;
+      });
   }
   return modelsLoadPromise;
 }

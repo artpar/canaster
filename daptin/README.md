@@ -17,7 +17,9 @@ MVP uses Daptin's built-in `document` table:
 
 The older `space` / `plane` / `snapshot` schema is stale and must not be used for MVP backend integration. Do not add `canaster_document` for MVP. See `docs/daptin-canaster-architecture-plan.md` for the concrete built-in `document` file-blob plan.
 
-Built-in `document` creates rows as public by default in the verified runtime, so the MVP create flow must create a harmless placeholder row, immediately PATCH `permission: 16256`, then PATCH the real JSON file content.
+After table-level create access is allowed, built-in `document` creates rows as public by default in the verified runtime. The MVP create flow must create a harmless placeholder row, immediately PATCH `permission: 16256`, then PATCH the real JSON file content.
+
+Production after admin lockdown can still block normal users at the table metadata layer. Verify `world.permission` for `table_name=document` with a normal non-admin account before release; a privileged CLI smoke does not prove the browser save journey.
 
 ## Local Daptin Startup
 

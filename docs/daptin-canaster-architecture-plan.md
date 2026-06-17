@@ -23,6 +23,7 @@ These points were verified against Daptin `v0.12.17`, local Daptin docs/source, 
 - PATCHing the created row to `permission: 16256` works.
 - After PATCH to `16256`, unauthenticated GET returns `403`.
 - PATCHing the row to `permission: 16259` makes the row public-readable.
+- Production after admin lockdown must separately allow `document` table creation for the intended caller. As of the 2026-06-17 real-user release check, production `world.permission` for `table_name=document` was `561441`, which blocks normal non-admin `POST /api/document`.
 
 ## MVP Decisions
 
@@ -100,7 +101,9 @@ Do not split `history.present`, `undoStack`, `redoStack`, cameras, selections, p
 
 ## Create Flow
 
-Because Daptin creates built-in `document` rows with `permission: 2097151`, do not create a row with real user content first.
+Prerequisite: the Daptin `world` row for `table_name=document` must allow table-level create for the intended caller. The row-level create sequence below does not bypass table metadata permissions.
+
+Because Daptin creates built-in `document` rows with `permission: 2097151` after the table-level create check passes, do not create a row with real user content first.
 
 Use this exact sequence:
 

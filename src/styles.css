@@ -558,8 +558,7 @@ button {
   font-size: 11px;
 }
 
-.sync-chip > span:last-child,
-.account-status > span:last-child {
+.sync-chip > span:last-child {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1424,14 +1423,21 @@ button {
 
 .account-status {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 7px;
   min-height: 28px;
   border-radius: 6px;
-  padding: 0 8px;
+  padding: 7px 8px;
   color: #8b96a5;
   background: rgba(255, 255, 255, 0.035);
   font-size: 11px;
+  line-height: 1.35;
+}
+
+.account-status > span:last-child {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .account-status.clean {
