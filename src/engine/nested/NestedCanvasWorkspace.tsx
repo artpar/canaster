@@ -130,29 +130,29 @@ export type NodeAccessPanelProps = {
 export function NodeAccessPanel({ collection, status, executeActiveCanvasCommand, executeDocumentCommand }: NodeAccessPanelProps) {
   const model = collection.documents[collection.activeCanvasId].model;
   return (
-    <aside className="node-access-panel" aria-label="Canvas nodes">
+    <aside className="node-access-panel" aria-label="Work items on this canvas">
       <div className="node-access-header">
-        <span>Nodes</span>
-        <span>{status.selectionCount ? `${status.selectionCount} selected` : 'No selection'}</span>
+        <span>Work items</span>
+        <span>{status.selectionCount ? `${status.selectionCount} selected` : 'Choose an item'}</span>
       </div>
-      <div className="node-access-actions" aria-label="Node editing commands">
-        <IconButton label="Move selection right" onClick={() => executeActiveCanvasCommand({ type: 'move-selection', dx: 32, dy: 0, source: 'nonvisual' })}>
+      <div className="node-access-actions" aria-label="Work item editing commands">
+        <IconButton label="Move selected item right" onClick={() => executeActiveCanvasCommand({ type: 'move-selection', dx: 32, dy: 0, source: 'nonvisual' })}>
           <MoveRight size={16} />
         </IconButton>
-        <IconButton label="Resize primary selection wider" onClick={() => executeActiveCanvasCommand({ type: 'resize-primary', dw: 32, dh: 0, source: 'nonvisual' })}>
+        <IconButton label="Make selected item wider" onClick={() => executeActiveCanvasCommand({ type: 'resize-primary', dw: 32, dh: 0, source: 'nonvisual' })}>
           <Maximize2 size={16} />
         </IconButton>
-        <IconButton label="Copy selection" onClick={() => executeActiveCanvasCommand({ type: 'copy-selection', source: 'nonvisual' })}>
+        <IconButton label="Copy selected item" onClick={() => executeActiveCanvasCommand({ type: 'copy-selection', source: 'nonvisual' })}>
           <Copy size={16} />
         </IconButton>
-        <IconButton label="Paste copied nodes" onClick={() => executeActiveCanvasCommand({ type: 'paste-clipboard', source: 'nonvisual' })}>
+        <IconButton label="Paste copied item" onClick={() => executeActiveCanvasCommand({ type: 'paste-clipboard', source: 'nonvisual' })}>
           <Clipboard size={16} />
         </IconButton>
-        <IconButton label="Delete selection" onClick={() => executeActiveCanvasCommand({ type: 'delete-selection', source: 'nonvisual' })}>
+        <IconButton label="Delete selected item" onClick={() => executeActiveCanvasCommand({ type: 'delete-selection', source: 'nonvisual' })}>
           <Trash2 size={16} />
         </IconButton>
       </div>
-      <ul className="node-access-list" aria-label="Canvas node list">
+      <ul className="node-access-list" aria-label="Work item list">
         {model.nodes.map((node) => {
           const selected = status.selectedNodeIds.includes(node.id);
           const primary = status.selectedNodeId === node.id;
@@ -163,7 +163,7 @@ export function NodeAccessPanel({ collection, status, executeActiveCanvasCommand
                 className="node-access-select"
                 type="button"
                 aria-pressed={selected}
-                aria-label={`${selected ? 'Selected' : 'Select'} ${description.label}, ${description.roleDescription}, x ${Math.round(node.x)}, y ${Math.round(node.y)}, width ${Math.round(node.w)}, height ${Math.round(node.h)}`}
+                aria-label={`${selected ? 'Selected' : 'Select'} ${description.label}, ${description.roleDescription}`}
                 onClick={() => executeActiveCanvasCommand({ type: 'select-node', nodeId: node.id, source: 'nonvisual' })}
               >
                 <span>{description.label}</span>
@@ -179,9 +179,9 @@ export function NodeAccessPanel({ collection, status, executeActiveCanvasCommand
                 +
               </button>
               <span className="node-access-meta">
-                {description.roleDescription} · x {Math.round(node.x)} · y {Math.round(node.y)} · {Math.round(node.w)}x{Math.round(node.h)}
+                {description.roleDescription}
               </span>
-              <span className="node-access-detail">{description.details.join(' · ')}</span>
+              {description.details.length ? <span className="node-access-detail">{description.details.join(' · ')}</span> : null}
               {description.actions.map((action) => (
                 <button
                   key={action.id}
@@ -210,21 +210,67 @@ export function WorkspaceStatusBar({
   status: ViewportStatus;
   lastModelChange: DocumentModelChange | null;
 }) {
+  const activeDocument = collection.documents[collection.activeCanvasId];
+  const selectedNode = status.selectedNodeId ? activeDocument.model.nodes.find((node) => node.id === status.selectedNodeId) : null;
+  const selectedText = status.selectionCount > 1
+    ? `${status.selectionCount} items selected`
+    : selectedNode
+      ? `Selected ${describeNode(selectedNode).label}`
+      : 'No item selected';
+  const itemText = `${status.totalNodes} ${status.totalNodes === 1 ? 'item' : 'items'}`;
+  const placeText = activeDocument.parentCanvasId ? `Inside ${activeDocument.title}` : activeDocument.title;
   return (
     <div className="statusbar" role="status" aria-live="polite">
-      <span>
-        {status.selectionCount > 1
-          ? `${status.selectionCount} selected`
-          : status.selectedNodeId
-            ? `Selected ${status.selectedNodeId}`
-            : 'No selection'}
-      </span>
-      <span>{status.cursorWorld ? `x ${Math.round(status.cursorWorld.x)} · y ${Math.round(status.cursorWorld.y)}` : 'Move over canvas'}</span>
-      <span>Drawn {status.renderedNodes}/{status.totalNodes}</span>
-      <span>{status.interaction}</span>
-      <span>{lastModelChange ? `${lastModelChange.kind} ${lastModelChange.source}` : `Canvas ${collection.activeCanvasId}`}</span>
+      <span>{selectedText}</span>
+      <span>{status.cursorWorld ? 'Pointer on canvas' : 'Drag canvas to pan'}</span>
+      <span>{itemText}</span>
+      <span>{userFacingInteraction(status.interaction)}</span>
+      <span>{lastModelChange ? userFacingModelChange(lastModelChange) : placeText}</span>
     </div>
   );
+}
+
+function userFacingInteraction(interaction: string) {
+  switch (interaction) {
+    case 'Idle':
+      return 'Ready';
+    case 'Fit view':
+      return 'View fitted';
+    case 'Selection changed':
+      return 'Item selected';
+    case 'Canvas activated':
+    case 'Entered child canvas':
+      return 'Opened view';
+    case 'Returned to parent canvas':
+      return 'Back to overview';
+    case 'Preview focused':
+      return 'Preview focused';
+    case 'Workspace restored':
+      return 'Workspace restored';
+    default:
+      return interaction.replace(/\bnodes\b/gi, 'items').replace(/\bnode\b/gi, 'item').replace(/\bcanvas\b/gi, 'view');
+  }
+}
+
+function userFacingModelChange(change: DocumentModelChange) {
+  switch (change.kind) {
+    case 'active-canvas-change':
+      return 'View changed';
+    case 'canvas-create':
+      return 'View added';
+    case 'node-data-change':
+      return 'Item updated';
+    case 'portal-preview-focus':
+      return 'Preview focused';
+    case 'delete-confirmation-open':
+      return 'Confirm delete';
+    case 'delete-confirmation-close':
+      return 'Delete canceled';
+    case 'document-delete':
+      return 'Items deleted';
+    default:
+      return 'Workspace updated';
+  }
 }
 
 function IconButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {

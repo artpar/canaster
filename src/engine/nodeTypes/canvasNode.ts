@@ -36,18 +36,17 @@ export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = {
       ctx.fillStyle = theme.mutedText;
       ctx.font = '12px ui-sans-serif, system-ui, sans-serif';
       if (!data.childCanvasId) {
-        ctx.fillText('No child canvas', previewX + 10, previewY + 10);
+        ctx.fillText('No view inside', previewX + 10, previewY + 10);
       } else if (state.portalPreview === 'unavailable') {
-        ctx.fillText('Live preview unavailable', previewX + 10, previewY + 10);
-        ctx.fillText(`${data.nodeCount} child node${data.nodeCount === 1 ? '' : 's'}`, previewX + 10, previewY + 28);
+        ctx.fillText('Preview unavailable', previewX + 10, previewY + 10);
+        ctx.fillText(`${data.nodeCount} item${data.nodeCount === 1 ? '' : 's'} inside`, previewX + 10, previewY + 28);
       } else if (state.portalPreview === 'none') {
-        ctx.fillText(`${data.nodeCount} child node${data.nodeCount === 1 ? '' : 's'}`, previewX + 10, previewY + 10);
-        ctx.fillText(clipText(ctx, data.childCanvasId, Math.max(0, previewW - 20)), previewX + 10, previewY + 28);
+        ctx.fillText(`${data.nodeCount} item${data.nodeCount === 1 ? '' : 's'} inside`, previewX + 10, previewY + 10);
       }
       if (state.portalPreview !== 'live') drawPreviewBoxes(ctx, previewX, previewY, previewW, previewH, theme);
     }
 
-    drawTypeBadge(ctx, contentRect, 'CANVAS', theme);
+    drawTypeBadge(ctx, contentRect, 'VIEW', theme);
   },
   hitTest({ data, point, contentRect }) {
     const preview = canvasPortalViewportRect(contentRect);
@@ -58,16 +57,16 @@ export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = {
   },
   describe({ data }) {
     return {
-      label: data.title || 'Canvas node',
-      roleDescription: 'Canvas portal',
-      details: [data.childCanvasId ? `child ${data.childCanvasId}` : 'no child canvas', `${data.nodeCount} child node${data.nodeCount === 1 ? '' : 's'}`],
+      label: data.title || 'View inside',
+      roleDescription: 'View inside',
+      details: [data.childCanvasId ? `${data.nodeCount} item${data.nodeCount === 1 ? '' : 's'} inside` : 'No view inside'],
       state: [],
       actions: data.childCanvasId
         ? [
-            { id: 'enter-child-canvas', label: 'Enter canvas', available: true },
-            { id: 'focus-portal-preview', label: 'Focus preview', available: true },
+            { id: 'enter-child-canvas', label: 'Open view', available: true },
+            { id: 'focus-portal-preview', label: 'Preview here', available: true },
           ]
-        : [{ id: 'create-child-canvas', label: 'Create child canvas', available: true }],
+        : [{ id: 'create-child-canvas', label: 'Add view inside', available: true }],
     };
   },
 };

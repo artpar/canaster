@@ -23,12 +23,15 @@ import {
 import type { CanvasCommand, ThemeName } from './engine/types';
 import type { DocumentCommand } from './engine/documentTypes';
 
+const ONBOARDING_DISMISSED_STORAGE_KEY = 'canaster:onboarding-dismissed:v1';
+
 export function App() {
   const workspaceRef = useRef<NestedCanvasWorkspaceHandle | null>(null);
   const ignoreDirtyUntilRef = useRef(0);
   const lastSavedSnapshotSignatureRef = useRef<string | null>(null);
   const [theme, setTheme] = useState<ThemeName>('dark');
   const [nodesOpen, setNodesOpen] = useState(false);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(() => window.localStorage.getItem(ONBOARDING_DISMISSED_STORAGE_KEY) === 'true');
   const [authEmail, setAuthEmail] = useState(() => window.localStorage.getItem(DAPTIN_LAST_EMAIL_STORAGE_KEY) ?? '');
   const [authName, setAuthName] = useState('Canaster User');
   const [authPassword, setAuthPassword] = useState('');
@@ -37,7 +40,7 @@ export function App() {
   const [activeDocumentId, setActiveDocumentId] = useState(() => window.localStorage.getItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY) ?? '');
   const [documentTitle, setDocumentTitle] = useState('Canaster Workspace');
   const [syncStatus, setSyncStatus] = useState<'anonymous' | 'loading' | 'clean' | 'dirty' | 'saving' | 'error'>(() => (getToken() ? 'loading' : 'anonymous'));
-  const [syncMessage, setSyncMessage] = useState(() => (getToken() ? 'Restoring session' : 'Local draft'));
+  const [syncMessage, setSyncMessage] = useState(() => (getToken() ? 'Restoring session' : 'Saved on this device'));
   const initialCollection = useMemo(() => defaultStarterCollection(), []);
   const workspaceStorageKey = activeDocumentId ? `daptin:${activeDocumentId}` : STARTER_WORKSPACE_STORAGE_KEY;
   const [chromeState, setChromeState] = useState<NestedCanvasWorkspaceChromeState>(() => ({
@@ -178,7 +181,7 @@ export function App() {
     setDocuments([]);
     setAuthPassword('');
     setSyncStatus('anonymous');
-    setSyncMessage('Local draft');
+    setSyncMessage('Saved on this device');
   }, []);
 
   const handleCreateDocument = useCallback(async () => {
@@ -222,6 +225,26 @@ export function App() {
     }
   }, [activeDocumentId, refreshDocuments]);
 
+  const dismissOnboarding = useCallback(() => {
+    window.localStorage.setItem(ONBOARDING_DISMISSED_STORAGE_KEY, 'true');
+    setOnboardingDismissed(true);
+  }, []);
+
+  const handleOpenNodePanel = useCallback(() => {
+    setNodesOpen((open) => {
+      const next = !open;
+      if (next) dismissOnboarding();
+      return next;
+    });
+  }, [dismissOnboarding]);
+
+  const handleShowWorkItems = useCallback(() => {
+    setNodesOpen(true);
+    dismissOnboarding();
+  }, [dismissOnboarding]);
+
+  const showOnboarding = !activeDocumentId && !onboardingDismissed && !nodesOpen;
+
   return (
     <main className="app-shell">
       <section className="workspace" aria-label="Canvas workspace">
@@ -258,7 +281,7 @@ export function App() {
             >
               {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
             </IconButton>
-            <IconButton label={nodesOpen ? 'Close node panel' : 'Open node panel'} onClick={() => setNodesOpen((open) => !open)}>
+            <IconButton label={nodesOpen ? 'Close work items' : 'Open work items'} onClick={handleOpenNodePanel}>
               {nodesOpen ? <X size={17} /> : <ListTree size={17} />}
             </IconButton>
           </div>
@@ -313,7 +336,7 @@ export function App() {
                   aria-label="Email"
                   name="email"
                   autoComplete="email"
-                  placeholder="email"
+                  placeholder="Email"
                   value={authEmail}
                   onChange={(event) => setAuthEmail(event.target.value)}
                 />
@@ -323,7 +346,7 @@ export function App() {
                   aria-label="Password"
                   name="password"
                   autoComplete="current-password"
-                  placeholder="password"
+                  placeholder="Password"
                   value={authPassword}
                   onChange={(event) => setAuthPassword(event.target.value)}
                 />
@@ -348,6 +371,13 @@ export function App() {
           onCollectionChange={handleWorkspaceCollectionChange}
           onChromeStateChange={handleChromeStateChange}
         />
+        {showOnboarding ? (
+          <FirstRunGuide
+            onDismiss={dismissOnboarding}
+            onFitSample={() => workspaceRef.current?.fitActiveCanvas()}
+            onShowWorkItems={handleShowWorkItems}
+          />
+        ) : null}
         {nodesOpen ? (
           <NodeAccessPanel
             collection={chromeState.collection}
@@ -363,6 +393,44 @@ export function App() {
         />
       </section>
     </main>
+  );
+}
+
+type FirstRunGuideProps = {
+  onDismiss: () => void;
+  onFitSample: () => void;
+  onShowWorkItems: () => void;
+};
+
+function FirstRunGuide({ onDismiss, onFitSample, onShowWorkItems }: FirstRunGuideProps) {
+  return (
+    <aside className="first-run-guide" aria-label="Start with the sample workspace">
+      <button className="guide-close" type="button" aria-label="Dismiss getting started guide" onClick={onDismiss}>
+        <X size={15} />
+      </button>
+      <p className="guide-label">Starter workspace</p>
+      <h2>Plan one job, then step inside it.</h2>
+      <p>
+        This sample keeps intake, crew, site notes, and proof connected. Move a card, open the large job view, and come back to the bigger picture when the details are clear.
+      </p>
+      <ul>
+        <li>Your changes stay on this device until you sign in.</li>
+        <li>The work-items panel gives a plain list when the canvas feels busy.</li>
+      </ul>
+      <div className="guide-actions" aria-label="Getting started actions">
+        <button className="guide-action primary" type="button" onClick={onFitSample}>
+          <Maximize2 size={15} />
+          Fit sample
+        </button>
+        <button className="guide-action" type="button" onClick={onShowWorkItems}>
+          <ListTree size={15} />
+          Show work items
+        </button>
+        <button className="guide-action quiet" type="button" onClick={onDismiss}>
+          Got it
+        </button>
+      </div>
+    </aside>
   );
 }
 

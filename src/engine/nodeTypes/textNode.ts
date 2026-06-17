@@ -37,12 +37,12 @@ export const textNodeDefinition: NodeDefinition<TextNodeData> = {
     }
     drawTypeBadge(ctx, contentRect, 'TEXT', theme);
   },
-  describe({ node, data }) {
-    const label = clipPlainText(firstLine(data.text), 60) || 'Empty text node';
+  describe({ data }) {
+    const label = clipPlainText(firstLine(data.text), 60) || 'Empty note';
     return {
       label,
-      roleDescription: 'Text',
-      details: [`${lineCount(data.text)} line${lineCount(data.text) === 1 ? '' : 's'}`, `size ${Math.round(node.w)}x${Math.round(node.h)}`],
+      roleDescription: 'Note',
+      details: [`${lineCount(data.text)} line${lineCount(data.text) === 1 ? '' : 's'}`],
       state: [],
       actions: [],
     };

@@ -537,6 +537,14 @@ button {
   white-space: nowrap;
 }
 
+.sync-readout.anonymous {
+  color: #c6ced8;
+}
+
+:root[data-theme='light'] .sync-readout.anonymous {
+  color: #3d4652;
+}
+
 .sync-readout.clean {
   color: #42c987;
 }
@@ -559,6 +567,193 @@ button {
 :root[data-theme='light'] .shell-select {
   color: #3d4652;
   background: rgba(24, 33, 45, 0.04);
+}
+
+.shell-input::placeholder {
+  color: #8b96a5;
+  opacity: 1;
+}
+
+:root[data-theme='light'] .shell-input::placeholder {
+  color: #6d7784;
+}
+
+.first-run-guide {
+  position: absolute;
+  top: 94px;
+  right: 14px;
+  z-index: 19;
+  width: min(360px, calc(100% - 28px));
+  padding: 13px;
+  border: 1px solid rgba(139, 150, 165, 0.22);
+  border-radius: 8px;
+  color: #c6ced8;
+  background: rgba(24, 29, 37, 0.9);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(16px);
+  pointer-events: auto;
+}
+
+:root[data-theme='light'] .first-run-guide {
+  border-color: rgba(122, 133, 148, 0.28);
+  color: #3d4652;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 12px 28px rgba(38, 50, 68, 0.14);
+}
+
+.guide-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  color: #8b96a5;
+  background: transparent;
+  cursor: pointer;
+}
+
+.guide-close:hover {
+  color: #eef2f6;
+  background: rgba(90, 167, 255, 0.16);
+}
+
+:root[data-theme='light'] .guide-close:hover {
+  color: #18212d;
+  background: rgba(47, 111, 208, 0.12);
+}
+
+.guide-label {
+  margin: 0 32px 6px 0;
+  color: #8b96a5;
+  font-size: 12px;
+}
+
+.first-run-guide h2 {
+  margin: 0 32px 8px 0;
+  color: #eef2f6;
+  font-size: 16px;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+:root[data-theme='light'] .first-run-guide h2 {
+  color: #18212d;
+}
+
+.first-run-guide p {
+  margin: 0;
+  color: #c6ced8;
+  font-size: 13px;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+:root[data-theme='light'] .guide-label,
+:root[data-theme='light'] .first-run-guide p {
+  color: #3d4652;
+}
+
+.first-run-guide ul {
+  display: grid;
+  gap: 7px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.first-run-guide li {
+  position: relative;
+  padding-left: 14px;
+  color: #c6ced8;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.first-run-guide li::before {
+  content: '';
+  position: absolute;
+  top: 0.55em;
+  left: 2px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #42c987;
+}
+
+:root[data-theme='light'] .first-run-guide li {
+  color: #3d4652;
+}
+
+.guide-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.guide-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 32px;
+  min-width: 0;
+  border: 1px solid rgba(139, 150, 165, 0.22);
+  border-radius: 6px;
+  padding: 0 10px;
+  color: #c6ced8;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.guide-action:hover {
+  color: #eef2f6;
+  background: rgba(90, 167, 255, 0.16);
+}
+
+.guide-action.primary {
+  border-color: rgba(90, 167, 255, 0.48);
+  color: #eef2f6;
+  background: rgba(90, 167, 255, 0.18);
+}
+
+.guide-action.quiet {
+  border-color: transparent;
+  color: #8b96a5;
+  background: transparent;
+}
+
+.guide-close:focus-visible,
+.guide-action:focus-visible {
+  outline: 2px solid #5aa7ff;
+  outline-offset: 2px;
+}
+
+:root[data-theme='light'] .guide-action {
+  color: #3d4652;
+  background: rgba(24, 33, 45, 0.04);
+}
+
+:root[data-theme='light'] .guide-action:hover,
+:root[data-theme='light'] .guide-action.primary {
+  color: #18212d;
+  background: rgba(47, 111, 208, 0.12);
+}
+
+:root[data-theme='light'] .guide-action.primary {
+  border-color: rgba(47, 111, 208, 0.42);
+}
+
+:root[data-theme='light'] .guide-action.quiet {
+  color: #6d7784;
+  background: transparent;
 }
 
 .node-access-panel {
@@ -787,6 +982,21 @@ button {
     left: 14px;
     right: 14px;
     width: auto;
+  }
+
+  .first-run-guide {
+    top: auto;
+    right: 14px;
+    bottom: 92px;
+    left: 14px;
+    width: auto;
+    max-height: calc(100% - 220px);
+    overflow: auto;
+  }
+
+  .first-run-guide h2,
+  .guide-label {
+    margin-right: 28px;
   }
 
   .statusbar {

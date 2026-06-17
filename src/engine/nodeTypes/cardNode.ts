@@ -46,15 +46,11 @@ export const cardNodeDefinition: NodeDefinition<CardNodeData> = {
 
     drawTypeBadge(ctx, contentRect, data.accent.toUpperCase(), theme);
   },
-  describe({ node, data }) {
+  describe({ data }) {
     return {
       label: data.title || 'Untitled card',
-      roleDescription: 'Card',
+      roleDescription: 'Work item',
       details: [
-        `accent ${data.accent}`,
-        `x ${Math.round(node.x)}`,
-        `y ${Math.round(node.y)}`,
-        `size ${Math.round(node.w)}x${Math.round(node.h)}`,
         data.detail,
       ].filter(Boolean),
       state: [],
