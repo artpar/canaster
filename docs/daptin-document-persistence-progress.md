@@ -11,6 +11,14 @@ The backend remains an implementation detail. The user-facing UI says "Documents
 
 No custom Canaster persistence entity was added. The MVP does not use `canaster_document`, `space`, `plane`, or `snapshot`.
 
+## Shell UX Update - 2026-06-17
+
+- The app uses one persistent top command bar for workspace title, New, Open, Save online, canvas navigation, view controls, theme, Work Items, and Account.
+- Account fields are no longer inline in the toolbar. Sign in, sign up, and sign out live in a toolbar-launched account popover.
+- Open uses the same right-side utility drawer slot as Work Items. Only Documents or Work Items is visible at a time.
+- Local autosave remains available without an account. Save online is always visible; signed-out users are prompted to sign in, and signed-in users create or update the active Daptin-backed document.
+- New starts a local draft first. First remote save creates the Daptin document, then later saves update it.
+
 ## Implemented
 
 - Added `src/backend/daptinClient.ts`.
@@ -175,4 +183,3 @@ The temporary Vite dev server used for browser E2E was stopped after verificatio
 - Decide whether to code-split the SDK-backed document/account shell later; this is only a bundle-size warning, not a functional failure.
 - Remove old public smoke documents from the local development database if the document dropdown should stay clean during manual testing.
 - Production endpoint wiring should be handled through deployment config. The product UI should continue to avoid backend-provider wording.
-

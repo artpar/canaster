@@ -113,10 +113,16 @@ export async function loadDocument(documentRef: string): Promise<CanvasWorkspace
   return decodeSnapshotContent(content);
 }
 
-export async function saveDocument(documentRef: string, snapshot: CanvasWorkspaceSnapshot): Promise<void> {
+export async function saveDocument(documentRef: string, snapshot: CanvasWorkspaceSnapshot, title?: string): Promise<void> {
   const current = await getDocumentRow(documentRef);
-  const name = String(rowAttr(current, 'document_name') ?? `${documentRef}.canaster.json`);
+  const name = title === undefined
+    ? String(rowAttr(current, 'document_name') ?? `${documentRef}.canaster.json`)
+    : `${safeDocumentTitle(title)}.canaster.json`;
   await updateDocument(documentRef, {
+    ...(title === undefined ? {} : {
+      document_name: name,
+      document_path: `/canaster/documents/${documentRef}.canaster.json`,
+    }),
     document_content: encodeSnapshotContent(name, snapshot),
     document_extension: 'json',
     mime_type: 'application/json',

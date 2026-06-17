@@ -1,11 +1,45 @@
-import { ArrowDown, ArrowUp, ListTree, Maximize2, Minus, Moon, PanelsTopLeft, Plus, Redo2, RotateCcw, Sun, Undo2, X } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  CheckCircle2,
+  FilePlus2,
+  FolderOpen,
+  ListTree,
+  Loader2,
+  LogIn,
+  LogOut,
+  Maximize2,
+  Minus,
+  Moon,
+  PanelsTopLeft,
+  Plus,
+  Redo2,
+  RefreshCw,
+  RotateCcw,
+  Save,
+  Sun,
+  Undo2,
+  UserCircle,
+  UserPlus,
+  X,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createDocument,
+  listDocuments,
+  loadDocument,
+  saveDocument,
+  signIn,
+  signOut,
+  signUp,
+  type CanasterDocumentSummary,
+} from './backend/canasterDocuments';
+import { DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY, DAPTIN_LAST_EMAIL_STORAGE_KEY, getToken } from './backend/daptinClient';
 import { defaultStarterCollection, STARTER_WORKSPACE_STORAGE_KEY } from './catalog/starterCatalog';
 import { portalDataForNode } from './engine/documentModel';
 import {
   NestedCanvasWorkspace,
   NodeAccessPanel,
-  WorkspaceStatusBar,
   initialViewportStatus,
   type NestedCanvasWorkspaceChromeState,
   type NestedCanvasWorkspaceHandle,
@@ -13,22 +47,49 @@ import {
 import { PARENT_CONTEXT_REGIONS, regionForContextVector } from './engine/nested/parentContextField';
 import { describeNode } from './engine/nodeTypes/registry';
 import type { CanvasCommand, CanvasNode, ThemeName } from './engine/types';
-import type { CanvasDocument, CanvasDocumentCollection, CanvasDocumentId, DocumentCommand, ParentContextRegion, StackFrame } from './engine/documentTypes';
+import type { CanvasDocument, CanvasDocumentCollection, CanvasDocumentId, CanvasWorkspaceSnapshot, DocumentCommand, ParentContextRegion, StackFrame } from './engine/documentTypes';
+import { saveWorkspaceSnapshot } from './engine/workspaceStorage';
+import { createWorkspaceHistory, createWorkspaceSnapshot } from './engine/workspaceHistory';
 
 const ONBOARDING_DISMISSED_STORAGE_KEY = 'canaster:onboarding-dismissed:v1';
+const DEFAULT_DOCUMENT_TITLE = 'Canaster Workspace';
+const LOCAL_SAVE_MESSAGE = 'Saved on this device';
+const ONLINE_READY_MESSAGE = 'Ready to save online';
+const SAVED_MESSAGE = 'Saved online';
 const NAVIGATOR_VIEWBOX = { width: 360, height: 150 };
 const NAVIGATOR_MID_Y = 76;
 const CURRENT_GRAPH_POINT: GraphPoint = { x: 150, y: NAVIGATOR_MID_Y };
 const NEXT_GRAPH_ELBOW_X = 232;
 const NEXT_GRAPH_X = 260;
 
+type UtilityDrawerMode = 'documents' | 'work-items' | null;
+type AuthMode = 'sign-in' | 'sign-up';
+type SyncStatus = 'anonymous' | 'loading' | 'clean' | 'dirty' | 'saving' | 'error';
+
 export function App() {
   const workspaceRef = useRef<NestedCanvasWorkspaceHandle | null>(null);
+  const ignoreDirtyUntilRef = useRef(0);
+  const lastSavedSnapshotSignatureRef = useRef<string | null>(null);
+  const didRestoreRemoteRef = useRef(false);
   const [theme, setTheme] = useState<ThemeName>('dark');
-  const [nodesOpen, setNodesOpen] = useState(false);
+  const [utilityDrawerMode, setUtilityDrawerMode] = useState<UtilityDrawerMode>(null);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthMode>('sign-in');
   const [parentContextVisible, setParentContextVisible] = useState(true);
   const [onboardingDismissed, setOnboardingDismissed] = useState(() => window.localStorage.getItem(ONBOARDING_DISMISSED_STORAGE_KEY) === 'true');
+  const [authEmail, setAuthEmail] = useState(() => window.localStorage.getItem(DAPTIN_LAST_EMAIL_STORAGE_KEY) ?? '');
+  const [authName, setAuthName] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [signedIn, setSignedIn] = useState(() => Boolean(getToken()));
+  const [documents, setDocuments] = useState<CanasterDocumentSummary[]>([]);
+  const [activeDocumentId, setActiveDocumentId] = useState(() => window.localStorage.getItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY) ?? '');
+  const [documentTitle, setDocumentTitle] = useState(DEFAULT_DOCUMENT_TITLE);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(() => (getToken() ? 'loading' : 'anonymous'));
+  const [syncMessage, setSyncMessage] = useState(() => (getToken() ? 'Checking saved workspaces' : LOCAL_SAVE_MESSAGE));
   const initialCollection = useMemo(() => defaultStarterCollection(), []);
+  const workspaceStorageKey = activeDocumentId ? remoteWorkspaceStorageKey(activeDocumentId) : STARTER_WORKSPACE_STORAGE_KEY;
+  const workItemsOpen = !accountOpen && utilityDrawerMode === 'work-items';
+  const documentsOpen = !accountOpen && utilityDrawerMode === 'documents';
   const [chromeState, setChromeState] = useState<NestedCanvasWorkspaceChromeState>(() => ({
     collection: initialCollection,
     status: initialViewportStatus,
@@ -40,6 +101,23 @@ export function App() {
   const handleChromeStateChange = useCallback((next: NestedCanvasWorkspaceChromeState) => {
     setChromeState(next);
   }, []);
+
+  const handleWorkspaceCollectionChange = useCallback(() => {
+    if (Date.now() < ignoreDirtyUntilRef.current) return;
+    if (!activeDocumentId) {
+      setSyncStatus((current) => current === 'loading' || current === 'saving' || current === 'error' ? current : signedIn ? 'dirty' : 'anonymous');
+      setSyncMessage((current) => current === 'Checking saved workspaces' || current === 'Saving workspace' ? current : signedIn ? ONLINE_READY_MESSAGE : LOCAL_SAVE_MESSAGE);
+      return;
+    }
+    const currentSnapshot = workspaceRef.current?.getWorkspaceSnapshot();
+    if (currentSnapshot && snapshotSignature(currentSnapshot) === lastSavedSnapshotSignatureRef.current) {
+      setSyncStatus('clean');
+      setSyncMessage(SAVED_MESSAGE);
+      return;
+    }
+    setSyncStatus((current) => current === 'loading' || current === 'saving' || current === 'error' ? current : 'dirty');
+    setSyncMessage((current) => current === 'Opening workspace' || current === 'Saving workspace' ? current : 'Unsaved online changes');
+  }, [activeDocumentId, signedIn]);
 
   const executeActiveCanvasCommand = useCallback(
     (command: CanvasCommand) => workspaceRef.current?.executeActiveCanvasCommand(command) ?? false,
@@ -54,21 +132,231 @@ export function App() {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
 
+  useEffect(() => {
+    if (accountOpen && utilityDrawerMode) setUtilityDrawerMode(null);
+  }, [accountOpen, utilityDrawerMode]);
+
   const dismissOnboarding = useCallback(() => {
     window.localStorage.setItem(ONBOARDING_DISMISSED_STORAGE_KEY, 'true');
     setOnboardingDismissed(true);
   }, []);
 
+  const refreshDocuments = useCallback(async () => {
+    if (!getToken()) return [];
+    const rows = await listDocuments();
+    setDocuments(rows);
+    return rows;
+  }, []);
+
+  const loadDaptinDocument = useCallback(async (documentRef: string, knownDocuments = documents) => {
+    if (!documentRef) return;
+    setSyncStatus('loading');
+    setSyncMessage('Opening workspace');
+    try {
+      const snapshot = await loadDocument(documentRef);
+      const title = knownDocuments.find((document) => document.id === documentRef)?.title ?? titleFromSnapshot(snapshot);
+      await saveWorkspaceSnapshot(snapshot, remoteWorkspaceStorageKey(documentRef));
+      lastSavedSnapshotSignatureRef.current = snapshotSignature(snapshot);
+      ignoreDirtyUntilRef.current = Date.now() + 1200;
+      workspaceRef.current?.loadWorkspaceSnapshot(snapshot, 'Document loaded');
+      window.localStorage.setItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY, documentRef);
+      setActiveDocumentId(documentRef);
+      setDocumentTitle(title);
+      setSyncStatus('clean');
+      setSyncMessage(SAVED_MESSAGE);
+      window.setTimeout(() => {
+        const currentSnapshot = workspaceRef.current?.getWorkspaceSnapshot();
+        if (currentSnapshot && snapshotSignature(currentSnapshot) === lastSavedSnapshotSignatureRef.current) {
+          setSyncStatus('clean');
+          setSyncMessage(SAVED_MESSAGE);
+        }
+      }, 1600);
+    } catch (error) {
+      setSyncStatus('error');
+      setSyncMessage(workspaceErrorMessage(error, 'open'));
+    }
+  }, [documents]);
+
+  useEffect(() => {
+    if (!signedIn) {
+      didRestoreRemoteRef.current = false;
+      return;
+    }
+    if (didRestoreRemoteRef.current) return;
+    didRestoreRemoteRef.current = true;
+    let canceled = false;
+    setSyncStatus('loading');
+    setSyncMessage('Checking saved workspaces');
+    refreshDocuments()
+      .then(async (rows) => {
+        if (canceled) return;
+        const restoredDocumentId = activeDocumentId || window.localStorage.getItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY) || '';
+        if (restoredDocumentId && rows.some((document) => document.id === restoredDocumentId)) {
+          await loadDaptinDocument(restoredDocumentId, rows);
+          return;
+        }
+        setSyncStatus('clean');
+        setSyncMessage(ONLINE_READY_MESSAGE);
+      })
+      .catch((error) => {
+        if (canceled) return;
+        setSyncStatus('error');
+        setSyncMessage(workspaceErrorMessage(error, 'refresh'));
+      });
+    return () => {
+      canceled = true;
+    };
+  }, [activeDocumentId, loadDaptinDocument, refreshDocuments, signedIn]);
+
+  const handleSignUp = useCallback(async () => {
+    if (!authEmail.trim() || !authPassword) return;
+    setSyncStatus('loading');
+    setSyncMessage('Creating account');
+    try {
+      await signUp({ name: authName.trim() || 'Canaster User', email: authEmail.trim(), password: authPassword });
+      window.localStorage.setItem(DAPTIN_LAST_EMAIL_STORAGE_KEY, authEmail.trim());
+      didRestoreRemoteRef.current = false;
+      setSignedIn(true);
+      setAccountOpen(false);
+      setAuthPassword('');
+      setSyncStatus('loading');
+      setSyncMessage('Checking saved workspaces');
+    } catch (error) {
+      setSyncStatus('error');
+      setSyncMessage(accountErrorMessage(error, 'create'));
+    }
+  }, [authEmail, authName, authPassword]);
+
+  const handleSignIn = useCallback(async () => {
+    if (!authEmail.trim() || !authPassword) return;
+    setSyncStatus('loading');
+    setSyncMessage('Signing in');
+    try {
+      await signIn({ email: authEmail.trim(), password: authPassword });
+      window.localStorage.setItem(DAPTIN_LAST_EMAIL_STORAGE_KEY, authEmail.trim());
+      didRestoreRemoteRef.current = false;
+      setSignedIn(true);
+      setAccountOpen(false);
+      setAuthPassword('');
+      setSyncStatus('loading');
+      setSyncMessage('Checking saved workspaces');
+    } catch (error) {
+      setSyncStatus('error');
+      setSyncMessage(accountErrorMessage(error, 'sign-in'));
+    }
+  }, [authEmail, authPassword]);
+
+  const handleSignOut = useCallback(async () => {
+    const snapshot = workspaceRef.current?.getWorkspaceSnapshot();
+    if (snapshot) await saveWorkspaceSnapshot(snapshot, STARTER_WORKSPACE_STORAGE_KEY);
+    await signOut();
+    window.localStorage.removeItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY);
+    didRestoreRemoteRef.current = false;
+    lastSavedSnapshotSignatureRef.current = null;
+    setSignedIn(false);
+    setActiveDocumentId('');
+    setDocuments([]);
+    setAuthPassword('');
+    setAccountOpen(false);
+    setSyncStatus('anonymous');
+    setSyncMessage(LOCAL_SAVE_MESSAGE);
+  }, []);
+
+  const handleNewLocalDraft = useCallback(async () => {
+    const snapshot = createLocalDraftSnapshot();
+    await saveWorkspaceSnapshot(snapshot, STARTER_WORKSPACE_STORAGE_KEY);
+    window.localStorage.removeItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY);
+    ignoreDirtyUntilRef.current = Date.now() + 700;
+    lastSavedSnapshotSignatureRef.current = null;
+    setActiveDocumentId('');
+    setDocumentTitle(DEFAULT_DOCUMENT_TITLE);
+    setSyncStatus(signedIn ? 'dirty' : 'anonymous');
+    setSyncMessage(signedIn ? ONLINE_READY_MESSAGE : LOCAL_SAVE_MESSAGE);
+    setUtilityDrawerMode(null);
+    if (!activeDocumentId) workspaceRef.current?.loadWorkspaceSnapshot(snapshot, 'New workspace');
+  }, [activeDocumentId, signedIn]);
+
+  const handleSaveOnline = useCallback(async () => {
+    if (!signedIn) {
+      setAuthMode('sign-in');
+      setAccountOpen(true);
+      setUtilityDrawerMode(null);
+      setSyncStatus('anonymous');
+      setSyncMessage('Sign in to save online');
+      return;
+    }
+    const snapshot = workspaceRef.current?.getWorkspaceSnapshot();
+    if (!snapshot) {
+      setSyncStatus('error');
+      setSyncMessage('Workspace is not ready yet');
+      return;
+    }
+    setSyncStatus('saving');
+    setSyncMessage('Saving workspace');
+    try {
+      await workspaceRef.current?.flushWorkspaceSnapshot();
+      const freshSnapshot = workspaceRef.current?.getWorkspaceSnapshot() ?? snapshot;
+      if (activeDocumentId) {
+        await saveDocument(activeDocumentId, freshSnapshot, documentTitle);
+        await saveWorkspaceSnapshot(freshSnapshot, remoteWorkspaceStorageKey(activeDocumentId));
+      } else {
+        const documentRef = await createDocument(documentTitle, freshSnapshot);
+        await saveWorkspaceSnapshot(freshSnapshot, remoteWorkspaceStorageKey(documentRef));
+        window.localStorage.setItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY, documentRef);
+        setActiveDocumentId(documentRef);
+      }
+      lastSavedSnapshotSignatureRef.current = snapshotSignature(freshSnapshot);
+      await refreshDocuments();
+      ignoreDirtyUntilRef.current = Date.now() + 1200;
+      setSyncStatus('clean');
+      setSyncMessage(SAVED_MESSAGE);
+    } catch (error) {
+      setSyncStatus('error');
+      setSyncMessage(workspaceErrorMessage(error, 'save'));
+    }
+  }, [activeDocumentId, documentTitle, refreshDocuments, signedIn]);
+
+  const handleRefreshDocuments = useCallback(async () => {
+    if (!signedIn) {
+      setAuthMode('sign-in');
+      setAccountOpen(true);
+      setUtilityDrawerMode(null);
+      setSyncStatus('anonymous');
+      setSyncMessage('Sign in to see saved workspaces');
+      return;
+    }
+    setSyncStatus('loading');
+    setSyncMessage('Checking saved workspaces');
+    try {
+      await refreshDocuments();
+      setSyncStatus('clean');
+      setSyncMessage(activeDocumentId ? SAVED_MESSAGE : ONLINE_READY_MESSAGE);
+    } catch (error) {
+      setSyncStatus('error');
+      setSyncMessage(workspaceErrorMessage(error, 'refresh'));
+    }
+  }, [activeDocumentId, refreshDocuments, signedIn]);
+
+  const handleOpenDocumentsDrawer = useCallback(() => {
+    const nextMode = utilityDrawerMode === 'documents' ? null : 'documents';
+    if (nextMode) {
+      setAccountOpen(false);
+      dismissOnboarding();
+    }
+    setUtilityDrawerMode(nextMode);
+  }, [dismissOnboarding, utilityDrawerMode]);
+
   const handleOpenNodePanel = useCallback(() => {
-    setNodesOpen((open) => {
-      const next = !open;
-      if (next) dismissOnboarding();
-      return next;
-    });
-  }, [dismissOnboarding]);
+    const nextMode = utilityDrawerMode === 'work-items' ? null : 'work-items';
+    if (nextMode) {
+      setAccountOpen(false);
+      dismissOnboarding();
+    }
+    setUtilityDrawerMode(nextMode);
+  }, [dismissOnboarding, utilityDrawerMode]);
 
   const handleShowWorkItems = useCallback(() => {
-    setNodesOpen(true);
+    setUtilityDrawerMode('work-items');
     dismissOnboarding();
   }, [dismissOnboarding]);
 
@@ -91,7 +379,7 @@ export function App() {
     });
   }, [executeDocumentCommand, navigation.activeCanvasId, navigation.selectedChildView]);
 
-  const showOnboarding = !onboardingDismissed && !nodesOpen;
+  const showOnboarding = !activeDocumentId && !onboardingDismissed && utilityDrawerMode === null;
 
   return (
     <main className="app-shell">
@@ -101,6 +389,36 @@ export function App() {
             <span className="brand-mark" />
             <span>Canaster</span>
           </div>
+          <form
+            className="toolbar-group document-command-group"
+            aria-label="Documents"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleSaveOnline();
+            }}
+          >
+            <input
+              className="document-title-input"
+              aria-label="Workspace name"
+              name="document-title"
+              value={documentTitle}
+              onChange={(event) => setDocumentTitle(event.target.value)}
+            />
+            <IconButton label="New local workspace" onClick={() => void handleNewLocalDraft()}>
+              <FilePlus2 size={17} />
+            </IconButton>
+            <IconButton label={documentsOpen ? 'Close saved workspaces' : 'Open saved workspaces'} pressed={documentsOpen} onClick={handleOpenDocumentsDrawer}>
+              <FolderOpen size={17} />
+            </IconButton>
+            <button className="save-online-button" type="submit" disabled={syncStatus === 'loading' || syncStatus === 'saving'}>
+              <Save size={16} />
+              <span>Save online</span>
+            </button>
+            <span className={`sync-chip ${syncStatus}`} role="status" aria-live="polite" title={syncMessage}>
+              <SyncStatusIcon status={syncStatus} />
+              <span>{syncMessage}</span>
+            </span>
+          </form>
           <div className="toolbar-group view-navigation-group" aria-label="View navigation">
             <IconButton label={navigation.parentTitle ? `Go up to ${navigation.parentTitle}` : 'Already at top view'} disabled={!navigation.parentCanvasId} onClick={goToParentView}>
               <ArrowUp size={17} />
@@ -150,18 +468,52 @@ export function App() {
             >
               {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
             </IconButton>
-            <IconButton label={nodesOpen ? 'Close work items' : 'Open work items'} onClick={handleOpenNodePanel}>
-              {nodesOpen ? <X size={17} /> : <ListTree size={17} />}
+            <IconButton label={workItemsOpen ? 'Close work items' : 'Open work items'} pressed={workItemsOpen} onClick={handleOpenNodePanel}>
+              <ListTree size={17} />
+            </IconButton>
+          </div>
+          <div className="toolbar-group account-command-group" aria-label="Account">
+            <IconButton
+              label={signedIn ? 'Open account' : 'Sign in'}
+              pressed={accountOpen}
+              onClick={() => {
+                const nextOpen = !accountOpen;
+                if (nextOpen) setUtilityDrawerMode(null);
+                setAccountOpen(nextOpen);
+              }}
+            >
+              {signedIn ? <UserCircle size={17} /> : <LogIn size={17} />}
             </IconButton>
           </div>
         </div>
+        {accountOpen ? (
+          <AccountPopover
+            authEmail={authEmail}
+            authMode={authMode}
+            authName={authName}
+            authPassword={authPassword}
+            signedIn={signedIn}
+            syncMessage={syncMessage}
+            syncStatus={syncStatus}
+            onAuthModeChange={setAuthMode}
+            onClose={() => setAccountOpen(false)}
+            onEmailChange={setAuthEmail}
+            onNameChange={setAuthName}
+            onPasswordChange={setAuthPassword}
+            onSignIn={() => void handleSignIn()}
+            onSignOut={() => void handleSignOut()}
+            onSignUp={() => void handleSignUp()}
+          />
+        ) : null}
 
         <NestedCanvasWorkspace
           ref={workspaceRef}
           initialCollection={initialCollection}
           theme={theme}
           parentContextVisible={parentContextVisible}
-          storageKey={STARTER_WORKSPACE_STORAGE_KEY}
+          fitOnFirstLoad={!activeDocumentId}
+          storageKey={workspaceStorageKey}
+          onCollectionChange={handleWorkspaceCollectionChange}
           onChromeStateChange={handleChromeStateChange}
         />
         <ViewNavigator navigation={navigation} executeDocumentCommand={executeDocumentCommand} />
@@ -172,7 +524,25 @@ export function App() {
             onShowWorkItems={handleShowWorkItems}
           />
         ) : null}
-        {nodesOpen ? (
+        {documentsOpen ? (
+          <DocumentsDrawer
+            activeDocumentId={activeDocumentId}
+            documents={documents}
+            signedIn={signedIn}
+            syncStatus={syncStatus}
+            onClose={() => setUtilityDrawerMode(null)}
+            onNew={() => void handleNewLocalDraft()}
+            onOpenAccount={() => {
+              setAuthMode('sign-in');
+              setAccountOpen(true);
+              setUtilityDrawerMode(null);
+            }}
+            onOpenDocument={(documentRef) => void loadDaptinDocument(documentRef)}
+            onRefresh={() => void handleRefreshDocuments()}
+            onSaveOnline={() => void handleSaveOnline()}
+          />
+        ) : null}
+        {workItemsOpen ? (
           <NodeAccessPanel
             collection={chromeState.collection}
             status={chromeState.status}
@@ -180,11 +550,6 @@ export function App() {
             executeDocumentCommand={executeDocumentCommand}
           />
         ) : null}
-        <WorkspaceStatusBar
-          collection={chromeState.collection}
-          status={chromeState.status}
-          lastModelChange={chromeState.lastModelChange}
-        />
       </section>
     </main>
   );
@@ -333,6 +698,213 @@ function FirstRunGuide({ onDismiss, onFitSample, onShowWorkItems }: FirstRunGuid
       </div>
     </aside>
   );
+}
+
+type DocumentsDrawerProps = {
+  activeDocumentId: string;
+  documents: CanasterDocumentSummary[];
+  signedIn: boolean;
+  syncStatus: SyncStatus;
+  onClose: () => void;
+  onNew: () => void;
+  onOpenAccount: () => void;
+  onOpenDocument: (documentRef: string) => void;
+  onRefresh: () => void;
+  onSaveOnline: () => void;
+};
+
+function DocumentsDrawer({
+  activeDocumentId,
+  documents,
+  signedIn,
+  syncStatus,
+  onClose,
+  onNew,
+  onOpenAccount,
+  onOpenDocument,
+  onRefresh,
+  onSaveOnline,
+}: DocumentsDrawerProps) {
+  return (
+    <aside className="node-access-panel utility-drawer document-drawer" aria-label="Saved workspaces">
+      <div className="utility-drawer-header">
+        <div>
+          <span>Documents</span>
+          <span>{signedIn ? `${documents.length} saved` : 'Local only'}</span>
+        </div>
+        <button className="utility-close" type="button" aria-label="Close documents" onClick={onClose}>
+          <X size={15} />
+        </button>
+      </div>
+      <div className="utility-drawer-actions" aria-label="Document commands">
+        <button className="drawer-action" type="button" onClick={onNew}>
+          <FilePlus2 size={15} />
+          New
+        </button>
+        <button className="drawer-action primary" type="button" disabled={syncStatus === 'loading' || syncStatus === 'saving'} onClick={onSaveOnline}>
+          <Save size={15} />
+          Save online
+        </button>
+        <button className="drawer-action" type="button" disabled={!signedIn || syncStatus === 'loading'} onClick={onRefresh}>
+          <RefreshCw size={15} />
+          Refresh
+        </button>
+      </div>
+      {signedIn ? (
+        documents.length ? (
+          <ul className="document-list" aria-label="Saved workspaces">
+            {documents.map((document) => {
+              const active = document.id === activeDocumentId;
+              return (
+                <li key={document.id} className="document-row">
+                  <button
+                    className="document-row-button"
+                    type="button"
+                    aria-current={active ? 'page' : undefined}
+                    onClick={() => onOpenDocument(document.id)}
+                  >
+                    <span className="document-row-title">
+                      {active ? <CheckCircle2 size={14} /> : <span className="document-row-dot" />}
+                      <span>{document.title}</span>
+                    </span>
+                    <span>{formatDocumentDate(document.updatedAt)}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <div className="drawer-empty">
+            <p>No online workspaces yet.</p>
+            <button className="drawer-action primary" type="button" onClick={onSaveOnline}>
+              <Save size={15} />
+              Save this workspace
+            </button>
+          </div>
+        )
+      ) : (
+        <div className="drawer-empty">
+          <p>Sign in to save and open workspaces from other devices.</p>
+          <button className="drawer-action primary" type="button" onClick={onOpenAccount}>
+            <LogIn size={15} />
+            Sign in
+          </button>
+        </div>
+      )}
+    </aside>
+  );
+}
+
+type AccountPopoverProps = {
+  authEmail: string;
+  authMode: AuthMode;
+  authName: string;
+  authPassword: string;
+  signedIn: boolean;
+  syncMessage: string;
+  syncStatus: SyncStatus;
+  onAuthModeChange: (mode: AuthMode) => void;
+  onClose: () => void;
+  onEmailChange: (value: string) => void;
+  onNameChange: (value: string) => void;
+  onPasswordChange: (value: string) => void;
+  onSignIn: () => void;
+  onSignOut: () => void;
+  onSignUp: () => void;
+};
+
+function AccountPopover({
+  authEmail,
+  authMode,
+  authName,
+  authPassword,
+  signedIn,
+  syncMessage,
+  syncStatus,
+  onAuthModeChange,
+  onClose,
+  onEmailChange,
+  onNameChange,
+  onPasswordChange,
+  onSignIn,
+  onSignOut,
+  onSignUp,
+}: AccountPopoverProps) {
+  const busy = syncStatus === 'loading' || syncStatus === 'saving';
+  return (
+    <aside className="account-popover" aria-label="Account">
+      <div className="account-popover-header">
+        <div>
+          <span>Account</span>
+          <span>{signedIn ? 'Signed in' : 'Save online'}</span>
+        </div>
+        <button className="utility-close" type="button" aria-label="Close account" onClick={onClose}>
+          <X size={15} />
+        </button>
+      </div>
+      {signedIn ? (
+        <div className="account-signed-in">
+          <p>{authEmail || 'Signed in to Canaster'}</p>
+          <button className="drawer-action" type="button" onClick={onSignOut}>
+            <LogOut size={15} />
+            Sign out
+          </button>
+        </div>
+      ) : (
+        <form
+          className="account-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (authMode === 'sign-up') onSignUp();
+            else onSignIn();
+          }}
+        >
+          <div className="account-tabs" role="tablist" aria-label="Account mode">
+            <button type="button" role="tab" aria-selected={authMode === 'sign-in'} onClick={() => onAuthModeChange('sign-in')}>
+              Sign in
+            </button>
+            <button type="button" role="tab" aria-selected={authMode === 'sign-up'} onClick={() => onAuthModeChange('sign-up')}>
+              Create account
+            </button>
+          </div>
+          {authMode === 'sign-up' ? (
+            <label className="account-field">
+              <span>Name</span>
+              <input name="name" autoComplete="name" value={authName} onChange={(event) => onNameChange(event.target.value)} />
+            </label>
+          ) : null}
+          <label className="account-field">
+            <span>Email</span>
+            <input name="email" type="email" autoComplete="email" value={authEmail} onChange={(event) => onEmailChange(event.target.value)} />
+          </label>
+          <label className="account-field">
+            <span>Password</span>
+            <input
+              name="password"
+              type="password"
+              autoComplete={authMode === 'sign-up' ? 'new-password' : 'current-password'}
+              value={authPassword}
+              onChange={(event) => onPasswordChange(event.target.value)}
+            />
+          </label>
+          <button className="account-submit" type="submit" disabled={busy || !authEmail.trim() || !authPassword}>
+            {authMode === 'sign-up' ? <UserPlus size={15} /> : <LogIn size={15} />}
+            {authMode === 'sign-up' ? 'Create account' : 'Sign in'}
+          </button>
+        </form>
+      )}
+      <div className={`account-status ${syncStatus}`} role="status" aria-live="polite">
+        <SyncStatusIcon status={syncStatus} />
+        <span>{syncMessage}</span>
+      </div>
+    </aside>
+  );
+}
+
+function SyncStatusIcon({ status }: { status: SyncStatus }) {
+  if (status === 'loading' || status === 'saving') return <Loader2 size={13} />;
+  if (status === 'clean') return <CheckCircle2 size={13} />;
+  return <span className="sync-dot" aria-hidden="true" />;
 }
 
 type IconButtonProps = {
@@ -590,4 +1162,53 @@ function siblingTargetsFor(collection: CanvasDocumentCollection, activeCanvasId:
 
 function nodeCenter(node: CanvasNode) {
   return { x: node.x + node.w / 2, y: node.y + node.h / 2 };
+}
+
+function remoteWorkspaceStorageKey(documentRef: string): string {
+  return `daptin:${documentRef}`;
+}
+
+function createLocalDraftSnapshot(): CanvasWorkspaceSnapshot {
+  return createWorkspaceSnapshot(createWorkspaceHistory(defaultStarterCollection()), null);
+}
+
+function titleFromSnapshot(snapshot: CanvasWorkspaceSnapshot): string {
+  const collection = snapshot.history.present;
+  return collection.documents[collection.rootCanvasId]?.title || DEFAULT_DOCUMENT_TITLE;
+}
+
+function workspaceErrorMessage(error: unknown, action: 'open' | 'refresh' | 'save'): string {
+  const message = rawErrorMessage(error);
+  if (looksOffline(message)) return 'Could not reach saved workspaces. Check your connection and try again.';
+  if (action === 'open') return 'Could not open this workspace. Refresh saved workspaces or choose another one.';
+  if (action === 'refresh') return 'Could not refresh saved workspaces. Check your connection and try again.';
+  return 'Could not save this workspace. Check your connection and try again.';
+}
+
+function accountErrorMessage(error: unknown, action: 'create' | 'sign-in'): string {
+  const message = rawErrorMessage(error);
+  if (looksOffline(message)) return 'Could not reach accounts. Check your connection and try again.';
+  if (action === 'create') return 'Could not create the account. Check the email and password, then try again.';
+  return 'Could not sign in. Check the email and password, then try again.';
+}
+
+function rawErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  return '';
+}
+
+function looksOffline(message: string): boolean {
+  return /network|fetch|offline|failed to fetch|connection|timeout/i.test(message);
+}
+
+function snapshotSignature(snapshot: unknown): string {
+  return JSON.stringify(snapshot);
+}
+
+function formatDocumentDate(updatedAt: string | null): string {
+  if (!updatedAt) return 'Saved workspace';
+  const date = new Date(updatedAt);
+  if (Number.isNaN(date.getTime())) return 'Saved workspace';
+  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date);
 }
