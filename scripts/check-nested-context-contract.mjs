@@ -192,6 +192,40 @@ async function browserContract(createCollection) {
   const paneCanvases = [...document.querySelectorAll('.parent-context-canvas-clip > canvas')];
   const nonInteractive = paneCanvases.filter((canvas) => canvas.tabIndex !== 0 || canvas.dataset.engineMode !== 'embedded-live');
   if (nonInteractive.length) throw new Error(`context panes are not live interactive canvases: ${nonInteractive.length}`);
+  const activePaneCamera = (region) => window.__canwayNested.contextPaneCameras().find((entry) => entry.ownerKey === 'active:child' && entry.region === region)?.camera;
+  const emptyTopLeftCanvas = document.querySelector('.nested-stage > .parent-context-field > .parent-context-canvas-clip[data-region="top-left"] > canvas');
+  if (!emptyTopLeftCanvas) throw new Error('active empty top-left pane canvas missing');
+  const emptyRect = emptyTopLeftCanvas.getBoundingClientRect();
+  const zoomBefore = activePaneCamera('top-left');
+  emptyTopLeftCanvas.dispatchEvent(new WheelEvent('wheel', {
+    bubbles: true,
+    clientX: emptyRect.left + emptyRect.width / 2,
+    clientY: emptyRect.top + emptyRect.height / 2,
+    deltaY: -140,
+    ctrlKey: true,
+  }));
+  for (let i = 0; i < 6; i += 1) await frame();
+  const zoomAfter = activePaneCamera('top-left');
+  if (!zoomBefore || !zoomAfter || zoomAfter.scale === zoomBefore.scale) throw new Error('wheel zoom inside empty border pane did not persist');
+
+  const panBefore = activePaneCamera('top-left');
+  const dispatchEmptyPointer = (type, x, y, pointerId = 70, buttons = 1) => emptyTopLeftCanvas.dispatchEvent(new PointerEvent(type, {
+    bubbles: true,
+    pointerId,
+    pointerType: 'mouse',
+    clientX: x,
+    clientY: y,
+    buttons,
+    button: 0,
+  }));
+  dispatchEmptyPointer('pointerdown', emptyRect.left + emptyRect.width / 2, emptyRect.top + emptyRect.height / 2);
+  await frame();
+  dispatchEmptyPointer('pointermove', emptyRect.left + emptyRect.width / 2 + 36, emptyRect.top + emptyRect.height / 2 + 18, 70, 1);
+  await frame();
+  dispatchEmptyPointer('pointerup', emptyRect.left + emptyRect.width / 2 + 36, emptyRect.top + emptyRect.height / 2 + 18, 70, 0);
+  for (let i = 0; i < 6; i += 1) await frame();
+  const panAfter = activePaneCamera('top-left');
+  if (!panBefore || !panAfter || (panAfter.x === panBefore.x && panAfter.y === panBefore.y)) throw new Error('empty-space pan inside border pane did not persist');
 
   const rootTopBefore = window.__canwayNested.getCollection().documents.root.model.nodes.find((node) => node.id === 'root-top')?.x;
   const topPaneCanvas = document.querySelector('.nested-stage > .parent-context-field > .parent-context-canvas-clip[data-region="top"] > canvas');
@@ -224,6 +258,10 @@ async function browserContract(createCollection) {
     embeddedPaneCanvasIds,
     embeddedPaneTotals,
     contextPaneCanvasModes: [...new Set(paneCanvases.map((canvas) => canvas.dataset.engineMode))],
+    zoomBefore,
+    zoomAfter,
+    panBefore,
+    panAfter,
     rootTopBefore,
     rootTopAfter,
     engineCount: window.__canwayNested.engineCount(),

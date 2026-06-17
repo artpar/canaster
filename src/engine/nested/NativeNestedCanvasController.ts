@@ -15,7 +15,7 @@ import {
   stripPortalChildReferenceOnPaste,
 } from '../documentCommands';
 import { parseNodeData } from '../nodeTypes/registry';
-import { BuiltInNodeTypes, type CanvasCommand, type CanvasModel, type CanvasPortalNodeData, type CanvasSelectionState, type PortalLayout, type ThemeName, type ViewportStatus } from '../types';
+import { BuiltInNodeTypes, type Camera, type CanvasCommand, type CanvasModel, type CanvasPortalNodeData, type CanvasSelectionState, type PortalLayout, type ThemeName, type ViewportStatus } from '../types';
 import type {
   CanvasDocumentCollection,
   CanvasDocumentId,
@@ -83,6 +83,9 @@ type ParentContextPaneSlot = {
   canvas: HTMLCanvasElement;
   engine: CanvasEngine;
   portalLayouts: PortalLayout[];
+  cameraInitialized: boolean;
+  camera: Camera | null;
+  targetSignature: string;
   sizeSignature: string;
 };
 
@@ -777,7 +780,15 @@ export class NativeNestedCanvasController {
       slot.engine.setModel(parent.model, { preserveInteraction: true });
       slot.engine.setSelectionState(selectionForCanvas(collection, parent.id));
       const worldRect = parentContextWorldRect(source, shapesByRegion.get(region), region);
-      slot.engine.setCamera(cameraForWorldRect(worldRect, rect));
+      const targetSignature = worldRectSignature(worldRect);
+      if (!slot.cameraInitialized || slot.targetSignature !== targetSignature) {
+        slot.camera = cameraForWorldRect(worldRect, rect);
+        slot.cameraInitialized = true;
+        slot.targetSignature = targetSignature;
+        slot.engine.setCamera(slot.camera);
+      } else if (slot.camera) {
+        slot.engine.setCamera(slot.camera);
+      }
       if (slot.sizeSignature !== nextSizeSignature) {
         slot.sizeSignature = nextSizeSignature;
       }
@@ -801,7 +812,7 @@ export class NativeNestedCanvasController {
     const engine = new CanvasEngine(canvas, {
       canvasId,
       interactionMode: 'embedded-live',
-      onStatus: () => undefined,
+      onStatus: () => this.handleParentContextStatus(key),
       onModelChange: (model) => this.handleEmbeddedModelChange(canvasId, model),
       onCanvasDoubleClick: (targetCanvasId) => {
         this.executeDocumentCommand({ type: 'select-canvas', canvasId: targetCanvasId, source: 'pointer' });
@@ -817,7 +828,16 @@ export class NativeNestedCanvasController {
     });
     engine.setTheme(this.theme);
     this.record('parent-context:pane:create', { ownerKey, canvasId, region });
-    return { key, ownerKey, canvasId, region, clip, childOverlayLayer, canvas, engine, portalLayouts: [], sizeSignature: '' };
+    return { key, ownerKey, canvasId, region, clip, childOverlayLayer, canvas, engine, portalLayouts: [], cameraInitialized: false, camera: null, targetSignature: '', sizeSignature: '' };
+  }
+
+  private handleParentContextStatus(slotKey: string) {
+    const slot = this.parentContextSlots.get(slotKey);
+    if (!slot) return;
+    const nextCamera = slot.engine.getCamera();
+    if (slot.camera && sameCamera(slot.camera, nextCamera)) return;
+    slot.camera = nextCamera;
+    slot.cameraInitialized = true;
   }
 
   private handleParentContextPortalLayouts(slotKey: string, layouts: PortalLayout[]) {
@@ -1164,6 +1184,13 @@ export class NativeNestedCanvasController {
       redoWorkspace: () => this.redoWorkspace(),
       activeCanvasId: () => this.collectionRef.current.activeCanvasId,
       engineCount: () => this.root.querySelectorAll('canvas[data-engine-mode]').length,
+      contextPaneCameras: () => [...this.parentContextSlots.values()].map((slot) => ({
+        key: slot.key,
+        ownerKey: slot.ownerKey,
+        canvasId: slot.canvasId,
+        region: slot.region,
+        camera: slot.engine.getCamera(),
+      })),
       runtimeLog: () => nativeCanvasRuntimeLog(),
     };
   }
@@ -1238,6 +1265,10 @@ function cameraForWorldRect(worldRect: { x: number; y: number; w: number; h: num
     x: (screenRect.w - worldRect.w * scale) / 2 - worldRect.x * scale,
     y: (screenRect.h - worldRect.h * scale) / 2 - worldRect.y * scale,
   };
+}
+
+function worldRectSignature(rect: { x: number; y: number; w: number; h: number }) {
+  return `${Math.round(rect.x)}:${Math.round(rect.y)}:${Math.round(rect.w)}:${Math.round(rect.h)}`;
 }
 
 function updateParentPortalSummary(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId) {
