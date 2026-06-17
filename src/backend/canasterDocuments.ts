@@ -11,6 +11,11 @@ export type CanasterDocumentSummary = {
   updatedAt: string | null;
 };
 
+export type CanasterLoadedDocument = {
+  snapshot: CanvasWorkspaceSnapshot;
+  title: string;
+};
+
 type DaptinDocumentAttributes = {
   document_name?: string;
   document_path?: string;
@@ -105,12 +110,20 @@ export async function createDocument(title: string, snapshot: CanvasWorkspaceSna
 }
 
 export async function loadDocument(documentRef: string): Promise<CanvasWorkspaceSnapshot> {
+  return (await loadDocumentDetails(documentRef)).snapshot;
+}
+
+export async function loadDocumentDetails(documentRef: string): Promise<CanasterLoadedDocument> {
   await ensureDaptinModelsLoaded();
   const response = await getDaptinClient().jsonApi.find<DaptinDocumentAttributes>('document', documentRef);
   if (!response.data) throw new Error(`Daptin document not found: ${documentRef}`);
-  const content = rowAttr(response.data as DaptinDocumentRow, 'document_content');
+  const row = response.data as DaptinDocumentRow;
+  const content = rowAttr(row, 'document_content');
   if (typeof content !== 'string') throw new Error('Daptin document_content was not a string');
-  return decodeSnapshotContent(content);
+  return {
+    snapshot: decodeSnapshotContent(content),
+    title: documentTitle(row),
+  };
 }
 
 export async function saveDocument(documentRef: string, snapshot: CanvasWorkspaceSnapshot, title?: string): Promise<void> {

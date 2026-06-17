@@ -17,9 +17,9 @@ MVP uses Daptin's built-in `document` table:
 
 The older `space` / `plane` / `snapshot` schema is stale and must not be used for MVP backend integration. Do not add `canaster_document` for MVP. See `docs/daptin-canaster-architecture-plan.md` for the concrete built-in `document` file-blob plan.
 
-After table-level create access is allowed, built-in `document` creates rows as public by default in the verified runtime. The MVP create flow must create a harmless placeholder row, immediately PATCH `permission: 16256`, then PATCH the real JSON file content.
+The production `document` table currently creates new rows with `world_schema_json.DefaultPermission=16256`. Keep the MVP create flow conservative anyway: create a harmless placeholder row, immediately PATCH `permission: 16256`, then PATCH the real JSON file content.
 
-Production after admin lockdown can still block normal users at the table metadata layer. Verify `world.permission` for `table_name=document` with a normal non-admin account before release; a privileged CLI smoke does not prove the browser save journey.
+Production after admin lockdown can still block normal users at the table metadata layer. The current production setting for `world.permission` on `table_name=document` is `561453`, which admits create/update for the current signed-in JSON:API save path while row privacy stays on the document rows. This also admits anonymous creation of private document rows; anonymous read/update of private saved workspaces still returns `403`. Verify the browser journey with a normal non-admin account before release; a privileged CLI smoke does not prove the user path.
 
 ## Local Daptin Startup
 
@@ -47,7 +47,7 @@ npm run daptin:smoke:local
 Frontend code must use `daptin-client` and Daptin managers:
 
 - `authManager` / `actionManager` for sign up, sign in, password reset, and actions.
-- `worldManager` to load models before JSON:API calls.
+- `worldManager` to load the required `document` model before JSON:API calls.
 - `jsonApi` for built-in `document` CRUD.
 - file-array encode/decode helpers for `document_content`.
 
@@ -73,8 +73,9 @@ Current public TLS shape:
 
 - `canaster.in` and `www.canaster.in` terminate on GCP managed certificate `canaster-managed-cert`.
 - `api.canaster.in` terminates on GCP certificate resource `canaster-api-self-cert`, but that certificate material is issued by Daptin ACME and uploaded into GCP.
-- As of 2026-06-16, `canaster.in` and `www.canaster.in` serve the Canway frontend, while `api.canaster.in` remains the Daptin admin/API hostname.
+- As of 2026-06-18, `canaster.in` and `www.canaster.in` serve the Canway frontend, while `api.canaster.in` remains the Daptin admin/API hostname.
 - Public frontend auth calls should use `https://api.canaster.in`; production has `signin.permission=561441` and `signup.permission=2085152` so public signup/signin remain open after admin lockdown.
+- Production document storage has `world.permission(document)=561453` and `DefaultPermission(document)=16256`. A tighter `users` group-scoped table permission (`758049` plus a `world.usergroup_id` relation) was tested on 2026-06-18 and still returned `403` for normal-user document create/update, so it is not the current production setting.
 
 See `docs/daptin-backend-groundwork.md` for the exact GCP commands and required CI/CD variables.
 

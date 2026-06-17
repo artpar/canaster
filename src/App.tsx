@@ -27,7 +27,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   createDocument,
   listDocuments,
-  loadDocument,
+  loadDocumentDetails,
   saveDocument,
   signIn,
   signOut,
@@ -148,13 +148,14 @@ export function App() {
     return rows;
   }, []);
 
-  const loadDaptinDocument = useCallback(async (documentRef: string, knownDocuments = documents) => {
+  const loadDaptinDocument = useCallback(async (documentRef: string, knownDocuments: CanasterDocumentSummary[] = []) => {
     if (!documentRef) return;
     setSyncStatus('loading');
     setSyncMessage('Opening workspace');
     try {
-      const snapshot = await loadDocument(documentRef);
-      const title = knownDocuments.find((document) => document.id === documentRef)?.title ?? titleFromSnapshot(snapshot);
+      const loadedDocument = await loadDocumentDetails(documentRef);
+      const snapshot = loadedDocument.snapshot;
+      const title = knownDocuments.find((document) => document.id === documentRef)?.title ?? loadedDocument.title ?? titleFromSnapshot(snapshot);
       await saveWorkspaceSnapshot(snapshot, remoteWorkspaceStorageKey(documentRef));
       lastSavedSnapshotSignatureRef.current = snapshotSignature(snapshot);
       ignoreDirtyUntilRef.current = Date.now() + 1200;
@@ -175,7 +176,7 @@ export function App() {
       setSyncStatus('error');
       setSyncMessage(workspaceErrorMessage(error, 'open'));
     }
-  }, [documents]);
+  }, []);
 
   useEffect(() => {
     if (!signedIn) {
@@ -187,14 +188,27 @@ export function App() {
     let canceled = false;
     setSyncStatus('loading');
     setSyncMessage('Checking saved workspaces');
+    const restoredDocumentId = activeDocumentId || window.localStorage.getItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY) || '';
+    if (restoredDocumentId) {
+      void loadDaptinDocument(restoredDocumentId);
+      refreshDocuments()
+        .then((rows) => {
+          if (canceled) return;
+          const restoredDocument = rows.find((document) => document.id === restoredDocumentId);
+          if (restoredDocument) setDocumentTitle(restoredDocument.title);
+        })
+        .catch((error) => {
+          if (canceled) return;
+          setSyncStatus('error');
+          setSyncMessage(workspaceErrorMessage(error, 'refresh'));
+        });
+      return () => {
+        canceled = true;
+      };
+    }
     refreshDocuments()
-      .then(async (rows) => {
+      .then((rows) => {
         if (canceled) return;
-        const restoredDocumentId = activeDocumentId || window.localStorage.getItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY) || '';
-        if (restoredDocumentId && rows.some((document) => document.id === restoredDocumentId)) {
-          await loadDaptinDocument(restoredDocumentId, rows);
-          return;
-        }
         setSyncStatus('clean');
         setSyncMessage(ONLINE_READY_MESSAGE);
       })
@@ -537,7 +551,7 @@ export function App() {
               setAccountOpen(true);
               setUtilityDrawerMode(null);
             }}
-            onOpenDocument={(documentRef) => void loadDaptinDocument(documentRef)}
+            onOpenDocument={(documentRef) => void loadDaptinDocument(documentRef, documents)}
             onRefresh={() => void handleRefreshDocuments()}
             onSaveOnline={() => void handleSaveOnline()}
           />

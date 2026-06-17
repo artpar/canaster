@@ -19,11 +19,11 @@ These points were verified against Daptin `v0.12.17`, local Daptin docs/source, 
 - Decoding `document_content[0].file` returns the original Canaster JSON payload.
 - Through `daptin-client@0.7.12`, `jsonApi.create('document', payload)` and `jsonApi.update('document', { id, ...payload })` work when `document_content` is sent as `JSON.stringify(fileArray)`.
 - `daptin-client@0.7.12` runtime `jsonApi.update` expects the row `id` inside the payload. Do not use the three-argument signature from the type file.
-- Built-in `document` rows are created with `permission: 2097151`; passing `permission: 16256` during create was ignored in the probe.
+- In the original local probe, built-in `document` rows were created with `permission: 2097151`; passing `permission: 16256` during create was ignored.
 - PATCHing the created row to `permission: 16256` works.
 - After PATCH to `16256`, unauthenticated GET returns `403`.
 - PATCHing the row to `permission: 16259` makes the row public-readable.
-- Production after admin lockdown must separately allow `document` table creation for the intended caller. As of the 2026-06-17 real-user release check, production `world.permission` for `table_name=document` was `561441`, which blocks normal non-admin `POST /api/document`.
+- Production after admin lockdown must separately allow `document` table create/update for the intended caller. As of the 2026-06-18 real-user release check, production `world.permission` for `table_name=document` is `561453` and `world_schema_json.DefaultPermission` is `16256`. This setting lets the current signed-in save path work, but also permits anonymous creation of private document rows; anonymous read/update of private saved workspaces still returns `403`.
 
 ## MVP Decisions
 
@@ -101,9 +101,11 @@ Do not split `history.present`, `undoStack`, `redoStack`, cameras, selections, p
 
 ## Create Flow
 
-Prerequisite: the Daptin `world` row for `table_name=document` must allow table-level create for the intended caller. The row-level create sequence below does not bypass table metadata permissions.
+Prerequisite: the Daptin `world` row for `table_name=document` must allow table-level create and update for the intended caller. The row-level create sequence below does not bypass table metadata permissions.
 
-Because Daptin creates built-in `document` rows with `permission: 2097151` after the table-level create check passes, do not create a row with real user content first.
+Because Daptin deployments can create built-in `document` rows with broad default permission unless configured otherwise, do not create a row with real user content first.
+
+On production, a tighter `users` group-scoped table permission (`758049` with a `world.usergroup_id -> users` relation) was tested and rejected because normal-user `POST /api/document` and `PATCH /api/document/<id>` still returned `403`. Until there is a verified Daptin-side authenticated-create/update gate, the working production MVP uses `world.permission=561453` and relies on row permission `16256` to protect saved workspace content.
 
 Use this exact sequence:
 
@@ -143,7 +145,7 @@ Add `src/backend/daptinClient.ts`:
 - creates one `DaptinClient`;
 - owns endpoint selection from env;
 - owns token getter/setter;
-- calls `worldManager.loadModels()` before JSON:API use;
+- calls `worldManager.loadModel('document', false)` before JSON:API use;
 - uses `jsonApi.create('document', payload)` for creates;
 - uses `jsonApi.update('document', { id: documentRef, ...payload })` for updates;
 - exports typed functions, not a raw global client.
