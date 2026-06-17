@@ -30,10 +30,6 @@ jobs:
           node-version: 22
           cache: npm
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.23"
-
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
@@ -101,31 +97,18 @@ jobs:
           DAPTIN_ENDPOINT="$(gcloud run services describe "$GCP_CLOUD_RUN_SERVICE" --region "$GCP_REGION" --project "$GCP_PROJECT" --format='value(status.url)')"
           echo "DAPTIN_ENDPOINT=$DAPTIN_ENDPOINT" >> "$GITHUB_ENV"
 
-      - name: Build frontend for deployed Daptin
+      - name: Build frontend for production Daptin
         run: |
           set -euo pipefail
-          VITE_DAPTIN_ENDPOINT="$DAPTIN_ENDPOINT" VITE_CANASTER_STORAGE_MODE=daptin npm run build
+          VITE_DAPTIN_ENDPOINT="https://api.canaster.in" VITE_CANASTER_STORAGE_MODE=daptin npm run build
 
-      - name: Install Daptin CLI
-        run: go install github.com/daptin/daptin-cli@latest
-
-      - name: Authenticate Daptin CLI
-        env:
-          DAPTIN_CLI_CONFIG: ${{ runner.temp }}/daptin-cli.yaml
-          DAPTIN_ADMIN_EMAIL: ${{ secrets.DAPTIN_ADMIN_EMAIL }}
-          DAPTIN_ADMIN_PASSWORD: ${{ secrets.DAPTIN_ADMIN_PASSWORD }}
+      - name: Upload frontend to site storage
         run: |
           set -euo pipefail
-          daptin-cli context add prod "$DAPTIN_ENDPOINT"
-          daptin-cli context set prod
-          daptin-cli execute user_account signin "email=$DAPTIN_ADMIN_EMAIL" "password=$DAPTIN_ADMIN_PASSWORD"
-
-      - name: Upload frontend to Daptin site storage
-        env:
-          DAPTIN_CLI_CONFIG: ${{ runner.temp }}/daptin-cli.yaml
-        run: |
-          set -euo pipefail
-          daptin-cli storage upload "$DAPTIN_SITE_STORE:$DAPTIN_SITE_PATH" ./dist --recursive
+          SITE_PATH="${DAPTIN_SITE_PATH#/}"
+          SITE_URI="gs://$GCP_STORAGE_BUCKET/$SITE_PATH"
+          gcloud storage rsync ./dist "$SITE_URI" --recursive --delete-unmatched-destination-objects
+          gcloud storage ls "$SITE_URI/index.html" >/dev/null
 
       - name: Smoke deployed runtime
         run: |
