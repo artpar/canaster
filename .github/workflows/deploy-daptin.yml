@@ -110,6 +110,14 @@ jobs:
           gcloud storage rsync ./dist "$SITE_URI" --recursive --delete-unmatched-destination-objects
           gcloud storage ls "$SITE_URI/index.html" >/dev/null
 
+      - name: Refresh Daptin site cache
+        run: |
+          set -euo pipefail
+          gcloud run services update "$GCP_CLOUD_RUN_SERVICE" \
+            --region "$GCP_REGION" \
+            --project "$GCP_PROJECT" \
+            --update-env-vars CANASTER_SITE_RELOAD_MARKER="$(date +%s)"
+
       - name: Smoke deployed runtime
         run: |
           set -euo pipefail

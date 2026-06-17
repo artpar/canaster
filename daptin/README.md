@@ -67,7 +67,7 @@ The production Daptin instance runs on Google Cloud Run and owns both API and st
 6. Create/link a GCS-backed Daptin `cloud_store` for static site files.
 7. Create one Daptin `site` row per hostname. The current public frontend rows are `canaster.in` and `www.canaster.in`.
 8. Keep `api.canaster.in` as the Daptin admin/API hostname and do not create a static site row for it.
-9. CI builds the Daptin image, deploys Cloud Run, builds `dist/`, uploads it through `daptin-cli storage upload`, and probes the deployed runtime.
+9. CI builds the Daptin image, deploys Cloud Run, builds `dist/`, uploads it to the site storage prefix, refreshes the Cloud Run site cache, and probes the deployed runtime.
 
 Current public TLS shape:
 
