@@ -117,7 +117,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     flushWorkspaceSnapshot: () => controllerRef.current?.flushWorkspaceSnapshot() ?? Promise.resolve(),
   }), [initialCollection]);
 
-  return <div ref={hostRef} className="nested-workspace" aria-label="Nested canvas workspace" />;
+  return <div ref={hostRef} className="nested-workspace" aria-label="Workspace map" />;
 });
 
 export type NodeAccessPanelProps = {
@@ -130,7 +130,7 @@ export type NodeAccessPanelProps = {
 export function NodeAccessPanel({ collection, status, executeActiveCanvasCommand, executeDocumentCommand }: NodeAccessPanelProps) {
   const model = collection.documents[collection.activeCanvasId].model;
   return (
-    <aside className="node-access-panel" aria-label="Work items on this canvas">
+    <aside className="node-access-panel" aria-label="Work items in this view">
       <div className="node-access-header">
         <span>Work items</span>
         <span>{status.selectionCount ? `${status.selectionCount} selected` : 'Choose an item'}</span>
@@ -152,7 +152,7 @@ export function NodeAccessPanel({ collection, status, executeActiveCanvasCommand
           <Trash2 size={16} />
         </IconButton>
       </div>
-      <ul className="node-access-list" aria-label="Work item list">
+      <ul className="node-access-list" aria-label="Work items in this view">
         {model.nodes.map((node) => {
           const selected = status.selectedNodeIds.includes(node.id);
           const primary = status.selectedNodeId === node.id;
@@ -222,7 +222,7 @@ export function WorkspaceStatusBar({
   return (
     <div className="statusbar" role="status" aria-live="polite">
       <span>{selectedText}</span>
-      <span>{status.cursorWorld ? 'Pointer on canvas' : 'Drag canvas to pan'}</span>
+      <span>{status.cursorWorld ? 'Pointer on map' : 'Drag map to pan'}</span>
       <span>{itemText}</span>
       <span>{userFacingInteraction(status.interaction)}</span>
       <span>{lastModelChange ? userFacingModelChange(lastModelChange) : placeText}</span>

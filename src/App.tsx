@@ -24,6 +24,9 @@ import type { CanvasCommand, ThemeName } from './engine/types';
 import type { DocumentCommand } from './engine/documentTypes';
 
 const ONBOARDING_DISMISSED_STORAGE_KEY = 'canaster:onboarding-dismissed:v1';
+const LOCAL_SAVE_MESSAGE = 'Saved on this device';
+const ONLINE_READY_MESSAGE = 'Ready to save online';
+const SAVED_MESSAGE = 'Saved';
 
 export function App() {
   const workspaceRef = useRef<NestedCanvasWorkspaceHandle | null>(null);
@@ -33,14 +36,14 @@ export function App() {
   const [nodesOpen, setNodesOpen] = useState(false);
   const [onboardingDismissed, setOnboardingDismissed] = useState(() => window.localStorage.getItem(ONBOARDING_DISMISSED_STORAGE_KEY) === 'true');
   const [authEmail, setAuthEmail] = useState(() => window.localStorage.getItem(DAPTIN_LAST_EMAIL_STORAGE_KEY) ?? '');
-  const [authName, setAuthName] = useState('Canaster User');
+  const [authName, setAuthName] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [signedIn, setSignedIn] = useState(() => Boolean(getToken()));
   const [documents, setDocuments] = useState<CanasterDocumentSummary[]>([]);
   const [activeDocumentId, setActiveDocumentId] = useState(() => window.localStorage.getItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY) ?? '');
   const [documentTitle, setDocumentTitle] = useState('Canaster Workspace');
   const [syncStatus, setSyncStatus] = useState<'anonymous' | 'loading' | 'clean' | 'dirty' | 'saving' | 'error'>(() => (getToken() ? 'loading' : 'anonymous'));
-  const [syncMessage, setSyncMessage] = useState(() => (getToken() ? 'Restoring session' : 'Saved on this device'));
+  const [syncMessage, setSyncMessage] = useState(() => (getToken() ? 'Opening last workspace' : LOCAL_SAVE_MESSAGE));
   const initialCollection = useMemo(() => defaultStarterCollection(), []);
   const workspaceStorageKey = activeDocumentId ? `daptin:${activeDocumentId}` : STARTER_WORKSPACE_STORAGE_KEY;
   const [chromeState, setChromeState] = useState<NestedCanvasWorkspaceChromeState>(() => ({
@@ -61,11 +64,11 @@ export function App() {
       const currentSnapshot = workspaceRef.current?.getWorkspaceSnapshot();
       if (currentSnapshot && snapshotSignature(currentSnapshot) === lastSavedSnapshotSignatureRef.current) {
         setSyncStatus('clean');
-        setSyncMessage('Saved');
+        setSyncMessage(SAVED_MESSAGE);
         return;
       }
       setSyncStatus((current) => current === 'loading' || current === 'saving' || current === 'error' ? current : 'dirty');
-      setSyncMessage((current) => current === 'Loading document' || current === 'Saving document' ? current : 'Unsaved changes');
+      setSyncMessage((current) => current === 'Opening workspace' || current === 'Saving workspace' ? current : 'Unsaved changes');
     }
   }, [activeDocumentId]);
 
@@ -92,7 +95,7 @@ export function App() {
   const loadDaptinDocument = useCallback(async (documentRef: string) => {
     if (!documentRef) return;
     setSyncStatus('loading');
-    setSyncMessage('Loading document');
+    setSyncMessage('Opening workspace');
     try {
       const snapshot = await loadDocument(documentRef);
       lastSavedSnapshotSignatureRef.current = snapshotSignature(snapshot);
@@ -101,17 +104,17 @@ export function App() {
       window.localStorage.setItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY, documentRef);
       setActiveDocumentId(documentRef);
       setSyncStatus('clean');
-      setSyncMessage('Saved');
+      setSyncMessage(SAVED_MESSAGE);
       window.setTimeout(() => {
         const currentSnapshot = workspaceRef.current?.getWorkspaceSnapshot();
         if (currentSnapshot && snapshotSignature(currentSnapshot) === lastSavedSnapshotSignatureRef.current) {
           setSyncStatus('clean');
-          setSyncMessage('Saved');
+          setSyncMessage(SAVED_MESSAGE);
         }
       }, 1600);
     } catch (error) {
       setSyncStatus('error');
-      setSyncMessage(errorMessage(error));
+      setSyncMessage(workspaceErrorMessage(error, 'open'));
     }
   }, []);
 
@@ -126,12 +129,12 @@ export function App() {
           return loadDaptinDocument(restoredDocumentId);
         }
         setSyncStatus('clean');
-        setSyncMessage('Signed in');
+        setSyncMessage(ONLINE_READY_MESSAGE);
       })
       .catch((error) => {
         if (canceled) return;
         setSyncStatus('error');
-        setSyncMessage(errorMessage(error));
+        setSyncMessage(workspaceErrorMessage(error, 'open'));
       });
     return () => {
       canceled = true;
@@ -141,17 +144,17 @@ export function App() {
   const handleSignUp = useCallback(async () => {
     if (!authEmail.trim() || !authPassword) return;
     setSyncStatus('loading');
-    setSyncMessage('Signing up');
+    setSyncMessage('Creating account');
     try {
       await signUp({ name: authName.trim() || 'Canaster User', email: authEmail.trim(), password: authPassword });
       window.localStorage.setItem(DAPTIN_LAST_EMAIL_STORAGE_KEY, authEmail.trim());
       setSignedIn(true);
       setSyncStatus('clean');
-      setSyncMessage('Signed in');
+      setSyncMessage(ONLINE_READY_MESSAGE);
       await refreshDocuments();
     } catch (error) {
       setSyncStatus('error');
-      setSyncMessage(errorMessage(error));
+      setSyncMessage(accountErrorMessage(error, 'create'));
     }
   }, [authEmail, authName, authPassword, refreshDocuments]);
 
@@ -164,11 +167,11 @@ export function App() {
       window.localStorage.setItem(DAPTIN_LAST_EMAIL_STORAGE_KEY, authEmail.trim());
       setSignedIn(true);
       setSyncStatus('clean');
-      setSyncMessage('Signed in');
+      setSyncMessage(ONLINE_READY_MESSAGE);
       await refreshDocuments();
     } catch (error) {
       setSyncStatus('error');
-      setSyncMessage(errorMessage(error));
+      setSyncMessage(accountErrorMessage(error, 'sign-in'));
     }
   }, [authEmail, authPassword, refreshDocuments]);
 
@@ -181,14 +184,18 @@ export function App() {
     setDocuments([]);
     setAuthPassword('');
     setSyncStatus('anonymous');
-    setSyncMessage('Saved on this device');
+    setSyncMessage(LOCAL_SAVE_MESSAGE);
   }, []);
 
   const handleCreateDocument = useCallback(async () => {
     const snapshot = workspaceRef.current?.getWorkspaceSnapshot();
-    if (!snapshot) return;
+    if (!snapshot) {
+      setSyncStatus('error');
+      setSyncMessage('Workspace is not ready yet');
+      return;
+    }
     setSyncStatus('saving');
-    setSyncMessage('Creating document');
+    setSyncMessage('Saving new workspace');
     try {
       await workspaceRef.current?.flushWorkspaceSnapshot();
       const documentRef = await createDocument(documentTitle, snapshot);
@@ -198,19 +205,23 @@ export function App() {
       await refreshDocuments();
       ignoreDirtyUntilRef.current = Date.now() + 1200;
       setSyncStatus('clean');
-      setSyncMessage('Saved');
+      setSyncMessage(SAVED_MESSAGE);
     } catch (error) {
       setSyncStatus('error');
-      setSyncMessage(errorMessage(error));
+      setSyncMessage(workspaceErrorMessage(error, 'save'));
     }
   }, [documentTitle, refreshDocuments]);
 
   const handleSaveDocument = useCallback(async () => {
     if (!activeDocumentId) return;
     const snapshot = workspaceRef.current?.getWorkspaceSnapshot();
-    if (!snapshot) return;
+    if (!snapshot) {
+      setSyncStatus('error');
+      setSyncMessage('Workspace is not ready yet');
+      return;
+    }
     setSyncStatus('saving');
-    setSyncMessage('Saving document');
+    setSyncMessage('Saving workspace');
     try {
       await workspaceRef.current?.flushWorkspaceSnapshot();
       await saveDocument(activeDocumentId, snapshot);
@@ -218,10 +229,28 @@ export function App() {
       await refreshDocuments();
       ignoreDirtyUntilRef.current = Date.now() + 1200;
       setSyncStatus('clean');
-      setSyncMessage('Saved');
+      setSyncMessage(SAVED_MESSAGE);
     } catch (error) {
       setSyncStatus('error');
-      setSyncMessage(errorMessage(error));
+      setSyncMessage(workspaceErrorMessage(error, 'save'));
+    }
+  }, [activeDocumentId, refreshDocuments]);
+
+  const handleRefreshDocuments = useCallback(async () => {
+    if (!getToken()) {
+      setSyncStatus('anonymous');
+      setSyncMessage(LOCAL_SAVE_MESSAGE);
+      return;
+    }
+    setSyncStatus('loading');
+    setSyncMessage('Checking saved workspaces');
+    try {
+      await refreshDocuments();
+      setSyncStatus('clean');
+      setSyncMessage(activeDocumentId ? SAVED_MESSAGE : ONLINE_READY_MESSAGE);
+    } catch (error) {
+      setSyncStatus('error');
+      setSyncMessage(workspaceErrorMessage(error, 'refresh'));
     }
   }, [activeDocumentId, refreshDocuments]);
 
@@ -247,8 +276,8 @@ export function App() {
 
   return (
     <main className="app-shell">
-      <section className="workspace" aria-label="Canvas workspace">
-        <div className="topbar" aria-label="Canvas controls">
+      <section className="workspace" aria-label="Workspace map">
+        <div className="topbar" aria-label="Workspace tools">
           <div className="brand">
             <span className="brand-mark" />
             <span>Canaster</span>
@@ -260,16 +289,16 @@ export function App() {
             <IconButton label="Redo" disabled={!chromeState.canRedo} onClick={() => workspaceRef.current?.redoWorkspace()}>
               <Redo2 size={17} />
             </IconButton>
-            <IconButton label="Fit view" onClick={() => workspaceRef.current?.fitActiveCanvas()}>
+            <IconButton label="Center map" onClick={() => workspaceRef.current?.fitActiveCanvas()}>
               <Maximize2 size={17} />
             </IconButton>
-            <IconButton label="Reset zoom" onClick={() => workspaceRef.current?.resetActiveZoom()}>
+            <IconButton label="Reset map zoom" onClick={() => workspaceRef.current?.resetActiveZoom()}>
               <RotateCcw size={17} />
             </IconButton>
             <IconButton label="Zoom out" onClick={() => workspaceRef.current?.zoomActiveBy(0.82)}>
               <Minus size={17} />
             </IconButton>
-            <span className="zoom-readout">Canvas</span>
+            <span className="zoom-readout">Map</span>
             <IconButton label="Zoom in" onClick={() => workspaceRef.current?.zoomActiveBy(1.22)}>
               <Plus size={17} />
             </IconButton>
@@ -285,35 +314,35 @@ export function App() {
               {nodesOpen ? <X size={17} /> : <ListTree size={17} />}
             </IconButton>
           </div>
-          <form className="toolbar-group document-group" aria-label="Documents" onSubmit={(event) => event.preventDefault()}>
+          <form className="toolbar-group document-group" aria-label="Saved workspaces" onSubmit={(event) => event.preventDefault()}>
             {signedIn ? (
               <>
                 <select
                   className="shell-select"
-                  aria-label="Active document"
+                  aria-label="Saved workspace"
                   name="active-document"
                   value={activeDocumentId}
                   onChange={(event) => loadDaptinDocument(event.target.value)}
                 >
-                  <option value="">No document</option>
+                  <option value="">No saved workspace</option>
                   {documents.map((document) => (
                     <option key={document.id} value={document.id}>{document.title}</option>
                   ))}
                 </select>
                 <input
                   className="shell-input"
-                  aria-label="Document title"
+                  aria-label="Workspace name"
                   name="document-title"
                   value={documentTitle}
                   onChange={(event) => setDocumentTitle(event.target.value)}
                 />
-                <IconButton label="Create document" onClick={handleCreateDocument}>
+                <IconButton label="Save as new workspace" onClick={handleCreateDocument}>
                   <FilePlus2 size={17} />
                 </IconButton>
-                <IconButton label="Save document" disabled={!activeDocumentId || syncStatus === 'saving'} onClick={handleSaveDocument}>
+                <IconButton label="Save workspace" disabled={!activeDocumentId || syncStatus === 'saving'} onClick={handleSaveDocument}>
                   <Save size={17} />
                 </IconButton>
-                <IconButton label="Refresh documents" onClick={() => refreshDocuments()}>
+                <IconButton label="Refresh saved workspaces" onClick={handleRefreshDocuments}>
                   <RefreshCw size={17} />
                 </IconButton>
                 <IconButton label="Sign out" onClick={handleSignOut}>
@@ -324,9 +353,10 @@ export function App() {
               <>
                 <input
                   className="shell-input"
-                  aria-label="Name"
+                  aria-label="Your name"
                   name="name"
                   autoComplete="name"
+                  placeholder="Name"
                   value={authName}
                   onChange={(event) => setAuthName(event.target.value)}
                 />
@@ -411,16 +441,16 @@ function FirstRunGuide({ onDismiss, onFitSample, onShowWorkItems }: FirstRunGuid
       <p className="guide-label">Starter workspace</p>
       <h2>Plan one job, then step inside it.</h2>
       <p>
-        This sample keeps intake, crew, site notes, and proof connected. Move a card, open the large job view, and come back to the bigger picture when the details are clear.
+        This sample keeps intake, crew, site notes, and proof connected. Move a work item, open the large job view, and come back to the bigger picture when the details are clear.
       </p>
       <ul>
         <li>Your changes stay on this device until you sign in.</li>
-        <li>The work-items panel gives a plain list when the canvas feels busy.</li>
+        <li>The work-items panel gives a plain list when the map feels busy.</li>
       </ul>
       <div className="guide-actions" aria-label="Getting started actions">
         <button className="guide-action primary" type="button" onClick={onFitSample}>
           <Maximize2 size={15} />
-          Fit sample
+          Center sample
         </button>
         <button className="guide-action" type="button" onClick={onShowWorkItems}>
           <ListTree size={15} />
@@ -434,14 +464,29 @@ function FirstRunGuide({ onDismiss, onFitSample, onShowWorkItems }: FirstRunGuid
   );
 }
 
-function errorMessage(error: unknown): string {
-  if (error instanceof Error) return userFacingError(error.message);
-  if (typeof error === 'string') return userFacingError(error);
-  return 'Save failed';
+function workspaceErrorMessage(error: unknown, action: 'open' | 'refresh' | 'save'): string {
+  const message = rawErrorMessage(error);
+  if (looksOffline(message)) return 'Could not reach saved workspaces. Check your connection and try again.';
+  if (action === 'open') return 'Could not open this workspace. Refresh saved workspaces or choose another one.';
+  if (action === 'refresh') return 'Could not refresh saved workspaces. Check your connection and try again.';
+  return 'Could not save this workspace. Check your connection and try again.';
 }
 
-function userFacingError(message: string): string {
-  return message.replace(/daptin\s*/gi, '').replace(/\s+/g, ' ').trim() || 'Request failed';
+function accountErrorMessage(error: unknown, action: 'create' | 'sign-in'): string {
+  const message = rawErrorMessage(error);
+  if (looksOffline(message)) return 'Could not reach accounts. Check your connection and try again.';
+  if (action === 'create') return 'Could not create the account. Check the email and password, then try again.';
+  return 'Could not sign in. Check the email and password, then try again.';
+}
+
+function rawErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  return '';
+}
+
+function looksOffline(message: string): boolean {
+  return /network|fetch|offline|failed to fetch|connection|timeout/i.test(message);
 }
 
 function snapshotSignature(snapshot: unknown): string {

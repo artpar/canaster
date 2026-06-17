@@ -5,16 +5,16 @@ import type { NodeContentRect, NodeDefinition } from './types';
 
 export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = {
   type: BuiltInNodeTypes.canvas,
-  displayName: 'Canvas',
+  displayName: 'View',
   defaultSize: { w: 300, h: 180 },
   minSize: { w: 160, h: 100 },
   createDefaultData() {
-    return { childCanvasId: null, title: 'Canvas', nodeCount: 0 };
+    return { childCanvasId: null, title: 'View', nodeCount: 0 };
   },
   parseData(raw) {
     return {
       childCanvasId: asNullableString(raw.childCanvasId),
-      title: asString(raw.title, 'Canvas'),
+      title: asString(raw.title, 'View'),
       nodeCount: Math.max(0, Math.floor(asNumber(raw.nodeCount, 0))),
     };
   },
@@ -23,7 +23,7 @@ export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = {
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.font = '600 15px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    ctx.fillText(clipText(ctx, data.title || 'Canvas', Math.max(0, contentRect.w - 8)), contentRect.x + 4, contentRect.y + 4);
+    ctx.fillText(clipText(ctx, data.title || 'View', Math.max(0, contentRect.w - 8)), contentRect.x + 4, contentRect.y + 4);
 
     if (state.quality !== 'compact') {
       ctx.strokeStyle = theme.nodeBorder;

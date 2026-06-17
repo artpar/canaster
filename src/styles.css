@@ -66,11 +66,24 @@ button {
 }
 
 .nested-stage {
+  --nested-pane-gutter: 6px;
+  --nested-pane-border: rgba(142, 157, 176, 0.2);
+  --nested-pane-border-inner: rgba(238, 242, 246, 0.05);
+  --nested-pane-fill: rgba(13, 16, 22, 0.62);
+  --nested-pane-resizer: rgba(90, 167, 255, 0.2);
+  --nested-pane-resizer-muted: rgba(90, 167, 255, 0.13);
+  --nested-pane-resizer-strong: rgba(90, 167, 255, 0.68);
   background: #101217;
   display: grid;
 }
 
 :root[data-theme='light'] .nested-stage {
+  --nested-pane-border: rgba(55, 68, 84, 0.18);
+  --nested-pane-border-inner: rgba(255, 255, 255, 0.72);
+  --nested-pane-fill: rgba(255, 255, 255, 0.56);
+  --nested-pane-resizer: rgba(47, 111, 208, 0.22);
+  --nested-pane-resizer-muted: rgba(47, 111, 208, 0.14);
+  --nested-pane-resizer-strong: rgba(47, 111, 208, 0.64);
   background: #f4f6f8;
 }
 
@@ -101,9 +114,11 @@ button {
 }
 
 .portal-overlay {
+  border-radius: 6px;
   box-shadow:
-    inset 0 0 0 1px rgba(90, 167, 255, 0.38),
-    0 8px 24px rgba(0, 0, 0, 0.22);
+    inset 0 0 0 1px rgba(90, 167, 255, 0.24),
+    0 8px 24px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
 }
 
 .portal-preview-canvas {
@@ -146,16 +161,23 @@ button {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border-radius: 0;
-  box-shadow: inset 0 0 0 1px rgba(90, 167, 255, 0.38);
+  border: 1px solid var(--nested-pane-border);
+  border-radius: 6px;
+  background: var(--nested-pane-fill);
+  box-shadow: inset 0 0 0 1px var(--nested-pane-border-inner);
   pointer-events: auto;
 }
 
 .parent-context-canvas {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  inset: var(--nested-pane-gutter);
+  width: calc(100% - 12px);
+  height: calc(100% - 12px);
+  border-radius: 4px;
+}
+
+.parent-context-canvas-clip > .portal-overlays {
+  inset: var(--nested-pane-gutter);
 }
 
 .parent-context-resizers {
@@ -165,40 +187,45 @@ button {
 .parent-context-resizer {
   position: absolute;
   border: 0;
-  border-radius: 0;
+  border-radius: 999px;
   padding: 0;
-  background: rgba(90, 167, 255, 0.22);
+  background: transparent;
   pointer-events: auto;
   touch-action: none;
 }
 
-.parent-context-resizers[data-current-view='false'] .parent-context-resizer.vertical,
-.parent-context-resizers[data-current-view='false'] .parent-context-resizer.horizontal {
-  background: transparent;
-}
-
+.parent-context-resizer.vertical::after,
+.parent-context-resizer.horizontal::after,
 .parent-context-resizers[data-current-view='false'] .parent-context-resizer.vertical::after,
 .parent-context-resizers[data-current-view='false'] .parent-context-resizer.horizontal::after {
   content: '';
   position: absolute;
   pointer-events: none;
-  background: rgba(90, 167, 255, 0.22);
+  border-radius: 999px;
+  background: var(--nested-pane-resizer);
 }
 
+.parent-context-resizer.vertical::after,
 .parent-context-resizers[data-current-view='false'] .parent-context-resizer.vertical::after {
-  top: 0;
-  bottom: 0;
+  top: var(--nested-pane-gutter);
+  bottom: var(--nested-pane-gutter);
   left: 50%;
   width: 1px;
   transform: translateX(-0.5px);
 }
 
+.parent-context-resizer.horizontal::after,
 .parent-context-resizers[data-current-view='false'] .parent-context-resizer.horizontal::after {
   top: 50%;
-  right: 0;
-  left: 0;
+  right: var(--nested-pane-gutter);
+  left: var(--nested-pane-gutter);
   height: 1px;
   transform: translateY(-0.5px);
+}
+
+.parent-context-resizers[data-current-view='false'] .parent-context-resizer.vertical::after,
+.parent-context-resizers[data-current-view='false'] .parent-context-resizer.horizontal::after {
+  background: var(--nested-pane-resizer-muted);
 }
 
 .parent-context-resizer.vertical {
@@ -212,14 +239,17 @@ button {
 .parent-context-resizer.corner {
   width: 6px;
   height: 6px;
-  border: 1px solid rgba(238, 242, 246, 0.42);
-  background: rgba(90, 167, 255, 0.42);
+  border: 1px solid rgba(238, 242, 246, 0.28);
+  border-radius: 999px;
+  background: var(--nested-pane-resizer);
+  box-shadow: 0 0 0 3px rgba(90, 167, 255, 0.06);
   cursor: move;
 }
 
 .parent-context-resizers[data-current-view='false'] .parent-context-resizer.corner {
   border: 0;
   background: transparent;
+  box-shadow: none;
 }
 
 .parent-context-resizers[data-current-view='false'] .parent-context-resizer.corner::after {
@@ -227,35 +257,38 @@ button {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 1px;
-  height: 1px;
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
   pointer-events: none;
-  background: rgba(90, 167, 255, 0.42);
+  background: var(--nested-pane-resizer-muted);
   transform: translate(-50%, -50%);
 }
 
 .parent-context-resizer:hover,
 .parent-context-resizer:focus-visible {
-  background: rgba(90, 167, 255, 0.68);
+  background: transparent;
   outline: none;
 }
 
-.parent-context-resizers[data-current-view='false'] .parent-context-resizer.vertical:hover,
-.parent-context-resizers[data-current-view='false'] .parent-context-resizer.vertical:focus-visible,
-.parent-context-resizers[data-current-view='false'] .parent-context-resizer.horizontal:hover,
-.parent-context-resizers[data-current-view='false'] .parent-context-resizer.horizontal:focus-visible,
-.parent-context-resizers[data-current-view='false'] .parent-context-resizer.corner:hover,
-.parent-context-resizers[data-current-view='false'] .parent-context-resizer.corner:focus-visible {
-  background: transparent;
+.parent-context-resizer.corner:hover,
+.parent-context-resizer.corner:focus-visible {
+  border-color: rgba(238, 242, 246, 0.48);
+  background: var(--nested-pane-resizer-strong);
+  box-shadow: 0 0 0 4px rgba(90, 167, 255, 0.1);
 }
 
+.parent-context-resizer.vertical:hover::after,
+.parent-context-resizer.vertical:focus-visible::after,
+.parent-context-resizer.horizontal:hover::after,
+.parent-context-resizer.horizontal:focus-visible::after,
 .parent-context-resizers[data-current-view='false'] .parent-context-resizer.vertical:hover::after,
 .parent-context-resizers[data-current-view='false'] .parent-context-resizer.vertical:focus-visible::after,
 .parent-context-resizers[data-current-view='false'] .parent-context-resizer.horizontal:hover::after,
 .parent-context-resizers[data-current-view='false'] .parent-context-resizer.horizontal:focus-visible::after,
 .parent-context-resizers[data-current-view='false'] .parent-context-resizer.corner:hover::after,
 .parent-context-resizers[data-current-view='false'] .parent-context-resizer.corner:focus-visible::after {
-  background: rgba(90, 167, 255, 0.68);
+  background: var(--nested-pane-resizer-strong);
 }
 
 .parent-context-shape-hit {

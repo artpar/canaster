@@ -19,7 +19,7 @@ export const unknownNodeDefinition: NodeDefinition<NodeData> = {
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.font = '600 14px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText('Unknown node type', contentRect.x + 4, contentRect.y + 4);
+    ctx.fillText('Unknown item type', contentRect.x + 4, contentRect.y + 4);
     ctx.fillStyle = theme.bodyText;
     ctx.font = '12px ui-sans-serif, system-ui, sans-serif';
     const lines = wrapText(ctx, node.type, Math.max(0, contentRect.w - 8), 2);
@@ -32,9 +32,9 @@ export const unknownNodeDefinition: NodeDefinition<NodeData> = {
   },
   describe({ node }) {
     return {
-      label: `Unknown node type ${node.type}`,
-      roleDescription: 'Unknown node',
-      details: [`type ${node.type}`, `size ${Math.round(node.w)}x${Math.round(node.h)}`],
+      label: `Unknown item type ${node.type}`,
+      roleDescription: 'Unknown item',
+      details: [`Type ${node.type}`],
       state: [],
       actions: [],
     };
