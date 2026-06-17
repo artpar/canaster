@@ -9,7 +9,14 @@ import {
   type CanvasSelectionState,
   type NodeData,
 } from './types';
-import type { CanvasDocument, CanvasDocumentCollection, CanvasDocumentId, ParentContextPaneLayout, PortalNode, StackFrame } from './documentTypes';
+import type { CanvasDocument, CanvasDocumentCollection, CanvasDocumentId, PortalNode, SerializableNestedCanvasViewState, StackFrame } from './documentTypes';
+import {
+  applySerializableViewState,
+  cloneViewState,
+  createEmptyViewportMemoryState,
+  exportSerializableViewState,
+  pruneViewStateForDocuments,
+} from './viewState';
 
 const DEFAULT_CAMERA: Camera = { x: 0, y: 0, scale: 1 };
 const EMPTY_SELECTION: CanvasSelectionState = { selectedNodeIds: [], primarySelectedNodeId: null, resizeMode: false };
@@ -33,6 +40,7 @@ export function createInitialDocumentCollection(rootModel: CanvasModel, rootTitl
       cameras: { [rootCanvasId]: { ...DEFAULT_CAMERA } },
       selections: { [rootCanvasId]: { ...EMPTY_SELECTION, selectedNodeIds: [] } },
       paneLayouts: {},
+      viewportMemory: createEmptyViewportMemoryState(),
       activeCanvasId: rootCanvasId,
       focusedEngineId: rootCanvasId,
       previewFocus: null,
@@ -56,21 +64,7 @@ export function cloneDocumentCollection(collection: CanvasDocumentCollection): C
   return {
     ...collection,
     documents,
-    view: {
-      ...collection.view,
-      cameras: cloneRecord(collection.view.cameras),
-      selections: cloneSelectionRecord(collection.view.selections),
-      paneLayouts: clonePaneLayoutRecord(collection.view.paneLayouts ?? {}),
-      previewFocus: collection.view.previewFocus ? { ...collection.view.previewFocus } : null,
-      stackPath: collection.view.stackPath.map((frame) => ({ ...frame })),
-      parentContext: {
-        ...collection.view.parentContext,
-        shapes: collection.view.parentContext.shapes.map((shape) => ({ ...shape, projectedRect: { ...shape.projectedRect }, node: cloneNode(shape.node) })),
-      },
-      deleteConfirmation: collection.view.deleteConfirmation
-        ? { ...collection.view.deleteConfirmation, nodeIds: [...collection.view.deleteConfirmation.nodeIds] }
-        : null,
-    },
+    view: cloneViewState(collection.view),
   };
 }
 
@@ -273,6 +267,7 @@ export function deleteNodesAndDescendants(collection: CanvasDocumentCollection, 
     delete next.view.selections[childId];
     delete next.view.paneLayouts[childId];
   }
+  next.view = pruneViewStateForDocuments(next.view, next.documents);
   next.view.deleteConfirmation = null;
   next.view.selections[canvasId] = { ...EMPTY_SELECTION, selectedNodeIds: [] };
   if (!next.documents[next.activeCanvasId]) next.activeCanvasId = canvasId;
@@ -294,17 +289,28 @@ export function cloneNode(node: CanvasNode): CanvasNode {
 
 export function syncDerivedView(collection: CanvasDocumentCollection): CanvasDocumentCollection {
   const activeCanvasId = collection.documents[collection.activeCanvasId] ? collection.activeCanvasId : collection.rootCanvasId;
+  const prunedView = pruneViewStateForDocuments(collection.view, collection.documents);
   return {
     ...collection,
     activeCanvasId,
     view: {
-      ...collection.view,
-      paneLayouts: collection.view.paneLayouts ?? {},
+      ...prunedView,
       activeCanvasId,
       focusedEngineId: activeCanvasId,
       stackPath: stackPathFor(collection, activeCanvasId),
     },
   };
+}
+
+export function serializeCollectionViewState(collection: CanvasDocumentCollection): SerializableNestedCanvasViewState {
+  return exportSerializableViewState(syncDerivedView(collection).view);
+}
+
+export function applySerializedViewState(collection: CanvasDocumentCollection, view: SerializableNestedCanvasViewState): CanvasDocumentCollection {
+  const next = cloneDocumentCollection(collection);
+  next.view = pruneViewStateForDocuments(applySerializableViewState(next.view, view), next.documents);
+  next.activeCanvasId = next.documents[next.view.activeCanvasId] ? next.view.activeCanvasId : next.activeCanvasId;
+  return syncDerivedView(next);
 }
 
 function collectDescendants(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId, into: Set<CanvasDocumentId>) {
@@ -334,21 +340,4 @@ function descriptionLabel(node: CanvasNode) {
   const rawText = (node.data as { text?: unknown }).text;
   if (typeof rawText === 'string' && rawText.trim()) return rawText.trim().slice(0, 42);
   return 'Canvas';
-}
-
-function cloneRecord<T extends object>(record: Record<string, T>): Record<string, T> {
-  return Object.fromEntries(Object.entries(record).map(([key, value]) => [key, { ...value }]));
-}
-
-function cloneSelectionRecord(record: Record<string, CanvasSelectionState>): Record<string, CanvasSelectionState> {
-  return Object.fromEntries(
-    Object.entries(record).map(([key, value]) => [
-      key,
-      { selectedNodeIds: [...value.selectedNodeIds], primarySelectedNodeId: value.primarySelectedNodeId, resizeMode: value.resizeMode },
-    ]),
-  );
-}
-
-function clonePaneLayoutRecord(record: Record<string, ParentContextPaneLayout>): Record<string, ParentContextPaneLayout> {
-  return Object.fromEntries(Object.entries(record).map(([key, value]) => [key, { ...value }]));
 }

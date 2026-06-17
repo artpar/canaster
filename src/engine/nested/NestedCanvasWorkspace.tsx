@@ -20,6 +20,7 @@ import { NativeNestedCanvasController } from './NativeNestedCanvasController';
 export type NestedCanvasWorkspaceProps = {
   initialCollection: CanvasDocumentCollection;
   theme: ThemeName;
+  parentContextVisible?: boolean;
   animationEnabled?: boolean;
   fitOnFirstLoad?: boolean;
   storageKey?: string;
@@ -64,6 +65,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
   {
     initialCollection,
     theme,
+    parentContextVisible = true,
     fitOnFirstLoad = true,
     storageKey,
     onCollectionChange,
@@ -87,6 +89,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
       root: host,
       initialCollection: initialCollectionRef.current,
       theme,
+      parentContextVisible,
       fitOnFirstLoad,
       storageKey,
       onCollectionChange: (collection, changes) => callbacksRef.current.onCollectionChange?.(collection, changes),
@@ -102,6 +105,10 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
   useEffect(() => {
     controllerRef.current?.setTheme(theme);
   }, [theme]);
+
+  useEffect(() => {
+    controllerRef.current?.setParentContextVisible(parentContextVisible);
+  }, [parentContextVisible]);
 
   useImperativeHandle(ref, () => ({
     fitActiveCanvas: () => controllerRef.current?.fitActiveCanvas(),

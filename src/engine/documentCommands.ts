@@ -15,6 +15,7 @@ import { nodeDefinitionFor, parseNodeData } from './nodeTypes/registry';
 import type { NodeActionDescriptor } from './nodeTypes/types';
 import { BuiltInNodeTypes, type CanvasEditSource, type CanvasNode, type CanvasPortalNodeData } from './types';
 import type { CanvasDocumentCollection, CanvasDocumentId, DocumentCommand, DocumentModelChange, PortalNode } from './documentTypes';
+import { cloneViewState } from './viewState';
 
 export type DocumentCommandPlan = {
   collection: CanvasDocumentCollection;
@@ -161,21 +162,7 @@ function cloneCollectionForNavigation(collection: CanvasDocumentCollection): Can
   return {
     ...collection,
     documents: collection.documents,
-    view: {
-      ...collection.view,
-      cameras: { ...collection.view.cameras },
-      selections: { ...collection.view.selections },
-      paneLayouts: { ...collection.view.paneLayouts },
-      stackPath: collection.view.stackPath.map((frame) => ({ ...frame })),
-      previewFocus: collection.view.previewFocus ? { ...collection.view.previewFocus } : null,
-      parentContext: {
-        ...collection.view.parentContext,
-        shapes: collection.view.parentContext.shapes.map((shape) => ({ ...shape, projectedRect: { ...shape.projectedRect }, node: cloneNode(shape.node) })),
-      },
-      deleteConfirmation: collection.view.deleteConfirmation
-        ? { ...collection.view.deleteConfirmation, nodeIds: [...collection.view.deleteConfirmation.nodeIds] }
-        : null,
-    },
+    view: cloneViewState(collection.view),
   };
 }
 

@@ -211,6 +211,7 @@ export class CanvasEngine {
   }
 
   setLivePortalNodeIds(ids: Set<string>) {
+    if (sameStringSet(this.livePortalNodeIds, ids)) return;
     this.livePortalNodeIds = new Set(ids);
     this.markDirty();
   }
@@ -229,6 +230,14 @@ export class CanvasEngine {
     this.camera = { ...camera };
     this.markDirty();
     this.emitStatus();
+  }
+
+  flushRender() {
+    if (this.disposed) return;
+    this.resize();
+    this.frameQueued = false;
+    this.render();
+    this.dirty = false;
   }
 
   getSelectionState(): CanvasSelectionState {
@@ -1332,6 +1341,14 @@ function emptySelectionState(): CanvasSelectionState {
 
 function sameSelectionState(a: CanvasSelectionState, b: CanvasSelectionState) {
   return a.primarySelectedNodeId === b.primarySelectedNodeId && a.resizeMode === b.resizeMode && arraysEqual(a.selectedNodeIds, b.selectedNodeIds);
+}
+
+function sameStringSet(a: Set<string>, b: Set<string>) {
+  if (a.size !== b.size) return false;
+  for (const id of a) {
+    if (!b.has(id)) return false;
+  }
+  return true;
 }
 
 function selectInState(state: CanvasSelectionState, nodeId: string, mode: 'replace' | 'toggle' | 'add'): CanvasSelectionState {

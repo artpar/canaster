@@ -176,6 +176,7 @@ function canasterSnapshot() {
           cameras: { root: { x: 40, y: 50, zoom: 0.8 } },
           selections: { root: { nodeId: 'smoke-node', nodeIds: ['smoke-node'] } },
           paneLayouts: { root: { left: 0.1, right: 0.1, top: 0.1, bottom: 0.1 } },
+          viewportMemory: { schemaVersion: 1, contextPanes: {}, embeddedPortals: {} },
           activeCanvasId: 'root',
           focusedEngineId: 'root',
           previewFocus: null,

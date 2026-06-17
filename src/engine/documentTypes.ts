@@ -24,6 +24,18 @@ export type CanvasWorkspaceSnapshot = {
   lastModelChange: DocumentModelChange | null;
 };
 
+export type SerializableNestedCanvasViewState = {
+  schemaVersion: 1;
+  cameras: Record<CanvasDocumentId, Camera>;
+  selections: Record<CanvasDocumentId, CanvasSelectionState>;
+  paneLayouts: Record<CanvasDocumentId, ParentContextPaneLayout>;
+  viewportMemory: NestedCanvasViewportMemoryState;
+  activeCanvasId: CanvasDocumentId;
+  focusedEngineId: EngineSlotId;
+  previewFocus: PortalPreviewFocus | null;
+  animationEnabled: boolean;
+};
+
 export type CanvasWorkspaceHistory = {
   present: CanvasDocumentCollection;
   undoStack: CanvasDocumentCollection[];
@@ -42,6 +54,7 @@ export type NestedCanvasViewState = {
   cameras: Record<CanvasDocumentId, Camera>;
   selections: Record<CanvasDocumentId, CanvasSelectionState>;
   paneLayouts: Record<CanvasDocumentId, ParentContextPaneLayout>;
+  viewportMemory: NestedCanvasViewportMemoryState;
   activeCanvasId: CanvasDocumentId;
   focusedEngineId: EngineSlotId;
   previewFocus: PortalPreviewFocus | null;
@@ -56,6 +69,21 @@ export type ParentContextPaneLayout = {
   right: number;
   top: number;
   bottom: number;
+};
+
+export type NestedCanvasViewportMemoryState = {
+  schemaVersion: 1;
+  contextPanes: Record<ViewportMemoryKey, ViewportMemory>;
+  embeddedPortals: Record<ViewportMemoryKey, ViewportMemory>;
+};
+
+export type ViewportMemoryKey = string;
+
+export type ViewportMemory = {
+  camera: Camera;
+  selection?: CanvasSelectionState;
+  targetSignature?: string;
+  updatedAt: number;
 };
 
 export type EngineSlotId = string;

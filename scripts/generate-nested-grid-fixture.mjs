@@ -138,6 +138,7 @@ const collection = {
     cameras,
     selections,
     paneLayouts,
+    viewportMemory: { schemaVersion: 1, contextPanes: {}, embeddedPortals: {} },
     activeCanvasId: 'root',
     focusedEngineId: 'root',
     previewFocus: null,

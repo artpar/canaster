@@ -3,11 +3,19 @@ import {
   cameraForCanvas,
   cloneModel,
   cloneDocumentCollection,
+  applySerializedViewState,
   selectNodeInCanvas,
   selectionForCanvas,
+  serializeCollectionViewState,
   setCameraForCanvas,
   setSelectionForCanvas,
 } from '../documentModel';
+import {
+  cloneViewState,
+  contextPaneViewportMemory,
+  parentContextPaneViewportKey,
+  rememberContextPaneViewport,
+} from '../viewState';
 import {
   openDeleteConfirmation,
   planDocumentCommand,
@@ -25,6 +33,8 @@ import type {
   DocumentCommand,
   DocumentModelChange,
   ParentContextPaneLayout,
+  ParentContextRegion,
+  SerializableNestedCanvasViewState,
 } from '../documentTypes';
 import {
   createWorkspaceHistory,
@@ -52,6 +62,7 @@ export type NativeNestedCanvasControllerOptions = {
   root: HTMLElement;
   initialCollection: CanvasDocumentCollection;
   theme: ThemeName;
+  parentContextVisible?: boolean;
   fitOnFirstLoad?: boolean;
   storageKey?: string;
   onCollectionChange?: (collection: CanvasDocumentCollection, changes: DocumentModelChange[]) => void;
@@ -77,7 +88,7 @@ type ParentContextPaneSlot = {
   key: string;
   ownerKey: string;
   canvasId: CanvasDocumentId;
-  region: string;
+  region: ParentContextRegion;
   clip: HTMLDivElement;
   childOverlayLayer: HTMLDivElement;
   canvas: HTMLCanvasElement;
@@ -86,6 +97,7 @@ type ParentContextPaneSlot = {
   cameraInitialized: boolean;
   camera: Camera | null;
   targetSignature: string;
+  memoryKey: string;
   sizeSignature: string;
 };
 
@@ -153,11 +165,13 @@ export class NativeNestedCanvasController {
   private overlayRenderCount = 0;
   private overlayStableCount = 0;
   private commitCount = 0;
+  private parentContextVisible: boolean;
   private resizeObserver: ResizeObserver;
 
   constructor(options: NativeNestedCanvasControllerOptions) {
     this.root = options.root;
     this.theme = options.theme;
+    this.parentContextVisible = options.parentContextVisible ?? true;
     this.fitOnFirstLoad = options.fitOnFirstLoad ?? true;
     this.storageKey = options.storageKey ?? DEFAULT_WORKSPACE_STORAGE_ID;
     this.onCollectionChange = options.onCollectionChange;
@@ -237,6 +251,21 @@ export class NativeNestedCanvasController {
     this.theme = theme;
     this.activeEngine?.setTheme(theme);
     for (const slot of this.slots.values()) slot.engine.setTheme(theme);
+    for (const slot of this.parentContextSlots.values()) slot.engine.setTheme(theme);
+  }
+
+  setParentContextVisible(visible: boolean) {
+    if (this.parentContextVisible === visible) return;
+    const stageRect = rectToDomRect(this.root.getBoundingClientRect());
+    const previousLayout = this.normalizedActiveParentContextLayout(stageRect, this.parentContextVisible);
+    this.parentContextVisible = visible;
+    const nextLayout = this.normalizedActiveParentContextLayout(stageRect, this.parentContextVisible);
+    this.shiftActiveCameraForPaneLayoutChange(stageRect, previousLayout, nextLayout);
+    this.layout();
+    this.flushActiveCanvasRender();
+    this.flushOverlayRender();
+    this.scheduleOverlayRender();
+    this.emitChromeState();
   }
 
   fitActiveCanvas() {
@@ -285,6 +314,18 @@ export class NativeNestedCanvasController {
 
   collection(): CanvasDocumentCollection {
     return cloneDocumentCollection(this.collectionRef.current);
+  }
+
+  viewState() {
+    return serializeCollectionViewState(this.collectionRef.current);
+  }
+
+  applyViewState(viewState: SerializableNestedCanvasViewState) {
+    this.commitCollection(applySerializedViewState(this.collectionRef.current, viewState), [], {
+      recordHistory: false,
+      persist: true,
+      notify: true,
+    });
   }
 
   getWorkspaceSnapshot(): CanvasWorkspaceSnapshot {
@@ -399,12 +440,59 @@ export class NativeNestedCanvasController {
     const rect = this.root.getBoundingClientRect();
     const paneLayout = collection.view.paneLayouts[collection.activeCanvasId] ?? DEFAULT_PARENT_CONTEXT_PANE_LAYOUT;
     const hasParent = Boolean(collection.documents[collection.activeCanvasId]?.parentCanvasId);
-    const normalized = hasParent ? normalizeParentContextPaneLayout(rectToDomRect(rect), paneLayout) : { left: 0, right: 0, top: 0, bottom: 0 };
+    const parentContextEnabled = hasParent && this.parentContextVisible;
+    const normalized = parentContextEnabled ? normalizeParentContextPaneLayout(rectToDomRect(rect), paneLayout) : { left: 0, right: 0, top: 0, bottom: 0 };
     this.stage.style.gridTemplateColumns = `${normalized.left}px minmax(0, 1fr) ${normalized.right}px`;
     this.stage.style.gridTemplateRows = `${normalized.top}px minmax(0, 1fr) ${normalized.bottom}px`;
-    this.resizerLayer.style.display = hasParent ? '' : 'none';
-    this.renderParentContextPanes(this.parentContextField, `active:${collection.activeCanvasId}`, collection.activeCanvasId, rectToDomRect(rect), normalized);
-    if (hasParent) this.renderResizers(this.resizerLayer, normalized, rectToDomRect(rect), true, (next, commit) => this.handlePaneLayoutChange(collection.activeCanvasId, next, commit));
+    this.resizerLayer.style.display = parentContextEnabled ? '' : 'none';
+    if (parentContextEnabled) {
+      this.renderParentContextPanes(this.parentContextField, `active:${collection.activeCanvasId}`, collection.activeCanvasId, rectToDomRect(rect), normalized);
+      this.renderResizers(this.resizerLayer, normalized, rectToDomRect(rect), true, (next, commit) => this.handlePaneLayoutChange(collection.activeCanvasId, next, commit));
+    } else {
+      this.disposeParentContextSlotsForOwner(`active:${collection.activeCanvasId}`);
+      this.resizerLayer.replaceChildren();
+    }
+  }
+
+  private normalizedActiveParentContextLayout(stageRect: DOMRect, visible: boolean): ParentContextPaneLayout {
+    const collection = this.collectionRef.current;
+    const hasParent = Boolean(collection.documents[collection.activeCanvasId]?.parentCanvasId);
+    if (!visible || !hasParent) return { left: 0, right: 0, top: 0, bottom: 0 };
+    const paneLayout = collection.view.paneLayouts[collection.activeCanvasId] ?? DEFAULT_PARENT_CONTEXT_PANE_LAYOUT;
+    return normalizeParentContextPaneLayout(stageRect, paneLayout);
+  }
+
+  private shiftActiveCameraForPaneLayoutChange(stageRect: DOMRect, previous: ParentContextPaneLayout, next: ParentContextPaneLayout) {
+    const engine = this.activeEngine;
+    if (!engine) return;
+    const dx = previous.left - next.left;
+    const dy = previous.top - next.top;
+    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
+    const camera = engine.getCamera();
+    const nextCamera = { ...camera, x: camera.x + dx, y: camera.y + dy };
+    engine.setCamera(nextCamera);
+    const base = this.collectionRef.current;
+    base.view.cameras[base.activeCanvasId] = nextCamera;
+    this.historyRef.current = { ...this.historyRef.current, present: base };
+    this.collectionRef.current = base;
+    if (this.storageReady) this.scheduleViewportSnapshotMirror();
+  }
+
+  private flushActiveCanvasRender() {
+    this.activeEngine?.flushRender();
+  }
+
+  private flushOverlayRender() {
+    if (this.overlayFrame !== null) {
+      cancelAnimationFrame(this.overlayFrame);
+      this.overlayFrame = null;
+    }
+    if (this.overlayTimer !== null) {
+      window.clearTimeout(this.overlayTimer);
+      this.overlayTimer = null;
+    }
+    this.lastOverlayRenderAt = performance.now();
+    this.renderOverlays();
   }
 
   private scheduleOverlayRender() {
@@ -429,6 +517,7 @@ export class NativeNestedCanvasController {
   private renderOverlays() {
     const collection = this.collectionRef.current;
     const liveLayouts = livePortalSlotsFor(collection, this.portalLayouts).slice(0, Math.min(this.previewCapacity, MAX_TOTAL_ENGINES - 1));
+    this.activeEngine?.setLivePortalNodeIds(portalNodeIdsFor(liveLayouts));
     const signature = liveLayouts.map((layout) => `${layout.portalNodeId}:${layout.childCanvasId}`).join('|');
     const topologyChanged = signature !== this.lastOverlaySignature;
     if (!topologyChanged) {
@@ -452,15 +541,15 @@ export class NativeNestedCanvasController {
       remaining -= this.createOverlayViewport(this.overlayLayer, layout.childCanvasId, layout, remaining, 0, 'active', seen);
     }
     for (const slot of this.parentContextSlots.values()) {
-      if (remaining <= 0 || !slot.portalLayouts.length) break;
-      const contextLayouts = livePortalSlotsFor(collection, slot.portalLayouts).slice(0, remaining);
+      const contextLayouts = remaining > 0 ? livePortalSlotsFor(collection, slot.portalLayouts).slice(0, remaining) : [];
+      slot.engine.setLivePortalNodeIds(portalNodeIdsFor(contextLayouts));
+      if (!contextLayouts.length) continue;
       for (const layout of contextLayouts) {
         if (remaining <= 0 || !layout.childCanvasId) break;
         remaining -= this.createOverlayViewport(slot.childOverlayLayer, layout.childCanvasId, layout, remaining, 0, `context:${slot.key}`, seen);
       }
     }
     this.disposeSlotsExcept(seen);
-    this.updateLivePortalIds();
     this.emitChromeState();
   }
 
@@ -548,9 +637,10 @@ export class NativeNestedCanvasController {
   }
 
   private renderEmbeddedChildOverlays(slot: Slot, remaining: number, depth: number, seen: Set<string>): number {
-    if (remaining <= 0 || !slot.portalLayouts.length) return 0;
     const collection = this.collectionRef.current;
-    const liveLayouts = livePortalSlotsFor(collection, slot.portalLayouts).slice(0, remaining);
+    const liveLayouts = remaining > 0 ? livePortalSlotsFor(collection, slot.portalLayouts).slice(0, remaining) : [];
+    slot.engine.setLivePortalNodeIds(portalNodeIdsFor(liveLayouts));
+    if (!liveLayouts.length && !slot.portalLayouts.length) return 0;
     this.record('embedded:child-overlays:render', {
       canvasId: slot.canvasId,
       depth,
@@ -565,6 +655,7 @@ export class NativeNestedCanvasController {
         h: Math.round(layout.screenRect.h),
       })),
     });
+    if (!liveLayouts.length) return 0;
     let used = 0;
     for (const layout of liveLayouts) {
       if (remaining - used <= 0 || !layout.childCanvasId) break;
@@ -725,17 +816,10 @@ export class NativeNestedCanvasController {
   }
 
   private layoutEmbeddedSlot(slot: Slot, stageRect: DOMRect) {
-    const collection = this.collectionRef.current;
-    const paneLayout = collection.view.paneLayouts[slot.canvasId] ?? DEFAULT_PARENT_CONTEXT_PANE_LAYOUT;
-    const hasParent = Boolean(collection.documents[slot.canvasId]?.parentCanvasId);
-    const normalized = hasParent
-      ? normalizeParentContextPaneLayout(stageRect, paneLayout, EMBEDDED_PARENT_CONTEXT_CONSTRAINTS)
-      : { left: 0, right: 0, top: 0, bottom: 0 };
-    slot.viewport.style.gridTemplateColumns = `${normalized.left}px minmax(0, 1fr) ${normalized.right}px`;
-    slot.viewport.style.gridTemplateRows = `${normalized.top}px minmax(0, 1fr) ${normalized.bottom}px`;
-    slot.resizers.style.display = hasParent ? '' : 'none';
-    this.renderParentContextPanes(slot.parentContextField, slot.parentContextOwnerKey, slot.canvasId, stageRect, normalized, EMBEDDED_PARENT_CONTEXT_CONSTRAINTS);
-    if (hasParent) this.renderResizers(slot.resizers, normalized, stageRect, false, (next, commit) => this.handlePaneLayoutChange(slot.canvasId, next, commit));
+    slot.viewport.style.gridTemplateColumns = '0px minmax(0, 1fr) 0px';
+    slot.viewport.style.gridTemplateRows = '0px minmax(0, 1fr) 0px';
+    slot.resizers.style.display = 'none';
+    this.disposeParentContextSlotsForOwner(slot.parentContextOwnerKey);
   }
 
   private renderParentContextPanes(
@@ -781,10 +865,18 @@ export class NativeNestedCanvasController {
       slot.engine.setSelectionState(selectionForCanvas(collection, parent.id));
       const worldRect = parentContextWorldRect(source, shapesByRegion.get(region), region);
       const targetSignature = worldRectSignature(worldRect);
-      if (!slot.cameraInitialized || slot.targetSignature !== targetSignature) {
-        slot.camera = cameraForWorldRect(worldRect, rect);
+      const memoryKey = parentContextPaneViewportKey({
+        ownerCanvasId: canvasId,
+        parentCanvasId: parent.id,
+        sourceNodeId: source.id,
+        region,
+      });
+      if (!slot.cameraInitialized || slot.targetSignature !== targetSignature || slot.memoryKey !== memoryKey) {
+        const remembered = contextPaneViewportMemory(collection.view, memoryKey, targetSignature);
+        slot.camera = remembered?.camera ?? cameraForWorldRect(worldRect, rect);
         slot.cameraInitialized = true;
         slot.targetSignature = targetSignature;
+        slot.memoryKey = memoryKey;
         slot.engine.setCamera(slot.camera);
       } else if (slot.camera) {
         slot.engine.setCamera(slot.camera);
@@ -797,7 +889,7 @@ export class NativeNestedCanvasController {
     this.disposeParentContextSlotsExcept(ownerKey, seen);
   }
 
-  private createParentContextPaneSlot(key: string, ownerKey: string, region: string, canvasId: CanvasDocumentId, label: string): ParentContextPaneSlot {
+  private createParentContextPaneSlot(key: string, ownerKey: string, region: ParentContextRegion, canvasId: CanvasDocumentId, label: string): ParentContextPaneSlot {
     const clip = document.createElement('div');
     clip.className = 'parent-context-canvas-clip native-parent-context-canvas-clip';
     clip.dataset.region = region;
@@ -828,7 +920,7 @@ export class NativeNestedCanvasController {
     });
     engine.setTheme(this.theme);
     this.record('parent-context:pane:create', { ownerKey, canvasId, region });
-    return { key, ownerKey, canvasId, region, clip, childOverlayLayer, canvas, engine, portalLayouts: [], cameraInitialized: false, camera: null, targetSignature: '', sizeSignature: '' };
+    return { key, ownerKey, canvasId, region, clip, childOverlayLayer, canvas, engine, portalLayouts: [], cameraInitialized: false, camera: null, targetSignature: '', memoryKey: '', sizeSignature: '' };
   }
 
   private handleParentContextStatus(slotKey: string) {
@@ -838,6 +930,12 @@ export class NativeNestedCanvasController {
     if (slot.camera && sameCamera(slot.camera, nextCamera)) return;
     slot.camera = nextCamera;
     slot.cameraInitialized = true;
+    if (!slot.memoryKey || !slot.targetSignature) return;
+    const base = this.collectionRef.current;
+    base.view = rememberContextPaneViewport(base.view, slot.memoryKey, nextCamera, slot.targetSignature);
+    this.historyRef.current = { ...this.historyRef.current, present: base };
+    this.collectionRef.current = base;
+    if (this.storageReady) this.scheduleViewportSnapshotMirror();
   }
 
   private handleParentContextPortalLayouts(slotKey: string, layouts: PortalLayout[]) {
@@ -885,19 +983,7 @@ export class NativeNestedCanvasController {
           model: cloneModel(model),
         },
       },
-      view: {
-        ...base.view,
-        cameras: { ...base.view.cameras },
-        selections: { ...base.view.selections },
-        paneLayouts: { ...base.view.paneLayouts },
-        stackPath: base.view.stackPath.map((frame) => ({ ...frame })),
-        previewFocus: base.view.previewFocus ? { ...base.view.previewFocus } : null,
-        parentContext: {
-          ...base.view.parentContext,
-          shapes: base.view.parentContext.shapes.map((shape) => ({ ...shape, projectedRect: { ...shape.projectedRect }, node: cloneModel({ schemaVersion: 2, nodes: [shape.node] }).nodes[0] })),
-        },
-        deleteConfirmation: base.view.deleteConfirmation ? { ...base.view.deleteConfirmation, nodeIds: [...base.view.deleteConfirmation.nodeIds] } : null,
-      },
+      view: cloneViewState(base.view),
     };
     updateParentPortalSummary(next, canvasId);
     const nextHistory = pushWorkspaceHistory(this.historyRef.current, next);
@@ -1105,11 +1191,6 @@ export class NativeNestedCanvasController {
     });
   }
 
-  private updateLivePortalIds() {
-    const ids = new Set(this.portalLayouts.filter((layout) => layout.childCanvasId).map((layout) => layout.portalNodeId));
-    this.activeEngine?.setLivePortalNodeIds(ids);
-  }
-
   private disposeSlots() {
     if (this.slots.size) this.record('engine:embedded:dispose', { slots: this.slots.size });
     for (const slot of this.slots.values()) {
@@ -1173,6 +1254,8 @@ export class NativeNestedCanvasController {
   private exposeDebugApi() {
     (window as Window & { __canwayNested?: unknown }).__canwayNested = {
       getCollection: () => cloneDocumentCollection(this.collectionRef.current),
+      getViewState: () => this.viewState(),
+      applyViewState: (viewState: SerializableNestedCanvasViewState) => this.applyViewState(viewState),
       getWorkspaceSnapshot: () => this.getWorkspaceSnapshot(),
       loadWorkspaceSnapshot: (snapshot: CanvasWorkspaceSnapshot) => this.loadWorkspaceSnapshot(snapshot),
       flushWorkspaceSnapshot: () => this.flushWorkspaceSnapshot(),
@@ -1189,6 +1272,8 @@ export class NativeNestedCanvasController {
         ownerKey: slot.ownerKey,
         canvasId: slot.canvasId,
         region: slot.region,
+        memoryKey: slot.memoryKey,
+        targetSignature: slot.targetSignature,
         camera: slot.engine.getCamera(),
       })),
       runtimeLog: () => nativeCanvasRuntimeLog(),
@@ -1364,4 +1449,8 @@ function samePortalLayouts(a: PortalLayout[], b: PortalLayout[]): boolean {
       layout.screenRect.h === other.screenRect.h
     );
   });
+}
+
+function portalNodeIdsFor(layouts: PortalLayout[]): Set<string> {
+  return new Set(layouts.filter((layout) => layout.childCanvasId).map((layout) => layout.portalNodeId));
 }

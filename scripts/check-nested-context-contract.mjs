@@ -179,16 +179,85 @@ async function browserContract(createCollection) {
   if (!embedded) throw new Error('grandchild embedded viewport missing');
   const embeddedPanes = [...embedded.querySelectorAll(':scope > .parent-context-field > .parent-context-canvas-clip')];
   const embeddedRegions = embeddedPanes.map((pane) => pane.dataset.region).sort();
-  const embeddedPaneCanvasIds = embeddedPanes.map((pane) => pane.dataset.canvasId);
-  const embeddedPaneTotals = embeddedPanes.map((pane) => pane.querySelector('canvas')?.dataset.totalNodes ?? null);
 
   const expected = [...regions].sort().join('|');
   if (activeRegions.join('|') !== expected) throw new Error(`active context regions mismatch: ${activeRegions.join(',')}`);
-  if (embeddedRegions.join('|') !== expected) throw new Error(`embedded context regions mismatch: ${embeddedRegions.join(',')}`);
+  if (embeddedRegions.length) throw new Error(`embedded previews should not render parent context panes: ${embeddedRegions.join(',')}`);
   if (!activePaneCanvasIds.every((id) => id === 'root')) throw new Error(`active panes are not root canvas viewports: ${activePaneCanvasIds.join(',')}`);
-  if (!embeddedPaneCanvasIds.every((id) => id === 'child')) throw new Error(`embedded panes are not child canvas viewports: ${embeddedPaneCanvasIds.join(',')}`);
   if (!activePaneTotals.every((count) => count === String(collection.documents.root.model.nodes.length))) throw new Error(`active panes are not rendering root model: ${activePaneTotals.join(',')}`);
-  if (!embeddedPaneTotals.every((count) => count === String(collection.documents.child.model.nodes.length))) throw new Error(`embedded panes are not rendering child model: ${embeddedPaneTotals.join(',')}`);
+  const activeCamera = () => {
+    const state = window.__canwayNested.getCollection();
+    return state.view.cameras[state.activeCanvasId];
+  };
+  const activePortalRect = () => {
+    const portal = document.querySelector('.nested-stage > .nested-center-cell > .portal-overlays > .portal-overlay');
+    if (!portal) return null;
+    const rect = portal.getBoundingClientRect();
+    return {
+      left: Math.round(rect.left),
+      top: Math.round(rect.top),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+    };
+  };
+  const parentContextToggle = document.querySelector('button[aria-label="Hide parent context panes"], button[aria-label="Show parent context panes"]');
+  if (!parentContextToggle) throw new Error('parent context toolbar toggle missing');
+  if (parentContextToggle.getAttribute('aria-pressed') !== 'true') throw new Error('parent context toolbar toggle should default on');
+  const centerCell = document.querySelector('.nested-stage > .nested-center-cell');
+  if (!centerCell) throw new Error('active center cell missing');
+  const visibleCenterRect = centerCell.getBoundingClientRect();
+  const visibleActiveCamera = activeCamera();
+  const visibleActivePortalRect = activePortalRect();
+  parentContextToggle.click();
+  await frame();
+  const firstHiddenActiveCamera = activeCamera();
+  const firstHiddenActivePortalRect = activePortalRect();
+  for (let i = 0; i < 11; i += 1) await frame();
+  const hiddenPanes = [...document.querySelectorAll('.nested-stage > .parent-context-field > .parent-context-canvas-clip')];
+  const hiddenHandles = [...document.querySelectorAll('.nested-stage > .parent-context-resizers > button[data-resize-handle]')];
+  if (hiddenPanes.length) throw new Error(`parent context toggle left active panes mounted: ${hiddenPanes.length}`);
+  if (hiddenHandles.length) throw new Error(`parent context toggle left resize handles mounted: ${hiddenHandles.length}`);
+  if (parentContextToggle.getAttribute('aria-pressed') !== 'false') throw new Error('parent context toolbar toggle did not switch off');
+  const hiddenCenterRect = centerCell.getBoundingClientRect();
+  const hiddenActiveCamera = activeCamera();
+  const expectedHiddenCamera = {
+    x: visibleActiveCamera.x + visibleCenterRect.left - hiddenCenterRect.left,
+    y: visibleActiveCamera.y + visibleCenterRect.top - hiddenCenterRect.top,
+  };
+  if (Math.abs(firstHiddenActiveCamera.x - expectedHiddenCamera.x) > 1 || Math.abs(firstHiddenActiveCamera.y - expectedHiddenCamera.y) > 1) {
+    throw new Error(`parent context toggle first hidden frame had stale active camera: ${JSON.stringify({ firstHiddenActiveCamera, expectedHiddenCamera })}`);
+  }
+  if (Math.abs(hiddenActiveCamera.x - expectedHiddenCamera.x) > 1 || Math.abs(hiddenActiveCamera.y - expectedHiddenCamera.y) > 1) {
+    throw new Error(`parent context toggle did not shift active camera with center origin: ${JSON.stringify({ visibleActiveCamera, hiddenActiveCamera, expectedHiddenCamera })}`);
+  }
+  if (visibleActivePortalRect && firstHiddenActivePortalRect && (
+    Math.abs(firstHiddenActivePortalRect.left - visibleActivePortalRect.left) > 1 ||
+    Math.abs(firstHiddenActivePortalRect.top - visibleActivePortalRect.top) > 1
+  )) {
+    throw new Error(`parent context toggle first hidden frame moved active portal overlay: ${JSON.stringify({ visibleActivePortalRect, firstHiddenActivePortalRect })}`);
+  }
+  parentContextToggle.click();
+  await frame();
+  const firstRestoredActiveCamera = activeCamera();
+  const firstRestoredActivePortalRect = activePortalRect();
+  for (let i = 0; i < 11; i += 1) await frame();
+  const restoredPanes = [...document.querySelectorAll('.nested-stage > .parent-context-field > .parent-context-canvas-clip')];
+  const restoredRegions = restoredPanes.map((pane) => pane.dataset.region).sort();
+  if (restoredRegions.join('|') !== expected) throw new Error(`parent context toggle did not restore active panes: ${restoredRegions.join(',')}`);
+  if (parentContextToggle.getAttribute('aria-pressed') !== 'true') throw new Error('parent context toolbar toggle did not switch back on');
+  const restoredActiveCamera = activeCamera();
+  if (Math.abs(firstRestoredActiveCamera.x - visibleActiveCamera.x) > 1 || Math.abs(firstRestoredActiveCamera.y - visibleActiveCamera.y) > 1) {
+    throw new Error(`parent context toggle first restored frame had stale active camera: ${JSON.stringify({ visibleActiveCamera, firstRestoredActiveCamera })}`);
+  }
+  if (Math.abs(restoredActiveCamera.x - visibleActiveCamera.x) > 1 || Math.abs(restoredActiveCamera.y - visibleActiveCamera.y) > 1) {
+    throw new Error(`parent context toggle did not restore active camera after center panel shift: ${JSON.stringify({ visibleActiveCamera, restoredActiveCamera })}`);
+  }
+  if (visibleActivePortalRect && firstRestoredActivePortalRect && (
+    Math.abs(firstRestoredActivePortalRect.left - visibleActivePortalRect.left) > 1 ||
+    Math.abs(firstRestoredActivePortalRect.top - visibleActivePortalRect.top) > 1
+  )) {
+    throw new Error(`parent context toggle first restored frame moved active portal overlay: ${JSON.stringify({ visibleActivePortalRect, firstRestoredActivePortalRect })}`);
+  }
   const paneCanvases = [...document.querySelectorAll('.parent-context-canvas-clip > canvas')];
   const nonInteractive = paneCanvases.filter((canvas) => canvas.tabIndex !== 0 || canvas.dataset.engineMode !== 'embedded-live');
   if (nonInteractive.length) throw new Error(`context panes are not live interactive canvases: ${nonInteractive.length}`);
@@ -226,6 +295,30 @@ async function browserContract(createCollection) {
   for (let i = 0; i < 6; i += 1) await frame();
   const panAfter = activePaneCamera('top-left');
   if (!panBefore || !panAfter || (panAfter.x === panBefore.x && panAfter.y === panBefore.y)) throw new Error('empty-space pan inside border pane did not persist');
+  const memoryEntry = window.__canwayNested.contextPaneCameras().find((entry) => entry.ownerKey === 'active:child' && entry.region === 'top-left');
+  const snapshot = window.__canwayNested.getWorkspaceSnapshot();
+  const remembered = memoryEntry?.memoryKey ? snapshot.history.present.view.viewportMemory?.contextPanes?.[memoryEntry.memoryKey] : null;
+  if (!remembered) throw new Error('context pane camera was not written to serializable view memory');
+  if (remembered.camera.scale !== panAfter.scale || remembered.camera.x !== panAfter.x || remembered.camera.y !== panAfter.y) {
+    throw new Error('serialized context pane camera does not match live pane camera');
+  }
+  const exportedView = window.__canwayNested.getViewState();
+  const roundTrippedView = JSON.parse(JSON.stringify(exportedView));
+  if ('parentContext' in roundTrippedView || 'stackPath' in roundTrippedView || 'deleteConfirmation' in roundTrippedView) {
+    throw new Error('shareable view state leaked derived document context or transient UI state');
+  }
+  window.__canwayNested.applyViewState(roundTrippedView);
+  for (let i = 0; i < 12; i += 1) await frame();
+  const restoredSharedViewPan = activePaneCamera('top-left');
+  if (!restoredSharedViewPan || restoredSharedViewPan.scale !== panAfter.scale || restoredSharedViewPan.x !== panAfter.x || restoredSharedViewPan.y !== panAfter.y) {
+    throw new Error('shared view state did not restore context pane camera');
+  }
+  window.__canwayNested.loadWorkspaceSnapshot(snapshot);
+  for (let i = 0; i < 12; i += 1) await frame();
+  const restoredPan = activePaneCamera('top-left');
+  if (!restoredPan || restoredPan.scale !== panAfter.scale || restoredPan.x !== panAfter.x || restoredPan.y !== panAfter.y) {
+    throw new Error('serialized context pane camera did not restore after workspace load');
+  }
 
   const rootTopBefore = window.__canwayNested.getCollection().documents.root.model.nodes.find((node) => node.id === 'root-top')?.x;
   const topPaneCanvas = document.querySelector('.nested-stage > .parent-context-field > .parent-context-canvas-clip[data-region="top"] > canvas');
@@ -255,13 +348,25 @@ async function browserContract(createCollection) {
     activePaneTotals,
     embeddedCanvasId: embedded.dataset.canvasId,
     embeddedRegions,
-    embeddedPaneCanvasIds,
-    embeddedPaneTotals,
+    hiddenPaneCount: hiddenPanes.length,
+    restoredRegionCount: restoredRegions.length,
+    visibleActiveCamera,
+    firstHiddenActiveCamera,
+    hiddenActiveCamera,
+    expectedHiddenCamera,
+    firstRestoredActiveCamera,
+    restoredActiveCamera,
+    visibleActivePortalRect,
+    firstHiddenActivePortalRect,
+    firstRestoredActivePortalRect,
     contextPaneCanvasModes: [...new Set(paneCanvases.map((canvas) => canvas.dataset.engineMode))],
     zoomBefore,
     zoomAfter,
     panBefore,
     panAfter,
+    restoredSharedViewPan,
+    restoredPan,
+    contextPaneMemoryKeys: Object.keys(snapshot.history.present.view.viewportMemory.contextPanes).sort(),
     rootTopBefore,
     rootTopAfter,
     engineCount: window.__canwayNested.engineCount(),
@@ -280,7 +385,7 @@ function createContractCollection() {
     bottom: [0, 260],
     'bottom-right': [360, 260],
   };
-  const paneLayout = { left: 96, right: 96, top: 88, bottom: 88 };
+  const paneLayout = { left: 144, right: 72, top: 112, bottom: 64 };
   const camera = { x: 380, y: 260, scale: 0.82 };
   const selection = { selectedNodeIds: [], primarySelectedNodeId: null, resizeMode: false };
   const card = (id, region) => {
@@ -343,6 +448,7 @@ function createContractCollection() {
       cameras: { root: camera, child: camera, grand: camera, side: camera },
       selections: { root: selection, child: selection, grand: selection, side: selection },
       paneLayouts: { root: paneLayout, child: paneLayout, grand: paneLayout, side: paneLayout },
+      viewportMemory: { schemaVersion: 1, contextPanes: {}, embeddedPortals: {} },
       activeCanvasId: 'child',
       focusedEngineId: 'child',
       previewFocus: null,
