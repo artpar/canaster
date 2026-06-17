@@ -19,6 +19,7 @@ import { BuiltInNodeTypes, type CanvasCommand, type CanvasModel, type CanvasPort
 import type {
   CanvasDocumentCollection,
   CanvasDocumentId,
+  ParentContextFieldShape,
   CanvasWorkspaceHistory,
   CanvasWorkspaceSnapshot,
   DocumentCommand,
@@ -40,6 +41,8 @@ import {
   buildParentContextField,
   DEFAULT_PARENT_CONTEXT_PANE_LAYOUT,
   normalizeParentContextPaneLayout,
+  paneRectForRegion,
+  PARENT_CONTEXT_REGIONS,
   type ParentContextPaneLayoutConstraints,
 } from './parentContextField';
 import { portalOverlayStyle } from './portalLayout';
@@ -70,14 +73,16 @@ type Slot = {
   sizeSignature: string;
 };
 
-type ParentContextCanvasSlot = {
+type ParentContextPaneSlot = {
   key: string;
   ownerKey: string;
   canvasId: CanvasDocumentId;
   region: string;
   clip: HTMLDivElement;
+  childOverlayLayer: HTMLDivElement;
   canvas: HTMLCanvasElement;
   engine: CanvasEngine;
+  portalLayouts: PortalLayout[];
   sizeSignature: string;
 };
 
@@ -116,7 +121,7 @@ export class NativeNestedCanvasController {
   private readonly collectionRef: { current: CanvasDocumentCollection };
   private readonly lastModelChangeRef: { current: DocumentModelChange | null } = { current: null };
   private readonly slots = new Map<string, Slot>();
-  private readonly parentContextSlots = new Map<string, ParentContextCanvasSlot>();
+  private readonly parentContextSlots = new Map<string, ParentContextPaneSlot>();
   private readonly activeFrameOverBudgetCount = { current: 0 };
 
   private theme: ThemeName;
@@ -395,7 +400,7 @@ export class NativeNestedCanvasController {
     this.stage.style.gridTemplateColumns = `${normalized.left}px minmax(0, 1fr) ${normalized.right}px`;
     this.stage.style.gridTemplateRows = `${normalized.top}px minmax(0, 1fr) ${normalized.bottom}px`;
     this.resizerLayer.style.display = hasParent ? '' : 'none';
-    this.renderParentContextCanvases(this.parentContextField, `active:${collection.activeCanvasId}`, collection.activeCanvasId, rectToDomRect(rect), normalized);
+    this.renderParentContextPanes(this.parentContextField, `active:${collection.activeCanvasId}`, collection.activeCanvasId, rectToDomRect(rect), normalized);
     if (hasParent) this.renderResizers(this.resizerLayer, normalized, rectToDomRect(rect), true, (next, commit) => this.handlePaneLayoutChange(collection.activeCanvasId, next, commit));
   }
 
@@ -442,6 +447,14 @@ export class NativeNestedCanvasController {
     for (const layout of liveLayouts) {
       if (remaining <= 0 || !layout.childCanvasId) break;
       remaining -= this.createOverlayViewport(this.overlayLayer, layout.childCanvasId, layout, remaining, 0, 'active', seen);
+    }
+    for (const slot of this.parentContextSlots.values()) {
+      if (remaining <= 0 || !slot.portalLayouts.length) break;
+      const contextLayouts = livePortalSlotsFor(collection, slot.portalLayouts).slice(0, remaining);
+      for (const layout of contextLayouts) {
+        if (remaining <= 0 || !layout.childCanvasId) break;
+        remaining -= this.createOverlayViewport(slot.childOverlayLayer, layout.childCanvasId, layout, remaining, 0, `context:${slot.key}`, seen);
+      }
     }
     this.disposeSlotsExcept(seen);
     this.updateLivePortalIds();
@@ -493,12 +506,10 @@ export class NativeNestedCanvasController {
     const parentContextField = document.createElement('div');
     parentContextField.className = 'parent-context-field native-parent-context-field';
     parentContextField.setAttribute('aria-label', 'Nested parent canvas context');
-    parentContextField.style.display = 'none';
 
     const resizers = document.createElement('div');
     resizers.className = 'parent-context-resizers native-resizers';
     resizers.setAttribute('aria-label', 'Resize nested panes');
-    resizers.style.display = 'none';
 
     center.append(canvas, childOverlayLayer);
     viewport.append(center, parentContextField, resizers);
@@ -506,8 +517,6 @@ export class NativeNestedCanvasController {
     parent.append(wrapper);
 
     const stageRect = screenRectToDomRect(layout.screenRect);
-    viewport.style.gridTemplateColumns = '0px minmax(0, 1fr) 0px';
-    viewport.style.gridTemplateRows = '0px minmax(0, 1fr) 0px';
     const parentContextOwnerKey = `context:${key}`;
 
     const engine = new CanvasEngine(canvas, {
@@ -525,6 +534,7 @@ export class NativeNestedCanvasController {
     engine.setTheme(this.theme);
     engine.setSelectionState(selectionForCanvas(this.collectionRef.current, canvasId));
     this.slots.set(key, { key, canvasId, wrapper, viewport, parentContextField, parentContextOwnerKey, childOverlayLayer, resizers, canvas, engine, portalLayouts: [], sizeSignature: sizeSignature(stageRect) });
+    this.layoutEmbeddedSlot(this.slots.get(key) as Slot, stageRect);
     requestAnimationFrame(() => {
       if (this.disposed || !this.slots.has(key)) return;
       engine.fit(16);
@@ -578,9 +588,7 @@ export class NativeNestedCanvasController {
     const nextSizeSignature = sizeSignature(stageRect);
     if (nextSizeSignature === slot.sizeSignature) return;
     slot.sizeSignature = nextSizeSignature;
-    slot.viewport.style.gridTemplateColumns = '0px minmax(0, 1fr) 0px';
-    slot.viewport.style.gridTemplateRows = '0px minmax(0, 1fr) 0px';
-    this.disposeParentContextSlotsForOwner(slot.parentContextOwnerKey);
+    this.layoutEmbeddedSlot(slot, stageRect);
     this.record('overlay:viewport:update', {
       canvasId: slot.canvasId,
       width: Math.round(stageRect.width),
@@ -708,78 +716,121 @@ export class NativeNestedCanvasController {
   private layoutEmbeddedPane(canvasId: CanvasDocumentId, _paneLayout: ParentContextPaneLayout) {
     for (const slot of this.slots.values()) {
       if (slot.canvasId !== canvasId) continue;
-      this.disposeParentContextSlotsForOwner(slot.parentContextOwnerKey);
-      slot.viewport.style.gridTemplateColumns = '0px minmax(0, 1fr) 0px';
-      slot.viewport.style.gridTemplateRows = '0px minmax(0, 1fr) 0px';
+      const rect = slot.wrapper.getBoundingClientRect();
+      this.layoutEmbeddedSlot(slot, rectToDomRect(rect));
     }
   }
 
-  private renderParentContextCanvases(layer: HTMLElement, ownerKey: string, canvasId: CanvasDocumentId, stageRect: DOMRect, paneLayout: ParentContextPaneLayout) {
-    const field = buildParentContextField(this.collectionRef.current, stageRect, canvasId, paneLayout, canvasId === this.collectionRef.current.activeCanvasId ? {} : EMBEDDED_PARENT_CONTEXT_CONSTRAINTS);
+  private layoutEmbeddedSlot(slot: Slot, stageRect: DOMRect) {
+    const collection = this.collectionRef.current;
+    const paneLayout = collection.view.paneLayouts[slot.canvasId] ?? DEFAULT_PARENT_CONTEXT_PANE_LAYOUT;
+    const hasParent = Boolean(collection.documents[slot.canvasId]?.parentCanvasId);
+    const normalized = hasParent
+      ? normalizeParentContextPaneLayout(stageRect, paneLayout, EMBEDDED_PARENT_CONTEXT_CONSTRAINTS)
+      : { left: 0, right: 0, top: 0, bottom: 0 };
+    slot.viewport.style.gridTemplateColumns = `${normalized.left}px minmax(0, 1fr) ${normalized.right}px`;
+    slot.viewport.style.gridTemplateRows = `${normalized.top}px minmax(0, 1fr) ${normalized.bottom}px`;
+    slot.resizers.style.display = hasParent ? '' : 'none';
+    this.renderParentContextPanes(slot.parentContextField, slot.parentContextOwnerKey, slot.canvasId, stageRect, normalized, EMBEDDED_PARENT_CONTEXT_CONSTRAINTS);
+    if (hasParent) this.renderResizers(slot.resizers, normalized, stageRect, false, (next, commit) => this.handlePaneLayoutChange(slot.canvasId, next, commit));
+  }
+
+  private renderParentContextPanes(
+    layer: HTMLElement,
+    ownerKey: string,
+    canvasId: CanvasDocumentId,
+    stageRect: DOMRect,
+    paneLayout: ParentContextPaneLayout,
+    paneLayoutConstraints: ParentContextPaneLayoutConstraints = {},
+  ) {
+    const collection = this.collectionRef.current;
+    const active = collection.documents[canvasId];
+    const parent = active?.parentCanvasId ? collection.documents[active.parentCanvasId] : null;
+    const source = parent && active?.parentNodeId ? parent.model.nodes.find((node) => node.id === active.parentNodeId) : null;
+    if (!parent || !source) {
+      this.disposeParentContextSlotsForOwner(ownerKey);
+      return;
+    }
+    const field = buildParentContextField(collection, stageRect, canvasId, paneLayout, paneLayoutConstraints);
+    const shapesByRegion = new Map(field.shapes.map((shape) => [shape.region, shape]));
     const seen = new Set<string>();
-    for (const shape of field.shapes) {
-      if (!shape.childCanvasId) continue;
-      const canvasDocument = this.collectionRef.current.documents[shape.childCanvasId];
-      if (!canvasDocument) continue;
-      const rect = shape.projectedRect;
+    for (const region of PARENT_CONTEXT_REGIONS) {
+      const rect = paneRectForRegion(region, stageRect, paneLayout, paneLayoutConstraints);
       if (rect.w <= 0 || rect.h <= 0) continue;
-      const key = `${ownerKey}:${shape.region}:${shape.childCanvasId}`;
+      const key = `${ownerKey}:${region}:${parent.id}`;
       seen.add(key);
       let slot = this.parentContextSlots.get(key);
       if (!slot) {
-        slot = this.createParentContextCanvasSlot(key, ownerKey, shape.region, shape.childCanvasId);
+        slot = this.createParentContextPaneSlot(key, ownerKey, region, parent.id, parent.title);
         this.parentContextSlots.set(key, slot);
       }
       if (slot.clip.parentElement !== layer) layer.append(slot.clip);
       applyParentContextClipStyle(slot.clip, rect);
-      slot.clip.dataset.region = shape.region;
-      slot.clip.dataset.canvasId = shape.childCanvasId;
+      slot.clip.dataset.region = region;
+      slot.clip.dataset.canvasId = parent.id;
       const nextSizeSignature = rectSizeSignature(rect);
-      if (slot.canvasId !== shape.childCanvasId) {
-        slot.canvasId = shape.childCanvasId;
-        slot.engine.setCanvasId(shape.childCanvasId);
+      if (slot.canvasId !== parent.id) {
+        slot.canvasId = parent.id;
+        slot.engine.setCanvasId(parent.id);
       }
       slot.engine.setTheme(this.theme);
-      slot.engine.setModel(canvasDocument.model, { preserveInteraction: true });
-      slot.engine.setSelectionState(selectionForCanvas(this.collectionRef.current, shape.childCanvasId));
+      slot.engine.setModel(parent.model, { preserveInteraction: true });
+      slot.engine.setSelectionState(selectionForCanvas(collection, parent.id));
+      const worldRect = parentContextWorldRect(source, shapesByRegion.get(region), region);
+      slot.engine.setCamera(cameraForWorldRect(worldRect, rect));
       if (slot.sizeSignature !== nextSizeSignature) {
         slot.sizeSignature = nextSizeSignature;
-        requestAnimationFrame(() => {
-          if (this.disposed || !this.parentContextSlots.has(key)) return;
-          slot?.engine.fit(parentContextFitPadding(rect));
-        });
       }
     }
 
     this.disposeParentContextSlotsExcept(ownerKey, seen);
   }
 
-  private createParentContextCanvasSlot(key: string, ownerKey: string, region: string, canvasId: CanvasDocumentId): ParentContextCanvasSlot {
+  private createParentContextPaneSlot(key: string, ownerKey: string, region: string, canvasId: CanvasDocumentId, label: string): ParentContextPaneSlot {
     const clip = document.createElement('div');
     clip.className = 'parent-context-canvas-clip native-parent-context-canvas-clip';
     clip.dataset.region = region;
     clip.dataset.canvasId = canvasId;
     const canvas = document.createElement('canvas');
     canvas.className = 'parent-context-canvas';
-    canvas.dataset.engineMode = 'context-live';
-    canvas.setAttribute('aria-label', `${this.collectionRef.current.documents[canvasId]?.title ?? 'Sibling'} context canvas`);
-    clip.append(canvas);
+    canvas.dataset.engineMode = 'embedded-live';
+    canvas.setAttribute('aria-label', `${label} context pane`);
+    const childOverlayLayer = document.createElement('div');
+    childOverlayLayer.className = 'portal-overlays';
+    clip.append(canvas, childOverlayLayer);
     const engine = new CanvasEngine(canvas, {
       canvasId,
-      interactionMode: 'context-live',
+      interactionMode: 'embedded-live',
       onStatus: () => undefined,
+      onModelChange: (model) => this.handleEmbeddedModelChange(canvasId, model),
       onCanvasDoubleClick: (targetCanvasId) => {
         this.executeDocumentCommand({ type: 'select-canvas', canvasId: targetCanvasId, source: 'pointer' });
         return true;
       },
-      onPortalLayout: () => undefined,
+      onPortalLayout: (layouts) => this.handleParentContextPortalLayouts(key, layouts),
+      onNodeAction: (nodeId, actionId, source) => {
+        this.executeDocumentCommand({ type: 'execute-node-action', canvasId, nodeId, actionId, source });
+        return true;
+      },
+      transformPastedNode: stripPortalChildReferenceOnPaste,
+      pasteInteractionForNodes: (nodes) => nodes.some((node) => node.type === BuiltInNodeTypes.canvas) ? 'Pasted canvas node without child contents' : null,
     });
-    const canvasDocument = this.collectionRef.current.documents[canvasId];
-    if (canvasDocument) engine.setModel(canvasDocument.model);
     engine.setTheme(this.theme);
-    engine.setSelectionState(selectionForCanvas(this.collectionRef.current, canvasId));
-    this.record('parent-context:canvas:create', { ownerKey, canvasId, region });
-    return { key, ownerKey, canvasId, region, clip, canvas, engine, sizeSignature: '' };
+    this.record('parent-context:pane:create', { ownerKey, canvasId, region });
+    return { key, ownerKey, canvasId, region, clip, childOverlayLayer, canvas, engine, portalLayouts: [], sizeSignature: '' };
+  }
+
+  private handleParentContextPortalLayouts(slotKey: string, layouts: PortalLayout[]) {
+    const slot = this.parentContextSlots.get(slotKey);
+    if (!slot || samePortalLayouts(slot.portalLayouts, layouts)) return;
+    slot.portalLayouts = layouts;
+    this.record('parent-context:portal-layouts:update', {
+      canvasId: slot.canvasId,
+      region: slot.region,
+      count: layouts.length,
+      visible: layouts.filter((layout) => layout.visible && layout.childCanvasId).length,
+    });
+    this.scheduleOverlayRender();
   }
 
   private handleActiveStatus(canvasId: CanvasDocumentId, nextStatus: ViewportStatus) {
@@ -1132,11 +1183,6 @@ function rectSizeSignature(rect: { w: number; h: number }) {
   return `${Math.round(rect.w)}x${Math.round(rect.h)}`;
 }
 
-function parentContextFitPadding(rect: { w: number; h: number }) {
-  const minDimension = Math.min(Math.max(1, rect.w), Math.max(1, rect.h));
-  return Math.max(0, Math.min(16, Math.floor(minDimension * 0.08)));
-}
-
 function screenRectToDomRect(rect: { x: number; y: number; w: number; h: number }): DOMRect {
   return new DOMRect(rect.x, rect.y, Math.max(1, rect.w), Math.max(1, rect.h));
 }
@@ -1159,6 +1205,39 @@ function applyPortalOverlayStyle(element: HTMLElement, layout: PortalLayout) {
   element.style.overflow = 'hidden';
   element.style.borderRadius = `${style.borderRadius}px`;
   element.style.pointerEvents = 'auto';
+}
+
+function parentContextWorldRect(source: { x: number; y: number; w: number; h: number }, shape: ParentContextFieldShape | undefined, region: string) {
+  if (shape) return paddedWorldRect(shape.node, 0.48);
+
+  const gapX = Math.max(source.w * 1.35, 260);
+  const gapY = Math.max(source.h * 1.35, 200);
+  const target = { ...source };
+  if (region.includes('left')) target.x -= gapX;
+  if (region.includes('right')) target.x += gapX;
+  if (region === 'top' || region.includes('top')) target.y -= gapY;
+  if (region === 'bottom' || region.includes('bottom')) target.y += gapY;
+  return paddedWorldRect(target, 0.48);
+}
+
+function paddedWorldRect(rect: { x: number; y: number; w: number; h: number }, ratio: number) {
+  const padX = Math.max(48, rect.w * ratio);
+  const padY = Math.max(40, rect.h * ratio);
+  return {
+    x: rect.x - padX,
+    y: rect.y - padY,
+    w: rect.w + padX * 2,
+    h: rect.h + padY * 2,
+  };
+}
+
+function cameraForWorldRect(worldRect: { x: number; y: number; w: number; h: number }, screenRect: { w: number; h: number }) {
+  const scale = Math.max(0.08, Math.min(1.5, Math.min(screenRect.w / Math.max(1, worldRect.w), screenRect.h / Math.max(1, worldRect.h))));
+  return {
+    scale,
+    x: (screenRect.w - worldRect.w * scale) / 2 - worldRect.x * scale,
+    y: (screenRect.h - worldRect.h * scale) / 2 - worldRect.y * scale,
+  };
 }
 
 function updateParentPortalSummary(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId) {

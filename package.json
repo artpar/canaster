@@ -14,6 +14,7 @@
     "daptin:smoke": "node scripts/daptin-smoke.mjs",
     "daptin:smoke:local": "DAPTIN_SMOKE_ENDPOINT=http://localhost:6336 DAPTIN_SMOKE_CLI_CONFIG=.tmp/daptin/local-site-cli.yaml node scripts/daptin-smoke.mjs",
     "daptin:check:cloud": "curl -fsS 'https://api.canaster.in/api/world?page%5Bsize%5D=1' >/dev/null",
+    "check:nested-context": "node scripts/check-nested-context-contract.mjs",
     "fixture:nested": "node scripts/generate-nested-grid-fixture.mjs",
     "profile:nested": "node scripts/profile-nested-grid-fixture.mjs"
   },

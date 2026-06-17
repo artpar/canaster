@@ -15,7 +15,7 @@ export const EMBEDDED_FIELD_CENTER_RATIO = 0.8;
 export const EMBEDDED_FIELD_MIN_BORDER_BAND = 8;
 export const EMBEDDED_FIELD_MIN_CENTER_BAND = 32;
 
-const REGION_ORDER: ParentContextRegion[] = ['top', 'top-right', 'right', 'bottom-right', 'bottom', 'bottom-left', 'left', 'top-left'];
+export const PARENT_CONTEXT_REGIONS: ParentContextRegion[] = ['top', 'top-right', 'right', 'bottom-right', 'bottom', 'bottom-left', 'left', 'top-left'];
 
 export type { ParentContextPaneLayout } from '../documentTypes';
 
@@ -73,7 +73,7 @@ export function buildParentContextField(
     });
 
   const shapes = [...nearestByRegion.values()]
-    .sort((a, b) => REGION_ORDER.indexOf(a.region) - REGION_ORDER.indexOf(b.region) || b.detail - a.detail);
+    .sort((a, b) => PARENT_CONTEXT_REGIONS.indexOf(a.region) - PARENT_CONTEXT_REGIONS.indexOf(b.region) || b.detail - a.detail);
 
   return { sourceCanvasId: parent.id, sourcePortalNodeId: source.id, shapes };
 }
@@ -134,7 +134,7 @@ export function parentContextRegionLabel(region: ParentContextRegion): string {
   return region.split('-').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
 }
 
-function paneRectForRegion(
+export function paneRectForRegion(
   region: ParentContextRegion,
   stageRect: DOMRect,
   paneLayout: ParentContextPaneLayout,
