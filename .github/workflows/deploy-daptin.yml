@@ -52,6 +52,7 @@ jobs:
             --project "$GCP_PROJECT" \
             --config deploy/gcp/cloudbuild-daptin.yaml \
             --substitutions "_IMAGE=$IMAGE" \
+            --suppress-logs \
             .
 
       - name: Deploy Daptin to Cloud Run
