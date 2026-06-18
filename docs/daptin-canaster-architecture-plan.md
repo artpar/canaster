@@ -23,7 +23,7 @@ These points were verified against Daptin `v0.12.17`, local Daptin docs/source, 
 - PATCHing the created row to `permission: 16256` works.
 - After PATCH to `16256`, unauthenticated GET returns `403`.
 - PATCHing the row to `permission: 16259` makes the row public-readable.
-- Production after admin lockdown must separately allow `document` table create/update for the intended caller. As of the 2026-06-18 real-user release check, production `world.permission` for `table_name=document` is `561453` and `world_schema_json.DefaultPermission` is `16256`. This setting lets the current signed-in save path work, but also permits anonymous creation of private document rows; anonymous read/update of private saved workspaces still returns `403`.
+- Production after admin lockdown must separately allow `document` table create/update for the intended caller. As of the 2026-06-18 real-user release check, production uses `world.permission(document)=561408`, a `world.usergroup_id -> users` relation with `permission=770048`, and `world_schema_json.DefaultPermission=16256`. This lets authenticated normal users create/update `document` rows while anonymous `POST`, `GET`, and `PATCH` on `document` return `403`.
 
 ## MVP Decisions
 
@@ -105,7 +105,13 @@ Prerequisite: the Daptin `world` row for `table_name=document` must allow table-
 
 Because Daptin deployments can create built-in `document` rows with broad default permission unless configured otherwise, do not create a row with real user content first.
 
-On production, a tighter `users` group-scoped table permission (`758049` with a `world.usergroup_id -> users` relation) was tested and rejected because normal-user `POST /api/document` and `PATCH /api/document/<id>` still returned `403`. Until there is a verified Daptin-side authenticated-create/update gate, the working production MVP uses `world.permission=561453` and relies on row permission `16256` to protect saved workspace content.
+On production, grant the built-in `users` usergroup access to the `document` world row:
+
+- `world.permission(document)=561408` (`Guest: (none)`, `Owner: Read, Execute`, `Group: Read, Execute`)
+- `world.usergroup_id -> users` relation permission `770048` (`Group: Peek, Read, Create, Update, Execute`)
+- `world_schema_json.DefaultPermission=16256`
+
+Use `PATCH /api/world/<document_world_ref>/relationships/usergroup_id` with relation data for the `users` group and `attributes.permission=770048`, then verify with `GET /api/world/<document_world_ref>/usergroup_id`. Do not use `GuestCreate` or `GuestUpdate` to make signed-in saves work.
 
 Use this exact sequence:
 

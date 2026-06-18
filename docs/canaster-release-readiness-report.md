@@ -6,9 +6,9 @@ This report covers a real-user journey pass against the deployed production fron
 
 ## Verdict
 
-Release candidate ready for frontend deployment, with one backend hardening item documented.
+Core production storage release path verified. The earlier backend hardening item is closed.
 
-The local/no-account canvas journeys are usable. The release-candidate frontend fixes the sign-in model-loading failure, wrapped account errors, and signed-in reload/open restore. Production Daptin now admits normal-user document create/update at the table layer while new document rows default private. Anonymous clients can still create private placeholder document rows at the table layer; they cannot read or patch private saved workspaces, but server-side authenticated-create gating remains a follow-up hardening item.
+The local/no-account canvas journeys are usable. The deployed frontend no longer requires normal users to load the full Daptin world model, account errors wrap instead of clipping, and signed-in reload/open restore works. Production Daptin now admits `document` create/update only for authenticated users in the built-in `users` usergroup. Anonymous clients cannot create, read, or patch private saved workspaces.
 
 ## Test Setup
 
@@ -26,10 +26,10 @@ The local/no-account canvas journeys are usable. The release-candidate frontend 
 | Start working without an account | Pass on production | Production opened the starter workspace, local-save status showed `Saved on this device`, no permanent login bar was present, and the bottom-left map was visible. |
 | Move through a nested job | Pass on production | The bottom-left map opened `One job, four views`; the toolbar changed to level 2, the up command became available, and child map nodes remained visible. |
 | Use Work Items | Pass on production | Work Items opened in the right utility drawer, then Documents replaced it instead of creating a second toolbar or stacked drawer. |
-| Save online from a local draft | Pass on release candidate | A normal production account signed in, created a `document` row with `POST /api/document [201]`, patched it private/content with `PATCH /api/document/<id> [200]`, and ended at `Saved online`. |
-| Open a saved workspace | Pass on release candidate | Documents listed the saved workspace, selecting it restored the snapshot and kept the toolbar title aligned with the document title. |
+| Save online from a local draft | Pass on production | A normal production account signed in, created a `document` row with `POST /api/document [201]`, patched it private/content with `PATCH /api/document/<id> [200]`, and ended at `Saved online`. |
+| Open a saved workspace | Pass on production | Documents listed the saved workspace, selecting it restored the snapshot and kept the toolbar title aligned with the document title. |
 | Create a new workspace | Pass on release candidate | New starts a local draft and does not create an online row until Save online is explicitly used. |
-| Return later on same device | Pass on release candidate | A hard reload restored the signed-in session, active document id, workspace snapshot, document title, and `Saved online` status. |
+| Return later on same device | Pass on production | A hard reload restored the signed-in session, active document id, workspace snapshot, document title, and `Saved online` status. |
 | Sign out | Pass on release candidate | After signing in on the release-candidate frontend, Sign out returned the toolbar to `Saved on this device`, changed Account back to Sign in, and kept the visible workspace. |
 | Work on a small screen | Not fully tested | This pass did not complete a dedicated narrow-viewport run because the focus was the signed-in storage blocker. Long account errors were verified against the release-candidate CSS and now wrap. |
 | Recover from account or save errors | Partial | The release-candidate Account popover shows the full error text without clipping. Failed online save keeps the local workspace visible and marks the save as failed. |
@@ -50,7 +50,7 @@ Fix in the release candidate:
 - `src/backend/daptinClient.ts` now loads only the `document` model with `worldManager.loadModel('document', false)`.
 - Failed model loading now resets the cached promise so retry can work.
 
-### 2. Production Backend Blocked Real User Document Creation
+### 2. Production Backend Authenticated Document Creation
 
 After the local sign-in fix, the release-candidate frontend signed in successfully and reached `Ready to save online`. The backend then needed table-level document create/update admission for normal accounts.
 
@@ -64,28 +64,33 @@ Current live production metadata for the built-in `document` table:
 
 - `world.table_name`: `document`
 - `world.reference_id`: `019ecca4-e56c-78e6-8a56-e1ed846a99ef`
-- `world.permission`: `561453`
-- decoded as `Guest: Peek, Create, Update, Execute`, `Owner: Read, Execute`, `Group: Read, Execute`
-- purpose: allow the current Daptin JSON:API path to create and update `document` rows for normal signed-in saves
+- `world.permission`: `561408`
+- decoded as `Guest: (none)`, `Owner: Read, Execute`, `Group: Read, Execute`
+- `world.usergroup_id -> users` relation permission: `770048`
+- decoded as `Group: Peek, Read, Create, Update, Execute`
+- purpose: allow normal authenticated users in the built-in `users` usergroup to create/update `document` rows without granting anonymous table access
 - `world.user_account_id`: admin account
 - `world_schema_json.DefaultPermission`: `16256`
 - `world_schema_json.DefaultGroups`: `administrators`
-- Cloud Run cache-clearing revision after the final backend permission update: `canaster-00011-wfm`
 
-Daptin table-access checks the `world` row before allowing `POST` and `PATCH` on `document`. The create/update admission is now open at the table layer, and row privacy is enforced by the private row permission. New rows now default to `16256`, so failed mid-flow placeholder rows are not public.
+Daptin table-access checks the `world` row before allowing `POST` and `PATCH` on `document`. The correct production shape is not anonymous table create/update. The `document` world row is related to the built-in `users` usergroup, and the relation row carries the group create/update bits. New rows still default to `16256`, so saved workspaces remain private to their owner unless a later sharing feature intentionally changes row permission.
 
-Attempted tighter setting:
+Correct relation update path:
 
-- `world.permission=758049` plus a `world.usergroup_id -> users` relation decoded as `Guest: Peek, Execute`, `Group: Read, Create, Update, Execute`.
-- A fresh normal-user sign-in still failed with `POST /api/document [403]`, and an existing saved document update failed with `PATCH /api/document/<id> [403]`.
-- The attempted relation was removed before the final backend restart.
+- Add or update `world.usergroup_id -> users` through the JSON:API relationship route:
+  `PATCH /api/world/<document_world_ref>/relationships/usergroup_id`.
+- Include the relation data object with `type: "usergroup"`, the `users` group id, and `attributes.permission=770048`.
+- Do not use anonymous `GuestCreate`/`GuestUpdate` bits to make the save path work.
+- Do not treat generated join-table entity names as the operator-facing workflow; use the relationship route and verify with `GET /api/world/<document_world_ref>/usergroup_id`.
 
 Final privacy checks:
 
-- Normal signed-in open and save of the saved workspace returned `GET /api/document/<id> [200]` and `PATCH /api/document/<id> [200]`.
+- Anonymous `POST /api/document` returned `403`.
 - Anonymous `GET /api/document/<id>` returned `403`.
 - Anonymous `PATCH /api/document/<id>` returned `403`.
-- Anonymous `POST /api/document` returned `201`; the probe row was deleted. This is the remaining backend hardening gap.
+- Normal signed-in browser save returned `POST /api/document [201]`, then two `PATCH /api/document/<id> [200]` calls.
+- Normal signed-in reload restored the active saved workspace with `GET /api/document/<id> [200]`.
+- The backend and browser probe rows were deleted after verification.
 
 The earlier failed placeholder rows from the broken permission attempts were deleted from production after verification.
 

@@ -19,7 +19,7 @@ The older `space` / `plane` / `snapshot` schema is stale and must not be used fo
 
 The production `document` table currently creates new rows with `world_schema_json.DefaultPermission=16256`. Keep the MVP create flow conservative anyway: create a harmless placeholder row, immediately PATCH `permission: 16256`, then PATCH the real JSON file content.
 
-Production after admin lockdown can still block normal users at the table metadata layer. The current production setting for `world.permission` on `table_name=document` is `561453`, which admits create/update for the current signed-in JSON:API save path while row privacy stays on the document rows. This also admits anonymous creation of private document rows; anonymous read/update of private saved workspaces still returns `403`. Verify the browser journey with a normal non-admin account before release; a privileged CLI smoke does not prove the user path.
+Production after admin lockdown must grant `document` table access to authenticated users through the built-in `users` usergroup, not through guest create/update bits. The current production setting is `world.permission(document)=561408`, with the `document` world row related to `users` through `usergroup_id` and that relation carrying `permission=770048` (`Group: Peek, Read, Create, Update, Execute`). Anonymous `POST`, `GET`, and `PATCH` on `document` return `403`; the normal signed-in browser save path creates and patches document rows successfully. Verify the browser journey with a normal non-admin account before release; a privileged CLI smoke does not prove the user path.
 
 ## Local Daptin Startup
 
@@ -75,7 +75,7 @@ Current public TLS shape:
 - `api.canaster.in` terminates on GCP certificate resource `canaster-api-self-cert`, but that certificate material is issued by Daptin ACME and uploaded into GCP.
 - As of 2026-06-18, `canaster.in` and `www.canaster.in` serve the Canway frontend, while `api.canaster.in` remains the Daptin admin/API hostname.
 - Public frontend auth calls should use `https://api.canaster.in`; production has `signin.permission=561441` and `signup.permission=2085152` so public signup/signin remain open after admin lockdown.
-- Production document storage has `world.permission(document)=561453` and `DefaultPermission(document)=16256`. A tighter `users` group-scoped table permission (`758049` plus a `world.usergroup_id` relation) was tested on 2026-06-18 and still returned `403` for normal-user document create/update, so it is not the current production setting.
+- Production document storage has `world.permission(document)=561408`, `world.usergroup_id -> users` relation permission `770048`, and `DefaultPermission(document)=16256`. Update the relation through `PATCH /api/world/<document_world_ref>/relationships/usergroup_id` and verify it through `GET /api/world/<document_world_ref>/usergroup_id`; do not use anonymous guest create/update bits for the save path.
 
 See `docs/daptin-backend-groundwork.md` for the exact GCP commands and required CI/CD variables.
 
