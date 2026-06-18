@@ -1,0 +1,87 @@
+Actions:
+  - Name: request_canaster_email_otp
+    Label: Request Canaster email sign-in code
+    OnType: user_account
+    InstanceOptional: true
+    Permission: 32
+    Conformations:
+      - ColumnName: email
+        Tags: email,lower
+    InFields:
+      - ColumnName: email
+        ColumnType: email
+        IsNullable: false
+        Name: email
+    OutFields:
+      - Type: user_account
+        Method: GET
+        Reference: user
+        SkipInResponse: true
+        Attributes:
+          query: '[{"column": "email", "operator": "is", "value": "$email"}]'
+      - Type: user_account
+        Method: POST
+        Reference: new_user
+        Condition: '!user == null || user.length == 0'
+        SkipInResponse: true
+        Attributes:
+          confirmed: '0'
+          email: ~email
+          name: '!email.split("@")[0]'
+      - Type: __as_user
+        Method: SWITCH_USER
+        SkipInResponse: true
+        Attributes:
+          user_reference_id: '!user && user.length > 0 ? user[0].reference_id : new_user.reference_id'
+      - Type: otp.generate
+        Method: EXECUTE
+        Reference: otp
+        SkipInResponse: true
+        Attributes:
+          email: ~email
+      - Type: mail.send
+        Method: EXECUTE
+        SkipInResponse: true
+        Attributes:
+          body: '!"Your Canaster sign-in code is " + otp.otp + ". It is valid for 5 minutes."'
+          to:
+            - '~email'
+          subject: 'Your Canaster sign-in code'
+          from: 'login@mail.canaster.in'
+          mail_server_hostname: 'mail.canaster.in'
+      - Type: client.notify
+        Method: ACTIONRESPONSE
+        Attributes:
+          type: success
+          title: Code sent
+          message: Check your email for the sign-in code.
+    Validations:
+      - ColumnName: email
+        Tags: email
+
+  - Name: verify_canaster_email_otp
+    Label: Verify Canaster email sign-in code
+    OnType: user_account
+    InstanceOptional: true
+    Permission: 32
+    Conformations:
+      - ColumnName: email
+        Tags: email,lower
+    InFields:
+      - ColumnName: email
+        ColumnType: email
+        IsNullable: false
+        Name: email
+      - ColumnName: otp
+        ColumnType: label
+        IsNullable: false
+        Name: otp
+    OutFields:
+      - Type: otp.login.verify
+        Method: EXECUTE
+        Attributes:
+          email: ~email
+          otp: ~otp
+    Validations:
+      - ColumnName: email
+        Tags: email

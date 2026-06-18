@@ -17,10 +17,9 @@ jobs:
       GCP_PROJECT: ${{ vars.GCP_PROJECT }}
       GCP_REGION: ${{ vars.GCP_REGION }}
       GCP_ARTIFACT_REPOSITORY: ${{ vars.GCP_ARTIFACT_REPOSITORY }}
-      GCP_CLOUD_RUN_SERVICE: ${{ vars.GCP_CLOUD_RUN_SERVICE }}
-      GCP_SQL_CONNECTION_NAME: ${{ vars.GCP_SQL_CONNECTION_NAME }}
+      GCP_VM_NAME: ${{ vars.GCP_VM_NAME }}
+      GCP_VM_ZONE: ${{ vars.GCP_VM_ZONE }}
       GCP_STORAGE_BUCKET: ${{ vars.GCP_STORAGE_BUCKET }}
-      DAPTIN_SITE_STORE: ${{ vars.DAPTIN_SITE_STORE }}
       DAPTIN_SITE_PATH: ${{ vars.DAPTIN_SITE_PATH }}
     steps:
       - uses: actions/checkout@v4
@@ -69,34 +68,6 @@ jobs:
             esac
           done
 
-      - name: Deploy Daptin to Cloud Run
-        run: |
-          set -euo pipefail
-          gcloud run deploy "$GCP_CLOUD_RUN_SERVICE" \
-            --image "$IMAGE" \
-            --region "$GCP_REGION" \
-            --project "$GCP_PROJECT" \
-            --service-account "canaster-daptin-run@$GCP_PROJECT.iam.gserviceaccount.com" \
-            --execution-environment gen2 \
-            --no-invoker-iam-check \
-            --port 8080 \
-            --memory 1Gi \
-            --cpu 1 \
-            --min-instances 0 \
-            --max-instances 1 \
-            --timeout 300 \
-            --set-cloudsql-instances "$GCP_SQL_CONNECTION_NAME" \
-            --set-secrets DAPTIN_DB_CONNECTION_STRING=canaster-daptin-db-connection:latest \
-            --set-env-vars DAPTIN_SCHEMA_FOLDER=/opt/canaster/schema,DAPTIN_LOCAL_STORAGE_PATH=/data/storage,DAPTIN_STORAGE=/data/storage \
-            --add-volume name=daptin-storage,type=cloud-storage,bucket="$GCP_STORAGE_BUCKET" \
-            --add-volume-mount volume=daptin-storage,mount-path=/data/storage
-
-      - name: Resolve Daptin endpoint
-        run: |
-          set -euo pipefail
-          DAPTIN_ENDPOINT="$(gcloud run services describe "$GCP_CLOUD_RUN_SERVICE" --region "$GCP_REGION" --project "$GCP_PROJECT" --format='value(status.url)')"
-          echo "DAPTIN_ENDPOINT=$DAPTIN_ENDPOINT" >> "$GITHUB_ENV"
-
       - name: Build frontend for production Daptin
         run: |
           set -euo pipefail
@@ -110,15 +81,26 @@ jobs:
           gcloud storage rsync ./dist "$SITE_URI" --recursive --delete-unmatched-destination-objects
           gcloud storage ls "$SITE_URI/index.html" >/dev/null
 
-      - name: Refresh Daptin site cache
+      - name: Deploy Daptin to VM
         run: |
           set -euo pipefail
-          gcloud run services update "$GCP_CLOUD_RUN_SERVICE" \
-            --region "$GCP_REGION" \
+          gcloud compute scp deploy/gcp/vm-deploy-image.sh "$GCP_VM_NAME:/tmp/vm-deploy-image.sh" \
+            --zone "$GCP_VM_ZONE" \
             --project "$GCP_PROJECT" \
-            --update-env-vars CANASTER_SITE_RELOAD_MARKER="$(date +%s)"
+            --tunnel-through-iap
+          gcloud compute ssh "$GCP_VM_NAME" \
+            --zone "$GCP_VM_ZONE" \
+            --project "$GCP_PROJECT" \
+            --tunnel-through-iap \
+            --command "sudo install -m 0755 /tmp/vm-deploy-image.sh /opt/canaster/bin/deploy-image.sh && sudo /opt/canaster/bin/deploy-image.sh '$IMAGE'"
+
+      - name: Resolve VM endpoint
+        run: |
+          set -euo pipefail
+          VM_IP="$(gcloud compute instances describe "$GCP_VM_NAME" --zone "$GCP_VM_ZONE" --project "$GCP_PROJECT" --format='value(networkInterfaces[0].accessConfigs[0].natIP)')"
+          echo "VM_IP=$VM_IP" >> "$GITHUB_ENV"
 
       - name: Smoke deployed runtime
         run: |
           set -euo pipefail
-          curl -fsS "$DAPTIN_ENDPOINT/api/world?page%5Bsize%5D=1" >/dev/null
+          curl -fsS -H "Host: api.canaster.in" "http://$VM_IP/api/world?page%5Bsize%5D=1" >/dev/null

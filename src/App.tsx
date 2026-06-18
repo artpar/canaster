@@ -20,7 +20,6 @@ import {
   Sun,
   Undo2,
   UserCircle,
-  UserPlus,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -28,10 +27,10 @@ import {
   createDocument,
   listDocuments,
   loadDocumentDetails,
+  requestEmailOtp,
   saveDocument,
-  signIn,
   signOut,
-  signUp,
+  verifyEmailOtp,
   type CanasterDocumentSummary,
 } from './backend/canasterDocuments';
 import { DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY, DAPTIN_LAST_EMAIL_STORAGE_KEY, getToken } from './backend/daptinClient';
@@ -63,7 +62,7 @@ const NEXT_GRAPH_ELBOW_X = 232;
 const NEXT_GRAPH_X = 260;
 
 type UtilityDrawerMode = 'documents' | 'work-items' | null;
-type AuthMode = 'sign-in' | 'sign-up';
+type AuthStep = 'email' | 'otp';
 type SyncStatus = 'anonymous' | 'loading' | 'clean' | 'dirty' | 'saving' | 'error';
 
 export function App() {
@@ -73,12 +72,11 @@ export function App() {
   const [theme, setTheme] = useState<ThemeName>('dark');
   const [utilityDrawerMode, setUtilityDrawerMode] = useState<UtilityDrawerMode>(null);
   const [accountOpen, setAccountOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<AuthMode>('sign-in');
+  const [authStep, setAuthStep] = useState<AuthStep>('email');
   const [parentContextVisible, setParentContextVisible] = useState(true);
   const [onboardingDismissed, setOnboardingDismissed] = useState(() => window.localStorage.getItem(ONBOARDING_DISMISSED_STORAGE_KEY) === 'true');
   const [authEmail, setAuthEmail] = useState(() => emailFromStoredToken() || window.localStorage.getItem(DAPTIN_LAST_EMAIL_STORAGE_KEY) || '');
-  const [authName, setAuthName] = useState('');
-  const [authPassword, setAuthPassword] = useState('');
+  const [authOtp, setAuthOtp] = useState('');
   const [signedIn, setSignedIn] = useState(() => Boolean(getToken()));
   const [documents, setDocuments] = useState<CanasterDocumentSummary[]>([]);
   const [activeDocumentId, setActiveDocumentId] = useState(() => window.localStorage.getItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY) ?? '');
@@ -224,41 +222,54 @@ export function App() {
     };
   }, [signedIn]);
 
-  const handleSignUp = useCallback(async () => {
-    if (!authEmail.trim() || !authPassword) return;
-    setSyncStatus('loading');
-    setSyncMessage('Creating account');
-    try {
-      await signUp({ name: authName.trim() || 'Canaster User', email: authEmail.trim(), password: authPassword });
-      window.localStorage.setItem(DAPTIN_LAST_EMAIL_STORAGE_KEY, authEmail.trim());
-      setSignedIn(true);
-      setAccountOpen(false);
-      setAuthPassword('');
-      setSyncStatus('loading');
-      setSyncMessage('Checking saved workspaces');
-    } catch (error) {
-      setSyncStatus('error');
-      setSyncMessage(accountErrorMessage(error, 'create'));
+  const handleAuthEmailChange = useCallback((value: string) => {
+    setAuthEmail(value);
+    if (authStep === 'otp') {
+      setAuthStep('email');
+      setAuthOtp('');
     }
-  }, [authEmail, authName, authPassword]);
+  }, [authStep]);
 
-  const handleSignIn = useCallback(async () => {
-    if (!authEmail.trim() || !authPassword) return;
+  const handleRequestEmailOtp = useCallback(async () => {
+    const email = authEmail.trim().toLowerCase();
+    if (!email) return;
     setSyncStatus('loading');
-    setSyncMessage('Signing in');
+    setSyncMessage('Sending sign-in code');
     try {
-      await signIn({ email: authEmail.trim(), password: authPassword });
-      window.localStorage.setItem(DAPTIN_LAST_EMAIL_STORAGE_KEY, authEmail.trim());
+      await requestEmailOtp({ email });
+      window.localStorage.setItem(DAPTIN_LAST_EMAIL_STORAGE_KEY, email);
+      setAuthEmail(email);
+      setAuthOtp('');
+      setAuthStep('otp');
+      setSyncStatus('clean');
+      setSyncMessage('Check your email for the sign-in code.');
+    } catch (error) {
+      setSyncStatus('error');
+      setSyncMessage(accountErrorMessage(error, 'send-code'));
+    }
+  }, [authEmail]);
+
+  const handleVerifyEmailOtp = useCallback(async () => {
+    const email = authEmail.trim().toLowerCase();
+    const otp = authOtp.trim();
+    if (!email || !otp) return;
+    setSyncStatus('loading');
+    setSyncMessage('Verifying sign-in code');
+    try {
+      await verifyEmailOtp({ email, otp });
+      window.localStorage.setItem(DAPTIN_LAST_EMAIL_STORAGE_KEY, email);
+      setAuthEmail(email);
       setSignedIn(true);
       setAccountOpen(false);
-      setAuthPassword('');
+      setAuthOtp('');
+      setAuthStep('email');
       setSyncStatus('loading');
       setSyncMessage('Checking saved workspaces');
     } catch (error) {
       setSyncStatus('error');
-      setSyncMessage(accountErrorMessage(error, 'sign-in'));
+      setSyncMessage(accountErrorMessage(error, 'verify-code'));
     }
-  }, [authEmail, authPassword]);
+  }, [authEmail, authOtp]);
 
   const handleSignOut = useCallback(async () => {
     const snapshot = workspaceRef.current?.getWorkspaceSnapshot();
@@ -269,7 +280,8 @@ export function App() {
     setSignedIn(false);
     setActiveDocumentId('');
     setDocuments([]);
-    setAuthPassword('');
+    setAuthOtp('');
+    setAuthStep('email');
     setAccountOpen(false);
     setSyncStatus('anonymous');
     setSyncMessage(LOCAL_SAVE_MESSAGE);
@@ -291,7 +303,7 @@ export function App() {
 
   const handleSaveOnline = useCallback(async () => {
     if (!signedIn) {
-      setAuthMode('sign-in');
+      setAuthStep('email');
       setAccountOpen(true);
       setUtilityDrawerMode(null);
       setSyncStatus('anonymous');
@@ -331,7 +343,7 @@ export function App() {
 
   const handleRefreshDocuments = useCallback(async () => {
     if (!signedIn) {
-      setAuthMode('sign-in');
+      setAuthStep('email');
       setAccountOpen(true);
       setUtilityDrawerMode(null);
       setSyncStatus('anonymous');
@@ -505,20 +517,18 @@ export function App() {
         {accountOpen ? (
           <AccountPopover
             authEmail={authEmail}
-            authMode={authMode}
-            authName={authName}
-            authPassword={authPassword}
+            authOtp={authOtp}
+            authStep={authStep}
             signedIn={signedIn}
             syncMessage={syncMessage}
             syncStatus={syncStatus}
-            onAuthModeChange={setAuthMode}
+            onAuthStepChange={setAuthStep}
             onClose={() => setAccountOpen(false)}
-            onEmailChange={setAuthEmail}
-            onNameChange={setAuthName}
-            onPasswordChange={setAuthPassword}
-            onSignIn={() => void handleSignIn()}
+            onEmailChange={handleAuthEmailChange}
+            onOtpChange={setAuthOtp}
+            onRequestEmailOtp={() => void handleRequestEmailOtp()}
             onSignOut={() => void handleSignOut()}
-            onSignUp={() => void handleSignUp()}
+            onVerifyEmailOtp={() => void handleVerifyEmailOtp()}
           />
         ) : null}
 
@@ -549,7 +559,7 @@ export function App() {
             onClose={() => setUtilityDrawerMode(null)}
             onNew={() => void handleNewLocalDraft()}
             onOpenAccount={() => {
-              setAuthMode('sign-in');
+              setAuthStep('email');
               setAccountOpen(true);
               setUtilityDrawerMode(null);
             }}
@@ -813,46 +823,43 @@ function DocumentsDrawer({
 
 type AccountPopoverProps = {
   authEmail: string;
-  authMode: AuthMode;
-  authName: string;
-  authPassword: string;
+  authOtp: string;
+  authStep: AuthStep;
   signedIn: boolean;
   syncMessage: string;
   syncStatus: SyncStatus;
-  onAuthModeChange: (mode: AuthMode) => void;
+  onAuthStepChange: (step: AuthStep) => void;
   onClose: () => void;
   onEmailChange: (value: string) => void;
-  onNameChange: (value: string) => void;
-  onPasswordChange: (value: string) => void;
-  onSignIn: () => void;
+  onOtpChange: (value: string) => void;
+  onRequestEmailOtp: () => void;
   onSignOut: () => void;
-  onSignUp: () => void;
+  onVerifyEmailOtp: () => void;
 };
 
 function AccountPopover({
   authEmail,
-  authMode,
-  authName,
-  authPassword,
+  authOtp,
+  authStep,
   signedIn,
   syncMessage,
   syncStatus,
-  onAuthModeChange,
+  onAuthStepChange,
   onClose,
   onEmailChange,
-  onNameChange,
-  onPasswordChange,
-  onSignIn,
+  onOtpChange,
+  onRequestEmailOtp,
   onSignOut,
-  onSignUp,
+  onVerifyEmailOtp,
 }: AccountPopoverProps) {
   const busy = syncStatus === 'loading' || syncStatus === 'saving';
+  const submitDisabled = busy || !authEmail.trim() || (authStep === 'otp' && !authOtp.trim());
   return (
     <aside className="account-popover" aria-label="Account">
       <div className="account-popover-header">
         <div>
           <span>Account</span>
-          <span>{signedIn ? 'Signed in' : 'Save online'}</span>
+          <span>{signedIn ? 'Signed in' : authStep === 'otp' ? 'Enter code' : 'Email sign in'}</span>
         </div>
         <button className="utility-close" type="button" aria-label="Close account" onClick={onClose}>
           <X size={15} />
@@ -879,42 +886,42 @@ function AccountPopover({
           className="account-form"
           onSubmit={(event) => {
             event.preventDefault();
-            if (authMode === 'sign-up') onSignUp();
-            else onSignIn();
+            if (authStep === 'otp') onVerifyEmailOtp();
+            else onRequestEmailOtp();
           }}
         >
-          <div className="account-tabs" role="tablist" aria-label="Account mode">
-            <button type="button" role="tab" aria-selected={authMode === 'sign-in'} onClick={() => onAuthModeChange('sign-in')}>
-              Sign in
-            </button>
-            <button type="button" role="tab" aria-selected={authMode === 'sign-up'} onClick={() => onAuthModeChange('sign-up')}>
-              Create account
-            </button>
+          <div className="account-auth-copy">
+            <span>{authStep === 'otp' ? 'Check your email' : 'Save workspaces online'}</span>
+            <p>{authStep === 'otp' ? `Enter the code sent to ${authEmail.trim()}.` : 'Canaster sends a short code and creates the account if needed.'}</p>
           </div>
-          {authMode === 'sign-up' ? (
-            <label className="account-field">
-              <span>Name</span>
-              <input name="name" autoComplete="name" value={authName} onChange={(event) => onNameChange(event.target.value)} />
-            </label>
-          ) : null}
           <label className="account-field">
             <span>Email</span>
             <input name="email" type="email" autoComplete="email" value={authEmail} onChange={(event) => onEmailChange(event.target.value)} />
           </label>
-          <label className="account-field">
-            <span>Password</span>
-            <input
-              name="password"
-              type="password"
-              autoComplete={authMode === 'sign-up' ? 'new-password' : 'current-password'}
-              value={authPassword}
-              onChange={(event) => onPasswordChange(event.target.value)}
-            />
-          </label>
-          <button className="account-submit" type="submit" disabled={busy || !authEmail.trim() || !authPassword}>
-            {authMode === 'sign-up' ? <UserPlus size={15} /> : <LogIn size={15} />}
-            {authMode === 'sign-up' ? 'Create account' : 'Sign in'}
+          {authStep === 'otp' ? (
+            <label className="account-field">
+              <span>Code</span>
+              <input
+                name="one-time-code"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]*"
+                maxLength={6}
+                value={authOtp}
+                onChange={(event) => onOtpChange(event.target.value.replace(/\D/g, '').slice(0, 6))}
+              />
+            </label>
+          ) : null}
+          <button className="account-submit" type="submit" disabled={submitDisabled}>
+            {authStep === 'otp' ? <CheckCircle2 size={15} /> : <LogIn size={15} />}
+            {authStep === 'otp' ? 'Verify code' : 'Send code'}
           </button>
+          {authStep === 'otp' ? (
+            <button className="account-text-action" type="button" onClick={() => onAuthStepChange('email')}>
+              Use a different email
+            </button>
+          ) : null}
         </form>
       )}
       <div className={`account-status ${syncStatus}`} role="status" aria-live="polite">
@@ -1209,11 +1216,11 @@ function workspaceErrorMessage(error: unknown, action: 'open' | 'refresh' | 'sav
   return 'Could not save this workspace. Check your connection and try again.';
 }
 
-function accountErrorMessage(error: unknown, action: 'create' | 'sign-in'): string {
+function accountErrorMessage(error: unknown, action: 'send-code' | 'verify-code'): string {
   const message = rawErrorMessage(error);
   if (looksOffline(message)) return 'Could not reach accounts. Check your connection and try again.';
-  if (action === 'create') return 'Could not create the account. Check the email and password, then try again.';
-  return 'Could not sign in. Check the email and password, then try again.';
+  if (action === 'send-code') return 'Could not send a sign-in code. Check the email and try again.';
+  return 'Could not verify that code. Check the code and try again.';
 }
 
 function rawErrorMessage(error: unknown): string {

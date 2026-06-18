@@ -1402,6 +1402,25 @@ button {
   gap: 9px;
 }
 
+.account-auth-copy {
+  display: grid;
+  gap: 4px;
+  padding: 2px 1px 3px;
+}
+
+.account-auth-copy span {
+  color: #eef2f6;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.account-auth-copy p {
+  margin: 0;
+  color: #a1acb9;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .account-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1459,6 +1478,29 @@ button {
 
 .account-submit {
   min-height: 32px;
+}
+
+.account-text-action {
+  justify-self: center;
+  min-height: 28px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 8px;
+  color: #a1cfff;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.account-text-action:hover {
+  color: #d7ebff;
+  background: rgba(90, 167, 255, 0.12);
+}
+
+.account-text-action:focus-visible {
+  outline: 2px solid #5aa7ff;
+  outline-offset: 2px;
 }
 
 .account-status {
@@ -1523,10 +1565,27 @@ button {
   background: rgba(47, 111, 208, 0.12);
 }
 
+:root[data-theme='light'] .account-auth-copy span {
+  color: #18212d;
+}
+
+:root[data-theme='light'] .account-auth-copy p {
+  color: #566273;
+}
+
 :root[data-theme='light'] .account-field input {
   border-color: rgba(122, 133, 148, 0.28);
   color: #18212d;
   background: rgba(24, 33, 45, 0.04);
+}
+
+:root[data-theme='light'] .account-text-action {
+  color: #225faa;
+}
+
+:root[data-theme='light'] .account-text-action:hover {
+  color: #143c73;
+  background: rgba(47, 111, 208, 0.1);
 }
 
 :root[data-theme='light'] .account-avatar {

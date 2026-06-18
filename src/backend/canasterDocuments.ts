@@ -44,18 +44,28 @@ type DaptinFileObject = {
 
 const PRIVATE_PERMISSION = 16256;
 const PUBLIC_READ_PERMISSION = 16259;
+const REQUEST_EMAIL_OTP_ACTION = 'request_canaster_email_otp';
+const VERIFY_EMAIL_OTP_ACTION = 'verify_canaster_email_otp';
 
-export async function signUp(input: { name: string; email: string; password: string }): Promise<void> {
+export async function requestEmailOtp(input: { email: string }): Promise<void> {
   const client = getDaptinClient();
-  await client.authManager.signup(input.name, input.email, input.password, input.password);
-  await signIn({ email: input.email, password: input.password });
+  const response = await client.actionManager.doAction('user_account', REQUEST_EMAIL_OTP_ACTION, {
+    email: input.email,
+  });
+  const failureMessage = daptinActionFailureMessage(response);
+  if (failureMessage) throw new Error(failureMessage);
 }
 
-export async function signIn(input: { email: string; password: string }): Promise<void> {
+export async function verifyEmailOtp(input: { email: string; otp: string }): Promise<void> {
   const client = getDaptinClient();
-  const response = await client.authManager.signin(input.email, input.password);
+  const response = await client.actionManager.doAction('user_account', VERIFY_EMAIL_OTP_ACTION, {
+    email: input.email,
+    otp: input.otp,
+  });
+  const failureMessage = daptinActionFailureMessage(response);
+  if (failureMessage) throw new Error(failureMessage);
   const token = client.authManager.extractToken(response);
-  if (!token) throw new Error('Daptin signin did not return a token');
+  if (!token) throw new Error('Daptin OTP verification did not return a token');
   setToken(token);
   await ensureDaptinModelsLoaded();
 }
@@ -176,6 +186,22 @@ async function updateDocument(documentRef: string, attributes: DaptinDocumentAtt
 
 function encodeSnapshotContent(name: string, snapshot: CanvasWorkspaceSnapshot): string {
   return JSON.stringify([{ name, file: encodeJsonDataUri(hydrateWorkspaceSnapshot(snapshot)), type: 'application/json' } satisfies DaptinFileObject]);
+}
+
+function daptinActionFailureMessage(response: unknown): string {
+  if (!Array.isArray(response)) return '';
+  for (const item of response) {
+    if (!isRecord(item) || item.ResponseType !== 'client.notify' || !isRecord(item.Attributes)) continue;
+    const type = item.Attributes.type;
+    if (type !== 'error' && type !== 'failed') continue;
+    const message = item.Attributes.message;
+    return typeof message === 'string' && message.trim() ? message : 'Daptin action failed';
+  }
+  return '';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 function decodeSnapshotContent(documentContent: string): CanvasWorkspaceSnapshot {
