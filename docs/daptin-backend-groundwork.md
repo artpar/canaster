@@ -135,7 +135,7 @@ DNS cutover records for Namecheap:
 
 `deploy/daptin/Dockerfile` builds a thin Canaster Daptin image:
 
-- Base image: `daptin/daptin:v0.12.18`
+- Base image: `daptin/daptin:v0.12.19`
 - Copies `daptin/schema_*.yaml` into `/opt/canaster/schema` for schema-managed email OTP auth actions
 - Uses `/opt/canaster/entrypoint.sh`
 - Reads `PORT` and `HTTPS_PORT`
@@ -737,7 +737,7 @@ CI (`.github/workflows/ci.yml`) runs:
 
 - `npm ci`
 - TypeScript and Vite build
-- Daptin schema smoke against the real Daptin `daptin/daptin:v0.12.18` image and Postgres 16
+- Daptin schema smoke against the real Daptin `daptin/daptin:v0.12.19` image and Postgres 16
 
 Production deploy (`.github/workflows/deploy-daptin.yml`) builds the Daptin image, builds/uploads the frontend, deploys the image to `canaster-daptin-vm` over IAP SSH, and smokes the VM runtime.
 
