@@ -105,7 +105,7 @@ Current production status as of 2026-06-18 15:35 IST:
 - Cloud SQL instance `canaster-postgres` exists as Enterprise `db-g1-small`, 10 GB SSD.
 - Secret Manager secret `canaster-daptin-vm-db-connection` exists and points at the Cloud SQL public IP authorized only for the VM static IP.
 - VM `canaster-daptin-vm` exists in `asia-south1-c` with external IP `34.14.185.249`.
-- VM firewall rules allow public TCP `80`, `443`, `25`, `465`, and `587` for tag `canaster-vm`, plus IAP SSH from `35.235.240.0/20`.
+- VM firewall rules allow public TCP `80`, `443`, `25`, `465`, `587`, and `993` for tag `canaster-vm`, plus IAP SSH from `35.235.240.0/20`.
 - Runtime image `asia-south1-docker.pkg.dev/agent4-471206/canaster/daptin:manual-vm-20260618095407` is deployed.
 - Daptin HTTP verification passed with `HTTP 200` for `Host: api.canaster.in` and `/api/world?page%5Bsize%5D=1`.
 - Daptin HTTPS verification passed with `curl --resolve api.canaster.in:443:34.14.185.249 https://api.canaster.in/api/world?page%5Bsize%5D=1`.
@@ -232,6 +232,15 @@ gcloud compute firewall-rules create canaster-vm-smtp \
   --priority 1000 \
   --action ALLOW \
   --rules tcp:25,tcp:465,tcp:587 \
+  --source-ranges 0.0.0.0/0 \
+  --target-tags canaster-vm
+
+gcloud compute firewall-rules create canaster-vm-imaps \
+  --network default \
+  --direction INGRESS \
+  --priority 1000 \
+  --action ALLOW \
+  --rules tcp:993 \
   --source-ranges 0.0.0.0/0 \
   --target-tags canaster-vm
 

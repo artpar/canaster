@@ -86,6 +86,7 @@ docker run -d \
   -p 25:25 \
   -p 465:465 \
   -p 587:587 \
+  -p 993:993 \
   -e PORT=8080 \
   -e HTTPS_PORT=6443 \
   -e DAPTIN_DB_CONNECTION_STRING="$DAPTIN_DB_CONNECTION_STRING" \

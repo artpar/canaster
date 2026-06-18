@@ -25,6 +25,7 @@ services:
     ports:
       - "6336:8080"
       - "6443:6443"
+      - "993:993"
     volumes:
       - ./daptin:/opt/daptin/schema:ro
       - daptin-data:/data
