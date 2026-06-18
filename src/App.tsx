@@ -70,14 +70,13 @@ export function App() {
   const workspaceRef = useRef<NestedCanvasWorkspaceHandle | null>(null);
   const ignoreDirtyUntilRef = useRef(0);
   const lastSavedSnapshotSignatureRef = useRef<string | null>(null);
-  const didRestoreRemoteRef = useRef(false);
   const [theme, setTheme] = useState<ThemeName>('dark');
   const [utilityDrawerMode, setUtilityDrawerMode] = useState<UtilityDrawerMode>(null);
   const [accountOpen, setAccountOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>('sign-in');
   const [parentContextVisible, setParentContextVisible] = useState(true);
   const [onboardingDismissed, setOnboardingDismissed] = useState(() => window.localStorage.getItem(ONBOARDING_DISMISSED_STORAGE_KEY) === 'true');
-  const [authEmail, setAuthEmail] = useState(() => window.localStorage.getItem(DAPTIN_LAST_EMAIL_STORAGE_KEY) ?? '');
+  const [authEmail, setAuthEmail] = useState(() => emailFromStoredToken() || window.localStorage.getItem(DAPTIN_LAST_EMAIL_STORAGE_KEY) || '');
   const [authName, setAuthName] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [signedIn, setSignedIn] = useState(() => Boolean(getToken()));
@@ -136,6 +135,14 @@ export function App() {
     if (accountOpen && utilityDrawerMode) setUtilityDrawerMode(null);
   }, [accountOpen, utilityDrawerMode]);
 
+  useEffect(() => {
+    if (!signedIn) return;
+    const tokenEmail = emailFromStoredToken();
+    if (!tokenEmail || tokenEmail === authEmail.trim()) return;
+    setAuthEmail(tokenEmail);
+    window.localStorage.setItem(DAPTIN_LAST_EMAIL_STORAGE_KEY, tokenEmail);
+  }, [authEmail, signedIn]);
+
   const dismissOnboarding = useCallback(() => {
     window.localStorage.setItem(ONBOARDING_DISMISSED_STORAGE_KEY, 'true');
     setOnboardingDismissed(true);
@@ -179,12 +186,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (!signedIn) {
-      didRestoreRemoteRef.current = false;
-      return;
-    }
-    if (didRestoreRemoteRef.current) return;
-    didRestoreRemoteRef.current = true;
+    if (!signedIn) return;
     let canceled = false;
     setSyncStatus('loading');
     setSyncMessage('Checking saved workspaces');
@@ -220,7 +222,7 @@ export function App() {
     return () => {
       canceled = true;
     };
-  }, [activeDocumentId, loadDaptinDocument, refreshDocuments, signedIn]);
+  }, [signedIn]);
 
   const handleSignUp = useCallback(async () => {
     if (!authEmail.trim() || !authPassword) return;
@@ -229,7 +231,6 @@ export function App() {
     try {
       await signUp({ name: authName.trim() || 'Canaster User', email: authEmail.trim(), password: authPassword });
       window.localStorage.setItem(DAPTIN_LAST_EMAIL_STORAGE_KEY, authEmail.trim());
-      didRestoreRemoteRef.current = false;
       setSignedIn(true);
       setAccountOpen(false);
       setAuthPassword('');
@@ -248,7 +249,6 @@ export function App() {
     try {
       await signIn({ email: authEmail.trim(), password: authPassword });
       window.localStorage.setItem(DAPTIN_LAST_EMAIL_STORAGE_KEY, authEmail.trim());
-      didRestoreRemoteRef.current = false;
       setSignedIn(true);
       setAccountOpen(false);
       setAuthPassword('');
@@ -265,7 +265,6 @@ export function App() {
     if (snapshot) await saveWorkspaceSnapshot(snapshot, STARTER_WORKSPACE_STORAGE_KEY);
     await signOut();
     window.localStorage.removeItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY);
-    didRestoreRemoteRef.current = false;
     lastSavedSnapshotSignatureRef.current = null;
     setSignedIn(false);
     setActiveDocumentId('');
@@ -492,7 +491,10 @@ export function App() {
               pressed={accountOpen}
               onClick={() => {
                 const nextOpen = !accountOpen;
-                if (nextOpen) setUtilityDrawerMode(null);
+                if (nextOpen) {
+                  setUtilityDrawerMode(null);
+                  dismissOnboarding();
+                }
                 setAccountOpen(nextOpen);
               }}
             >
@@ -858,7 +860,15 @@ function AccountPopover({
       </div>
       {signedIn ? (
         <div className="account-signed-in">
-          <p>{authEmail || 'Signed in to Canaster'}</p>
+          <div className="account-identity">
+            <span className="account-avatar" aria-hidden="true">
+              <UserCircle size={18} />
+            </span>
+            <div>
+              <span>Canaster account</span>
+              <span>{authEmail || 'Signed in on this browser'}</span>
+            </div>
+          </div>
           <button className="drawer-action" type="button" onClick={onSignOut}>
             <LogOut size={15} />
             Sign out
@@ -1214,6 +1224,22 @@ function rawErrorMessage(error: unknown): string {
 
 function looksOffline(message: string): boolean {
   return /network|fetch|offline|failed to fetch|connection|timeout/i.test(message);
+}
+
+function emailFromStoredToken(): string {
+  const token = getToken();
+  if (!token) return '';
+  const [, payload] = token.split('.');
+  if (!payload) return '';
+  try {
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+    const claims = JSON.parse(atob(padded)) as Record<string, unknown>;
+    const email = claims.email ?? claims.Email ?? claims.mail ?? claims.Mail;
+    return typeof email === 'string' && email.includes('@') ? email : '';
+  } catch {
+    return '';
+  }
 }
 
 function snapshotSignature(snapshot: unknown): string {

@@ -1357,6 +1357,46 @@ button {
   line-height: 1.45;
 }
 
+.account-identity {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.account-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(90, 167, 255, 0.36);
+  border-radius: 6px;
+  color: #eef2f6;
+  background: rgba(90, 167, 255, 0.12);
+}
+
+.account-identity > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.account-identity > div > span:first-child {
+  color: #eef2f6;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.account-identity > div > span:last-child {
+  min-width: 0;
+  color: #8b96a5;
+  font-size: 11px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
 .account-form {
   display: grid;
   gap: 9px;
@@ -1487,6 +1527,20 @@ button {
   border-color: rgba(122, 133, 148, 0.28);
   color: #18212d;
   background: rgba(24, 33, 45, 0.04);
+}
+
+:root[data-theme='light'] .account-avatar {
+  border-color: rgba(47, 111, 208, 0.28);
+  color: #18212d;
+  background: rgba(47, 111, 208, 0.1);
+}
+
+:root[data-theme='light'] .account-identity > div > span:first-child {
+  color: #18212d;
+}
+
+:root[data-theme='light'] .account-identity > div > span:last-child {
+  color: #6d7784;
 }
 
 :root[data-theme='light'] .account-status.clean {
