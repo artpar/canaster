@@ -1,0 +1,24 @@
+Tables:
+  - TableName: mail
+    Columns:
+      - Name: mail
+        ColumnName: mail
+        DataType: blob
+        ColumnType: gzip
+        IsForeignKey: true
+        ForeignKeyData:
+          DataSource: cloud_store
+          Namespace: canaster-mail
+          KeyName: mail-messages
+
+  - TableName: outbox
+    Columns:
+      - Name: mail
+        ColumnName: mail
+        DataType: blob
+        ColumnType: gzip
+        IsForeignKey: true
+        ForeignKeyData:
+          DataSource: cloud_store
+          Namespace: canaster-mail
+          KeyName: outbox-messages

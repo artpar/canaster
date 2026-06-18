@@ -91,9 +91,10 @@ Fixed production defaults:
 - Public admin/API hostname target: `api.canaster.in`
 - Preferred frontend build backend endpoint: `https://api.canaster.in`
 - Daptin site store: `canaster-site`
+- Daptin mail store: `canaster-mail`
 - Daptin site path: `/canaster`
 
-The VM deployment intentionally runs a single Daptin process. Daptin’s DB state is in Cloud SQL. Static site files remain in the GCS-backed Daptin `cloud_store` and are cached by Daptin at runtime.
+The VM deployment intentionally runs a single Daptin process. Daptin’s DB state is in Cloud SQL. Static site files remain in the GCS-backed Daptin `canaster-site` `cloud_store`, while raw SMTP/IMAP message bodies use the GCS-backed Daptin `canaster-mail` `cloud_store`.
 
 Current production status as of 2026-06-18 15:35 IST:
 
@@ -110,6 +111,7 @@ Current production status as of 2026-06-18 15:35 IST:
 - Daptin HTTPS verification passed with `curl --resolve api.canaster.in:443:34.14.185.249 https://api.canaster.in/api/world?page%5Bsize%5D=1`.
 - Daptin logs show `TLS server listening on port :6443`.
 - Daptin logs show SMTP server setup for `mail.canaster.in` on `0.0.0.0:465`.
+- Daptin `cloud_store.name=canaster-mail`, reference `019edc18-5fe3-7370-be4f-ac76ded67a78`, points at `canaster-mail:canaster-daptin-storage` with credential `canaster-site` for cloud-store-backed raw `mail.mail` and `outbox.mail` bodies.
 - VM outbound SMTP verification passed for `gmail-smtp-in.l.google.com:25` and `smtp.gmail.com:465`.
 - Public DNS is still authoritative on Namecheap BasicDNS at `dns1.registrar-servers.com` and `dns2.registrar-servers.com`; update the public records before deleting the old Cloud Run/load balancer path.
 - Daptin `/_config/backend/hostname` and `/_config/backend/enable_https` work over the API host on the VM. `daptin-cli` does not currently have a config command; tracking issue: `daptin/daptin-cli#36`.
@@ -133,7 +135,7 @@ DNS cutover records for Namecheap:
 
 `deploy/daptin/Dockerfile` builds a thin Canaster Daptin image:
 
-- Base image: `daptin/daptin:v0.12.17`
+- Base image: `daptin/daptin:v0.12.18`
 - Copies `daptin/schema_*.yaml` into `/opt/canaster/schema` for schema-managed email OTP auth actions
 - Uses `/opt/canaster/entrypoint.sh`
 - Reads `PORT` and `HTTPS_PORT`
@@ -560,6 +562,22 @@ historical auth source: Cloud Run service account metadata
 bucket: gs://canaster-daptin-storage
 ```
 
+Production Daptin mail GCS store:
+
+```text
+cloud_store.name: canaster-mail
+cloud_store.store_type: google cloud storage
+cloud_store.store_provider: Google
+cloud_store.root_path: canaster-mail:canaster-daptin-storage
+cloud_store.credential_name: canaster-site
+credential style: rclone config keys
+production credential key: env_auth=true
+bucket: gs://canaster-daptin-storage
+schema columns:
+  mail.mail -> canaster-mail/mail-messages
+  outbox.mail -> canaster-mail/outbox-messages
+```
+
 Production Daptin sites:
 
 ```text
@@ -719,7 +737,7 @@ CI (`.github/workflows/ci.yml`) runs:
 
 - `npm ci`
 - TypeScript and Vite build
-- Daptin schema smoke against the real Daptin `daptin/daptin:v0.12.17` image and Postgres 16
+- Daptin schema smoke against the real Daptin `daptin/daptin:v0.12.18` image and Postgres 16
 
 Production deploy (`.github/workflows/deploy-daptin.yml`) builds the Daptin image, builds/uploads the frontend, deploys the image to `canaster-daptin-vm` over IAP SSH, and smokes the VM runtime.
 
