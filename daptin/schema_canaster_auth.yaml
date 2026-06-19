@@ -136,6 +136,13 @@ Actions:
           mail_server_id: '$canaster_mail_server[0].reference_id'
           user_account_id: '$user[0].reference_id'
           permission: 569633
+      - Type: mail_account
+        Method: PATCH
+        Reference: mail_account_permission
+        SkipInResponse: true
+        Attributes:
+          reference_id: '!(existing_mail_account != null && existing_mail_account.length > 0) ? existing_mail_account[0].reference_id : mail_account.reference_id'
+          permission: 569633
       - Type: mail_box
         Method: GET
         Reference: existing_mail_boxes
@@ -237,6 +244,48 @@ Actions:
           permanent_flags: '\*'
           mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0) ? existing_mail_account[0].reference_id : mail_account.reference_id'
           user_account_id: '$user[0].reference_id'
+          permission: 569633
+      - Type: mail_box
+        Method: PATCH
+        Reference: inbox_mail_box_permission
+        SkipInResponse: true
+        Attributes:
+          reference_id: '!(existing_mail_boxes != null && existing_mail_boxes.filter(function(box) { return box.name == "INBOX"; }).length > 0) ? existing_mail_boxes.filter(function(box) { return box.name == "INBOX"; })[0].reference_id : inbox_mail_box.reference_id'
+          permission: 569633
+      - Type: mail_box
+        Method: PATCH
+        Reference: draft_mail_box_permission
+        SkipInResponse: true
+        Attributes:
+          reference_id: '!(existing_mail_boxes != null && existing_mail_boxes.filter(function(box) { return box.name == "Draft"; }).length > 0) ? existing_mail_boxes.filter(function(box) { return box.name == "Draft"; })[0].reference_id : draft_mail_box.reference_id'
+          permission: 569633
+      - Type: mail_box
+        Method: PATCH
+        Reference: sent_mail_box_permission
+        SkipInResponse: true
+        Attributes:
+          reference_id: '!(existing_mail_boxes != null && existing_mail_boxes.filter(function(box) { return box.name == "Sent"; }).length > 0) ? existing_mail_boxes.filter(function(box) { return box.name == "Sent"; })[0].reference_id : sent_mail_box.reference_id'
+          permission: 569633
+      - Type: mail_box
+        Method: PATCH
+        Reference: archive_mail_box_permission
+        SkipInResponse: true
+        Attributes:
+          reference_id: '!(existing_mail_boxes != null && existing_mail_boxes.filter(function(box) { return box.name == "Archive"; }).length > 0) ? existing_mail_boxes.filter(function(box) { return box.name == "Archive"; })[0].reference_id : archive_mail_box.reference_id'
+          permission: 569633
+      - Type: mail_box
+        Method: PATCH
+        Reference: trash_mail_box_permission
+        SkipInResponse: true
+        Attributes:
+          reference_id: '!(existing_mail_boxes != null && existing_mail_boxes.filter(function(box) { return box.name == "Trash"; }).length > 0) ? existing_mail_boxes.filter(function(box) { return box.name == "Trash"; })[0].reference_id : trash_mail_box.reference_id'
+          permission: 569633
+      - Type: mail_box
+        Method: PATCH
+        Reference: spam_mail_box_permission
+        SkipInResponse: true
+        Attributes:
+          reference_id: '!(existing_mail_boxes != null && existing_mail_boxes.filter(function(box) { return box.name == "Spam"; }).length > 0) ? existing_mail_boxes.filter(function(box) { return box.name == "Spam"; })[0].reference_id : spam_mail_box.reference_id'
           permission: 569633
     Validations:
       - ColumnName: email
