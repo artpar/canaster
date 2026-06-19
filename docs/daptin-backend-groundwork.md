@@ -96,7 +96,7 @@ Fixed production defaults:
 
 The VM deployment intentionally runs a single Daptin process. Daptin’s DB state is in Cloud SQL. Static site files remain in the GCS-backed Daptin `canaster-site` `cloud_store`, while raw SMTP/IMAP message bodies use the GCS-backed Daptin `canaster-mail` `cloud_store`.
 
-Current production status as of 2026-06-19 02:30 IST:
+Current production status as of 2026-06-19 12:05 IST:
 
 - Google Cloud project: `agent4-471206`.
 - Artifact Registry repository `canaster` exists in `asia-south1`.
@@ -106,7 +106,7 @@ Current production status as of 2026-06-19 02:30 IST:
 - Secret Manager secret `canaster-daptin-vm-db-connection` exists and points at the Cloud SQL public IP authorized only for the VM static IP.
 - VM `canaster-daptin-vm` exists in `asia-south1-c` with external IP `34.14.185.249`.
 - VM firewall rules allow public TCP `80`, `443`, `25`, `465`, `587`, and `993` for tag `canaster-vm`, plus IAP SSH from `35.235.240.0/20`.
-- Runtime image `asia-south1-docker.pkg.dev/agent4-471206/canaster/daptin:58d71c4d9a17b6d4a72da25bb656887c1a8cecc9` is deployed.
+- Runtime image `asia-south1-docker.pkg.dev/agent4-471206/canaster/daptin:999455fec932ef769b5ff677dc550940cb3e5f6d` is deployed.
 - Daptin HTTP verification passed with `HTTP 200` for `Host: api.canaster.in` and `/api/world?page%5Bsize%5D=1`.
 - Daptin HTTPS verification passed with `curl --resolve api.canaster.in:443:34.14.185.249 https://api.canaster.in/api/world?page%5Bsize%5D=1`.
 - Daptin logs show `TLS server listening on port :6443`.
@@ -737,6 +737,8 @@ Current production Daptin SMTP/IMAP state as of 2026-06-19:
 - `/_config/backend/imap.hostname=imap.canaster.in`.
 - `certificate.hostname=imap.canaster.in`, reference `019edc81-f2fc-7adf-bfd9-8b9257fdf807`, issuer `acme`.
 - Daptin `v0.12.20` provides the independent `imap.hostname` setting, so IMAPS can use `imap.canaster.in` while HTTPS API keeps using `api.canaster.in`.
+- Runtime still required the ACME IMAPS certificate workaround from `daptin/daptin#223`: set `certificate_pem` to the leaf certificate plus `root_certificate`, then restart Daptin. Without that, IMAPS served only the leaf certificate and `openssl s_client -verify_return_error` failed with `unable to get local issuer certificate`.
+- Schema import still required a post-deploy world metadata patch tracked in `daptin/daptin#224`: set `mail.mail` and `outbox.mail` `IsForeignKey=true` while keeping their `ForeignKeyData` cloud-store targets.
 - The ignored local file `.tmp/daptin/prod-mail-login.env` stores the current `login@mail.canaster.in` mailbox credential for operational SMTP AUTH and IMAP smoke tests. Do not commit it.
 - `sync_mail_servers` and `process_outbox` both execute successfully as the production admin.
 
@@ -755,8 +757,8 @@ Final production mail smoke on 2026-06-19:
 - `openssl s_client -connect imap.canaster.in:993 -servername imap.canaster.in -verify_return_error` returned a trusted three-certificate chain.
 - IMAP `LOGIN`, `SELECT INBOX`, and `SEARCH ALL` succeeded for `login@mail.canaster.in`.
 - SMTP AUTH LOGIN over STARTTLS on `mail.canaster.in:587` succeeded for `login@mail.canaster.in`.
-- Fresh inbound SMTP to `login@mail.canaster.in` created a `mail` row with `mail` as a cloud-store file array and a matching object under `gs://canaster-daptin-storage/mail-messages/`.
-- Fresh `request_canaster_email_otp` plus `outbox.process_outbox` created a cloud-store outbox object under `gs://canaster-daptin-storage/outbox-messages/`, marked the outbox row `sent=true`, and delivered the OTP into `mail` as a cloud-store file array.
+- Fresh inbound SMTP to `login@mail.canaster.in` created a `mail` row with `mail` as a cloud-store file array.
+- Fresh `request_canaster_email_otp` plus `outbox.process_outbox` created a cloud-store outbox file array, marked the outbox row `sent=true`, and delivered the OTP into `mail` as a cloud-store file array.
 
 ## CI/CD
 
