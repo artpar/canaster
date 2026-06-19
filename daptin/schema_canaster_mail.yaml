@@ -1,5 +1,6 @@
 Tables:
   - TableName: mail
+    Permission: 561408
     Columns:
       - Name: mail
         ColumnName: mail

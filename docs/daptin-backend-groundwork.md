@@ -684,7 +684,8 @@ Current interim state as of 2026-06-18:
 - `reset-password` and `reset-password-verify` are locked at permission `2085120`; password reset is not the intended frontend auth path.
 - After the email OTP deployment, public browser auth should use `request_canaster_email_otp` and `verify_canaster_email_otp`, both schema-managed on `user_account` with action permission `32` (`GuestExecute`). The request action creates the user account before OTP generation when the email is new, makes that new account row self-owned with owner `Refer` permission for Daptin's `user_otp_account.otp_of_account` foreign key, then switches the action context to that user before executing Daptin's built-in `otp.generate`.
 - `verify_canaster_email_otp` is the signup completion point. After `otp.login.verify` succeeds, it creates the user's missing `mail_account` row and default mailbox folders (`INBOX`, `Draft`, `Sent`, `Archive`, `Trash`, `Spam`) using normal `mail_account.user_account_id`, `mail_account.mail_server_id`, `mail_box.user_account_id`, and `mail_box.mail_account_id` foreign-key columns. Do not create or patch generated join-table rows for this flow.
-- The generated mailbox password stays server-side and is not returned by the verify action. If users need direct IMAP/SMTP client credentials, add a separate authenticated mailbox-password reset action instead of exposing the generated value during signup.
+- The generated mailbox password stays server-side, stays under Daptin's bcrypt input limit, and is not returned by the verify action. If users need direct IMAP/SMTP client credentials, add a separate authenticated mailbox-password reset action instead of exposing the generated value during signup.
+- Inbound SMTP saves `mail` rows as the recipient user. Production must therefore keep `world.permission(mail)=561408` and grant the built-in `users` usergroup table-level `mail` access through a `usergroup(users).world_id -> mail` relation with permission `638976` (`Group: Peek, Read, Create, Execute`). Do not use `GuestCreate` on `mail`. Daptin currently lacks a first-class relation-permission command for this association; track `daptin/daptin-cli#34` and `daptin/daptin#225`.
 - Updating Daptin action permissions does not require a Daptin restart.
 - `artpar@gmail.com` exists in production as a normal user account; the retained bootstrap administrator account is still `admin@canaster.in`.
 - `admin@canaster.in` remains related to both `users` and `administrators`.
@@ -726,6 +727,13 @@ DAPTIN_CLI_CONFIG=.tmp/daptin/prod-cli.yaml daptin-cli create mail_server hostna
 DAPTIN_CLI_CONFIG=.tmp/daptin/prod-cli.yaml daptin-cli execute mail_server sync_mail_servers
 DAPTIN_CLI_CONFIG=.tmp/daptin/prod-cli.yaml daptin-cli --output json list certificate --filter hostname=mail.canaster.in --page-size 1
 DAPTIN_CLI_CONFIG=.tmp/daptin/prod-cli.yaml daptin-cli execute outbox process_outbox
+```
+
+After schema deploy, verify the mail table access state:
+
+```bash
+DAPTIN_CLI_CONFIG=.tmp/daptin/prod-cli.yaml daptin-cli --output json list world --filter table_name=mail --page-size 1
+DAPTIN_CLI_CONFIG=.tmp/daptin/prod-cli.yaml daptin-cli --output json related usergroup "$USERS_GROUP_REF" world_id
 ```
 
 Current production Daptin SMTP/IMAP state as of 2026-06-19:

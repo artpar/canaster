@@ -131,8 +131,8 @@ Actions:
         SkipInResponse: true
         Attributes:
           username: ~email
-          password: '!"canaster-mail-" + user[0].reference_id + "-" + Date.now() + "-" + Math.random().toString(36).slice(2)'
-          password_md5: '!"canaster-mail-md5-" + user[0].reference_id + "-" + Date.now() + "-" + Math.random().toString(36).slice(2)'
+          password: '!"cm-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 14)'
+          password_md5: '!"cmm-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 14)'
           mail_server_id: '$canaster_mail_server[0].reference_id'
           user_account_id: '$user[0].reference_id'
           permission: 561441
