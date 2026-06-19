@@ -28,6 +28,15 @@ Actions:
           confirmed: '0'
           email: ~email
           name: '!email.split("@")[0]'
+          permission: 569633
+      - Type: user_account
+        Method: PATCH
+        Reference: existing_user_permission
+        Condition: '!user != null && user.length > 0 && (user[0].permission & 8192) == 0'
+        SkipInResponse: true
+        Attributes:
+          reference_id: '$user[0].reference_id'
+          permission: '!user[0].permission | 8192'
       - Type: __as_user
         Method: SWITCH_USER
         SkipInResponse: true
