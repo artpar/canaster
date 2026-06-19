@@ -84,15 +84,29 @@ jobs:
       - name: Deploy Daptin to VM
         run: |
           set -euo pipefail
-          gcloud compute scp deploy/gcp/vm-deploy-image.sh "$GCP_VM_NAME:~/vm-deploy-image.sh" \
-            --zone "$GCP_VM_ZONE" \
-            --project "$GCP_PROJECT" \
-            --tunnel-through-iap
-          gcloud compute ssh "$GCP_VM_NAME" \
-            --zone "$GCP_VM_ZONE" \
-            --project "$GCP_PROJECT" \
-            --tunnel-through-iap \
-            --command "sudo install -m 0755 ~/vm-deploy-image.sh /opt/canaster/bin/deploy-image.sh && sudo /opt/canaster/bin/deploy-image.sh '$IMAGE'"
+          deploy_to_vm() {
+            gcloud compute scp deploy/gcp/vm-deploy-image.sh "$GCP_VM_NAME:~/vm-deploy-image.sh" \
+              --zone "$GCP_VM_ZONE" \
+              --project "$GCP_PROJECT" \
+              --tunnel-through-iap
+            gcloud compute ssh "$GCP_VM_NAME" \
+              --zone "$GCP_VM_ZONE" \
+              --project "$GCP_PROJECT" \
+              --tunnel-through-iap \
+              --command "sudo install -m 0755 ~/vm-deploy-image.sh /opt/canaster/bin/deploy-image.sh && sudo /opt/canaster/bin/deploy-image.sh '$IMAGE'"
+          }
+
+          for attempt in 1 2 3 4 5; do
+            echo "Deploy attempt $attempt"
+            if deploy_to_vm; then
+              exit 0
+            fi
+            if [[ "$attempt" == "5" ]]; then
+              exit 1
+            fi
+            echo "Deploy attempt $attempt failed; retrying after SSH key propagation delay"
+            sleep "$((attempt * 10))"
+          done
 
       - name: Resolve VM endpoint
         run: |
