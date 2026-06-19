@@ -136,7 +136,7 @@ DNS cutover records for Namecheap:
 
 `deploy/daptin/Dockerfile` builds a thin Canaster Daptin image:
 
-- Base image: `daptin/daptin:v0.12.20`
+- Base image: `daptin/daptin:v0.12.21`
 - Copies `daptin/schema_*.yaml` into `/opt/canaster/schema` for schema-managed email OTP auth actions
 - Uses `/opt/canaster/entrypoint.sh`
 - Reads `PORT` and `HTTPS_PORT`
@@ -736,9 +736,9 @@ Current production Daptin SMTP/IMAP state as of 2026-06-19:
 - `/_config/backend/imap.listen_interface=:993`.
 - `/_config/backend/imap.hostname=imap.canaster.in`.
 - `certificate.hostname=imap.canaster.in`, reference `019edc81-f2fc-7adf-bfd9-8b9257fdf807`, issuer `acme`.
-- Daptin `v0.12.20` provides the independent `imap.hostname` setting, so IMAPS can use `imap.canaster.in` while HTTPS API keeps using `api.canaster.in`.
-- Runtime still required the ACME IMAPS certificate workaround from `daptin/daptin#223`: set `certificate_pem` to the leaf certificate plus `root_certificate`, then restart Daptin. Without that, IMAPS served only the leaf certificate and `openssl s_client -verify_return_error` failed with `unable to get local issuer certificate`.
-- Schema import still required a post-deploy world metadata patch tracked in `daptin/daptin#224`: set `mail.mail` and `outbox.mail` `IsForeignKey=true` while keeping their `ForeignKeyData` cloud-store targets.
+- Daptin `v0.12.21` keeps the independent `imap.hostname` setting from `v0.12.20`, so IMAPS can use `imap.canaster.in` while HTTPS API keeps using `api.canaster.in`.
+- Daptin `v0.12.21` fixes `daptin/daptin#223` so IMAPS serves the full ACME certificate chain from `certificate_pem` plus `root_certificate` without a manual certificate row patch.
+- Daptin `v0.12.21` fixes `daptin/daptin#224` so schema import applies `IsForeignKey=true` and `ForeignKeyData` for the cloud-store-backed `mail.mail` and `outbox.mail` columns without a manual world row patch.
 - The ignored local file `.tmp/daptin/prod-mail-login.env` stores the current `login@mail.canaster.in` mailbox credential for operational SMTP AUTH and IMAP smoke tests. Do not commit it.
 - `sync_mail_servers` and `process_outbox` both execute successfully as the production admin.
 
@@ -766,7 +766,7 @@ CI (`.github/workflows/ci.yml`) runs:
 
 - `npm ci`
 - TypeScript and Vite build
-- Daptin schema smoke against the real Daptin `daptin/daptin:v0.12.20` image and Postgres 16
+- Daptin schema smoke against the real Daptin `daptin/daptin:v0.12.21` image and Postgres 16
 
 Production deploy (`.github/workflows/deploy-daptin.yml`) builds the Daptin image, builds/uploads the frontend, deploys the image to `canaster-daptin-vm` over IAP SSH, and smokes the VM runtime.
 
