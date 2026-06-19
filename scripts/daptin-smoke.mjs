@@ -1,4 +1,4 @@
-import { access, mkdir, mkdtemp, rm, readFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, mkdtemp, readdir, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -50,6 +50,15 @@ async function fileExists(filePath) {
     return true;
   } catch {
     return false;
+  }
+}
+
+async function copySchemaFiles(schemaDir) {
+  const sourceDir = path.resolve('daptin');
+  const entries = await readdir(sourceDir);
+  for (const entry of entries) {
+    if (!/^schema_.*\.ya?ml$/.test(entry)) continue;
+    await copyFile(path.join(sourceDir, entry), path.join(schemaDir, entry));
   }
 }
 
@@ -231,6 +240,7 @@ async function main() {
   try {
     await mkdir(schemaDir, { recursive: true });
     await mkdir(storageDir, { recursive: true });
+    await copySchemaFiles(schemaDir);
 
     let cliCommand = daptinCli;
     if (!(await fileExists(cliCommand))) {
@@ -282,10 +292,16 @@ async function main() {
       await run(cliCommand, ['--config', cliConfig, 'context', 'add', 'canaster-smoke', baseUrl], { env });
       await run(cliCommand, ['--config', cliConfig, 'context', 'set', 'canaster-smoke'], { env });
 
-      const email = `smoke-${Date.now()}@canaster.local`;
+      const adminEmail = `smoke-admin-${Date.now()}@canaster.local`;
       const password = 'CanasterSmoke1234';
-      await run(cliCommand, ['--config', cliConfig, 'execute', 'user_account', 'signup', `email=${email}`, 'name=Canaster Smoke', `password=${password}`, `passwordConfirm=${password}`], { env });
-      await run(cliCommand, ['--config', cliConfig, 'execute', 'user_account', 'signin', `email=${email}`, `password=${password}`], { env });
+      await run(cliCommand, ['--config', cliConfig, 'execute', 'user_account', 'signup', `email=${adminEmail}`, 'name=Canaster Smoke Admin', `password=${password}`, `passwordConfirm=${password}`], { env });
+      await run(cliCommand, ['--config', cliConfig, 'execute', 'user_account', 'signin', `email=${adminEmail}`, `password=${password}`], { env });
+      await run(cliCommand, ['--config', cliConfig, 'execute', 'world', 'become_an_administrator'], { env });
+      const requestAction = await run(cliCommand, ['--config', cliConfig, '--output', 'json', 'list', 'action', '--filter', 'action_name=request_canaster_email_otp', '--page-size', '1'], { env });
+      assert(requestAction.includes('"action_name": "request_canaster_email_otp"'), 'request_canaster_email_otp action is missing');
+      const verifyAction = await run(cliCommand, ['--config', cliConfig, '--output', 'json', 'list', 'action', '--filter', 'action_name=verify_canaster_email_otp', '--page-size', '1'], { env });
+      assert(verifyAction.includes('"action_name": "verify_canaster_email_otp"'), 'verify_canaster_email_otp action is missing');
+
       token = await readTokenFromCliConfig(cliConfig);
     }
 

@@ -21,8 +21,10 @@ The older `space` / `plane` / `snapshot` schema is stale and must not be used fo
 Canaster ships an actions-only schema file for email OTP auth:
 
 - `request_canaster_email_otp` on `user_account` accepts `email`, creates the user account if missing, makes that new account row self-owned with owner `Refer` permission for Daptin's OTP-profile foreign key, switches the action context to that user, generates a Daptin OTP, and sends it through Daptin's `mail.send` SMTP performer.
-- `verify_canaster_email_otp` on `user_account` accepts `email` and `otp`, runs `otp.login.verify`, and returns Daptin's `client.store.set` token response.
+- `verify_canaster_email_otp` on `user_account` accepts `email` and `otp`, runs `otp.login.verify`, returns Daptin's `client.store.set` token response, and then provisions the user's Daptin mailbox if it is missing.
 - Both action rows use `Permission: 32` (`GuestExecute`) so the public auth surface is action execution only. This does not grant anonymous CRUD on `document` or `user_account`.
+
+Mailbox provisioning is deliberately attached to OTP verification, not OTP request. A successful verify creates one `mail_account` row for the verified email address and creates the default `mail_box` rows (`INBOX`, `Draft`, `Sent`, `Archive`, `Trash`, `Spam`) through normal entity foreign-key columns. It does not write generated join tables. The mailbox password is generated server-side and is not returned to the browser; expose an authenticated mailbox-password reset action later if direct IMAP/SMTP client login is needed.
 
 Production email delivery uses Daptin SMTP, not AWS SES. The OTP action sends from `login@mail.canaster.in` with `mail_server_hostname: mail.canaster.in`. Production must have:
 
