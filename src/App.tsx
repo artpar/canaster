@@ -907,9 +907,9 @@ function AccountPopover({
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 pattern="[0-9]*"
-                maxLength={6}
+                maxLength={4}
                 value={authOtp}
-                onChange={(event) => onOtpChange(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                onChange={(event) => onOtpChange(event.target.value.replace(/\D/g, '').slice(0, 4))}
               />
             </label>
           ) : null}

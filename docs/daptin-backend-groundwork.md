@@ -682,7 +682,7 @@ Current interim state as of 2026-06-18:
 - `world.become_an_administrator` has already been consumed by the retained bootstrap admin account; later calls from another user return `403`.
 - Password `signin` remains at permission `561441` and `signup` remains at permission `2085152` as the interim production state until the email OTP deployment is live.
 - `reset-password` and `reset-password-verify` are locked at permission `2085120`; password reset is not the intended frontend auth path.
-- After the email OTP deployment, public browser auth should use `request_canaster_email_otp` and `verify_canaster_email_otp`, both schema-managed on `user_account` with action permission `32` (`GuestExecute`). The request action creates the user, home usergroup, and membership before OTP generation when the email is new.
+- After the email OTP deployment, public browser auth should use `request_canaster_email_otp` and `verify_canaster_email_otp`, both schema-managed on `user_account` with action permission `32` (`GuestExecute`). The request action creates the user account before OTP generation when the email is new, then switches the action context to that user before executing Daptin's built-in `otp.generate`.
 - Updating Daptin action permissions does not require a Daptin restart.
 - `artpar@gmail.com` exists in production as a normal user account; the retained bootstrap administrator account is still `admin@canaster.in`.
 - `admin@canaster.in` remains related to both `users` and `administrators`.
