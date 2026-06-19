@@ -2,7 +2,7 @@ name: canaster
 
 services:
   daptin:
-    image: daptin/daptin:v0.12.19
+    image: daptin/daptin:v0.12.20
     working_dir: /opt/daptin
     entrypoint:
       - /opt/daptin/daptin

@@ -111,11 +111,11 @@ Current production status as of 2026-06-19 02:30 IST:
 - Daptin HTTPS verification passed with `curl --resolve api.canaster.in:443:34.14.185.249 https://api.canaster.in/api/world?page%5Bsize%5D=1`.
 - Daptin logs show `TLS server listening on port :6443`.
 - Daptin logs show SMTP server setup for `mail.canaster.in` on `0.0.0.0:25`, `0.0.0.0:465`, and `0.0.0.0:587`.
-- Daptin logs show IMAPS server setup for `imap.api.canaster.in` on `:993`.
+- Daptin logs show IMAPS server setup for `imap.canaster.in` on `:993`.
 - Daptin `cloud_store.name=canaster-mail`, reference `019edc18-5fe3-7370-be4f-ac76ded67a78`, points at `canaster-mail:canaster-daptin-storage` with credential `canaster-site` for cloud-store-backed raw `mail.mail` and `outbox.mail` bodies.
 - VM outbound SMTP verification passed for `gmail-smtp-in.l.google.com:25` and `smtp.gmail.com:465`.
 - Public DNS is authoritative on Namecheap BasicDNS at `dns1.registrar-servers.com` and `dns2.registrar-servers.com`.
-- Daptin `/_config/backend/hostname`, `/_config/backend/imap.enabled`, `/_config/backend/imap.listen_interface`, and `/_config/backend/enable_https` work over the API host on the VM. `daptin-cli` does not currently have a config command; tracking issue: `daptin/daptin-cli#36`.
+- Daptin `/_config/backend/hostname`, `/_config/backend/imap.enabled`, `/_config/backend/imap.listen_interface`, `/_config/backend/imap.hostname`, and `/_config/backend/enable_https` work over the API host on the VM. `daptin-cli` does not currently have a config command; tracking issue: `daptin/daptin-cli#36`.
 
 Current recurring production resources include Cloud SQL and the Compute Engine VM. The old Cloud Run/load-balancer path still exists only as a temporary rollback path until DNS cutover is confirmed; delete it after public DNS points at `34.14.185.249` and public HTTPS/API checks pass.
 
@@ -136,7 +136,7 @@ DNS cutover records for Namecheap:
 
 `deploy/daptin/Dockerfile` builds a thin Canaster Daptin image:
 
-- Base image: `daptin/daptin:v0.12.19`
+- Base image: `daptin/daptin:v0.12.20`
 - Copies `daptin/schema_*.yaml` into `/opt/canaster/schema` for schema-managed email OTP auth actions
 - Uses `/opt/canaster/entrypoint.sh`
 - Reads `PORT` and `HTTPS_PORT`
@@ -731,11 +731,12 @@ Current production Daptin SMTP/IMAP state as of 2026-06-19:
 - `mail_server.hostname=mail.canaster.in`, reference `019ed9f2-96b5-7131-af6f-b304ee8ff581`, enabled on `0.0.0.0:465`.
 - Additional `mail.canaster.in` SMTP rows are enabled on `0.0.0.0:25` and `0.0.0.0:587`.
 - `certificate.hostname=mail.canaster.in`, reference `019ed9f3-17a2-72a9-89bd-2696b295a52f`, issuer `acme`.
-- `/_config/backend/hostname=api.canaster.in`; Daptin derives the IMAP TLS hostname as `imap.api.canaster.in`.
+- `/_config/backend/hostname=api.canaster.in`.
 - `/_config/backend/imap.enabled=true`.
 - `/_config/backend/imap.listen_interface=:993`.
-- `certificate.hostname=imap.api.canaster.in`, reference `019edc83-7e36-71e3-b60d-45684ab85e58`, issuer `acme`.
-- Until `daptin/daptin#219` is fixed in production, ACME certificate rows used by SMTP/IMAPS need `certificate_pem` to contain the leaf certificate plus `root_certificate`, otherwise clients receive only the leaf and TLS verification fails.
+- `/_config/backend/imap.hostname=imap.canaster.in`.
+- `certificate.hostname=imap.canaster.in`, reference `019edc81-f2fc-7adf-bfd9-8b9257fdf807`, issuer `acme`.
+- Daptin `v0.12.20` provides the independent `imap.hostname` setting, so IMAPS can use `imap.canaster.in` while HTTPS API keeps using `api.canaster.in`.
 - The ignored local file `.tmp/daptin/prod-mail-login.env` stores the current `login@mail.canaster.in` mailbox credential for operational SMTP AUTH and IMAP smoke tests. Do not commit it.
 - `sync_mail_servers` and `process_outbox` both execute successfully as the production admin.
 
@@ -746,12 +747,12 @@ DNS records to create after the Daptin certificate row exists:
 - `mail.canaster.in`: TXT SPF record allowing the actual Daptin outbound SMTP IP. Do not use the load balancer IP here unless live send headers prove it is also the SMTP egress IP.
 - `_dmarc.mail.canaster.in`: TXT `v=DMARC1; p=none; adkim=s; aspf=r` for initial monitoring while delivery is being verified.
 
-`mail.canaster.in`, `imap.api.canaster.in`, and wildcard subdomains should resolve to the VM IP `34.14.185.249` after DNS cutover. VM outbound SMTP delivery has been verified from `canaster-daptin-vm`: TCP 25 to `gmail-smtp-in.l.google.com` succeeds, and TCP 465 to `smtp.gmail.com` succeeds. Public SMTP is verified on `25`, `465`, and `587`; public IMAPS is verified on `993`.
+`mail.canaster.in`, `imap.canaster.in`, and wildcard subdomains should resolve to the VM IP `34.14.185.249` after DNS cutover. VM outbound SMTP delivery has been verified from `canaster-daptin-vm`: TCP 25 to `gmail-smtp-in.l.google.com` succeeds, and TCP 465 to `smtp.gmail.com` succeeds. Public SMTP is verified on `25`, `465`, and `587`; public IMAPS is verified on `993`.
 
 Final production mail smoke on 2026-06-19:
 
 - `openssl s_client -starttls smtp -connect mail.canaster.in:25 -servername mail.canaster.in -verify_return_error` returned a trusted three-certificate chain.
-- `openssl s_client -connect imap.api.canaster.in:993 -servername imap.api.canaster.in -verify_return_error` returned a trusted three-certificate chain.
+- `openssl s_client -connect imap.canaster.in:993 -servername imap.canaster.in -verify_return_error` returned a trusted three-certificate chain.
 - IMAP `LOGIN`, `SELECT INBOX`, and `SEARCH ALL` succeeded for `login@mail.canaster.in`.
 - SMTP AUTH LOGIN over STARTTLS on `mail.canaster.in:587` succeeded for `login@mail.canaster.in`.
 - Fresh inbound SMTP to `login@mail.canaster.in` created a `mail` row with `mail` as a cloud-store file array and a matching object under `gs://canaster-daptin-storage/mail-messages/`.
@@ -763,7 +764,7 @@ CI (`.github/workflows/ci.yml`) runs:
 
 - `npm ci`
 - TypeScript and Vite build
-- Daptin schema smoke against the real Daptin `daptin/daptin:v0.12.19` image and Postgres 16
+- Daptin schema smoke against the real Daptin `daptin/daptin:v0.12.20` image and Postgres 16
 
 Production deploy (`.github/workflows/deploy-daptin.yml`) builds the Daptin image, builds/uploads the frontend, deploys the image to `canaster-daptin-vm` over IAP SSH, and smokes the VM runtime.
 

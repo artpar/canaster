@@ -1,4 +1,4 @@
-FROM daptin/daptin:v0.12.19
+FROM daptin/daptin:v0.12.20
 
 WORKDIR /opt/daptin
 
