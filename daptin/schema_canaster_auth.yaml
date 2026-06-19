@@ -28,6 +28,21 @@ Actions:
           confirmed: '0'
           email: ~email
           name: '!email.split("@")[0]'
+      - Type: usergroup
+        Method: POST
+        Reference: new_usergroup
+        Condition: '!user == null || user.length == 0'
+        SkipInResponse: true
+        Attributes:
+          name: '!"Home group for " + email'
+      - Type: user_account_user_account_id_has_usergroup_usergroup_id
+        Method: POST
+        Reference: new_user_usergroup
+        Condition: '!user == null || user.length == 0'
+        SkipInResponse: true
+        Attributes:
+          user_account_id: '$new_user.reference_id'
+          usergroup_id: '$new_usergroup.reference_id'
       - Type: __as_user
         Method: SWITCH_USER
         SkipInResponse: true
