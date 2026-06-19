@@ -20,7 +20,7 @@ The older `space` / `plane` / `snapshot` schema is stale and must not be used fo
 
 Canaster ships an actions-only schema file for email OTP auth:
 
-- `request_canaster_email_otp` on `user_account` accepts `email`, creates the user account if missing, ensures the account row has owner `Refer` permission for Daptin's OTP-profile foreign key, switches the action context to that user, generates a Daptin OTP, and sends it through Daptin's `mail.send` SMTP performer.
+- `request_canaster_email_otp` on `user_account` accepts `email`, creates the user account if missing, makes that new account row self-owned with owner `Refer` permission for Daptin's OTP-profile foreign key, switches the action context to that user, generates a Daptin OTP, and sends it through Daptin's `mail.send` SMTP performer.
 - `verify_canaster_email_otp` on `user_account` accepts `email` and `otp`, runs `otp.login.verify`, and returns Daptin's `client.store.set` token response.
 - Both action rows use `Permission: 32` (`GuestExecute`) so the public auth surface is action execution only. This does not grant anonymous CRUD on `document` or `user_account`.
 

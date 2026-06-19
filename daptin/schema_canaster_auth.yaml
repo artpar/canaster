@@ -31,6 +31,15 @@ Actions:
           permission: 569633
       - Type: user_account
         Method: PATCH
+        Reference: new_user_owner
+        Condition: '!user == null || user.length == 0'
+        SkipInResponse: true
+        Attributes:
+          reference_id: '$new_user.reference_id'
+          user_account_id: '$new_user.reference_id'
+          permission: 569633
+      - Type: user_account
+        Method: PATCH
         Reference: existing_user_permission
         Condition: '!user != null && user.length > 0 && (user[0].permission & 8192) == 0'
         SkipInResponse: true
