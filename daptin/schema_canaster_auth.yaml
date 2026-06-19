@@ -135,7 +135,7 @@ Actions:
           password_md5: '!"cmm-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 14)'
           mail_server_id: '$canaster_mail_server[0].reference_id'
           user_account_id: '$user[0].reference_id'
-          permission: 561441
+          permission: 569633
       - Type: mail_box
         Method: GET
         Reference: existing_mail_boxes
@@ -157,7 +157,7 @@ Actions:
           permanent_flags: '\*'
           mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0) ? existing_mail_account[0].reference_id : mail_account.reference_id'
           user_account_id: '$user[0].reference_id'
-          permission: 561441
+          permission: 569633
       - Type: mail_box
         Method: POST
         Reference: draft_mail_box
@@ -173,7 +173,7 @@ Actions:
           permanent_flags: '\*'
           mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0) ? existing_mail_account[0].reference_id : mail_account.reference_id'
           user_account_id: '$user[0].reference_id'
-          permission: 561441
+          permission: 569633
       - Type: mail_box
         Method: POST
         Reference: sent_mail_box
@@ -189,7 +189,7 @@ Actions:
           permanent_flags: '\*'
           mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0) ? existing_mail_account[0].reference_id : mail_account.reference_id'
           user_account_id: '$user[0].reference_id'
-          permission: 561441
+          permission: 569633
       - Type: mail_box
         Method: POST
         Reference: archive_mail_box
@@ -205,7 +205,7 @@ Actions:
           permanent_flags: '\*'
           mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0) ? existing_mail_account[0].reference_id : mail_account.reference_id'
           user_account_id: '$user[0].reference_id'
-          permission: 561441
+          permission: 569633
       - Type: mail_box
         Method: POST
         Reference: trash_mail_box
@@ -221,7 +221,7 @@ Actions:
           permanent_flags: '\*'
           mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0) ? existing_mail_account[0].reference_id : mail_account.reference_id'
           user_account_id: '$user[0].reference_id'
-          permission: 561441
+          permission: 569633
       - Type: mail_box
         Method: POST
         Reference: spam_mail_box
@@ -237,7 +237,7 @@ Actions:
           permanent_flags: '\*'
           mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0) ? existing_mail_account[0].reference_id : mail_account.reference_id'
           user_account_id: '$user[0].reference_id'
-          permission: 561441
+          permission: 569633
     Validations:
       - ColumnName: email
         Tags: email
