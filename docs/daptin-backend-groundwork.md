@@ -136,7 +136,7 @@ DNS cutover records for Namecheap:
 
 `deploy/daptin/Dockerfile` builds a thin Canaster Daptin image:
 
-- Base image: `daptin/daptin:v0.12.21`
+- Base image: `daptin/daptin:v0.12.22`
 - Copies `daptin/schema_*.yaml` into `/opt/canaster/schema` for schema-managed email OTP auth actions
 - Uses `/opt/canaster/entrypoint.sh`
 - Reads `PORT` and `HTTPS_PORT`
@@ -684,9 +684,9 @@ Current interim state as of 2026-06-18:
 - `reset-password` and `reset-password-verify` are locked at permission `2085120`; password reset is not the intended frontend auth path.
 - After the email OTP deployment, public browser auth should use `request_canaster_email_otp` and `verify_canaster_email_otp`, both schema-managed on `user_account` with action permission `32` (`GuestExecute`). The request action creates the user account before OTP generation when the email is new, makes that new account row self-owned with owner `Refer` permission for Daptin's `user_otp_account.otp_of_account` foreign key, then switches the action context to that user before executing Daptin's built-in `otp.generate`.
 - `verify_canaster_email_otp` is the signup completion point. After `otp.login.verify` succeeds, it creates the user's missing `mail_account` row and default mailbox folders (`INBOX`, `Draft`, `Sent`, `Archive`, `Trash`, `Spam`) using normal `mail_account.user_account_id`, `mail_account.mail_server_id`, `mail_box.user_account_id`, and `mail_box.mail_account_id` foreign-key columns. Do not create or patch generated join-table rows for this flow.
-- `verify_canaster_email_otp` creates and then explicitly patches `mail_account` and `mail_box` rows to permission `569633` (`Owner: Read, Execute, Refer`) so later mail storage can use those rows as foreign-key targets for the same user. The explicit patch is required because production testing showed Daptin's mail-table create path normalizes those rows to `561441` even when the action POST outcome includes `permission: 569633`.
+- `mail_account` and `mail_box` use `DefaultPermission: 569633` (`Owner: Read, Execute, Refer`) so rows created by OTP verification can later be used as foreign-key targets for the same user. Do not put row permissions in the mail-table action POST payloads; Daptin create uses the table model default permission.
 - The generated mailbox password stays server-side, stays under Daptin's bcrypt input limit, and is not returned by the verify action. If users need direct IMAP/SMTP client credentials, add a separate authenticated mailbox-password reset action instead of exposing the generated value during signup.
-- Inbound SMTP saves `mail` rows as the recipient user. Production must therefore keep `world.permission(mail)=561408` and grant the built-in `users` usergroup table-level `mail` access through a `usergroup(users).world_id -> mail` relation with permission `638976` (`Group: Peek, Read, Create, Execute`). Do not use `GuestCreate` on `mail`. Daptin currently lacks a first-class relation-permission command for this association; track `daptin/daptin-cli#34` and `daptin/daptin#225`.
+- Inbound SMTP saves `mail` rows as the recipient user. Production must therefore keep `world.permission(mail)=561408` and grant the built-in `users` usergroup table-level `mail` access through a `usergroup(users).world_id -> mail` relation with permission `638976` (`Group: Peek, Read, Create, Execute`). The generated `world_world_id_has_usergroup_usergroup_id` relation table uses `DefaultPermission: 638976`; repair existing relation rows that predate the default. Do not use `GuestCreate` on `mail`.
 - Updating Daptin action permissions does not require a Daptin restart.
 - `artpar@gmail.com` exists in production as a normal user account; the retained bootstrap administrator account is still `admin@canaster.in`.
 - `admin@canaster.in` remains related to both `users` and `administrators`.
@@ -750,6 +750,7 @@ Current production Daptin SMTP/IMAP state as of 2026-06-19:
 - Daptin `v0.12.21` keeps the independent `imap.hostname` setting from `v0.12.20`, so IMAPS can use `imap.canaster.in` while HTTPS API keeps using `api.canaster.in`.
 - Daptin `v0.12.21` fixes `daptin/daptin#223` so IMAPS serves the full ACME certificate chain from `certificate_pem` plus `root_certificate` without a manual certificate row patch.
 - Daptin `v0.12.21` fixes `daptin/daptin#224` so schema import applies `IsForeignKey=true` and `ForeignKeyData` for the cloud-store-backed `mail.mail` and `outbox.mail` columns without a manual world row patch.
+- Daptin `v0.12.22` fixes `daptin/daptin#225` so schema import preserves deployer-authored generated join table metadata. Canaster declares `world_world_id_has_usergroup_usergroup_id.DefaultPermission=638976` in schema and verifies relation rows through normal relation APIs.
 - The ignored local file `.tmp/daptin/prod-mail-login.env` stores the current `login@mail.canaster.in` mailbox credential for operational SMTP AUTH and IMAP smoke tests. Do not commit it.
 - `sync_mail_servers` and `process_outbox` both execute successfully as the production admin.
 
@@ -777,7 +778,7 @@ CI (`.github/workflows/ci.yml`) runs:
 
 - `npm ci`
 - TypeScript and Vite build
-- Daptin schema smoke against the real Daptin `daptin/daptin:v0.12.21` image and Postgres 16
+- Daptin schema smoke against the real Daptin `daptin/daptin:v0.12.22` image and Postgres 16
 
 Production deploy (`.github/workflows/deploy-daptin.yml`) builds the Daptin image, builds/uploads the frontend, deploys the image to `canaster-daptin-vm` over IAP SSH, and smokes the VM runtime.
 

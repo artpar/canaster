@@ -1,4 +1,13 @@
 Tables:
+  - TableName: mail_account
+    DefaultPermission: 569633
+
+  - TableName: mail_box
+    DefaultPermission: 569633
+
+  - TableName: world_world_id_has_usergroup_usergroup_id
+    DefaultPermission: 638976
+
   - TableName: mail
     Permission: 561408
     Columns:

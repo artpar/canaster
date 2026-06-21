@@ -10,7 +10,7 @@ const daptinCliSourceDir = process.env.DAPTIN_CLI_SOURCE_DIR || '/Users/artpar/w
 const daptinCli = process.env.DAPTIN_CLI || '/Users/artpar/workspace/code/github.com/daptin/daptin-cli/out/bin/daptin-cli';
 const daptinBinary = process.env.DAPTIN_BINARY || '';
 const smokeRuntime = process.env.DAPTIN_SMOKE_RUNTIME || 'docker';
-const daptinDockerImage = process.env.DAPTIN_DOCKER_IMAGE || 'daptin/daptin:v0.12.21';
+const daptinDockerImage = process.env.DAPTIN_DOCKER_IMAGE || 'daptin/daptin:v0.12.22';
 const smokeDbType = process.env.DAPTIN_SMOKE_DB_TYPE || 'sqlite3';
 const smokeDbConnectionString = process.env.DAPTIN_SMOKE_DB_CONNECTION_STRING || '';
 const smokeEndpoint = process.env.DAPTIN_SMOKE_ENDPOINT || '';
@@ -18,6 +18,8 @@ const smokeCliConfig = process.env.DAPTIN_SMOKE_CLI_CONFIG || '';
 
 const PRIVATE_PERMISSION = 16256;
 const PUBLIC_READ_PERMISSION = 16259;
+const MAIL_OWNER_REFER_PERMISSION = 569633;
+const WORLD_USERGROUP_RELATION_PERMISSION = 638976;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -128,6 +130,13 @@ function rowId(row) {
 function rowAttr(row, key) {
   const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
   return row?.attributes?.[key] ?? row?.attributes?.[camelKey] ?? row?.[key] ?? row?.[camelKey];
+}
+
+function rowWorldSchema(row) {
+  const raw = rowAttr(row, 'world_schema_json');
+  if (typeof raw === 'string') return JSON.parse(raw);
+  assert(raw && typeof raw === 'object', `world row for ${rowAttr(row, 'table_name')} has no schema JSON`);
+  return raw;
 }
 
 function encodeSnapshotFile(name, snapshot) {
@@ -314,6 +323,16 @@ async function main() {
     for (const staleTable of ['space', 'plane', 'snapshot', 'canaster_document']) {
       assert(!tableNames.has(staleTable), `stale MVP table is loaded: ${staleTable}`);
     }
+    const worldRows = new Map((worldBody.data ?? []).map((row) => [rowAttr(row, 'table_name'), row]));
+    const mailAccountWorld = worldRows.get('mail_account');
+    const mailBoxWorld = worldRows.get('mail_box');
+    const worldUsergroupWorld = worldRows.get('world_world_id_has_usergroup_usergroup_id');
+    assert(mailAccountWorld, 'Daptin built-in mail_account table is missing');
+    assert(mailBoxWorld, 'Daptin built-in mail_box table is missing');
+    assert(worldUsergroupWorld, 'Daptin generated world/usergroup relation table is missing');
+    assert(rowWorldSchema(mailAccountWorld).DefaultPermission === MAIL_OWNER_REFER_PERMISSION, 'mail_account DefaultPermission mismatch');
+    assert(rowWorldSchema(mailBoxWorld).DefaultPermission === MAIL_OWNER_REFER_PERMISSION, 'mail_box DefaultPermission mismatch');
+    assert(rowWorldSchema(worldUsergroupWorld).DefaultPermission === WORLD_USERGROUP_RELATION_PERMISSION, 'world/usergroup relation DefaultPermission mismatch');
 
     const documentKey = `smoke-${Date.now()}`;
     const placeholderFile = encodeSnapshotFile('pending.canaster.json', { schemaVersion: 1, pending: true });
