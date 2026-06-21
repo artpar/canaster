@@ -27,7 +27,7 @@ The previous frontend dents are resolved in production:
 - Save online collapses to an icon-only control on narrow screens.
 - The bottom-left map remains usable but is scaled down on mobile.
 
-Remaining release risk is limited to recovery polish that was not fully forced in this pass: failed online-save recovery still needs a deliberate save-failure test. A wrong OTP was previously verified to show safe readable copy, but the backend still returns `500` for that invalid-code action.
+Remaining release risk is recovery verification, not a happy-path blocker: this pass did not deliberately force token expiry, permission loss, network failure, or a failed document save after sign-in. A wrong OTP was previously verified to show safe readable copy; the backend returning `500` for that invalid-code action is API hygiene to fix, not a release blocker by itself.
 
 ## Journey Results
 
@@ -39,7 +39,7 @@ Remaining release risk is limited to recovery polish that was not fully forced i
 | Return later on same device | Pass on production | Hard reload restored the signed-in session, active document id, workspace, canvas, and `Saved online` state. Reload used `GET /api/document/019ee8f7-3558-777c-8669-0b6f9e1c9427 [200]`. |
 | Sign out | Pass on production | Sign out returned Account to `Sign in`, status to `Saved on this device`, and kept the visible workspace. Zoom stayed `11%` before and after sign-out. DOM geometry stayed stable: active canvas `0,0,500x844`; minimap `14,608,360x150`; main `0,0,500x844`. |
 | Work on a small screen | Pass on production | At `390x844x2`, status chip was visible as `Local` (`74x28`), Save online collapsed to `34x28`, minimap scaled to `304x129`, toolbar stayed within `362px`, and `bodyScrollWidth` stayed `390`. |
-| Recover from account or save errors | Partial | A wrong OTP previously produced readable copy: `Could not verify that code. Check the code and try again.` Failed online save recovery was not re-tested in this pass. |
+| Recover from account or save errors | Partial | A wrong OTP previously produced readable copy: `Could not verify that code. Check the code and try again.` Token expiry, permission loss, network failure, and failed online save recovery were not forced in this production pass. |
 
 ## Production Network Evidence
 
@@ -116,12 +116,15 @@ The auth action must continue using normal entity foreign-key fields and support
 
 ## Remaining Work
 
-### 1. Re-Test Failed Save Recovery
+### 1. Re-Test API And Session Recovery
 
-This pass verified valid save and wrong-code recovery, but did not force a failed document save after sign-in.
+This pass verified valid save and wrong-code recovery, but did not force token expiry, permission loss, network failure, or a failed document save after sign-in.
 
 Expected:
 
+- Expired or invalid session should preserve the visible workspace locally, clear stale online session state, and ask the user to sign in again.
+- Permission loss should not clear the workspace or falsely claim `Saved online`.
+- Network/server failures should keep the workspace visible and leave Save online retryable.
 - Failed online save should keep the workspace visible.
 - The app should preserve the dirty/local state.
 - The toolbar should expose a retry path without claiming `Saved online`.
@@ -142,4 +145,4 @@ Before the next public release, run this focused gate again:
 6. Hard reload and confirm the same workspace restores.
 7. Sign out and confirm title, canvas, and camera remain stable while status changes to local.
 8. Repeat Account and Documents checks at a narrow mobile viewport.
-9. Force one account error and one save error and confirm full readable recovery copy.
+9. Force one account error, one expired-token case, one permission-denied case, and one save failure; confirm the workspace stays visible, local recovery remains available, and full readable recovery copy appears.

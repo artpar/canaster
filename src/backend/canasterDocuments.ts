@@ -1,7 +1,7 @@
 import type { DaptinJsonApiSingleResponse } from 'daptin-client';
 import type { CanvasWorkspaceSnapshot } from '../engine/documentTypes';
 import { hydrateWorkspaceSnapshot } from '../engine/workspaceHistory';
-import { clearToken, ensureDaptinModelsLoaded, getDaptinClient, setToken } from './daptinClient';
+import { clearToken, ensureDaptinModelsLoaded, getDaptinClient, normalizeDaptinError, requireUsableStoredToken, setToken } from './daptinClient';
 
 export type CanasterDocumentSummary = {
   id: string;
@@ -48,26 +48,30 @@ const REQUEST_EMAIL_OTP_ACTION = 'request_canaster_email_otp';
 const VERIFY_EMAIL_OTP_ACTION = 'verify_canaster_email_otp';
 
 export async function requestEmailOtp(input: { email: string }): Promise<void> {
-  const client = getDaptinClient();
-  const response = await client.actionManager.doAction('user_account', REQUEST_EMAIL_OTP_ACTION, {
-    email: input.email,
+  return daptinRequest('Could not send a sign-in code', async () => {
+    const client = getDaptinClient();
+    const response = await client.actionManager.doAction('user_account', REQUEST_EMAIL_OTP_ACTION, {
+      email: input.email,
+    });
+    const failureMessage = daptinActionFailureMessage(response);
+    if (failureMessage) throw new Error(failureMessage);
   });
-  const failureMessage = daptinActionFailureMessage(response);
-  if (failureMessage) throw new Error(failureMessage);
 }
 
 export async function verifyEmailOtp(input: { email: string; otp: string }): Promise<void> {
-  const client = getDaptinClient();
-  const response = await client.actionManager.doAction('user_account', VERIFY_EMAIL_OTP_ACTION, {
-    email: input.email,
-    otp: input.otp,
+  return daptinRequest('Could not verify the sign-in code', async () => {
+    const client = getDaptinClient();
+    const response = await client.actionManager.doAction('user_account', VERIFY_EMAIL_OTP_ACTION, {
+      email: input.email,
+      otp: input.otp,
+    });
+    const failureMessage = daptinActionFailureMessage(response);
+    if (failureMessage) throw new Error(failureMessage);
+    const token = client.authManager.extractToken(response);
+    if (!token) throw new Error('Daptin OTP verification did not return a token');
+    setToken(token);
+    await ensureDaptinModelsLoaded();
   });
-  const failureMessage = daptinActionFailureMessage(response);
-  if (failureMessage) throw new Error(failureMessage);
-  const token = client.authManager.extractToken(response);
-  if (!token) throw new Error('Daptin OTP verification did not return a token');
-  setToken(token);
-  await ensureDaptinModelsLoaded();
 }
 
 export async function signOut(): Promise<void> {
@@ -76,47 +80,49 @@ export async function signOut(): Promise<void> {
 }
 
 export async function listDocuments(): Promise<CanasterDocumentSummary[]> {
-  await ensureDaptinModelsLoaded();
-  const response = await getDaptinClient().jsonApi.findAll<DaptinDocumentAttributes>('document', {
-    page: { size: 100 },
-    sort: '-updated_at',
+  return authenticatedDaptinRequest('Could not list saved workspaces', async () => {
+    const response = await getDaptinClient().jsonApi.findAll<DaptinDocumentAttributes>('document', {
+      page: { size: 100 },
+      sort: '-updated_at',
+    });
+    return (response.data ?? [])
+      .map((row) => row as DaptinDocumentRow)
+      .filter((row) => documentId(row) && String(rowAttr(row, 'document_extension') ?? '').toLowerCase() === 'json')
+      .map((row) => ({
+        id: documentId(row),
+        title: documentTitle(row),
+        path: String(rowAttr(row, 'document_path') ?? ''),
+        permission: Number(rowAttr(row, 'permission') ?? 0),
+        updatedAt: stringOrNull(rowAttr(row, 'updated_at') ?? rowAttr(row, 'updatedAt')),
+      }));
   });
-  return (response.data ?? [])
-    .map((row) => row as DaptinDocumentRow)
-    .filter((row) => documentId(row) && String(rowAttr(row, 'document_extension') ?? '').toLowerCase() === 'json')
-    .map((row) => ({
-      id: documentId(row),
-      title: documentTitle(row),
-      path: String(rowAttr(row, 'document_path') ?? ''),
-      permission: Number(rowAttr(row, 'permission') ?? 0),
-      updatedAt: stringOrNull(rowAttr(row, 'updated_at') ?? rowAttr(row, 'updatedAt')),
-    }));
 }
 
 export async function createDocument(title: string, snapshot: CanvasWorkspaceSnapshot): Promise<string> {
-  await ensureDaptinModelsLoaded();
-  const client = getDaptinClient();
-  const documentKey = crypto.randomUUID();
-  const placeholder = JSON.stringify([{ name: 'pending.canaster.json', file: encodeJsonDataUri({ schemaVersion: 1, pending: true }), type: 'application/json' }]);
-  const created = await client.jsonApi.create?.<DaptinDocumentAttributes>('document', {
-    document_name: 'pending.canaster.json',
-    document_path: `/canaster/pending/${documentKey}.canaster.json`,
-    document_extension: 'json',
-    mime_type: 'application/json',
-    document_content: placeholder,
+  return authenticatedDaptinRequest('Could not create a saved workspace', async () => {
+    const client = getDaptinClient();
+    const documentKey = crypto.randomUUID();
+    const placeholder = JSON.stringify([{ name: 'pending.canaster.json', file: encodeJsonDataUri({ schemaVersion: 1, pending: true }), type: 'application/json' }]);
+    const created = await client.jsonApi.create?.<DaptinDocumentAttributes>('document', {
+      document_name: 'pending.canaster.json',
+      document_path: `/canaster/pending/${documentKey}.canaster.json`,
+      document_extension: 'json',
+      mime_type: 'application/json',
+      document_content: placeholder,
+    });
+    if (!created?.data) throw new Error('Daptin document create did not return a row');
+    const ref = documentId(created.data as DaptinDocumentRow);
+    if (!ref) throw new Error('Daptin document create did not return a reference id');
+    await updateDocument(ref, { permission: PRIVATE_PERMISSION });
+    await updateDocument(ref, {
+      document_name: `${safeDocumentTitle(title)}.canaster.json`,
+      document_path: `/canaster/documents/${ref}.canaster.json`,
+      document_extension: 'json',
+      mime_type: 'application/json',
+      document_content: encodeSnapshotContent(`${safeDocumentTitle(title)}.canaster.json`, snapshot),
+    });
+    return ref;
   });
-  if (!created?.data) throw new Error('Daptin document create did not return a row');
-  const ref = documentId(created.data as DaptinDocumentRow);
-  if (!ref) throw new Error('Daptin document create did not return a reference id');
-  await updateDocument(ref, { permission: PRIVATE_PERMISSION });
-  await updateDocument(ref, {
-    document_name: `${safeDocumentTitle(title)}.canaster.json`,
-    document_path: `/canaster/documents/${ref}.canaster.json`,
-    document_extension: 'json',
-    mime_type: 'application/json',
-    document_content: encodeSnapshotContent(`${safeDocumentTitle(title)}.canaster.json`, snapshot),
-  });
-  return ref;
 }
 
 export async function loadDocument(documentRef: string): Promise<CanvasWorkspaceSnapshot> {
@@ -124,47 +130,55 @@ export async function loadDocument(documentRef: string): Promise<CanvasWorkspace
 }
 
 export async function loadDocumentDetails(documentRef: string): Promise<CanasterLoadedDocument> {
-  await ensureDaptinModelsLoaded();
-  const response = await getDaptinClient().jsonApi.find<DaptinDocumentAttributes>('document', documentRef);
-  if (!response.data) throw new Error(`Daptin document not found: ${documentRef}`);
-  const row = response.data as DaptinDocumentRow;
-  const content = rowAttr(row, 'document_content');
-  if (typeof content !== 'string') throw new Error('Daptin document_content was not a string');
-  return {
-    snapshot: decodeSnapshotContent(content),
-    title: documentTitle(row),
-  };
+  return authenticatedDaptinRequest('Could not load this saved workspace', async () => {
+    const response = await getDaptinClient().jsonApi.find<DaptinDocumentAttributes>('document', documentRef);
+    if (!response.data) throw new Error(`Daptin document not found: ${documentRef}`);
+    const row = response.data as DaptinDocumentRow;
+    const content = rowAttr(row, 'document_content');
+    if (typeof content !== 'string') throw new Error('Daptin document_content was not a string');
+    return {
+      snapshot: decodeSnapshotContent(content),
+      title: documentTitle(row),
+    };
+  });
 }
 
 export async function saveDocument(documentRef: string, snapshot: CanvasWorkspaceSnapshot, title?: string): Promise<void> {
-  const current = await getDocumentRow(documentRef);
-  const name = title === undefined
-    ? String(rowAttr(current, 'document_name') ?? `${documentRef}.canaster.json`)
-    : `${safeDocumentTitle(title)}.canaster.json`;
-  await updateDocument(documentRef, {
-    ...(title === undefined ? {} : {
-      document_name: name,
-      document_path: `/canaster/documents/${documentRef}.canaster.json`,
-    }),
-    document_content: encodeSnapshotContent(name, snapshot),
-    document_extension: 'json',
-    mime_type: 'application/json',
+  return authenticatedDaptinRequest('Could not save this workspace', async () => {
+    const current = await getDocumentRow(documentRef);
+    const name = title === undefined
+      ? String(rowAttr(current, 'document_name') ?? `${documentRef}.canaster.json`)
+      : `${safeDocumentTitle(title)}.canaster.json`;
+    await updateDocument(documentRef, {
+      ...(title === undefined ? {} : {
+        document_name: name,
+        document_path: `/canaster/documents/${documentRef}.canaster.json`,
+      }),
+      document_content: encodeSnapshotContent(name, snapshot),
+      document_extension: 'json',
+      mime_type: 'application/json',
+    });
   });
 }
 
 export async function makeDocumentPrivate(documentRef: string): Promise<void> {
-  await updateDocument(documentRef, { permission: PRIVATE_PERMISSION });
+  return authenticatedDaptinRequest('Could not make this workspace private', async () => {
+    await updateDocument(documentRef, { permission: PRIVATE_PERMISSION });
+  });
 }
 
 export async function makeDocumentPublic(documentRef: string): Promise<void> {
-  await updateDocument(documentRef, { permission: PUBLIC_READ_PERMISSION });
+  return authenticatedDaptinRequest('Could not make this workspace public', async () => {
+    await updateDocument(documentRef, { permission: PUBLIC_READ_PERMISSION });
+  });
 }
 
 export async function deleteDocument(documentRef: string): Promise<void> {
-  await ensureDaptinModelsLoaded();
-  const destroy = getDaptinClient().jsonApi.destroy;
-  if (!destroy) throw new Error('daptin-client jsonApi.destroy is unavailable');
-  await destroy.call(getDaptinClient().jsonApi, 'document', documentRef);
+  return authenticatedDaptinRequest('Could not delete this workspace', async () => {
+    const destroy = getDaptinClient().jsonApi.destroy;
+    if (!destroy) throw new Error('daptin-client jsonApi.destroy is unavailable');
+    await destroy.call(getDaptinClient().jsonApi, 'document', documentRef);
+  });
 }
 
 async function getDocumentRow(documentRef: string): Promise<DaptinDocumentRow> {
@@ -182,6 +196,22 @@ async function updateDocument(documentRef: string, attributes: DaptinDocumentAtt
   ) => Promise<DaptinJsonApiSingleResponse<DaptinDocumentAttributes>>;
   if (!update) throw new Error('daptin-client jsonApi.update is unavailable');
   return update.call(getDaptinClient().jsonApi, 'document', { id: documentRef, ...attributes });
+}
+
+async function authenticatedDaptinRequest<T>(fallbackMessage: string, run: () => Promise<T>): Promise<T> {
+  return daptinRequest(fallbackMessage, async () => {
+    requireUsableStoredToken();
+    await ensureDaptinModelsLoaded();
+    return run();
+  });
+}
+
+async function daptinRequest<T>(fallbackMessage: string, run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    throw normalizeDaptinError(error, fallbackMessage);
+  }
 }
 
 function encodeSnapshotContent(name: string, snapshot: CanvasWorkspaceSnapshot): string {

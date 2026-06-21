@@ -33,7 +33,15 @@ import {
   verifyEmailOtp,
   type CanasterDocumentSummary,
 } from './backend/canasterDocuments';
-import { DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY, DAPTIN_LAST_EMAIL_STORAGE_KEY, getToken } from './backend/daptinClient';
+import {
+  DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY,
+  DAPTIN_LAST_EMAIL_STORAGE_KEY,
+  clearDaptinSession,
+  hasUsableStoredToken,
+  isSessionError,
+  normalizeDaptinError,
+  tokenEmail,
+} from './backend/daptinClient';
 import { defaultStarterCollection, STARTER_WORKSPACE_STORAGE_KEY } from './catalog/starterCatalog';
 import { portalDataForNode } from './engine/documentModel';
 import {
@@ -70,6 +78,9 @@ export function App() {
   const ignoreDirtyUntilRef = useRef(0);
   const lastSavedSnapshotSignatureRef = useRef<string | null>(null);
   const preserveCameraOnNextLocalMountRef = useRef(false);
+  const initialStoredSessionRef = useRef<boolean | null>(null);
+  if (initialStoredSessionRef.current === null) initialStoredSessionRef.current = hasUsableStoredToken();
+  const hasInitialStoredSession = initialStoredSessionRef.current === true;
   const [theme, setTheme] = useState<ThemeName>('dark');
   const [utilityDrawerMode, setUtilityDrawerMode] = useState<UtilityDrawerMode>(null);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -78,12 +89,12 @@ export function App() {
   const [onboardingDismissed, setOnboardingDismissed] = useState(() => window.localStorage.getItem(ONBOARDING_DISMISSED_STORAGE_KEY) === 'true');
   const [authEmail, setAuthEmail] = useState(() => emailFromStoredToken() || window.localStorage.getItem(DAPTIN_LAST_EMAIL_STORAGE_KEY) || '');
   const [authOtp, setAuthOtp] = useState('');
-  const [signedIn, setSignedIn] = useState(() => Boolean(getToken()));
+  const [signedIn, setSignedIn] = useState(() => hasInitialStoredSession);
   const [documents, setDocuments] = useState<CanasterDocumentSummary[]>([]);
   const [activeDocumentId, setActiveDocumentId] = useState(() => window.localStorage.getItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY) ?? '');
   const [documentTitle, setDocumentTitle] = useState(DEFAULT_DOCUMENT_TITLE);
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>(() => (getToken() ? 'loading' : 'anonymous'));
-  const [syncMessage, setSyncMessage] = useState(() => (getToken() ? 'Checking saved workspaces' : LOCAL_SAVE_MESSAGE));
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(() => (hasInitialStoredSession ? 'loading' : 'anonymous'));
+  const [syncMessage, setSyncMessage] = useState(() => (hasInitialStoredSession ? 'Checking saved workspaces' : LOCAL_SAVE_MESSAGE));
   const initialCollection = useMemo(() => defaultStarterCollection(), []);
   const workspaceStorageKey = activeDocumentId ? remoteWorkspaceStorageKey(activeDocumentId) : STARTER_WORKSPACE_STORAGE_KEY;
   const fitWorkspaceOnFirstLoad = !activeDocumentId && !preserveCameraOnNextLocalMountRef.current;
@@ -103,7 +114,7 @@ export function App() {
 
   const handleWorkspaceCollectionChange = useCallback(() => {
     if (Date.now() < ignoreDirtyUntilRef.current) return;
-    if (!activeDocumentId) {
+    if (!signedIn || !activeDocumentId) {
       setSyncStatus((current) => current === 'loading' || current === 'saving' || current === 'error' ? current : signedIn ? 'dirty' : 'anonymous');
       setSyncMessage((current) => current === 'Checking saved workspaces' || current === 'Saving workspace' ? current : signedIn ? ONLINE_READY_MESSAGE : LOCAL_SAVE_MESSAGE);
       return;
@@ -154,8 +165,41 @@ export function App() {
     setOnboardingDismissed(true);
   }, []);
 
+  const handleSessionExpired = useCallback(async () => {
+    let savedLocally = false;
+    const snapshot = workspaceRef.current?.getWorkspaceSnapshot();
+    if (snapshot) {
+      try {
+        await saveWorkspaceSnapshot(snapshot, STARTER_WORKSPACE_STORAGE_KEY);
+        savedLocally = true;
+      } catch {
+        savedLocally = false;
+      }
+    }
+    clearDaptinSession();
+    lastSavedSnapshotSignatureRef.current = null;
+    preserveCameraOnNextLocalMountRef.current = true;
+    setSignedIn(false);
+    setActiveDocumentId('');
+    setDocuments([]);
+    setAuthOtp('');
+    setAuthStep('email');
+    setAccountOpen(true);
+    setUtilityDrawerMode(null);
+    setSyncStatus('error');
+    setSyncMessage(savedLocally
+      ? 'Session expired. Your workspace is saved on this device. Sign in again to save online.'
+      : 'Session expired. Keep this tab open and sign in again to save online.');
+  }, []);
+
+  const recoverSessionError = useCallback(async (error: unknown): Promise<boolean> => {
+    if (!isSessionError(error)) return false;
+    await handleSessionExpired();
+    return true;
+  }, [handleSessionExpired]);
+
   const refreshDocuments = useCallback(async () => {
-    if (!getToken()) return [];
+    if (!hasUsableStoredToken()) throw normalizeDaptinError(new Error('Session expired'), 'Session expired');
     const rows = await listDocuments();
     setDocuments(rows);
     return rows;
@@ -186,10 +230,11 @@ export function App() {
         }
       }, 1600);
     } catch (error) {
+      if (await recoverSessionError(error)) return;
       setSyncStatus('error');
       setSyncMessage(workspaceErrorMessage(error, 'open'));
     }
-  }, []);
+  }, [recoverSessionError]);
 
   useEffect(() => {
     if (!signedIn) return;
@@ -207,8 +252,11 @@ export function App() {
         })
         .catch((error) => {
           if (canceled) return;
-          setSyncStatus('error');
-          setSyncMessage(workspaceErrorMessage(error, 'refresh'));
+          void recoverSessionError(error).then((recovered) => {
+            if (recovered || canceled) return;
+            setSyncStatus('error');
+            setSyncMessage(workspaceErrorMessage(error, 'refresh'));
+          });
         });
       return () => {
         canceled = true;
@@ -222,8 +270,11 @@ export function App() {
       })
       .catch((error) => {
         if (canceled) return;
-        setSyncStatus('error');
-        setSyncMessage(workspaceErrorMessage(error, 'refresh'));
+        void recoverSessionError(error).then((recovered) => {
+          if (recovered || canceled) return;
+          setSyncStatus('error');
+          setSyncMessage(workspaceErrorMessage(error, 'refresh'));
+        });
       });
     return () => {
       canceled = true;
@@ -282,8 +333,10 @@ export function App() {
   const handleSignOut = useCallback(async () => {
     const snapshot = workspaceRef.current?.getWorkspaceSnapshot();
     if (snapshot) await saveWorkspaceSnapshot(snapshot, STARTER_WORKSPACE_STORAGE_KEY);
-    await signOut();
-    window.localStorage.removeItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY);
+    try {
+      await signOut();
+    } catch {}
+    clearDaptinSession();
     lastSavedSnapshotSignatureRef.current = null;
     preserveCameraOnNextLocalMountRef.current = true;
     setSignedIn(false);
@@ -307,8 +360,8 @@ export function App() {
     setSyncStatus(signedIn ? 'dirty' : 'anonymous');
     setSyncMessage(signedIn ? ONLINE_READY_MESSAGE : LOCAL_SAVE_MESSAGE);
     setUtilityDrawerMode(null);
-    if (!activeDocumentId) workspaceRef.current?.loadWorkspaceSnapshot(snapshot, 'New workspace');
-  }, [activeDocumentId, signedIn]);
+    workspaceRef.current?.loadWorkspaceSnapshot(snapshot, 'New workspace');
+  }, [signedIn]);
 
   const handleSaveOnline = useCallback(async () => {
     if (!signedIn) {
@@ -345,10 +398,11 @@ export function App() {
       setSyncStatus('clean');
       setSyncMessage(SAVED_MESSAGE);
     } catch (error) {
+      if (await recoverSessionError(error)) return;
       setSyncStatus('error');
       setSyncMessage(workspaceErrorMessage(error, 'save'));
     }
-  }, [activeDocumentId, documentTitle, refreshDocuments, signedIn]);
+  }, [activeDocumentId, documentTitle, recoverSessionError, refreshDocuments, signedIn]);
 
   const handleRefreshDocuments = useCallback(async () => {
     if (!signedIn) {
@@ -366,10 +420,11 @@ export function App() {
       setSyncStatus('clean');
       setSyncMessage(activeDocumentId ? SAVED_MESSAGE : ONLINE_READY_MESSAGE);
     } catch (error) {
+      if (await recoverSessionError(error)) return;
       setSyncStatus('error');
       setSyncMessage(workspaceErrorMessage(error, 'refresh'));
     }
-  }, [activeDocumentId, refreshDocuments, signedIn]);
+  }, [activeDocumentId, recoverSessionError, refreshDocuments, signedIn]);
 
   const handleOpenDocumentsDrawer = useCallback(() => {
     const nextMode = utilityDrawerMode === 'documents' ? null : 'documents';
@@ -1229,44 +1284,34 @@ function titleFromSnapshot(snapshot: CanvasWorkspaceSnapshot): string {
 }
 
 function workspaceErrorMessage(error: unknown, action: 'open' | 'refresh' | 'save'): string {
-  const message = rawErrorMessage(error);
-  if (looksOffline(message)) return 'Could not reach saved workspaces. Check your connection and try again.';
+  const apiError = normalizeDaptinError(error, '');
+  if (apiError.kind === 'session') return 'Session expired. Your workspace is saved on this device. Sign in again to save online.';
+  if (apiError.kind === 'network') return 'Could not reach saved workspaces. Check your connection and try again.';
+  if (apiError.kind === 'permission') return action === 'save'
+    ? 'Could not save this workspace because this account no longer has access. Keep working locally or sign in again.'
+    : 'This account cannot open that workspace. Choose another workspace or sign in again.';
+  if (apiError.kind === 'not-found') return 'That saved workspace was not found. Refresh saved workspaces or keep working locally.';
+  if (apiError.kind === 'server') return action === 'save'
+    ? 'Saved workspaces are unavailable right now. Your workspace is still here; try Save online again.'
+    : 'Saved workspaces are unavailable right now. Keep working locally and try again.';
+  if (apiError.kind === 'invalid-response') return action === 'open'
+    ? 'That saved workspace could not be read. The current workspace was left unchanged.'
+    : 'Saved workspace data looked wrong. Keep working locally and try again.';
   if (action === 'open') return 'Could not open this workspace. Refresh saved workspaces or choose another one.';
   if (action === 'refresh') return 'Could not refresh saved workspaces. Check your connection and try again.';
   return 'Could not save this workspace. Check your connection and try again.';
 }
 
 function accountErrorMessage(error: unknown, action: 'send-code' | 'verify-code'): string {
-  const message = rawErrorMessage(error);
-  if (looksOffline(message)) return 'Could not reach accounts. Check your connection and try again.';
+  const apiError = normalizeDaptinError(error, '');
+  if (apiError.kind === 'network') return 'Could not reach accounts. Check your connection and try again.';
+  if (apiError.kind === 'server' && action === 'send-code') return 'Accounts are unavailable right now. Try sending the code again.';
   if (action === 'send-code') return 'Could not send a sign-in code. Check the email and try again.';
   return 'Could not verify that code. Check the code and try again.';
 }
 
-function rawErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'string') return error;
-  return '';
-}
-
-function looksOffline(message: string): boolean {
-  return /network|fetch|offline|failed to fetch|connection|timeout/i.test(message);
-}
-
 function emailFromStoredToken(): string {
-  const token = getToken();
-  if (!token) return '';
-  const [, payload] = token.split('.');
-  if (!payload) return '';
-  try {
-    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-    const claims = JSON.parse(atob(padded)) as Record<string, unknown>;
-    const email = claims.email ?? claims.Email ?? claims.mail ?? claims.Mail;
-    return typeof email === 'string' && email.includes('@') ? email : '';
-  } catch {
-    return '';
-  }
+  return tokenEmail();
 }
 
 function snapshotSignature(snapshot: unknown): string {
