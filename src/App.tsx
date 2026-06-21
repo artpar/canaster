@@ -69,6 +69,7 @@ export function App() {
   const workspaceRef = useRef<NestedCanvasWorkspaceHandle | null>(null);
   const ignoreDirtyUntilRef = useRef(0);
   const lastSavedSnapshotSignatureRef = useRef<string | null>(null);
+  const preserveCameraOnNextLocalMountRef = useRef(false);
   const [theme, setTheme] = useState<ThemeName>('dark');
   const [utilityDrawerMode, setUtilityDrawerMode] = useState<UtilityDrawerMode>(null);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -85,6 +86,7 @@ export function App() {
   const [syncMessage, setSyncMessage] = useState(() => (getToken() ? 'Checking saved workspaces' : LOCAL_SAVE_MESSAGE));
   const initialCollection = useMemo(() => defaultStarterCollection(), []);
   const workspaceStorageKey = activeDocumentId ? remoteWorkspaceStorageKey(activeDocumentId) : STARTER_WORKSPACE_STORAGE_KEY;
+  const fitWorkspaceOnFirstLoad = !activeDocumentId && !preserveCameraOnNextLocalMountRef.current;
   const workItemsOpen = !accountOpen && utilityDrawerMode === 'work-items';
   const documentsOpen = !accountOpen && utilityDrawerMode === 'documents';
   const [chromeState, setChromeState] = useState<NestedCanvasWorkspaceChromeState>(() => ({
@@ -132,6 +134,12 @@ export function App() {
   useEffect(() => {
     if (accountOpen && utilityDrawerMode) setUtilityDrawerMode(null);
   }, [accountOpen, utilityDrawerMode]);
+
+  useEffect(() => {
+    if (!activeDocumentId && preserveCameraOnNextLocalMountRef.current) {
+      preserveCameraOnNextLocalMountRef.current = false;
+    }
+  }, [activeDocumentId, workspaceStorageKey]);
 
   useEffect(() => {
     if (!signedIn) return;
@@ -277,6 +285,7 @@ export function App() {
     await signOut();
     window.localStorage.removeItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY);
     lastSavedSnapshotSignatureRef.current = null;
+    preserveCameraOnNextLocalMountRef.current = true;
     setSignedIn(false);
     setActiveDocumentId('');
     setDocuments([]);
@@ -390,6 +399,7 @@ export function App() {
     [chromeState.collection, chromeState.status.selectedNodeId],
   );
   const zoomReadout = `${Math.round(chromeState.status.zoom * 100)}%`;
+  const syncShortMessage = shortSyncMessage(syncStatus, syncMessage);
   const goToParentView = useCallback(() => {
     if (!navigation.parentCanvasId) return;
     executeDocumentCommand({ type: 'go-to-parent-canvas', source: 'nonvisual' });
@@ -441,7 +451,8 @@ export function App() {
             </button>
             <span className={`sync-chip ${syncStatus}`} role="status" aria-live="polite" title={syncMessage}>
               <SyncStatusIcon status={syncStatus} />
-              <span>{syncMessage}</span>
+              <span className="sync-chip-text">{syncMessage}</span>
+              <span className="sync-chip-short">{syncShortMessage}</span>
             </span>
           </form>
           <div className="toolbar-group view-navigation-group" aria-label="View navigation">
@@ -537,7 +548,7 @@ export function App() {
           initialCollection={initialCollection}
           theme={theme}
           parentContextVisible={parentContextVisible}
-          fitOnFirstLoad={!activeDocumentId}
+          fitOnFirstLoad={fitWorkspaceOnFirstLoad}
           storageKey={workspaceStorageKey}
           onCollectionChange={handleWorkspaceCollectionChange}
           onChromeStateChange={handleChromeStateChange}
@@ -936,6 +947,15 @@ function SyncStatusIcon({ status }: { status: SyncStatus }) {
   if (status === 'loading' || status === 'saving') return <Loader2 size={13} />;
   if (status === 'clean') return <CheckCircle2 size={13} />;
   return <span className="sync-dot" aria-hidden="true" />;
+}
+
+function shortSyncMessage(status: SyncStatus, message: string) {
+  if (status === 'saving') return 'Saving';
+  if (status === 'loading') return 'Checking';
+  if (status === 'error') return 'Error';
+  if (status === 'clean') return message === ONLINE_READY_MESSAGE ? 'Ready' : 'Saved';
+  if (status === 'dirty') return 'Unsaved';
+  return 'Local';
 }
 
 type IconButtonProps = {

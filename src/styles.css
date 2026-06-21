@@ -558,11 +558,15 @@ button {
   font-size: 11px;
 }
 
-.sync-chip > span:last-child {
+.sync-chip-text {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sync-chip-short {
+  display: none;
 }
 
 .sync-chip.clean {
@@ -1779,7 +1783,23 @@ button {
   }
 
   .sync-chip {
+    flex: 0 1 88px;
+    max-width: 88px;
+    height: 28px;
+    padding: 0 7px;
+    font-size: 10px;
+  }
+
+  .sync-chip-text {
     display: none;
+  }
+
+  .sync-chip-short {
+    display: inline;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .account-command-group {
@@ -1871,6 +1891,17 @@ button {
 
   .save-online-button span {
     display: none;
+  }
+
+  .sync-chip {
+    flex-basis: 74px;
+    max-width: 74px;
+  }
+
+  .view-navigator {
+    bottom: 58px;
+    transform: scale(0.86);
+    transform-origin: left bottom;
   }
 }
 
