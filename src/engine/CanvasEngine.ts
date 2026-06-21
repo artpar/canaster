@@ -5,6 +5,7 @@ import { describeNode, hitTestNodeContent, nodeDefinitionFor, parseNodeData, ren
 import type { NodeContentRect } from './nodeTypes/types';
 import type {
   Camera,
+  CanvasArrangeLayout,
   CanvasCommand,
   CanvasEditSource,
   CanvasFrameMetrics,
@@ -333,6 +334,8 @@ export class CanvasEngine {
         return this.planMoveSelection(command.dx, command.dy, command.source);
       case 'resize-primary':
         return this.planResizePrimary(command.dw, command.dh, command.source);
+      case 'arrange-nodes':
+        return this.planArrangeNodes(command.layout, command.source);
       case 'delete-selection':
         return this.planDeleteSelection(command.source);
       case 'copy-selection':
@@ -393,6 +396,25 @@ export class CanvasEngine {
       operations,
       change: operations.length ? { kind: 'node-resize', nodeId: node.id, nodeIds: [node.id], source } : undefined,
       interaction: operations.length ? sourceInteraction(source, 'resize') : 'Resize unchanged',
+    };
+  }
+
+  private planArrangeNodes(layout: CanvasArrangeLayout, source: CanvasEditSource): CommandPlan {
+    const nodes = this.model.nodes;
+    if (nodes.length < 2) return { operations: [], interaction: nodes.length ? 'Arrange needs more panels' : 'Arrange no panels' };
+    const geometries = arrangeNodeGeometries(nodes, layout);
+    const operations: CanvasOperation[] = [];
+    for (const node of nodes) {
+      const to = geometries.get(node.id);
+      if (!to) continue;
+      const from = nodeGeometry(node);
+      if (!sameGeometry(from, to)) operations.push({ type: 'set-node-geometry', nodeId: node.id, from, to });
+    }
+    const nodeIds = operations.map((operation) => operation.type === 'set-node-geometry' ? operation.nodeId : '').filter(Boolean);
+    return {
+      operations,
+      change: operations.length ? { kind: 'node-move', nodeId: nodeIds[0] ?? nodes[0].id, nodeIds, source } : undefined,
+      interaction: operations.length ? `Arranged ${nodes.length} panels as ${arrangeLayoutLabel(layout)}` : 'Arrangement unchanged',
     };
   }
 
@@ -1325,6 +1347,77 @@ function previewGeometriesFrom(operations: CanvasOperation[]) {
     if (operation.type === 'set-node-geometry') geometries.set(operation.nodeId, operation.to);
   }
   return geometries;
+}
+
+function arrangeNodeGeometries(nodes: CanvasNode[], layout: CanvasArrangeLayout): Map<string, NodeGeometry> {
+  const ordered = [...nodes].sort((a, b) => a.y - b.y || a.x - b.x || a.id.localeCompare(b.id));
+  const bounds = boundsForNodes(ordered);
+  const maxW = Math.max(...ordered.map((node) => node.w));
+  const maxH = Math.max(...ordered.map((node) => node.h));
+  const gap = layout === 'list' ? SNAP_STEP : SNAP_STEP * 2;
+  const cellW = snapCoordinate(maxW + gap);
+  const cellH = snapCoordinate(maxH + gap);
+  const startX = snapCoordinate(bounds.x);
+  const startY = snapCoordinate(bounds.y);
+  const placement = new Map<string, NodeGeometry>();
+  const count = ordered.length;
+  const gridColumns = Math.max(1, Math.ceil(Math.sqrt(count)));
+  const rowCount = count <= 8 ? 1 : Math.max(2, Math.round(Math.sqrt(count) / 2));
+  const rowColumns = Math.max(1, Math.ceil(count / rowCount));
+  const columnCount = count <= 2 ? 1 : count <= 8 ? 2 : Math.max(2, Math.round(Math.sqrt(count) / 2));
+  const columnRows = Math.max(1, Math.ceil(count / columnCount));
+  let listY = startY;
+
+  ordered.forEach((node, index) => {
+    const from = nodeGeometry(node);
+    let col = 0;
+    let row = 0;
+    if (layout === 'grid') {
+      col = index % gridColumns;
+      row = Math.floor(index / gridColumns);
+    } else if (layout === 'rows') {
+      col = index % rowColumns;
+      row = Math.floor(index / rowColumns);
+    } else if (layout === 'columns') {
+      col = Math.floor(index / columnRows);
+      row = index % columnRows;
+    } else {
+      placement.set(node.id, {
+        ...from,
+        x: startX,
+        y: listY,
+      });
+      listY = snapCoordinate(listY + node.h + gap);
+      return;
+    }
+    placement.set(node.id, {
+      ...from,
+      x: startX + col * cellW,
+      y: startY + row * cellH,
+    });
+  });
+  return placement;
+}
+
+function boundsForNodes(nodes: CanvasNode[]) {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const node of nodes) {
+    x0 = Math.min(x0, node.x);
+    y0 = Math.min(y0, node.y);
+    x1 = Math.max(x1, node.x + node.w);
+    y1 = Math.max(y1, node.y + node.h);
+  }
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+function arrangeLayoutLabel(layout: CanvasArrangeLayout) {
+  if (layout === 'rows') return 'rows';
+  if (layout === 'columns') return 'columns';
+  if (layout === 'list') return 'a list';
+  return 'a grid';
 }
 
 function operationAffectsRender(operation: CanvasOperation) {

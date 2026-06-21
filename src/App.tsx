@@ -1,7 +1,10 @@
 import {
   CheckCircle2,
+  Columns3,
   FilePlus2,
   FolderOpen,
+  LayoutGrid,
+  LayoutList,
   ListTree,
   Loader2,
   LogIn,
@@ -14,6 +17,7 @@ import {
   Redo2,
   RefreshCw,
   RotateCcw,
+  Rows3,
   Save,
   Sun,
   Undo2,
@@ -51,7 +55,7 @@ import {
 } from './engine/nested/NestedCanvasWorkspace';
 import { PARENT_CONTEXT_REGIONS, regionForContextVector } from './engine/nested/parentContextField';
 import { describeNode } from './engine/nodeTypes/registry';
-import type { CanvasCommand, CanvasNode, ThemeName } from './engine/types';
+import type { CanvasArrangeLayout, CanvasCommand, CanvasNode, ThemeName } from './engine/types';
 import type { CanvasDocument, CanvasDocumentCollection, CanvasDocumentId, CanvasWorkspaceSnapshot, DocumentCommand, ParentContextRegion, StackFrame } from './engine/documentTypes';
 import { saveWorkspaceSnapshot } from './engine/workspaceStorage';
 import { createWorkspaceHistory, createWorkspaceSnapshot } from './engine/workspaceHistory';
@@ -66,13 +70,17 @@ const NAVIGATOR_MID_Y = 76;
 const CURRENT_GRAPH_POINT: GraphPoint = { x: 150, y: NAVIGATOR_MID_Y };
 const NEXT_GRAPH_ELBOW_X = 232;
 const NEXT_GRAPH_X = 260;
+const ARRANGE_MENU_WIDTH = 208;
 
 type UtilityDrawerMode = 'documents' | 'work-items' | null;
 type AuthStep = 'email' | 'otp';
 type SyncStatus = 'anonymous' | 'loading' | 'clean' | 'dirty' | 'saving' | 'error';
+type ArrangeMenuPosition = { top: number; left: number };
 
 export function App() {
   const workspaceRef = useRef<NestedCanvasWorkspaceHandle | null>(null);
+  const arrangeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const arrangeMenuRef = useRef<HTMLDivElement | null>(null);
   const ignoreDirtyUntilRef = useRef(0);
   const lastSavedSnapshotSignatureRef = useRef<string | null>(null);
   const preserveCameraOnNextLocalMountRef = useRef(false);
@@ -82,6 +90,8 @@ export function App() {
   const [theme, setTheme] = useState<ThemeName>('dark');
   const [utilityDrawerMode, setUtilityDrawerMode] = useState<UtilityDrawerMode>(null);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [arrangeMenuOpen, setArrangeMenuOpen] = useState(false);
+  const [arrangeMenuPosition, setArrangeMenuPosition] = useState<ArrangeMenuPosition | null>(null);
   const [authStep, setAuthStep] = useState<AuthStep>('email');
   const [parentContextVisible, setParentContextVisible] = useState(true);
   const [onboardingDismissed, setOnboardingDismissed] = useState(() => window.localStorage.getItem(ONBOARDING_DISMISSED_STORAGE_KEY) === 'true');
@@ -447,6 +457,53 @@ export function App() {
     dismissOnboarding();
   }, [dismissOnboarding]);
 
+  const updateArrangeMenuPosition = useCallback(() => {
+    const button = arrangeButtonRef.current;
+    if (!button) return;
+    const rect = button.getBoundingClientRect();
+    const margin = 12;
+    const left = Math.max(margin, Math.min(window.innerWidth - ARRANGE_MENU_WIDTH - margin, rect.right - ARRANGE_MENU_WIDTH));
+    const top = Math.max(margin, Math.min(window.innerHeight - 220, rect.bottom + 8));
+    setArrangeMenuPosition({ left, top });
+  }, []);
+
+  const handleToggleArrangeMenu = useCallback(() => {
+    setArrangeMenuOpen((open) => {
+      if (!open) updateArrangeMenuPosition();
+      return !open;
+    });
+  }, [updateArrangeMenuPosition]);
+
+  const handleArrangeCanvas = useCallback((layout: CanvasArrangeLayout) => {
+    const changed = workspaceRef.current?.executeActiveCanvasCommand({ type: 'arrange-nodes', layout, source: 'nonvisual' }) ?? false;
+    setArrangeMenuOpen(false);
+    if (changed) window.requestAnimationFrame(() => workspaceRef.current?.fitActiveCanvas());
+  }, []);
+
+  useEffect(() => {
+    if (!arrangeMenuOpen) return;
+    updateArrangeMenuPosition();
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (arrangeButtonRef.current?.contains(target) || arrangeMenuRef.current?.contains(target)) return;
+      setArrangeMenuOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setArrangeMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', updateArrangeMenuPosition);
+    window.addEventListener('scroll', updateArrangeMenuPosition, true);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', updateArrangeMenuPosition);
+      window.removeEventListener('scroll', updateArrangeMenuPosition, true);
+    };
+  }, [arrangeMenuOpen, updateArrangeMenuPosition]);
+
   const navigation = useMemo(
     () => buildNestedNavigation(chromeState.collection, chromeState.status.selectedNodeId),
     [chromeState.collection, chromeState.status.selectedNodeId],
@@ -520,6 +577,18 @@ export function App() {
               >
                 <PanelsTopLeft size={17} />
               </IconButton>
+              <button
+                ref={arrangeButtonRef}
+                className="icon-button"
+                type="button"
+                aria-label="Arrange canvas panels"
+                aria-haspopup="menu"
+                aria-expanded={arrangeMenuOpen}
+                title="Arrange canvas panels"
+                onClick={handleToggleArrangeMenu}
+              >
+                <LayoutGrid size={17} />
+              </button>
             </div>
             <div className="toolbar-group" aria-label="Panels">
               <IconButton
@@ -550,6 +619,44 @@ export function App() {
             </div>
           </div>
         </div>
+        {arrangeMenuOpen ? (
+          <div
+            ref={arrangeMenuRef}
+            className="arrange-menu"
+            role="menu"
+            aria-label="Arrange canvas panels"
+            style={arrangeMenuPosition ? { top: arrangeMenuPosition.top, left: arrangeMenuPosition.left } : undefined}
+          >
+            <button className="arrange-menu-item" type="button" role="menuitem" onClick={() => handleArrangeCanvas('grid')}>
+              <LayoutGrid size={16} />
+              <span>
+                <strong>Grid</strong>
+                <small>Balanced rows and columns</small>
+              </span>
+            </button>
+            <button className="arrange-menu-item" type="button" role="menuitem" onClick={() => handleArrangeCanvas('rows')}>
+              <Rows3 size={16} />
+              <span>
+                <strong>Rows</strong>
+                <small>Wide left-to-right flow</small>
+              </span>
+            </button>
+            <button className="arrange-menu-item" type="button" role="menuitem" onClick={() => handleArrangeCanvas('columns')}>
+              <Columns3 size={16} />
+              <span>
+                <strong>Columns</strong>
+                <small>Tall top-to-bottom flow</small>
+              </span>
+            </button>
+            <button className="arrange-menu-item" type="button" role="menuitem" onClick={() => handleArrangeCanvas('list')}>
+              <LayoutList size={16} />
+              <span>
+                <strong>List</strong>
+                <small>Single clean stack</small>
+              </span>
+            </button>
+          </div>
+        ) : null}
         {accountOpen ? (
           <AccountPopover
             authEmail={authEmail}

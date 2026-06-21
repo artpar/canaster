@@ -64,11 +64,14 @@ export type CanvasPortalNodeData = {
 
 export type CanvasEditSource = 'pointer' | 'keyboard' | 'nonvisual' | 'ai';
 
+export type CanvasArrangeLayout = 'grid' | 'rows' | 'columns' | 'list';
+
 export type CanvasCommand =
   | { type: 'select-node'; nodeId: string; mode?: 'replace' | 'toggle' | 'add'; source: CanvasEditSource }
   | { type: 'clear-selection'; source: CanvasEditSource }
   | { type: 'move-selection'; dx: number; dy: number; source: CanvasEditSource }
   | { type: 'resize-primary'; dw: number; dh: number; source: CanvasEditSource }
+  | { type: 'arrange-nodes'; layout: CanvasArrangeLayout; source: CanvasEditSource }
   | { type: 'delete-selection'; source: CanvasEditSource }
   | { type: 'copy-selection'; source: CanvasEditSource }
   | { type: 'paste-clipboard'; source: CanvasEditSource };
