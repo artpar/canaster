@@ -1,6 +1,4 @@
 import {
-  ArrowDown,
-  ArrowUp,
   CheckCircle2,
   FilePlus2,
   FolderOpen,
@@ -454,20 +452,7 @@ export function App() {
     [chromeState.collection, chromeState.status.selectedNodeId],
   );
   const zoomReadout = `${Math.round(chromeState.status.zoom * 100)}%`;
-  const syncShortMessage = shortSyncMessage(syncStatus, syncMessage);
-  const goToParentView = useCallback(() => {
-    if (!navigation.parentCanvasId) return;
-    executeDocumentCommand({ type: 'go-to-parent-canvas', source: 'nonvisual' });
-  }, [executeDocumentCommand, navigation.parentCanvasId]);
-  const openSelectedChildView = useCallback(() => {
-    if (!navigation.selectedChildView) return;
-    executeDocumentCommand({
-      type: 'enter-child-canvas',
-      parentCanvasId: navigation.activeCanvasId,
-      portalNodeId: navigation.selectedChildView.portalNodeId,
-      source: 'nonvisual',
-    });
-  }, [executeDocumentCommand, navigation.activeCanvasId, navigation.selectedChildView]);
+  const saveButtonLabel = saveActionLabel(syncStatus, syncMessage, signedIn);
 
   const showOnboarding = !activeDocumentId && !onboardingDismissed && utilityDrawerMode === null;
 
@@ -475,109 +460,94 @@ export function App() {
     <main className="app-shell">
       <section className="workspace" aria-label="Workspace map">
         <div className="topbar" aria-label="Workspace tools">
-          <div className="brand">
-            <span className="brand-mark" />
-            <span>Canaster</span>
-          </div>
-          <form
-            className="toolbar-group document-command-group"
-            aria-label="Documents"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void handleSaveOnline();
-            }}
-          >
-            <input
-              className="document-title-input"
-              aria-label="Workspace name"
-              name="document-title"
-              value={documentTitle}
-              onChange={(event) => setDocumentTitle(event.target.value)}
-            />
-            <IconButton label="New local workspace" onClick={() => void handleNewLocalDraft()}>
-              <FilePlus2 size={17} />
-            </IconButton>
-            <IconButton label={documentsOpen ? 'Close saved workspaces' : 'Open saved workspaces'} pressed={documentsOpen} onClick={handleOpenDocumentsDrawer}>
-              <FolderOpen size={17} />
-            </IconButton>
-            <button className="save-online-button" type="submit" disabled={syncStatus === 'loading' || syncStatus === 'saving'}>
-              <Save size={16} />
-              <span>Save online</span>
-            </button>
-            <span className={`sync-chip ${syncStatus}`} role="status" aria-live="polite" title={syncMessage}>
-              <SyncStatusIcon status={syncStatus} />
-              <span className="sync-chip-text">{syncMessage}</span>
-              <span className="sync-chip-short">{syncShortMessage}</span>
-            </span>
-          </form>
-          <div className="toolbar-group view-navigation-group" aria-label="View navigation">
-            <IconButton label={navigation.parentTitle ? `Go up to ${navigation.parentTitle}` : 'Already at top view'} disabled={!navigation.parentCanvasId} onClick={goToParentView}>
-              <ArrowUp size={17} />
-            </IconButton>
-            <div className="view-location" aria-label="Current view">
-              <span className="view-title">{navigation.activeTitle}</span>
-              <span className="view-depth">{navigation.depthLabel}</span>
+          <div className="topbar-zone topbar-identity">
+            <div className="brand" aria-label="Canaster" title="Canaster">
+              <span className="brand-mark" aria-hidden="true" />
             </div>
-            <IconButton label={navigation.selectedChildView ? `Open ${navigation.selectedChildView.title}` : 'Select a view item to go down'} disabled={!navigation.selectedChildView} onClick={openSelectedChildView}>
-              <ArrowDown size={17} />
-            </IconButton>
-          </div>
-          <div className="toolbar-group" aria-label="History">
-            <IconButton label="Undo" disabled={!chromeState.canUndo} onClick={() => workspaceRef.current?.undoWorkspace()}>
-              <Undo2 size={17} />
-            </IconButton>
-            <IconButton label="Redo" disabled={!chromeState.canRedo} onClick={() => workspaceRef.current?.redoWorkspace()}>
-              <Redo2 size={17} />
-            </IconButton>
-          </div>
-          <div className="toolbar-group" aria-label="View controls">
-            <IconButton label="Center map" onClick={() => workspaceRef.current?.fitActiveCanvas()}>
-              <Maximize2 size={17} />
-            </IconButton>
-            <IconButton label="Reset map zoom" onClick={() => workspaceRef.current?.resetActiveZoom()}>
-              <RotateCcw size={17} />
-            </IconButton>
-            <IconButton
-              label={parentContextVisible ? 'Hide parent context panes' : 'Show parent context panes'}
-              pressed={parentContextVisible}
-              onClick={() => setParentContextVisible((visible) => !visible)}
-            >
-              <PanelsTopLeft size={17} />
-            </IconButton>
-            <IconButton label="Zoom out" onClick={() => workspaceRef.current?.zoomActiveBy(0.82)}>
-              <Minus size={17} />
-            </IconButton>
-            <span className="zoom-readout" aria-label={`Zoom ${zoomReadout}`}>{zoomReadout}</span>
-            <IconButton label="Zoom in" onClick={() => workspaceRef.current?.zoomActiveBy(1.22)}>
-              <Plus size={17} />
-            </IconButton>
-          </div>
-          <div className="toolbar-group" aria-label="Panels">
-            <IconButton
-              label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-              onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
-            >
-              {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
-            </IconButton>
-            <IconButton label={workItemsOpen ? 'Close work items' : 'Open work items'} pressed={workItemsOpen} onClick={handleOpenNodePanel}>
-              <ListTree size={17} />
-            </IconButton>
-          </div>
-          <div className="toolbar-group account-command-group" aria-label="Account">
-            <IconButton
-              label={signedIn ? 'Open account' : 'Sign in'}
-              pressed={accountOpen}
-              onClick={() => {
-                const nextOpen = !accountOpen;
-                if (nextOpen) {
-                  setUtilityDrawerMode(null);
-                  dismissOnboarding();
-                }
-                setAccountOpen(nextOpen);
+            <form
+              className="toolbar-group document-command-group"
+              aria-label="Documents"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleSaveOnline();
               }}
             >
-              {signedIn ? <UserCircle size={17} /> : <LogIn size={17} />}
-            </IconButton>
+              <input
+                className="document-title-input"
+                aria-label="Workspace name"
+                name="document-title"
+                value={documentTitle}
+                onChange={(event) => setDocumentTitle(event.target.value)}
+              />
+              <IconButton label={documentsOpen ? 'Close saved workspaces' : 'Open saved workspaces'} pressed={documentsOpen} onClick={handleOpenDocumentsDrawer}>
+                <FolderOpen size={17} />
+              </IconButton>
+              <button
+                className={`save-online-button ${syncStatus}`}
+                type="submit"
+                aria-label={saveButtonLabel}
+                title={syncMessage}
+                disabled={syncStatus === 'loading' || syncStatus === 'saving'}
+              >
+                <Save size={16} />
+                <span className="save-status-badge" aria-hidden="true">
+                  <SyncStatusIcon status={syncStatus} />
+                </span>
+              </button>
+              <span className="sync-status-reader" role="status" aria-live="polite">{syncMessage}</span>
+            </form>
+          </div>
+          <div className="topbar-zone topbar-controls">
+            <div className="toolbar-group" aria-label="History">
+              <IconButton label="Undo" disabled={!chromeState.canUndo} onClick={() => workspaceRef.current?.undoWorkspace()}>
+                <Undo2 size={17} />
+              </IconButton>
+              <IconButton label="Redo" disabled={!chromeState.canRedo} onClick={() => workspaceRef.current?.redoWorkspace()}>
+                <Redo2 size={17} />
+              </IconButton>
+            </div>
+            <div className="toolbar-group" aria-label="View controls">
+              <IconButton label="Center map" onClick={() => workspaceRef.current?.fitActiveCanvas()}>
+                <Maximize2 size={17} />
+              </IconButton>
+              <IconButton label="Reset map zoom" onClick={() => workspaceRef.current?.resetActiveZoom()}>
+                <RotateCcw size={17} />
+              </IconButton>
+              <IconButton
+                label={parentContextVisible ? 'Hide parent context panes' : 'Show parent context panes'}
+                pressed={parentContextVisible}
+                onClick={() => setParentContextVisible((visible) => !visible)}
+              >
+                <PanelsTopLeft size={17} />
+              </IconButton>
+            </div>
+            <div className="toolbar-group" aria-label="Panels">
+              <IconButton
+                label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+                onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
+              >
+                {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+              </IconButton>
+              <IconButton label={workItemsOpen ? 'Close work items' : 'Open work items'} pressed={workItemsOpen} onClick={handleOpenNodePanel}>
+                <ListTree size={17} />
+              </IconButton>
+            </div>
+            <div className="toolbar-group account-command-group" aria-label="Account">
+              <IconButton
+                label={signedIn ? 'Open account' : 'Sign in'}
+                pressed={accountOpen}
+                onClick={() => {
+                  const nextOpen = !accountOpen;
+                  if (nextOpen) {
+                    setUtilityDrawerMode(null);
+                    dismissOnboarding();
+                  }
+                  setAccountOpen(nextOpen);
+                }}
+              >
+                {signedIn ? <UserCircle size={17} /> : <LogIn size={17} />}
+              </IconButton>
+            </div>
           </div>
         </div>
         {accountOpen ? (
@@ -608,6 +578,15 @@ export function App() {
           onCollectionChange={handleWorkspaceCollectionChange}
           onChromeStateChange={handleChromeStateChange}
         />
+        <div className="toolbar-group zoom-toolbar" aria-label="Zoom controls">
+          <IconButton label="Zoom out" onClick={() => workspaceRef.current?.zoomActiveBy(0.82)}>
+            <Minus size={17} />
+          </IconButton>
+          <span className="zoom-readout" aria-label={`Zoom ${zoomReadout}`}>{zoomReadout}</span>
+          <IconButton label="Zoom in" onClick={() => workspaceRef.current?.zoomActiveBy(1.22)}>
+            <Plus size={17} />
+          </IconButton>
+        </div>
         <ViewNavigator navigation={navigation} executeDocumentCommand={executeDocumentCommand} />
         {showOnboarding ? (
           <FirstRunGuide
@@ -1004,13 +983,13 @@ function SyncStatusIcon({ status }: { status: SyncStatus }) {
   return <span className="sync-dot" aria-hidden="true" />;
 }
 
-function shortSyncMessage(status: SyncStatus, message: string) {
-  if (status === 'saving') return 'Saving';
-  if (status === 'loading') return 'Checking';
-  if (status === 'error') return 'Error';
-  if (status === 'clean') return message === ONLINE_READY_MESSAGE ? 'Ready' : 'Saved';
-  if (status === 'dirty') return 'Unsaved';
-  return 'Local';
+function saveActionLabel(status: SyncStatus, message: string, signedIn: boolean) {
+  if (!signedIn) return 'Sign in to save online';
+  if (status === 'saving' || status === 'loading') return message;
+  if (status === 'error') return `${message}. Try saving again.`;
+  if (status === 'dirty') return 'Save online changes';
+  if (status === 'clean') return message === SAVED_MESSAGE ? 'Saved online' : 'Save workspace online';
+  return 'Save workspace online';
 }
 
 type IconButtonProps = {
