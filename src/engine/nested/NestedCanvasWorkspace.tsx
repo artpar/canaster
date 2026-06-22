@@ -10,7 +10,7 @@ import { listImageAssets, uploadImageAsset, type CanasterAssetSummary } from '..
 import { hasUsableStoredToken, normalizeDaptinError } from '../../backend/daptinClient';
 import { cloneDocumentCollection } from '../documentModel';
 import { describeNode, parseNodeData } from '../nodeTypes/registry';
-import { BuiltInNodeTypes, type CanvasCommand, type CanvasNode, type CheckNodeData, type CheckNodeItem, type ImageNodeData, type ThemeName, type ViewportStatus } from '../types';
+import { BuiltInNodeTypes, type CanvasCommand, type CanvasModelChange, type CanvasNode, type CheckNodeData, type CheckNodeItem, type ImageNodeData, type ThemeName, type ViewportStatus } from '../types';
 import type {
   CanvasDocumentCollection,
   CanvasWorkspaceSnapshot,
@@ -35,6 +35,8 @@ export type NestedCanvasWorkspaceChromeState = {
   collection: CanvasDocumentCollection;
   status: ViewportStatus;
   lastModelChange: DocumentModelChange | null;
+  lastCanvasModelChange: CanvasModelChange | null;
+  lastCanvasModelChangeId: number;
   canUndo: boolean;
   canRedo: boolean;
 };

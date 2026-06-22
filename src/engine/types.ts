@@ -82,7 +82,7 @@ export type CanvasEditSource = 'pointer' | 'keyboard' | 'nonvisual' | 'ai';
 export type CanvasArrangeLayout = 'grid' | 'rows' | 'columns' | 'list';
 
 export type CanvasCommand =
-  | { type: 'create-node'; nodeType: NodeTypeId; source: CanvasEditSource }
+  | { type: 'create-node'; nodeType: NodeTypeId; source: CanvasEditSource; at?: WorldPoint }
   | { type: 'select-node'; nodeId: string; mode?: 'replace' | 'toggle' | 'add'; source: CanvasEditSource }
   | { type: 'clear-selection'; source: CanvasEditSource }
   | { type: 'move-selection'; dx: number; dy: number; source: CanvasEditSource }

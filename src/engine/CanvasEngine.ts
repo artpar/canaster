@@ -356,7 +356,7 @@ export class CanvasEngine {
   private planCommand(command: CanvasCommand): CommandPlan {
     switch (command.type) {
       case 'create-node':
-        return this.planCreateNode(command.nodeType, command.source);
+        return this.planCreateNode(command.nodeType, command.source, command.at);
       case 'select-node':
         return this.planSelectNode(command.nodeId, command.source, command.mode ?? 'replace');
       case 'clear-selection':
@@ -376,13 +376,13 @@ export class CanvasEngine {
     }
   }
 
-  private planCreateNode(nodeType: string, source: CanvasEditSource): CommandPlan {
+  private planCreateNode(nodeType: string, source: CanvasEditSource, at?: WorldPoint): CommandPlan {
     const definition = nodeDefinitionForType(nodeType);
     if (!definition) return { operations: [], interaction: 'Panel type unavailable' };
     const existingIds = new Set(this.model.nodes.map((node) => node.id));
     const id = uniqueNodeId(definition.type, existingIds);
     const { w, h } = definition.defaultSize;
-    const center = this.screenToWorld(this.viewW / 2, this.viewH / 2);
+    const center = at ?? this.cursorWorld ?? this.screenToWorld(this.viewW / 2, this.viewH / 2);
     const node: CanvasNode = {
       id,
       type: definition.type,
@@ -1009,7 +1009,8 @@ export class CanvasEngine {
       return;
     }
     const point = this.eventPoint(event);
-    const node = this.nodeAt(this.screenToWorld(point.x, point.y));
+    const world = this.screenToWorld(point.x, point.y);
+    const node = this.nodeAt(world);
     const action = node ? describeNode(node).actions.find((candidate) => candidate.available && candidate.id === 'enter-child-canvas') : null;
     if (node && action && this.routeNodeAction(node.id, action.id, 'pointer')) {
       this.interaction = 'Pointer node action';
@@ -1017,7 +1018,11 @@ export class CanvasEngine {
       this.emitStatus();
       return;
     }
-    this.zoomAt(point.x, point.y, 1.55);
+    if (node) {
+      this.zoomAt(point.x, point.y, 1.55);
+      return;
+    }
+    this.executeCommand({ type: 'create-node', nodeType: BuiltInNodeTypes.card, source: 'pointer', at: world });
   };
 
   private zoomAt(screenX: number, screenY: number, factor: number) {

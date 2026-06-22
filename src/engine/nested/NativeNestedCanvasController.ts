@@ -23,7 +23,7 @@ import {
   stripPortalChildReferenceOnPaste,
 } from '../documentCommands';
 import { parseNodeData } from '../nodeTypes/registry';
-import { BuiltInNodeTypes, type Camera, type CanvasCommand, type CanvasModel, type CanvasNode, type CanvasPortalNodeData, type CanvasSelectionState, type PortalLayout, type ThemeName, type ViewportStatus } from '../types';
+import { BuiltInNodeTypes, type Camera, type CanvasCommand, type CanvasModel, type CanvasModelChange, type CanvasNode, type CanvasPortalNodeData, type CanvasSelectionState, type PortalLayout, type ThemeName, type ViewportStatus } from '../types';
 import type {
   CanvasDocumentCollection,
   CanvasDocumentId,
@@ -136,6 +136,7 @@ export class NativeNestedCanvasController {
   private readonly historyRef: { current: CanvasWorkspaceHistory };
   private readonly collectionRef: { current: CanvasDocumentCollection };
   private readonly lastModelChangeRef: { current: DocumentModelChange | null } = { current: null };
+  private readonly lastCanvasModelChangeRef: { current: CanvasModelChange | null } = { current: null };
   private readonly slots = new Map<string, Slot>();
   private readonly parentContextSlots = new Map<string, ParentContextPaneSlot>();
   private readonly activeFrameOverBudgetCount = { current: 0 };
@@ -166,6 +167,7 @@ export class NativeNestedCanvasController {
   private overlayRenderCount = 0;
   private overlayStableCount = 0;
   private commitCount = 0;
+  private canvasModelChangeCount = 0;
   private parentContextVisible: boolean;
   private resizeObserver: ResizeObserver;
 
@@ -403,7 +405,7 @@ export class NativeNestedCanvasController {
       canvasId: collection.activeCanvasId,
       interactionMode: 'active',
       onStatus: (status) => this.handleActiveStatus(this.collectionRef.current.activeCanvasId, status),
-      onModelChange: (model) => this.handleActiveModelChange(this.collectionRef.current.activeCanvasId, model),
+      onModelChange: (model, change) => this.handleActiveModelChange(this.collectionRef.current.activeCanvasId, model, change),
       onPortalLayout: (layouts) => this.handleActivePortalLayouts(layouts),
       onNodeAction: (nodeId, actionId, source) => {
         this.executeDocumentCommand({ type: 'execute-node-action', canvasId: this.collectionRef.current.activeCanvasId, nodeId, actionId, source });
@@ -621,7 +623,7 @@ export class NativeNestedCanvasController {
       canvasId,
       interactionMode: 'embedded-live',
       onStatus: () => undefined,
-      onModelChange: (model) => this.handleEmbeddedModelChange(canvasId, model),
+      onModelChange: (model, change) => this.handleEmbeddedModelChange(canvasId, model, change),
       onCanvasDoubleClick: (targetCanvasId) => {
         this.executeDocumentCommand({ type: 'select-canvas', canvasId: targetCanvasId, source: 'pointer' });
         return true;
@@ -916,7 +918,7 @@ export class NativeNestedCanvasController {
       canvasId,
       interactionMode: 'embedded-live',
       onStatus: () => this.handleParentContextStatus(key),
-      onModelChange: (model) => this.handleEmbeddedModelChange(canvasId, model),
+      onModelChange: (model, change) => this.handleEmbeddedModelChange(canvasId, model, change),
       onCanvasDoubleClick: (targetCanvasId) => {
         this.executeDocumentCommand({ type: 'select-canvas', canvasId: targetCanvasId, source: 'pointer' });
         return true;
@@ -968,19 +970,19 @@ export class NativeNestedCanvasController {
     this.persistViewportFromActiveEngine();
   }
 
-  private handleActiveModelChange(canvasId: CanvasDocumentId, model: CanvasModel) {
+  private handleActiveModelChange(canvasId: CanvasDocumentId, model: CanvasModel, change: CanvasModelChange) {
     const base = this.collectionRef.current;
     if (base.activeCanvasId !== canvasId) return;
-    this.commitCanvasModelInPlace(canvasId, model);
+    this.commitCanvasModelInPlace(canvasId, model, change);
   }
 
-  private handleEmbeddedModelChange(canvasId: CanvasDocumentId, model: CanvasModel) {
+  private handleEmbeddedModelChange(canvasId: CanvasDocumentId, model: CanvasModel, change: CanvasModelChange) {
     const base = this.collectionRef.current;
     if (!base.documents[canvasId]) return;
-    this.commitCanvasModelInPlace(canvasId, model);
+    this.commitCanvasModelInPlace(canvasId, model, change);
   }
 
-  private commitCanvasModelInPlace(canvasId: CanvasDocumentId, model: CanvasModel) {
+  private commitCanvasModelInPlace(canvasId: CanvasDocumentId, model: CanvasModel, change: CanvasModelChange) {
     if (model.schemaVersion !== 2) throw new Error('Canvas documents only accept schemaVersion 2 models');
     const base = this.collectionRef.current;
     const document = base.documents[canvasId];
@@ -1000,6 +1002,8 @@ export class NativeNestedCanvasController {
     const nextHistory = pushWorkspaceHistory(this.historyRef.current, next);
     this.historyRef.current = nextHistory;
     this.collectionRef.current = nextHistory.present;
+    this.lastCanvasModelChangeRef.current = { ...change, nodeIds: [...change.nodeIds] };
+    this.canvasModelChangeCount += 1;
     if (this.storageReady) this.scheduleViewportSnapshotMirror();
     this.onCollectionChange?.(nextHistory.present, []);
     this.emitChromeState();
@@ -1197,6 +1201,8 @@ export class NativeNestedCanvasController {
       collection: this.collectionRef.current,
       status: this.status,
       lastModelChange: this.lastModelChangeRef.current,
+      lastCanvasModelChange: this.lastCanvasModelChangeRef.current,
+      lastCanvasModelChangeId: this.canvasModelChangeCount,
       canUndo: this.historyRef.current.undoStack.length > 0,
       canRedo: this.historyRef.current.redoStack.length > 0,
     });

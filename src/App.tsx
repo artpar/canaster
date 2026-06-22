@@ -24,7 +24,7 @@ import {
   UserCircle,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, type Ref } from 'react';
 import {
   createDocument,
   listDocuments,
@@ -86,6 +86,7 @@ type UtilityDrawerMode = 'documents' | 'work-items' | null;
 type AuthStep = 'email' | 'otp';
 type SyncStatus = 'anonymous' | 'loading' | 'clean' | 'dirty' | 'saving' | 'error';
 type ArrangeMenuPosition = { top: number; left: number };
+type WorkspaceToast = { id: number; message: string; actionLabel: string; action: () => void } | null;
 
 export function App() {
   const workspaceRef = useRef<NestedCanvasWorkspaceHandle | null>(null);
@@ -93,6 +94,7 @@ export function App() {
   const arrangeMenuRef = useRef<HTMLDivElement | null>(null);
   const addPanelButtonRef = useRef<HTMLButtonElement | null>(null);
   const addPanelMenuRef = useRef<HTMLDivElement | null>(null);
+  const addPanelSearchRef = useRef<HTMLInputElement | null>(null);
   const ignoreDirtyUntilRef = useRef(0);
   const lastSavedSnapshotSignatureRef = useRef<string | null>(null);
   const preserveCameraOnNextLocalMountRef = useRef(false);
@@ -106,6 +108,9 @@ export function App() {
   const [arrangeMenuPosition, setArrangeMenuPosition] = useState<ArrangeMenuPosition | null>(null);
   const [addPanelMenuOpen, setAddPanelMenuOpen] = useState(false);
   const [addPanelMenuPosition, setAddPanelMenuPosition] = useState<ArrangeMenuPosition | null>(null);
+  const [addPanelQuery, setAddPanelQuery] = useState('');
+  const [addPanelActiveIndex, setAddPanelActiveIndex] = useState(0);
+  const [workspaceToast, setWorkspaceToast] = useState<WorkspaceToast>(null);
   const [authStep, setAuthStep] = useState<AuthStep>('email');
   const [parentContextVisible, setParentContextVisible] = useState(true);
   const [onboardingDismissed, setOnboardingDismissed] = useState(() => window.localStorage.getItem(ONBOARDING_DISMISSED_STORAGE_KEY) === 'true');
@@ -126,6 +131,8 @@ export function App() {
     collection: initialCollection,
     status: initialViewportStatus,
     lastModelChange: null,
+    lastCanvasModelChange: null,
+    lastCanvasModelChangeId: 0,
     canUndo: false,
     canRedo: false,
   }));
@@ -512,15 +519,29 @@ export function App() {
   const handleToggleArrangeMenu = useCallback(() => {
     setArrangeMenuOpen((open) => {
       if (!open) updateArrangeMenuPosition();
-      if (!open) setAddPanelMenuOpen(false);
+      if (!open) {
+        setAddPanelMenuOpen(false);
+        setAddPanelQuery('');
+        setAddPanelActiveIndex(0);
+      }
       return !open;
     });
   }, [updateArrangeMenuPosition]);
+
+  const closeAddPanelMenu = useCallback(() => {
+    setAddPanelMenuOpen(false);
+    setAddPanelQuery('');
+    setAddPanelActiveIndex(0);
+  }, []);
 
   const handleToggleAddPanelMenu = useCallback(() => {
     setAddPanelMenuOpen((open) => {
       if (!open) updateAddPanelMenuPosition();
       if (!open) setArrangeMenuOpen(false);
+      if (!open) {
+        setAddPanelQuery('');
+        setAddPanelActiveIndex(0);
+      }
       return !open;
     });
   }, [updateAddPanelMenuPosition]);
@@ -533,9 +554,47 @@ export function App() {
 
   const handleCreatePanel = useCallback((nodeType: string) => {
     workspaceRef.current?.executeActiveCanvasCommand({ type: 'create-node', nodeType, source: 'nonvisual' });
-    setAddPanelMenuOpen(false);
+    closeAddPanelMenu();
     dismissOnboarding();
-  }, [dismissOnboarding]);
+  }, [closeAddPanelMenu, dismissOnboarding]);
+
+  const filteredPanelCreateOptions = useMemo(() => {
+    const query = addPanelQuery.trim().toLowerCase();
+    if (!query) return [...PANEL_CREATE_OPTIONS];
+    return PANEL_CREATE_OPTIONS.filter((option) => {
+      return `${option.label} ${option.detail} ${option.badge}`.toLowerCase().includes(query);
+    });
+  }, [addPanelQuery]);
+
+  useEffect(() => {
+    if (!addPanelMenuOpen) return;
+    setAddPanelActiveIndex((index) => Math.min(index, Math.max(0, filteredPanelCreateOptions.length - 1)));
+  }, [addPanelMenuOpen, filteredPanelCreateOptions.length]);
+
+  useEffect(() => {
+    if (!addPanelMenuOpen) return;
+    window.requestAnimationFrame(() => addPanelSearchRef.current?.focus());
+  }, [addPanelMenuOpen]);
+
+  useEffect(() => {
+    const change = chromeState.lastCanvasModelChange;
+    if (!change || change.kind !== 'node-delete') return;
+    const count = change.nodeIds.length;
+    const id = Date.now();
+    setWorkspaceToast({
+      id,
+      message: count > 1 ? `${count} panels deleted` : 'Panel deleted',
+      actionLabel: 'Undo',
+      action: () => {
+        workspaceRef.current?.undoWorkspace();
+        setWorkspaceToast(null);
+      },
+    });
+    const timeout = window.setTimeout(() => {
+      setWorkspaceToast((current) => current?.id === id ? null : current);
+    }, 4200);
+    return () => window.clearTimeout(timeout);
+  }, [chromeState.lastCanvasModelChange, chromeState.lastCanvasModelChangeId]);
 
   useEffect(() => {
     if (!arrangeMenuOpen) return;
@@ -568,10 +627,10 @@ export function App() {
       const target = event.target;
       if (!(target instanceof Node)) return;
       if (addPanelButtonRef.current?.contains(target) || addPanelMenuRef.current?.contains(target)) return;
-      setAddPanelMenuOpen(false);
+      closeAddPanelMenu();
     };
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setAddPanelMenuOpen(false);
+      if (event.key === 'Escape') closeAddPanelMenu();
     };
     document.addEventListener('pointerdown', handlePointerDown);
     document.addEventListener('keydown', handleKeyDown);
@@ -583,7 +642,7 @@ export function App() {
       window.removeEventListener('resize', updateAddPanelMenuPosition);
       window.removeEventListener('scroll', updateAddPanelMenuPosition, true);
     };
-  }, [addPanelMenuOpen, updateAddPanelMenuPosition]);
+  }, [addPanelMenuOpen, closeAddPanelMenu, updateAddPanelMenuPosition]);
 
   const navigation = useMemo(
     () => buildNestedNavigation(chromeState.collection, chromeState.status.selectedNodeId),
@@ -650,7 +709,7 @@ export function App() {
                 className="icon-button"
                 type="button"
                 aria-label="Add panel"
-                aria-haspopup="menu"
+                aria-haspopup="dialog"
                 aria-expanded={addPanelMenuOpen}
                 title="Add panel"
                 onClick={handleToggleAddPanelMenu}
@@ -713,23 +772,21 @@ export function App() {
           </div>
         </div>
         {addPanelMenuOpen ? (
-          <div
+          <AddPanelPopover
             ref={addPanelMenuRef}
-            className="add-panel-menu"
-            role="menu"
-            aria-label="Add panel"
-            style={addPanelMenuPosition ? { top: addPanelMenuPosition.top, left: addPanelMenuPosition.left } : undefined}
-          >
-            {PANEL_CREATE_OPTIONS.map((option) => (
-              <button key={option.type} className="arrange-menu-item add-panel-menu-item" type="button" role="menuitem" onClick={() => handleCreatePanel(option.type)}>
-                <span className="panel-type-mark" aria-hidden="true">{option.badge}</span>
-                <span>
-                  <strong>{option.label}</strong>
-                  <small>{option.detail}</small>
-                </span>
-              </button>
-            ))}
-          </div>
+            searchRef={addPanelSearchRef}
+            position={addPanelMenuPosition}
+            options={filteredPanelCreateOptions}
+            query={addPanelQuery}
+            activeIndex={addPanelActiveIndex}
+            onQueryChange={(query) => {
+              setAddPanelQuery(query);
+              setAddPanelActiveIndex(0);
+            }}
+            onActiveIndexChange={setAddPanelActiveIndex}
+            onCreate={handleCreatePanel}
+            onClose={closeAddPanelMenu}
+          />
         ) : null}
         {arrangeMenuOpen ? (
           <div
@@ -797,6 +854,16 @@ export function App() {
           onCollectionChange={handleWorkspaceCollectionChange}
           onChromeStateChange={handleChromeStateChange}
         />
+        {chromeState.collection.view.deleteConfirmation ? (
+          <DeleteConfirmationPrompt
+            collection={chromeState.collection}
+            onCancel={() => executeDocumentCommand({ type: 'cancel-delete-confirmation', source: 'nonvisual' })}
+            onConfirm={() => executeDocumentCommand({ type: 'confirm-delete-selection', canvasId: chromeState.collection.view.deleteConfirmation?.canvasId ?? chromeState.collection.activeCanvasId, source: 'nonvisual' })}
+          />
+        ) : null}
+        {workspaceToast ? (
+          <WorkspaceToastView toast={workspaceToast} onDismiss={() => setWorkspaceToast(null)} />
+        ) : null}
         <div className="toolbar-group zoom-toolbar" aria-label="Zoom controls">
           <IconButton label="Zoom out" onClick={() => workspaceRef.current?.zoomActiveBy(0.82)}>
             <Minus size={17} />
@@ -842,6 +909,152 @@ export function App() {
         ) : null}
       </section>
     </main>
+  );
+}
+
+type PanelCreateOption = (typeof PANEL_CREATE_OPTIONS)[number];
+
+type AddPanelPopoverProps = {
+  searchRef: Ref<HTMLInputElement>;
+  position: ArrangeMenuPosition | null;
+  options: PanelCreateOption[];
+  query: string;
+  activeIndex: number;
+  onQueryChange: (query: string) => void;
+  onActiveIndexChange: (index: number) => void;
+  onCreate: (nodeType: string) => void;
+  onClose: () => void;
+};
+
+const AddPanelPopover = forwardRef<HTMLDivElement, AddPanelPopoverProps>(function AddPanelPopover(
+  {
+    searchRef,
+    position,
+    options,
+    query,
+    activeIndex,
+    onQueryChange,
+    onActiveIndexChange,
+    onCreate,
+    onClose,
+  },
+  ref,
+) {
+  const activeOption = options[activeIndex] ?? null;
+  return (
+    <div
+      ref={ref}
+      className="add-panel-menu"
+      role="dialog"
+      aria-label="Add panel"
+      style={position ? { top: position.top, left: position.left } : undefined}
+      onKeyDown={(event) => {
+        if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          onActiveIndexChange(options.length ? (activeIndex + 1) % options.length : 0);
+          return;
+        }
+        if (event.key === 'ArrowUp') {
+          event.preventDefault();
+          onActiveIndexChange(options.length ? (activeIndex - 1 + options.length) % options.length : 0);
+          return;
+        }
+        if (event.key === 'Enter' && activeOption) {
+          event.preventDefault();
+          onCreate(activeOption.type);
+          return;
+        }
+        if (/^[1-9]$/.test(event.key)) {
+          const option = options[Number(event.key) - 1];
+          if (option) {
+            event.preventDefault();
+            onCreate(option.type);
+          }
+        }
+      }}
+    >
+      <input
+        ref={searchRef}
+        className="add-panel-search"
+        type="search"
+        aria-label="Search panel types"
+        placeholder="Add panel"
+        value={query}
+        onChange={(event) => onQueryChange(event.target.value)}
+      />
+      <div className="add-panel-options" role="listbox" aria-label="Panel types">
+        {options.length ? options.map((option, index) => (
+          <button
+            key={option.type}
+            className="arrange-menu-item add-panel-menu-item"
+            type="button"
+            role="option"
+            aria-selected={index === activeIndex}
+            onMouseEnter={() => onActiveIndexChange(index)}
+            onClick={() => onCreate(option.type)}
+          >
+            <span className="panel-type-mark" aria-hidden="true">{option.badge}</span>
+            <span>
+              <strong>{option.label}</strong>
+              <small>{option.detail}</small>
+            </span>
+            <kbd>{index + 1}</kbd>
+          </button>
+        )) : (
+          <div className="add-panel-empty">No panel type</div>
+        )}
+      </div>
+      <button className="add-panel-close" type="button" aria-label="Close add panel" onClick={onClose}>
+        <X size={14} />
+      </button>
+    </div>
+  );
+});
+
+function WorkspaceToastView({ toast, onDismiss }: { toast: NonNullable<WorkspaceToast>; onDismiss: () => void }) {
+  return (
+    <div className="workspace-toast" role="status" aria-live="polite">
+      <span>{toast.message}</span>
+      <button type="button" onClick={toast.action}>{toast.actionLabel}</button>
+      <button className="workspace-toast-close" type="button" aria-label="Dismiss notification" onClick={onDismiss}>
+        <X size={14} />
+      </button>
+    </div>
+  );
+}
+
+function DeleteConfirmationPrompt({
+  collection,
+  onCancel,
+  onConfirm,
+}: {
+  collection: CanvasDocumentCollection;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const confirmation = collection.view.deleteConfirmation;
+  if (!confirmation) return null;
+  const document = collection.documents[confirmation.canvasId];
+  const nodes = document?.model.nodes.filter((node) => confirmation.nodeIds.includes(node.id)) ?? [];
+  const count = nodes.length || confirmation.nodeIds.length;
+  return (
+    <div className="delete-confirmation" role="presentation" onPointerDown={onCancel}>
+      <section
+        className="delete-confirmation-panel"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="delete-confirmation-title"
+        aria-describedby="delete-confirmation-copy"
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        <h2 id="delete-confirmation-title">{count > 1 ? `Delete ${count} views?` : 'Delete this view?'}</h2>
+        <p id="delete-confirmation-copy">Child canvas content will be removed with it.</p>
+        <div>
+          <button type="button" onClick={onCancel}>Cancel</button>
+          <button className="danger" type="button" onClick={onConfirm}>Delete</button>
+        </div>
+      </section>
+    </div>
   );
 }
 
