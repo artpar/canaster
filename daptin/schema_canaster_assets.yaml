@@ -1,0 +1,18 @@
+Tables:
+  - TableName: asset
+    DefaultPermission: 16256
+    Columns:
+      - Name: name
+        DataType: varchar(300)
+        ColumnType: label
+      - Name: mime
+        DataType: varchar(120)
+        ColumnType: content
+      - Name: file
+        DataType: blob
+        ColumnType: file
+        IsForeignKey: true
+        ForeignKeyData:
+          DataSource: cloud_store
+          Namespace: assets
+          KeyName: img

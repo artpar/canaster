@@ -35,6 +35,7 @@ import {
   verifyEmailOtp,
   type CanasterDocumentSummary,
 } from './backend/canasterDocuments';
+import { loadAssetObject } from './backend/assets';
 import {
   DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY,
   DAPTIN_LAST_EMAIL_STORAGE_KEY,
@@ -54,8 +55,9 @@ import {
   type NestedCanvasWorkspaceHandle,
 } from './engine/nested/NestedCanvasWorkspace';
 import { PARENT_CONTEXT_REGIONS, regionForContextVector } from './engine/nested/parentContextField';
-import { describeNode } from './engine/nodeTypes/registry';
-import type { CanvasArrangeLayout, CanvasCommand, CanvasNode, ThemeName } from './engine/types';
+import { describeNode, parseNodeData } from './engine/nodeTypes/registry';
+import { cacheAssetImage, hasCachedAssetImage } from './engine/nodeTypes/imageAssets';
+import { BuiltInNodeTypes, type CanvasArrangeLayout, type CanvasCommand, type CanvasNode, type ThemeName } from './engine/types';
 import type { CanvasDocument, CanvasDocumentCollection, CanvasDocumentId, CanvasWorkspaceSnapshot, DocumentCommand, ParentContextRegion, StackFrame } from './engine/documentTypes';
 import { saveWorkspaceSnapshot } from './engine/workspaceStorage';
 import { createWorkspaceHistory, createWorkspaceSnapshot } from './engine/workspaceHistory';
@@ -71,6 +73,14 @@ const CURRENT_GRAPH_POINT: GraphPoint = { x: 150, y: NAVIGATOR_MID_Y };
 const NEXT_GRAPH_ELBOW_X = 232;
 const NEXT_GRAPH_X = 260;
 const ARRANGE_MENU_WIDTH = 208;
+const ADD_PANEL_MENU_WIDTH = 224;
+const PANEL_CREATE_OPTIONS = [
+  { type: BuiltInNodeTypes.card, label: 'Work item', detail: 'Title, detail, and work accent', badge: 'WORK' },
+  { type: BuiltInNodeTypes.text, label: 'Note', detail: 'Plain text for local context', badge: 'NOTE' },
+  { type: BuiltInNodeTypes.image, label: 'Image', detail: 'Visual reference with alt text', badge: 'IMAGE' },
+  { type: BuiltInNodeTypes.canvas, label: 'View', detail: 'A child canvas portal', badge: 'VIEW' },
+  { type: BuiltInNodeTypes.check, label: 'Checklist', detail: 'Actionable list with done count', badge: 'LIST' },
+] as const;
 
 type UtilityDrawerMode = 'documents' | 'work-items' | null;
 type AuthStep = 'email' | 'otp';
@@ -81,6 +91,8 @@ export function App() {
   const workspaceRef = useRef<NestedCanvasWorkspaceHandle | null>(null);
   const arrangeButtonRef = useRef<HTMLButtonElement | null>(null);
   const arrangeMenuRef = useRef<HTMLDivElement | null>(null);
+  const addPanelButtonRef = useRef<HTMLButtonElement | null>(null);
+  const addPanelMenuRef = useRef<HTMLDivElement | null>(null);
   const ignoreDirtyUntilRef = useRef(0);
   const lastSavedSnapshotSignatureRef = useRef<string | null>(null);
   const preserveCameraOnNextLocalMountRef = useRef(false);
@@ -92,6 +104,8 @@ export function App() {
   const [accountOpen, setAccountOpen] = useState(false);
   const [arrangeMenuOpen, setArrangeMenuOpen] = useState(false);
   const [arrangeMenuPosition, setArrangeMenuPosition] = useState<ArrangeMenuPosition | null>(null);
+  const [addPanelMenuOpen, setAddPanelMenuOpen] = useState(false);
+  const [addPanelMenuPosition, setAddPanelMenuPosition] = useState<ArrangeMenuPosition | null>(null);
   const [authStep, setAuthStep] = useState<AuthStep>('email');
   const [parentContextVisible, setParentContextVisible] = useState(true);
   const [onboardingDismissed, setOnboardingDismissed] = useState(() => window.localStorage.getItem(ONBOARDING_DISMISSED_STORAGE_KEY) === 'true');
@@ -289,6 +303,24 @@ export function App() {
     };
   }, [signedIn]);
 
+  useEffect(() => {
+    if (!signedIn || !hasUsableStoredToken()) return;
+    const assetIds = imageAssetIdsInCollection(chromeState.collection).filter((assetId) => !hasCachedAssetImage(assetId));
+    if (!assetIds.length) return;
+    let canceled = false;
+    for (const assetId of assetIds) {
+      void loadAssetObject(assetId)
+        .then((asset) => cacheAssetImage(asset.id, asset.objectUrl))
+        .then(() => {
+          if (!canceled) workspaceRef.current?.refreshActiveCanvas();
+        })
+        .catch(() => undefined);
+    }
+    return () => {
+      canceled = true;
+    };
+  }, [chromeState.collection, signedIn]);
+
   const handleAuthEmailChange = useCallback((value: string) => {
     setAuthEmail(value);
     if (authStep === 'otp') {
@@ -467,18 +499,43 @@ export function App() {
     setArrangeMenuPosition({ left, top });
   }, []);
 
+  const updateAddPanelMenuPosition = useCallback(() => {
+    const button = addPanelButtonRef.current;
+    if (!button) return;
+    const rect = button.getBoundingClientRect();
+    const margin = 12;
+    const left = Math.max(margin, Math.min(window.innerWidth - ADD_PANEL_MENU_WIDTH - margin, rect.right - ADD_PANEL_MENU_WIDTH));
+    const top = Math.max(margin, Math.min(window.innerHeight - 280, rect.bottom + 8));
+    setAddPanelMenuPosition({ left, top });
+  }, []);
+
   const handleToggleArrangeMenu = useCallback(() => {
     setArrangeMenuOpen((open) => {
       if (!open) updateArrangeMenuPosition();
+      if (!open) setAddPanelMenuOpen(false);
       return !open;
     });
   }, [updateArrangeMenuPosition]);
+
+  const handleToggleAddPanelMenu = useCallback(() => {
+    setAddPanelMenuOpen((open) => {
+      if (!open) updateAddPanelMenuPosition();
+      if (!open) setArrangeMenuOpen(false);
+      return !open;
+    });
+  }, [updateAddPanelMenuPosition]);
 
   const handleArrangeCanvas = useCallback((layout: CanvasArrangeLayout) => {
     const changed = workspaceRef.current?.executeActiveCanvasCommand({ type: 'arrange-nodes', layout, source: 'nonvisual' }) ?? false;
     setArrangeMenuOpen(false);
     if (changed) window.requestAnimationFrame(() => workspaceRef.current?.fitActiveCanvas());
   }, []);
+
+  const handleCreatePanel = useCallback((nodeType: string) => {
+    workspaceRef.current?.executeActiveCanvasCommand({ type: 'create-node', nodeType, source: 'nonvisual' });
+    setAddPanelMenuOpen(false);
+    dismissOnboarding();
+  }, [dismissOnboarding]);
 
   useEffect(() => {
     if (!arrangeMenuOpen) return;
@@ -503,6 +560,30 @@ export function App() {
       window.removeEventListener('scroll', updateArrangeMenuPosition, true);
     };
   }, [arrangeMenuOpen, updateArrangeMenuPosition]);
+
+  useEffect(() => {
+    if (!addPanelMenuOpen) return;
+    updateAddPanelMenuPosition();
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (addPanelButtonRef.current?.contains(target) || addPanelMenuRef.current?.contains(target)) return;
+      setAddPanelMenuOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setAddPanelMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', updateAddPanelMenuPosition);
+    window.addEventListener('scroll', updateAddPanelMenuPosition, true);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', updateAddPanelMenuPosition);
+      window.removeEventListener('scroll', updateAddPanelMenuPosition, true);
+    };
+  }, [addPanelMenuOpen, updateAddPanelMenuPosition]);
 
   const navigation = useMemo(
     () => buildNestedNavigation(chromeState.collection, chromeState.status.selectedNodeId),
@@ -564,6 +645,18 @@ export function App() {
               </IconButton>
             </div>
             <div className="toolbar-group" aria-label="View controls">
+              <button
+                ref={addPanelButtonRef}
+                className="icon-button"
+                type="button"
+                aria-label="Add panel"
+                aria-haspopup="menu"
+                aria-expanded={addPanelMenuOpen}
+                title="Add panel"
+                onClick={handleToggleAddPanelMenu}
+              >
+                <FilePlus2 size={17} />
+              </button>
               <IconButton label="Center map" onClick={() => workspaceRef.current?.fitActiveCanvas()}>
                 <Maximize2 size={17} />
               </IconButton>
@@ -619,6 +712,25 @@ export function App() {
             </div>
           </div>
         </div>
+        {addPanelMenuOpen ? (
+          <div
+            ref={addPanelMenuRef}
+            className="add-panel-menu"
+            role="menu"
+            aria-label="Add panel"
+            style={addPanelMenuPosition ? { top: addPanelMenuPosition.top, left: addPanelMenuPosition.left } : undefined}
+          >
+            {PANEL_CREATE_OPTIONS.map((option) => (
+              <button key={option.type} className="arrange-menu-item add-panel-menu-item" type="button" role="menuitem" onClick={() => handleCreatePanel(option.type)}>
+                <span className="panel-type-mark" aria-hidden="true">{option.badge}</span>
+                <span>
+                  <strong>{option.label}</strong>
+                  <small>{option.detail}</small>
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : null}
         {arrangeMenuOpen ? (
           <div
             ref={arrangeMenuRef}
@@ -1097,6 +1209,19 @@ function saveActionLabel(status: SyncStatus, message: string, signedIn: boolean)
   if (status === 'dirty') return 'Save online changes';
   if (status === 'clean') return message === SAVED_MESSAGE ? 'Saved online' : 'Save workspace online';
   return 'Save workspace online';
+}
+
+function imageAssetIdsInCollection(collection: CanvasDocumentCollection): string[] {
+  const ids = new Set<string>();
+  for (const document of Object.values(collection.documents)) {
+    for (const node of document.model.nodes) {
+      if (node.type !== BuiltInNodeTypes.image) continue;
+      const data = parseNodeData(node);
+      const assetId = typeof data.assetId === 'string' ? data.assetId : '';
+      if (assetId) ids.add(assetId);
+    }
+  }
+  return [...ids];
 }
 
 type IconButtonProps = {

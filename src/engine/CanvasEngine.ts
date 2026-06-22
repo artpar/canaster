@@ -2,7 +2,7 @@ import { THEMES, type CanvasTheme } from './theme';
 import { arrangeLayoutLabel, arrangeNodeGeometries } from './arrangeLayout';
 import { cloneNodeData } from './nodeTypes/data';
 import { canvasPortalViewportRect } from './nodeTypes/canvasNode';
-import { describeNode, hitTestNodeContent, nodeDefinitionFor, parseNodeData, renderNodeContent } from './nodeTypes/registry';
+import { describeNode, hitTestNodeContent, nodeDefinitionFor, nodeDefinitionForType, parseNodeData, renderNodeContent } from './nodeTypes/registry';
 import type { NodeContentRect } from './nodeTypes/types';
 import type {
   Camera,
@@ -355,6 +355,8 @@ export class CanvasEngine {
 
   private planCommand(command: CanvasCommand): CommandPlan {
     switch (command.type) {
+      case 'create-node':
+        return this.planCreateNode(command.nodeType, command.source);
       case 'select-node':
         return this.planSelectNode(command.nodeId, command.source, command.mode ?? 'replace');
       case 'clear-selection':
@@ -372,6 +374,37 @@ export class CanvasEngine {
       case 'paste-clipboard':
         return this.planPasteClipboard(command.source);
     }
+  }
+
+  private planCreateNode(nodeType: string, source: CanvasEditSource): CommandPlan {
+    const definition = nodeDefinitionForType(nodeType);
+    if (!definition) return { operations: [], interaction: 'Panel type unavailable' };
+    const existingIds = new Set(this.model.nodes.map((node) => node.id));
+    const id = uniqueNodeId(definition.type, existingIds);
+    const { w, h } = definition.defaultSize;
+    const center = this.screenToWorld(this.viewW / 2, this.viewH / 2);
+    const node: CanvasNode = {
+      id,
+      type: definition.type,
+      x: snapCoordinate(center.x - w / 2),
+      y: snapCoordinate(center.y - h / 2),
+      w,
+      h,
+      data: definition.createDefaultData(),
+    };
+    const selection = {
+      selectedNodeIds: [id],
+      primarySelectedNodeId: id,
+      resizeMode: false,
+    };
+    return {
+      operations: [
+        { type: 'create-nodes', nodes: [node] },
+        { type: 'set-selection', from: this.selectionState(), to: selection },
+      ],
+      change: { kind: 'node-create', nodeId: id, nodeIds: [id], source },
+      interaction: `Added ${panelLabelFor(definition.displayName)}`,
+    };
   }
 
   private planSelectNode(nodeId: string, source: CanvasEditSource, mode: 'replace' | 'toggle' | 'add'): CommandPlan {
@@ -1454,6 +1487,10 @@ function snapNodeHeight(node: CanvasNode, value: number) {
 function sourceInteraction(source: CanvasEditSource, action: 'selection' | 'move' | 'resize') {
   const label = source === 'ai' ? 'AI' : source.charAt(0).toUpperCase() + source.slice(1);
   return `${label} ${action}`;
+}
+
+function panelLabelFor(displayName: string) {
+  return displayName === 'Card' ? 'Work item' : displayName;
 }
 
 function keyMovement(key: string, step: number) {

@@ -11,6 +11,7 @@ export const BuiltInNodeTypes = {
   text: 'text',
   image: 'image',
   canvas: 'canvas',
+  check: 'check',
 } as const;
 
 export type BuiltInNodeType = (typeof BuiltInNodeTypes)[keyof typeof BuiltInNodeTypes];
@@ -53,9 +54,10 @@ export type TextNodeData = {
 } & JsonObject;
 
 export type ImageNodeData = {
-  src: string | null;
+  assetId: string | null;
   alt: string;
   fit: 'contain' | 'cover';
+  caption?: string;
 } & JsonObject;
 
 export type CanvasPortalNodeData = {
@@ -64,11 +66,23 @@ export type CanvasPortalNodeData = {
   nodeCount: number;
 } & JsonObject;
 
+export type CheckNodeItem = {
+  id: string;
+  text: string;
+  checked: boolean;
+} & JsonObject;
+
+export type CheckNodeData = {
+  title: string;
+  items: CheckNodeItem[];
+} & JsonObject;
+
 export type CanvasEditSource = 'pointer' | 'keyboard' | 'nonvisual' | 'ai';
 
 export type CanvasArrangeLayout = 'grid' | 'rows' | 'columns' | 'list';
 
 export type CanvasCommand =
+  | { type: 'create-node'; nodeType: NodeTypeId; source: CanvasEditSource }
   | { type: 'select-node'; nodeId: string; mode?: 'replace' | 'toggle' | 'add'; source: CanvasEditSource }
   | { type: 'clear-selection'; source: CanvasEditSource }
   | { type: 'move-selection'; dx: number; dy: number; source: CanvasEditSource }

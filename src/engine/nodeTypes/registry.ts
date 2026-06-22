@@ -1,6 +1,7 @@
 import type { CanvasNode } from '../types';
 import { cardNodeDefinition } from './cardNode';
 import { canvasNodeDefinition } from './canvasNode';
+import { checkNodeDefinition } from './checkNode';
 import { imageNodeDefinition } from './imageNode';
 import {
   safeDescribeNodeContent,
@@ -14,7 +15,7 @@ import { textNodeDefinition } from './textNode';
 import type { NodeDefinition, NodeDescription, NodeHitTarget, NodeHitTestContext, NodeRenderContext } from './types';
 import { unknownNodeDefinition } from './unknownNode';
 
-const definitions = createRegistry([cardNodeDefinition, textNodeDefinition, imageNodeDefinition, canvasNodeDefinition]);
+const definitions = createRegistry([cardNodeDefinition, textNodeDefinition, imageNodeDefinition, canvasNodeDefinition, checkNodeDefinition]);
 
 function createRegistry(items: NodeDefinition[]) {
   const map = new Map<string, NodeDefinition>();
@@ -28,6 +29,10 @@ function createRegistry(items: NodeDefinition[]) {
 
 export function nodeDefinitionFor(node: CanvasNode): NodeDefinition {
   return definitions.get(node.type) ?? unknownNodeDefinition;
+}
+
+export function nodeDefinitionForType(type: string): NodeDefinition | null {
+  return definitions.get(type) ?? null;
 }
 
 export function registeredNodeDefinitions(): NodeDefinition[] {

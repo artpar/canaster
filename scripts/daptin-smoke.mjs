@@ -119,6 +119,16 @@ async function request(baseUrl, pathName, options = {}) {
   return { response, body };
 }
 
+async function authenticatedJsonApiRequest(baseUrl, token, pathName, options = {}) {
+  return request(baseUrl, pathName, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(options.headers ?? {}),
+    },
+  });
+}
+
 function createDaptinClient(baseUrl, getToken) {
   return new DaptinClient(baseUrl, false, { getToken }, {});
 }
@@ -149,6 +159,14 @@ function encodeSnapshotFile(name, snapshot) {
   };
 }
 
+function encodeBlobFile(name, mime, content) {
+  return {
+    name,
+    file: `data:${mime};base64,${Buffer.from(content).toString('base64')}`,
+    type: mime,
+  };
+}
+
 function decodeSnapshotFile(documentContent) {
   const files = typeof documentContent === 'string' ? JSON.parse(documentContent) : documentContent;
   assert(Array.isArray(files), 'document_content is not a file array JSON string');
@@ -157,6 +175,35 @@ function decodeSnapshotFile(documentContent) {
   const [, base64] = files[0].file.split(',');
   assert(base64, 'file data URI did not contain a base64 payload');
   return JSON.parse(Buffer.from(base64, 'base64').toString('utf8'));
+}
+
+async function ensureAssetsCloudStore({ authenticatedClient, baseUrl, token, startDaptin, storageDir }) {
+  const cloudStoresBody = await authenticatedClient.jsonApi.findAll('cloud_store', { page: { size: 500 } });
+  const existing = (cloudStoresBody.data ?? []).find((row) => rowAttr(row, 'name') === 'assets');
+  if (existing) return rowId(existing);
+  assert(startDaptin, 'Daptin cloud_store named assets is missing');
+
+  const rootPath = smokeRuntime === 'docker' && !daptinBinary ? '/data/storage/assets' : path.join(storageDir, 'assets');
+  if (!(smokeRuntime === 'docker' && !daptinBinary)) await mkdir(rootPath, { recursive: true });
+  const { response, body } = await authenticatedJsonApiRequest(baseUrl, token, '/api/cloud_store', {
+    method: 'POST',
+    body: JSON.stringify({
+      data: {
+        type: 'cloud_store',
+        attributes: {
+          name: 'assets',
+          store_type: 'local',
+          store_provider: 'local',
+          root_path: rootPath,
+          store_parameters: '{}',
+        },
+      },
+    }),
+  });
+  assert(response.status === 201, `assets cloud_store create failed with ${response.status}`);
+  const ref = rowId(body?.data);
+  assert(ref, 'assets cloud_store create did not return a reference id');
+  return ref;
 }
 
 function canasterSnapshot() {
@@ -316,6 +363,13 @@ async function main() {
 
     const authenticatedClient = createDaptinClient(baseUrl, () => token);
     await authenticatedClient.worldManager.loadModels();
+    const assetsCloudStoreRef = await ensureAssetsCloudStore({
+      authenticatedClient,
+      baseUrl,
+      token,
+      startDaptin,
+      storageDir,
+    });
 
     const worldBody = await authenticatedClient.jsonApi.findAll('world', { page: { size: 500 } });
     const tableNames = new Set((worldBody.data ?? []).map((row) => rowAttr(row, 'table_name')));
@@ -327,12 +381,15 @@ async function main() {
     const mailAccountWorld = worldRows.get('mail_account');
     const mailBoxWorld = worldRows.get('mail_box');
     const worldUsergroupWorld = worldRows.get('world_world_id_has_usergroup_usergroup_id');
+    const assetWorld = worldRows.get('asset');
     assert(mailAccountWorld, 'Daptin built-in mail_account table is missing');
     assert(mailBoxWorld, 'Daptin built-in mail_box table is missing');
     assert(worldUsergroupWorld, 'Daptin generated world/usergroup relation table is missing');
+    assert(assetWorld, 'Canaster asset table is missing');
     assert(rowWorldSchema(mailAccountWorld).DefaultPermission === MAIL_OWNER_REFER_PERMISSION, 'mail_account DefaultPermission mismatch');
     assert(rowWorldSchema(mailBoxWorld).DefaultPermission === MAIL_OWNER_REFER_PERMISSION, 'mail_box DefaultPermission mismatch');
     assert(rowWorldSchema(worldUsergroupWorld).DefaultPermission === WORLD_USERGROUP_RELATION_PERMISSION, 'world/usergroup relation DefaultPermission mismatch');
+    assert(rowWorldSchema(assetWorld).DefaultPermission === PRIVATE_PERMISSION, 'asset DefaultPermission mismatch');
 
     const documentKey = `smoke-${Date.now()}`;
     const placeholderFile = encodeSnapshotFile('pending.canaster.json', { schemaVersion: 1, pending: true });
@@ -386,18 +443,47 @@ async function main() {
     assert(rawGuestPublicResponse.status === 200, `public document should return 200 to guest; raw status ${rawGuestPublicResponse.status}`);
     assert(rowAttr(rawGuestPublicBody.data, 'document_name') === `${documentKey}.canaster.json`, 'guest public read returned wrong document');
 
+    const assetKey = `smoke-image-${Date.now()}`;
+    const imageSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><rect width="2" height="2" fill="#5aa7ff"/></svg>`;
+    const assetFile = encodeBlobFile(`${assetKey}.svg`, 'image/svg+xml', imageSvg);
+    const assetCreateBody = await authenticatedClient.jsonApi.create('asset', {
+      name: `${assetKey}.svg`,
+      mime: 'image/svg+xml',
+      file: [assetFile],
+    });
+    const assetRef = rowId(assetCreateBody.data);
+    assert(assetRef, 'asset create did not return a reference id');
+    const assetPrivatePatchBody = await authenticatedClient.jsonApi.update('asset', {
+      id: assetRef,
+      permission: PRIVATE_PERMISSION,
+    });
+    assert(rowAttr(assetPrivatePatchBody.data, 'permission') === PRIVATE_PERMISSION, 'asset private permission patch did not persist');
+    const assetGetBody = await authenticatedClient.jsonApi.find('asset', assetRef);
+    assert(rowAttr(assetGetBody.data, 'name') === `${assetKey}.svg`, 'asset read returned wrong name');
+    assert(rowAttr(assetGetBody.data, 'mime') === 'image/svg+xml', 'asset read returned wrong MIME type');
+    const assetDownloadResponse = await fetch(`${baseUrl}/asset/asset/${assetRef}/file`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert(assetDownloadResponse.status === 200, `asset download returned ${assetDownloadResponse.status}`);
+    assert(assetDownloadResponse.headers.get('content-type')?.startsWith('image/svg+xml'), 'asset download returned wrong MIME type');
+    const decodedAssetContent = await assetDownloadResponse.text();
+    assert(decodedAssetContent === imageSvg, 'downloaded asset content mismatch');
+
     console.log(JSON.stringify({
       baseUrl,
       runtime: startDaptin ? 'isolated' : 'existing-endpoint',
       dbType: startDaptin ? smokeDbType : 'external',
       documentRef,
+      assetRef,
+      assetsCloudStoreRef,
       privatePermission: PRIVATE_PERMISSION,
       publicPermission: PUBLIC_READ_PERMISSION,
       createPermission,
       decodedActiveCanvasId: decoded.history.present.activeCanvasId,
       decodedNodeCount: decoded.history.present.documents.root.model.nodes.length,
+      decodedAssetMime: assetDownloadResponse.headers.get('content-type'),
     }, null, 2));
-    console.log('Canaster Daptin document-blob smoke passed');
+    console.log('Canaster Daptin document and asset blob smoke passed');
   } finally {
     await stopProcess(daptin);
     await rm(workDir, { recursive: true, force: true });

@@ -28,6 +28,8 @@ Mailbox provisioning is deliberately attached to OTP verification, not OTP reque
 
 Inbound SMTP stores messages as the recipient user, so production must grant the built-in `users` usergroup table-level create on the `mail` world row. The intended state is `world.permission(mail)=561408` and a `usergroup(users).world_id -> mail` relation permission of `638976` (`Group: Peek, Read, Create, Execute`). The generated `world_world_id_has_usergroup_usergroup_id` relation table default is `DefaultPermission: 638976`; existing relation rows that predate the default must be repaired to the same permission. Do not grant `GuestCreate` on `mail`.
 
+Image panels use `daptin/schema_canaster_assets.yaml`, which adds an `asset` table with short fields: `name`, `mime`, and cloud-store-backed blob `file`. Production must create a Daptin `cloud_store` row named `assets` backed by GCS before image upload is enabled. The `asset` table should follow the document table's authenticated-user access shape: owner/private row default (`DefaultPermission: 16256`) and a `users` usergroup relation that grants Peek, Read, Create, Update, and Execute. Do not store image bytes in workspace JSON; image nodes keep only `assetId`, `alt`, `fit`, and optional `caption`.
+
 Production email delivery uses Daptin SMTP, not AWS SES. The OTP action sends from `login@mail.canaster.in` with `mail_server_hostname: mail.canaster.in`. Production must have:
 
 - a Daptin `mail_server` row for `mail.canaster.in`;
@@ -86,9 +88,10 @@ Production Daptin runs directly on a Compute Engine VM and owns API, static fron
 6. Configure Daptin `mail_server`, `certificate`, DKIM DNS, and outbox processing for OTP delivery.
 7. Create/link a GCS-backed Daptin `cloud_store` for static site files.
 8. Create a GCS-backed Daptin `cloud_store` named `canaster-mail` for raw mail/outbox message bodies.
-9. Create one Daptin `site` row per frontend hostname. The current public frontend rows are `canaster.in` and `www.canaster.in`.
-10. Keep `api.canaster.in` as the Daptin admin/API hostname and do not create a static site row for it.
-11. CI builds the Daptin image, builds `dist/`, uploads it to the site storage prefix, deploys the image to the VM over IAP SSH, and probes the VM runtime.
+9. Create a GCS-backed Daptin `cloud_store` named `assets` for image panel uploads.
+10. Create one Daptin `site` row per frontend hostname. The current public frontend rows are `canaster.in` and `www.canaster.in`.
+11. Keep `api.canaster.in` as the Daptin admin/API hostname and do not create a static site row for it.
+12. CI builds the Daptin image, builds `dist/`, uploads it to the site storage prefix, deploys the image to the VM over IAP SSH, and probes the VM runtime.
 
 Current public TLS shape:
 

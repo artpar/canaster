@@ -4,10 +4,13 @@ import {
   useEffect,
   useImperativeHandle,
   useRef,
+  useState,
 } from 'react';
+import { listImageAssets, uploadImageAsset, type CanasterAssetSummary } from '../../backend/assets';
+import { hasUsableStoredToken, normalizeDaptinError } from '../../backend/daptinClient';
 import { cloneDocumentCollection } from '../documentModel';
-import { describeNode } from '../nodeTypes/registry';
-import type { CanvasCommand, ThemeName, ViewportStatus } from '../types';
+import { describeNode, parseNodeData } from '../nodeTypes/registry';
+import { BuiltInNodeTypes, type CanvasCommand, type CanvasNode, type CheckNodeData, type CheckNodeItem, type ImageNodeData, type ThemeName, type ViewportStatus } from '../types';
 import type {
   CanvasDocumentCollection,
   CanvasWorkspaceSnapshot,
@@ -38,6 +41,7 @@ export type NestedCanvasWorkspaceChromeState = {
 
 export type NestedCanvasWorkspaceHandle = {
   fitActiveCanvas(): void;
+  refreshActiveCanvas(): void;
   resetActiveZoom(): void;
   zoomActiveBy(factor: number): void;
   undoWorkspace(): boolean;
@@ -112,6 +116,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
 
   useImperativeHandle(ref, () => ({
     fitActiveCanvas: () => controllerRef.current?.fitActiveCanvas(),
+    refreshActiveCanvas: () => controllerRef.current?.refreshActiveCanvas(),
     resetActiveZoom: () => controllerRef.current?.resetActiveZoom(),
     zoomActiveBy: (factor: number) => controllerRef.current?.zoomActiveBy(factor),
     undoWorkspace: () => controllerRef.current?.undoWorkspace() ?? false,
@@ -135,7 +140,9 @@ export type NodeAccessPanelProps = {
 };
 
 export function NodeAccessPanel({ collection, status, executeActiveCanvasCommand, executeDocumentCommand }: NodeAccessPanelProps) {
-  const model = collection.documents[collection.activeCanvasId].model;
+  const activeDocument = collection.documents[collection.activeCanvasId];
+  const model = activeDocument.model;
+  const primaryNode = status.selectedNodeId ? model.nodes.find((node) => node.id === status.selectedNodeId) ?? null : null;
   return (
     <aside className="node-access-panel" aria-label="Work items in this view">
       <div className="node-access-header">
@@ -204,8 +211,257 @@ export function NodeAccessPanel({ collection, status, executeActiveCanvasCommand
           );
         })}
       </ul>
+      {primaryNode?.type === BuiltInNodeTypes.check ? (
+        <ChecklistInspector
+          canvasId={collection.activeCanvasId}
+          node={primaryNode}
+          executeDocumentCommand={executeDocumentCommand}
+        />
+      ) : null}
+      {primaryNode?.type === BuiltInNodeTypes.image ? (
+        <ImageInspector
+          canvasId={collection.activeCanvasId}
+          node={primaryNode}
+          executeDocumentCommand={executeDocumentCommand}
+        />
+      ) : null}
     </aside>
   );
+}
+
+function ImageInspector({
+  canvasId,
+  node,
+  executeDocumentCommand,
+}: {
+  canvasId: string;
+  node: CanvasNode;
+  executeDocumentCommand: (command: DocumentCommand) => void;
+}) {
+  const data = parseNodeData(node) as ImageNodeData;
+  const [assets, setAssets] = useState<CanasterAssetSummary[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const [assetAccess, setAssetAccess] = useState(() => hasUsableStoredToken());
+  const canUseAssets = assetAccess;
+
+  useEffect(() => {
+    let canceled = false;
+    if (!canUseAssets) {
+      setAssets([]);
+      setBusy(false);
+      setMessage('Sign in to upload and select image sources.');
+      return () => {
+        canceled = true;
+      };
+    }
+    setBusy(true);
+    setMessage('');
+    listImageAssets()
+      .then((rows) => {
+        if (!canceled) setAssets(rows);
+      })
+      .catch((error) => {
+        if (!canceled) {
+          const apiError = normalizeDaptinError(error);
+          if (apiError.kind === 'session' || apiError.kind === 'permission') {
+            setAssetAccess(false);
+            setMessage('Sign in to upload and select image sources.');
+          } else {
+            setMessage(error instanceof Error ? error.message : 'Could not list images');
+          }
+        }
+      })
+      .finally(() => {
+        if (!canceled) setBusy(false);
+      });
+    return () => {
+      canceled = true;
+    };
+  }, [canUseAssets]);
+
+  function updateImage(to: ImageNodeData) {
+    executeDocumentCommand({ type: 'set-node-data', canvasId, nodeId: node.id, from: node.data, to, source: 'nonvisual' });
+  }
+
+  async function handleUpload(file: File | null) {
+    if (!file) return;
+    if (!canUseAssets) {
+      setMessage('Sign in to upload and select image sources.');
+      return;
+    }
+    setBusy(true);
+    setMessage('Uploading image');
+    try {
+      const asset = await uploadImageAsset(file);
+      setAssets((current) => [asset, ...current.filter((candidate) => candidate.id !== asset.id)]);
+      updateImage({
+        ...data,
+        assetId: asset.id,
+        alt: data.alt || cleanImageName(asset.name),
+      });
+      setMessage('Image uploaded');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not upload image');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="image-inspector" aria-label="Image editor">
+      <div className="image-inspector-header">
+        <span>Image</span>
+        <span>{data.assetId ? 'Source selected' : 'Missing source'}</span>
+      </div>
+      <label className="image-upload-action">
+        <span>{busy ? 'Working...' : 'Upload image'}</span>
+        <input
+          type="file"
+          accept="image/*"
+          disabled={busy || !canUseAssets}
+          onChange={(event) => {
+            void handleUpload(event.target.files?.[0] ?? null);
+            event.currentTarget.value = '';
+          }}
+        />
+      </label>
+      <label className="image-field">
+        <span>Select saved image</span>
+        <select
+          value={data.assetId ?? ''}
+          disabled={busy || !canUseAssets}
+          onChange={(event) => updateImage({ ...data, assetId: event.target.value || null })}
+        >
+          <option value="">No image source</option>
+          {assets.map((asset) => (
+            <option key={asset.id} value={asset.id}>{asset.name}</option>
+          ))}
+        </select>
+      </label>
+      <label className="image-field">
+        <span>Alt text</span>
+        <input value={data.alt} onChange={(event) => updateImage({ ...data, alt: event.target.value })} />
+      </label>
+      <label className="image-field">
+        <span>Caption</span>
+        <input value={data.caption ?? ''} onChange={(event) => updateImage({ ...data, caption: event.target.value })} />
+      </label>
+      <div className="image-fit-control" aria-label="Image fit">
+        <button type="button" aria-pressed={data.fit === 'contain'} onClick={() => updateImage({ ...data, fit: 'contain' })}>Contain</button>
+        <button type="button" aria-pressed={data.fit === 'cover'} onClick={() => updateImage({ ...data, fit: 'cover' })}>Cover</button>
+      </div>
+      {message ? <p className="image-inspector-status" role="status">{message}</p> : null}
+    </section>
+  );
+}
+
+function ChecklistInspector({
+  canvasId,
+  node,
+  executeDocumentCommand,
+}: {
+  canvasId: string;
+  node: CanvasNode;
+  executeDocumentCommand: (command: DocumentCommand) => void;
+}) {
+  const data = parseNodeData(node) as CheckNodeData;
+  const [draftText, setDraftText] = useState('');
+
+  function updateChecklist(to: CheckNodeData) {
+    executeDocumentCommand({ type: 'set-node-data', canvasId, nodeId: node.id, from: node.data, to, source: 'nonvisual' });
+  }
+
+  function updateItem(itemId: string, patch: Partial<Pick<CheckNodeItem, 'text' | 'checked'>>) {
+    updateChecklist({
+      ...data,
+      items: data.items.map((item) => item.id === itemId ? {
+        id: item.id,
+        text: patch.text ?? item.text,
+        checked: patch.checked ?? item.checked,
+      } : item),
+    });
+  }
+
+  function deleteItem(itemId: string) {
+    updateChecklist({
+      ...data,
+      items: data.items.filter((item) => item.id !== itemId),
+    });
+  }
+
+  function addItem() {
+    const text = draftText.trim();
+    updateChecklist({
+      ...data,
+      items: [...data.items, { id: nextChecklistItemId(data.items), text: text || 'New item', checked: false }],
+    });
+    setDraftText('');
+  }
+
+  return (
+    <section className="checklist-inspector" aria-label="Checklist editor">
+      <div className="checklist-inspector-header">
+        <span>Checklist</span>
+        <span>{data.items.filter((item) => item.checked).length} of {data.items.length} done</span>
+      </div>
+      <label className="checklist-field">
+        <span>Title</span>
+        <input
+          value={data.title}
+          onChange={(event) => updateChecklist({ ...data, title: event.target.value })}
+        />
+      </label>
+      <ul className="checklist-editor-list" aria-label="Checklist items">
+        {data.items.map((item) => (
+          <li key={item.id} className="checklist-editor-row">
+            <input
+              type="checkbox"
+              aria-label={`Mark ${item.text || 'item'} ${item.checked ? 'not done' : 'done'}`}
+              checked={item.checked}
+              onChange={(event) => updateItem(item.id, { checked: event.target.checked })}
+            />
+            <input
+              type="text"
+              value={item.text}
+              aria-label="Checklist item text"
+              onChange={(event) => updateItem(item.id, { text: event.target.value })}
+            />
+            <button type="button" aria-label={`Delete ${item.text || 'checklist item'}`} onClick={() => deleteItem(item.id)}>
+              Delete
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div className="checklist-add-row">
+        <input
+          type="text"
+          aria-label="New checklist item"
+          placeholder="Add first item"
+          value={draftText}
+          onChange={(event) => setDraftText(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            addItem();
+          }}
+        />
+        <button type="button" onClick={addItem}>Add item</button>
+      </div>
+    </section>
+  );
+}
+
+function nextChecklistItemId(items: CheckNodeItem[]) {
+  const ids = new Set(items.map((item) => item.id));
+  let counter = items.length + 1;
+  let id = `item-${counter}`;
+  while (ids.has(id)) id = `item-${++counter}`;
+  return id;
+}
+
+function cleanImageName(name: string) {
+  return name.replace(/\.[a-z0-9]+$/i, '').replace(/[-_]+/g, ' ').trim() || 'Image';
 }
 
 function IconButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {

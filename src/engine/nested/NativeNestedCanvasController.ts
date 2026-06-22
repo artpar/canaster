@@ -284,6 +284,11 @@ export class NativeNestedCanvasController {
     this.persistViewportFromActiveEngine();
   }
 
+  refreshActiveCanvas() {
+    this.activeEngine?.flushRender();
+    this.scheduleOverlayRender();
+  }
+
   undoWorkspace(): boolean {
     const current = replaceWorkspacePresent(this.historyRef.current, this.saveActiveViewport(this.collectionRef.current));
     if (!current.undoStack.length) return false;
