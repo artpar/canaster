@@ -23,7 +23,7 @@ import {
   stripPortalChildReferenceOnPaste,
 } from '../documentCommands';
 import { parseNodeData } from '../nodeTypes/registry';
-import { BuiltInNodeTypes, type Camera, type CanvasCommand, type CanvasModel, type CanvasPortalNodeData, type CanvasSelectionState, type PortalLayout, type ThemeName, type ViewportStatus } from '../types';
+import { BuiltInNodeTypes, type Camera, type CanvasCommand, type CanvasModel, type CanvasNode, type CanvasPortalNodeData, type CanvasSelectionState, type PortalLayout, type ThemeName, type ViewportStatus } from '../types';
 import type {
   CanvasDocumentCollection,
   CanvasDocumentId,
@@ -52,6 +52,7 @@ import {
   DEFAULT_PARENT_CONTEXT_PANE_LAYOUT,
   normalizeParentContextPaneLayout,
   paneRectForRegion,
+  parentContextRegionForNode,
   PARENT_CONTEXT_REGIONS,
   type ParentContextPaneLayoutConstraints,
 } from './parentContextField';
@@ -862,6 +863,11 @@ export class NativeNestedCanvasController {
       }
       slot.engine.setTheme(this.theme);
       slot.engine.setModel(parent.model, { preserveInteraction: true });
+      const visibleNodeIds = parentContextNodeIdsForRegion(parent.model.nodes, source, region);
+      slot.engine.setNodeVisibilityFilter(
+        (node) => visibleNodeIds.has(node.id),
+        parentContextProjectionSignature(parent.id, source, region, visibleNodeIds),
+      );
       slot.engine.setSelectionState(selectionForCanvas(collection, parent.id));
       const worldRect = parentContextWorldRect(source, shapesByRegion.get(region), region);
       const targetSignature = worldRectSignature(worldRect);
@@ -1274,6 +1280,8 @@ export class NativeNestedCanvasController {
         region: slot.region,
         memoryKey: slot.memoryKey,
         targetSignature: slot.targetSignature,
+        projectedNodeIds: slot.engine.getProjectedNodeIds(),
+        renderedNodeIds: slot.engine.getRenderedNodeIds(),
         camera: slot.engine.getCamera(),
       })),
       runtimeLog: () => nativeCanvasRuntimeLog(),
@@ -1317,6 +1325,28 @@ function applyPortalOverlayStyle(element: HTMLElement, layout: PortalLayout) {
   element.style.overflow = 'hidden';
   element.style.borderRadius = `${style.borderRadius}px`;
   element.style.pointerEvents = 'auto';
+}
+
+function parentContextNodeIdsForRegion(nodes: CanvasNode[], source: CanvasNode, region: ParentContextRegion) {
+  const ids = new Set<string>();
+  for (const node of nodes) {
+    if (node.id === source.id) continue;
+    if (parentContextRegionForNode(source, node) === region) ids.add(node.id);
+  }
+  return ids;
+}
+
+function parentContextProjectionSignature(parentCanvasId: CanvasDocumentId, source: CanvasNode, region: ParentContextRegion, nodeIds: Set<string>) {
+  return [
+    parentCanvasId,
+    source.id,
+    Math.round(source.x),
+    Math.round(source.y),
+    Math.round(source.w),
+    Math.round(source.h),
+    region,
+    [...nodeIds].sort().join(','),
+  ].join(':');
 }
 
 function parentContextWorldRect(source: { x: number; y: number; w: number; h: number }, shape: ParentContextFieldShape | undefined, region: string) {

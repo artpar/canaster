@@ -38,6 +38,8 @@ export type CanvasModel = {
   nodes: CanvasNode[];
 };
 
+export type CanvasNodeVisibilityFilter = (node: CanvasNode) => boolean;
+
 export type CardAccent = 'task' | 'data' | 'system';
 
 export type CardNodeData = {
@@ -155,6 +157,8 @@ export type EngineOptions = {
   onModelChange?: (model: CanvasModel, change: CanvasModelChange) => void;
   onPortalLayout?: (layouts: PortalLayout[]) => void;
   onFrameMetrics?: (metrics: CanvasFrameMetrics) => void;
+  nodeVisibilityFilter?: CanvasNodeVisibilityFilter | null;
+  nodeVisibilitySignature?: string;
   livePortalNodeIds?: Set<string>;
   highlightNodeIds?: string[];
   transformPastedNode?: (node: CanvasNode) => CanvasNode;

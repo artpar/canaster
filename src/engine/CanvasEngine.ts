@@ -13,6 +13,7 @@ import type {
   CanvasModel,
   CanvasModelChange,
   CanvasNode,
+  CanvasNodeVisibilityFilter,
   CanvasOperation,
   CanvasPortalNodeData,
   CanvasSelectionState,
@@ -136,8 +137,11 @@ export class CanvasEngine {
   private clipboard: CanvasNode[] = [];
   private pasteCounter = 1;
   private disposed = false;
+  private nodeVisibilityFilter: CanvasNodeVisibilityFilter | null = null;
+  private nodeVisibilitySignature = '';
   private livePortalNodeIds = new Set<string>();
   private highlightNodeIds = new Set<string>();
+  private lastRenderedNodeIds: string[] = [];
 
   constructor(canvas: HTMLCanvasElement, options: EngineOptions = {}) {
     const ctx = canvas.getContext('2d');
@@ -156,6 +160,8 @@ export class CanvasEngine {
     this.onFrameMetrics = options.onFrameMetrics;
     this.transformPastedNode = options.transformPastedNode;
     this.pasteInteractionForNodes = options.pasteInteractionForNodes;
+    this.nodeVisibilityFilter = options.nodeVisibilityFilter ?? null;
+    this.nodeVisibilitySignature = options.nodeVisibilitySignature ?? '';
     this.livePortalNodeIds = new Set(options.livePortalNodeIds ?? []);
     this.highlightNodeIds = new Set(options.highlightNodeIds ?? []);
     this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -186,6 +192,28 @@ export class CanvasEngine {
     if (!this.primarySelectedNodeId && this.interaction.startsWith('Keyboard')) this.interaction = 'Idle';
     this.markDirty();
     this.emitStatus();
+  }
+
+  setNodeVisibilityFilter(filter: CanvasNodeVisibilityFilter | null, signature = '') {
+    const nextSignature = filter ? signature : '';
+    const changed = this.nodeVisibilitySignature !== nextSignature || Boolean(this.nodeVisibilityFilter) !== Boolean(filter);
+    this.nodeVisibilityFilter = filter;
+    this.nodeVisibilitySignature = nextSignature;
+    if (!changed) return;
+    this.reconcileSelection(new Set(this.selectedNodeIds), this.primarySelectedNodeId);
+    if (this.hoverNodeId && !this.model.nodes.some((node) => node.id === this.hoverNodeId && this.isNodeVisible(node))) {
+      this.hoverNodeId = null;
+    }
+    this.markDirty();
+    this.emitStatus();
+  }
+
+  getProjectedNodeIds() {
+    return this.projectedNodes().map((node) => node.id);
+  }
+
+  getRenderedNodeIds() {
+    return [...this.lastRenderedNodeIds];
   }
 
   setCanvasId(canvasId: string) {
@@ -347,7 +375,7 @@ export class CanvasEngine {
   }
 
   private planSelectNode(nodeId: string, source: CanvasEditSource, mode: 'replace' | 'toggle' | 'add'): CommandPlan {
-    if (!this.model.nodes.some((node) => node.id === nodeId)) return { operations: [], interaction: 'Selection unchanged' };
+    if (!this.model.nodes.some((node) => node.id === nodeId && this.isNodeVisible(node))) return { operations: [], interaction: 'Selection unchanged' };
     const from = this.selectionState();
     const to = selectInState(from, nodeId, mode);
     return {
@@ -401,7 +429,7 @@ export class CanvasEngine {
   }
 
   private planArrangeNodes(layout: CanvasArrangeLayout, source: CanvasEditSource): CommandPlan {
-    const nodes = this.model.nodes;
+    const nodes = this.projectedNodes();
     if (nodes.length < 2) return { operations: [], interaction: nodes.length ? 'Arrange needs more panels' : 'Arrange no panels' };
     const geometries = arrangeNodeGeometries(nodes, layout, SNAP_STEP);
     const operations: CanvasOperation[] = [];
@@ -534,7 +562,10 @@ export class CanvasEngine {
     ctx.setTransform(dpr * camera.scale, 0, 0, dpr * camera.scale, camera.x * dpr, camera.y * dpr);
     const cullBounds = this.visibleWorldBounds();
     const visibleNodes: CanvasNode[] = [];
+    let projectedNodeCount = 0;
     for (const node of this.model.nodes) {
+      if (!this.isNodeVisible(node)) continue;
+      projectedNodeCount += 1;
       const renderNode = this.renderNode(node);
       if (!intersectsNode(renderNode, cullBounds)) continue;
       visibleNodes.push(renderNode);
@@ -542,16 +573,18 @@ export class CanvasEngine {
     const compact = this.shouldUseCompactNodes(visibleNodes.length);
     for (const node of visibleNodes) this.drawNode(node, compact);
     const renderedNodes = visibleNodes.length;
+    this.lastRenderedNodeIds = visibleNodes.map((node) => node.id);
     this.lastRenderedNodes = renderedNodes;
     this.lastRenderTime = performance.now();
     this.canvas.dataset.renderedNodes = String(renderedNodes);
-    this.canvas.dataset.totalNodes = String(this.model.nodes.length);
+    this.canvas.dataset.totalNodes = String(projectedNodeCount);
+    this.canvas.dataset.modelNodes = String(this.model.nodes.length);
     this.onPortalLayout?.(this.portalLayoutsFor(visibleNodes));
     this.onFrameMetrics?.({
       canvasId: this.canvasId,
       mode: this.interactionMode,
       renderedNodes,
-      totalNodes: this.model.nodes.length,
+      totalNodes: projectedNodeCount,
       frameMs: performance.now() - started,
     });
     this.emitStatus();
@@ -991,6 +1024,7 @@ export class CanvasEngine {
   private nodeAt(point: WorldPoint) {
     for (let i = this.model.nodes.length - 1; i >= 0; i--) {
       const node = this.model.nodes[i];
+      if (!this.isNodeVisible(node)) continue;
       if (point.x >= node.x && point.x <= node.x + node.w && point.y >= node.y && point.y <= node.y + node.h) {
         return node;
       }
@@ -1018,12 +1052,12 @@ export class CanvasEngine {
 
   private selectedNode() {
     if (!this.primarySelectedNodeId) return null;
-    return this.model.nodes.find((node) => node.id === this.primarySelectedNodeId) ?? null;
+    return this.model.nodes.find((node) => node.id === this.primarySelectedNodeId && this.isNodeVisible(node)) ?? null;
   }
 
   private selectedNodes() {
     const selected = this.selectedNodeIds;
-    return this.model.nodes.filter((node) => selected.has(node.id));
+    return this.model.nodes.filter((node) => selected.has(node.id) && this.isNodeVisible(node));
   }
 
   private selectionIds() {
@@ -1045,7 +1079,7 @@ export class CanvasEngine {
   }
 
   private reconcileSelection(selectedNodeIds: Set<string>, primarySelectedNodeId: string | null) {
-    const existing = new Set(this.model.nodes.map((node) => node.id));
+    const existing = new Set(this.projectedNodes().map((node) => node.id));
     this.selectedNodeIds = new Set([...selectedNodeIds].filter((nodeId) => existing.has(nodeId)));
     this.primarySelectedNodeId =
       primarySelectedNodeId && this.selectedNodeIds.has(primarySelectedNodeId)
@@ -1058,7 +1092,7 @@ export class CanvasEngine {
     const center = this.screenToWorld(this.viewW / 2, this.viewH / 2);
     let nearest: CanvasNode | null = null;
     let nearestDistance = Infinity;
-    for (const node of this.model.nodes) {
+    for (const node of this.projectedNodes()) {
       const nodeCenterX = node.x + node.w / 2;
       const nodeCenterY = node.y + node.h / 2;
       const distance = (nodeCenterX - center.x) ** 2 + (nodeCenterY - center.y) ** 2;
@@ -1086,12 +1120,13 @@ export class CanvasEngine {
   }
 
   private modelBounds() {
-    if (this.model.nodes.length === 0) return null;
+    const nodes = this.projectedNodes();
+    if (nodes.length === 0) return null;
     let x0 = Infinity;
     let y0 = Infinity;
     let x1 = -Infinity;
     let y1 = -Infinity;
-    for (const node of this.model.nodes) {
+    for (const node of nodes) {
       x0 = Math.min(x0, node.x);
       y0 = Math.min(y0, node.y);
       x1 = Math.max(x1, node.x + node.w);
@@ -1309,6 +1344,14 @@ export class CanvasEngine {
           visible: intersectsRect(worldRect, cullBounds),
         };
       });
+  }
+
+  private isNodeVisible(node: CanvasNode) {
+    return this.nodeVisibilityFilter?.(node) ?? true;
+  }
+
+  private projectedNodes() {
+    return this.nodeVisibilityFilter ? this.model.nodes.filter((node) => this.isNodeVisible(node)) : this.model.nodes;
   }
 
   private portalPreviewState(node: CanvasNode): 'none' | 'live' | 'unavailable' {

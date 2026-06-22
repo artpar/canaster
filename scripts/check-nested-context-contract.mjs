@@ -160,6 +160,15 @@ async function main() {
 async function browserContract(createCollection) {
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+  const duplicates = (ids) => {
+    const seen = new Set();
+    const repeated = new Set();
+    for (const id of ids) {
+      if (seen.has(id)) repeated.add(id);
+      else seen.add(id);
+    }
+    return [...repeated].sort();
+  };
   for (let i = 0; i < 100; i += 1) {
     if (window.__canwayNested?.replaceCollection) break;
     await wait(50);
@@ -175,6 +184,9 @@ async function browserContract(createCollection) {
   const activeRegions = activePanes.map((pane) => pane.dataset.region).sort();
   const activePaneCanvasIds = activePanes.map((pane) => pane.dataset.canvasId);
   const activePaneTotals = activePanes.map((pane) => pane.querySelector('canvas')?.dataset.totalNodes ?? null);
+  const activePaneStates = window.__canwayNested.contextPaneCameras().filter((entry) => entry.ownerKey === 'active:child');
+  const activePaneAssignments = Object.fromEntries(activePaneStates.map((entry) => [entry.region, entry.projectedNodeIds]));
+  const activeRenderedAssignments = Object.fromEntries(activePaneStates.map((entry) => [entry.region, entry.renderedNodeIds]));
   const embedded = document.querySelector('.embedded-nested-viewport[data-canvas-id="grand"]');
   if (!embedded) throw new Error('grandchild embedded viewport missing');
   const embeddedPanes = [...embedded.querySelectorAll(':scope > .parent-context-field > .parent-context-canvas-clip')];
@@ -182,9 +194,31 @@ async function browserContract(createCollection) {
 
   const expected = [...regions].sort().join('|');
   if (activeRegions.join('|') !== expected) throw new Error(`active context regions mismatch: ${activeRegions.join(',')}`);
+  if (activePaneStates.map((pane) => pane.region).sort().join('|') !== expected) throw new Error(`active context debug regions mismatch: ${activePaneStates.map((pane) => pane.region).join(',')}`);
   if (embeddedRegions.length) throw new Error(`embedded previews should not render parent context panes: ${embeddedRegions.join(',')}`);
   if (!activePaneCanvasIds.every((id) => id === 'root')) throw new Error(`active panes are not root canvas viewports: ${activePaneCanvasIds.join(',')}`);
-  if (!activePaneTotals.every((count) => count === String(collection.documents.root.model.nodes.length))) throw new Error(`active panes are not rendering root model: ${activePaneTotals.join(',')}`);
+  const expectedContextNodeIds = collection.documents.root.model.nodes
+    .filter((node) => node.id !== 'root-center')
+    .map((node) => node.id)
+    .sort();
+  const projectedNodeIds = activePaneStates.flatMap((pane) => pane.projectedNodeIds).sort();
+  const duplicateProjectedIds = duplicates(projectedNodeIds);
+  if (duplicateProjectedIds.length) throw new Error(`context pane projected duplicate nodes: ${duplicateProjectedIds.join(',')}`);
+  if (projectedNodeIds.join('|') !== expectedContextNodeIds.join('|')) {
+    throw new Error(`context pane projected ownership mismatch: ${JSON.stringify({ expectedContextNodeIds, projectedNodeIds, activePaneAssignments })}`);
+  }
+  const renderedDuplicateIds = duplicates(activePaneStates.flatMap((pane) => pane.renderedNodeIds));
+  if (renderedDuplicateIds.length) throw new Error(`context pane rendered duplicate nodes: ${renderedDuplicateIds.join(',')}`);
+  if (activePaneStates.some((pane) => pane.projectedNodeIds.includes('root-center') || pane.renderedNodeIds.includes('root-center'))) {
+    throw new Error('active source portal appeared inside an around pane');
+  }
+  if (!activePaneAssignments['top-right']?.includes('root-boundary')) {
+    throw new Error(`large boundary node should be owned only by the top-right pane: ${JSON.stringify(activePaneAssignments)}`);
+  }
+  if (activePaneStates.some((pane) => pane.region !== 'top-right' && pane.projectedNodeIds.includes('root-boundary'))) {
+    throw new Error(`large boundary node leaked into another pane: ${JSON.stringify(activePaneAssignments)}`);
+  }
+  if (activePaneAssignments['top-left']?.length) throw new Error(`top-left should remain an empty live pane: ${activePaneAssignments['top-left'].join(',')}`);
   const activeCamera = () => {
     const state = window.__canwayNested.getCollection();
     return state.view.cameras[state.activeCanvasId];
@@ -346,6 +380,8 @@ async function browserContract(createCollection) {
     activeRegions,
     activePaneCanvasIds,
     activePaneTotals,
+    activePaneAssignments,
+    activeRenderedAssignments,
     embeddedCanvasId: embedded.dataset.canvasId,
     embeddedRegions,
     hiddenPaneCount: hiddenPanes.length,
@@ -392,6 +428,15 @@ function createContractCollection() {
     const [x, y] = positions[region];
     return { id, type: 'card', x, y, w: 220, h: 150, data: { title: region, detail: `Sibling ${region}`, accent: 'task' } };
   };
+  const boundaryCard = () => ({
+    id: 'root-boundary',
+    type: 'card',
+    x: 115,
+    y: -210,
+    w: 440,
+    h: 220,
+    data: { title: 'Boundary case', detail: 'Large panel near the north/east split', accent: 'task' },
+  });
   const portal = (id, region, childCanvasId, title) => {
     const [x, y] = positions[region];
     return { id, type: 'canvas', x, y, w: 220, h: 150, data: { childCanvasId, title, nodeCount: 9 } };
@@ -419,7 +464,7 @@ function createContractCollection() {
             if (region === 'center') return portal('root-center', region, 'child', 'Active child');
             if (region === 'right') return portal('root-right', region, 'side', 'Canvas sibling');
             return card(`root-${region}`, region);
-          }),
+          }).concat(boundaryCard()),
         },
       },
       child: {

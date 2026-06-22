@@ -1,5 +1,5 @@
 import { cloneNode } from '../documentModel';
-import { BuiltInNodeTypes, type CanvasPortalNodeData } from '../types';
+import { BuiltInNodeTypes, type CanvasNode, type CanvasPortalNodeData } from '../types';
 import type {
   CanvasDocumentCollection,
   ParentContextPaneLayout,
@@ -31,6 +31,8 @@ export const DEFAULT_PARENT_CONTEXT_PANE_LAYOUT: ParentContextPaneLayout = {
   bottom: FIELD_BORDER_BAND,
 };
 
+type ContextNodeGeometry = Pick<CanvasNode, 'x' | 'y' | 'w' | 'h'>;
+
 export function buildParentContextField(
   collection: CanvasDocumentCollection,
   stageRect: DOMRect,
@@ -54,7 +56,7 @@ export function buildParentContextField(
       const dx = node.x + node.w / 2 - sourceCenter.x;
       const dy = node.y + node.h / 2 - sourceCenter.y;
       const distance = Math.hypot(dx, dy);
-      const region = regionForContextVector(dx, dy);
+      const region = parentContextRegionForNode(source, node);
       const detail = detailForDistance(distance);
       const portalData = node.type === BuiltInNodeTypes.canvas ? (node.data as CanvasPortalNodeData) : null;
       const shape = {
@@ -76,6 +78,10 @@ export function buildParentContextField(
     .sort((a, b) => PARENT_CONTEXT_REGIONS.indexOf(a.region) - PARENT_CONTEXT_REGIONS.indexOf(b.region) || b.detail - a.detail);
 
   return { sourceCanvasId: parent.id, sourcePortalNodeId: source.id, shapes };
+}
+
+export function parentContextRegionForNode(source: ContextNodeGeometry, node: ContextNodeGeometry): ParentContextRegion {
+  return regionForContextVector(node.x + node.w / 2 - (source.x + source.w / 2), node.y + node.h / 2 - (source.y + source.h / 2));
 }
 
 export function normalizeParentContextPaneLayout(
