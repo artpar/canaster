@@ -630,8 +630,8 @@ export function App() {
             <button className="arrange-menu-item" type="button" role="menuitem" onClick={() => handleArrangeCanvas('grid')}>
               <LayoutGrid size={16} />
               <span>
-                <strong>Grid</strong>
-                <small>Balanced rows and columns</small>
+                <strong>Compact</strong>
+                <small>Dense balanced packing</small>
               </span>
             </button>
             <button className="arrange-menu-item" type="button" role="menuitem" onClick={() => handleArrangeCanvas('rows')}>
