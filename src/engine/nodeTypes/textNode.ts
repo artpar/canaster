@@ -1,5 +1,6 @@
 import { BuiltInNodeTypes, type TextNodeData } from '../types';
 import { asString } from './data';
+import { commitInputOnBlur, prepareInlineEditorMount } from './inlineEditorDom';
 import { clipText, drawTypeBadge, wrapText } from './rendering';
 import type { NodeDefinition } from './types';
 
@@ -45,6 +46,32 @@ export const textNodeDefinition: NodeDefinition<TextNodeData> = {
       details: [`${lineCount(data.text)} line${lineCount(data.text) === 1 ? '' : 's'}`],
       state: [],
       actions: [],
+    };
+  },
+  getInteractionRegions({ contentRect }) {
+    return [{
+      id: 'body',
+      rect: { ...contentRect },
+      cursor: 'text',
+      label: 'note',
+    }];
+  },
+  createInteraction(ctx) {
+    if (ctx.region.id !== 'body') return null;
+    prepareInlineEditorMount(ctx.mount, 'node-inline-text-editor');
+    const textarea = document.createElement('textarea');
+    textarea.value = ctx.data.text;
+    textarea.placeholder = 'Write note';
+    textarea.setAttribute('aria-label', 'Edit note');
+    ctx.mount.append(textarea);
+    const lifecycle = commitInputOnBlur({
+      input: textarea,
+      commit: () => ctx.requestCommit({ ...ctx.data, text: textarea.value }, 'pointer'),
+      close: ctx.requestClose,
+    });
+    return {
+      focus: lifecycle.focus,
+      dispose: lifecycle.dispose,
     };
   },
 };

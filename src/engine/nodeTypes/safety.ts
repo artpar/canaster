@@ -1,7 +1,17 @@
 import type { CanvasNode, NodeData } from '../types';
 import { asJsonObject } from './data';
 import { unknownNodeDefinition } from './unknownNode';
-import type { NodeDefinition, NodeDescription, NodeHitTarget, NodeHitTestContext, NodeRenderContext } from './types';
+import type {
+  NodeDefinition,
+  NodeDescription,
+  NodeHitTarget,
+  NodeHitTestContext,
+  NodeInteractionContext,
+  NodeInteractionController,
+  NodeInteractionRegion,
+  NodeInteractionRegionContext,
+  NodeRenderContext,
+} from './types';
 
 export type DefinitionRenderContext = Omit<NodeRenderContext, 'data'> & {
   definition: NodeDefinition;
@@ -9,6 +19,16 @@ export type DefinitionRenderContext = Omit<NodeRenderContext, 'data'> & {
 };
 
 export type DefinitionHitTestContext = Omit<NodeHitTestContext, 'data'> & {
+  definition: NodeDefinition;
+  data: NodeData;
+};
+
+export type DefinitionInteractionRegionContext = Omit<NodeInteractionRegionContext, 'data'> & {
+  definition: NodeDefinition;
+  data: NodeData;
+};
+
+export type DefinitionInteractionContext = Omit<NodeInteractionContext, 'data'> & {
   definition: NodeDefinition;
   data: NodeData;
 };
@@ -41,6 +61,24 @@ export function safeHitTestNodeContent(context: DefinitionHitTestContext): NodeH
     return context.definition.hitTest?.({ ...context, node }) ?? { type: 'body' };
   } catch {
     return { type: 'body' };
+  }
+}
+
+export function safeNodeInteractionRegions(context: DefinitionInteractionRegionContext): NodeInteractionRegion[] {
+  const node = context.node as CanvasNode & { data: NodeData };
+  try {
+    return context.definition.getInteractionRegions?.({ ...context, node }) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export function safeCreateNodeInteraction(context: DefinitionInteractionContext): NodeInteractionController | null {
+  const node = context.node as CanvasNode & { data: NodeData };
+  try {
+    return context.definition.createInteraction?.({ ...context, node }) ?? null;
+  } catch {
+    return null;
   }
 }
 

@@ -2,8 +2,8 @@ import { THEMES, type CanvasTheme } from './theme';
 import { arrangeLayoutLabel, arrangeNodeGeometries } from './arrangeLayout';
 import { cloneNodeData } from './nodeTypes/data';
 import { canvasPortalViewportRect } from './nodeTypes/canvasNode';
-import { describeNode, hitTestNodeContent, nodeDefinitionFor, nodeDefinitionForType, parseNodeData, renderNodeContent } from './nodeTypes/registry';
-import type { NodeContentRect } from './nodeTypes/types';
+import { createNodeInteraction, describeNode, hitTestNodeContent, nodeDefinitionFor, nodeDefinitionForType, nodeInteractionRegions, parseNodeData, renderNodeContent } from './nodeTypes/registry';
+import type { NodeContentRect, NodeInteractionController, NodeInteractionRegion } from './nodeTypes/types';
 import type {
   Camera,
   CanvasArrangeLayout,
@@ -24,6 +24,7 @@ import type {
   ThemeName,
   ViewportStatus,
   WorldPoint,
+  NodeData,
 } from './types';
 import { BuiltInNodeTypes } from './types';
 
@@ -95,12 +96,21 @@ type CommandPlan = {
   interaction: string;
 };
 
+type ActiveNodeInteraction = {
+  nodeId: string;
+  regionId: string;
+  region: NodeInteractionRegion;
+  mount: HTMLDivElement;
+  controller: NodeInteractionController;
+};
+
 export class CanvasEngine {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private canvasId: string;
   private readonly beforeCommand?: (command: CanvasCommand) => CanvasCommand | false;
   private readonly onNodeAction?: (nodeId: string, actionId: string, source: CanvasEditSource) => boolean;
+  private readonly onNodeDataChange?: (nodeId: string, from: NodeData, to: NodeData, source: CanvasEditSource) => boolean;
   private readonly onCanvasDoubleClick?: (canvasId: string, event: MouseEvent) => boolean;
   private readonly onStatus?: (status: ViewportStatus) => void;
   private readonly onModelChange?: (model: CanvasModel, change: CanvasModelChange) => void;
@@ -108,6 +118,7 @@ export class CanvasEngine {
   private readonly onFrameMetrics?: (metrics: CanvasFrameMetrics) => void;
   private readonly transformPastedNode?: (node: CanvasNode) => CanvasNode;
   private readonly pasteInteractionForNodes?: (nodes: CanvasNode[]) => string | null;
+  private readonly inlineLayer: HTMLDivElement | null;
   private readonly resizeObserver: ResizeObserver;
 
   private model: CanvasModel = { schemaVersion: 2, nodes: [] };
@@ -142,6 +153,7 @@ export class CanvasEngine {
   private livePortalNodeIds = new Set<string>();
   private highlightNodeIds = new Set<string>();
   private lastRenderedNodeIds: string[] = [];
+  private activeNodeInteraction: ActiveNodeInteraction | null = null;
 
   constructor(canvas: HTMLCanvasElement, options: EngineOptions = {}) {
     const ctx = canvas.getContext('2d');
@@ -153,6 +165,7 @@ export class CanvasEngine {
     this.interactionMode = options.interactionMode ?? 'active';
     this.beforeCommand = options.beforeCommand;
     this.onNodeAction = options.onNodeAction;
+    this.onNodeDataChange = options.onNodeDataChange;
     this.onCanvasDoubleClick = options.onCanvasDoubleClick;
     this.onStatus = options.onStatus;
     this.onModelChange = options.onModelChange;
@@ -166,6 +179,15 @@ export class CanvasEngine {
     this.highlightNodeIds = new Set(options.highlightNodeIds ?? []);
     this.resizeObserver = new ResizeObserver(() => this.resize());
 
+    if (this.onNodeDataChange) {
+      this.inlineLayer = document.createElement('div');
+      this.inlineLayer.className = 'node-inline-editor-layer';
+      this.inlineLayer.setAttribute('aria-label', 'Inline panel editor');
+      this.canvas.insertAdjacentElement('afterend', this.inlineLayer);
+    } else {
+      this.inlineLayer = null;
+    }
+
     this.canvas.tabIndex = this.acceptsInput() ? 0 : -1;
     this.attachInputListenersForMode();
     this.resizeObserver.observe(this.canvas);
@@ -177,6 +199,8 @@ export class CanvasEngine {
     this.disposed = true;
     if (this.statusFrame !== null) cancelAnimationFrame(this.statusFrame);
     if (this.throttleTimer !== null) window.clearTimeout(this.throttleTimer);
+    this.closeNodeInteraction();
+    this.inlineLayer?.remove();
     this.resizeObserver.disconnect();
     this.detachInputListeners();
   }
@@ -189,6 +213,7 @@ export class CanvasEngine {
     this.model = cloneModel(model);
     this.reconcileSelection(selectedNodeIds, primarySelectedNodeId);
     this.hoverNodeId = hoverNodeId && this.model.nodes.some((node) => node.id === hoverNodeId) ? hoverNodeId : null;
+    this.reconcileNodeInteraction();
     if (!this.primarySelectedNodeId && this.interaction.startsWith('Keyboard')) this.interaction = 'Idle';
     this.markDirty();
     this.emitStatus();
@@ -234,6 +259,7 @@ export class CanvasEngine {
     this.canvas.tabIndex = this.acceptsInput() ? 0 : -1;
     this.finishPointerInteraction(null, false);
     this.finishTouchGesture();
+    if (!this.acceptsInput()) this.closeNodeInteraction();
     this.touchPoints.clear();
     this.attachInputListenersForMode();
     this.markDirty();
@@ -258,6 +284,7 @@ export class CanvasEngine {
   setCamera(camera: Camera) {
     if (this.camera.x === camera.x && this.camera.y === camera.y && this.camera.scale === camera.scale) return;
     this.camera = { ...camera };
+    this.positionNodeInteraction();
     this.markDirty();
     this.emitStatus();
   }
@@ -317,6 +344,7 @@ export class CanvasEngine {
       this.emitStatus();
       return false;
     }
+    if (command.type !== 'select-node') this.closeNodeInteraction();
     const guarded = this.beforeCommand?.(command) ?? command;
     if (guarded === false) {
       this.emitStatus();
@@ -556,6 +584,7 @@ export class CanvasEngine {
     this.canvas.width = Math.round(this.viewW * this.dpr);
     this.canvas.height = Math.round(this.viewH * this.dpr);
     this.canvas.dataset.dpr = String(this.dpr);
+    this.positionNodeInteraction();
     this.markDirty();
   }
 
@@ -758,6 +787,7 @@ export class CanvasEngine {
     const selectedNode = this.selectedNode();
 
     if (selectedNode && this.isInsideResizeHandle(world, selectedNode)) {
+      this.closeNodeInteraction();
       this.drag = {
         mode: 'resize',
         pointerId: event.pointerId,
@@ -776,6 +806,13 @@ export class CanvasEngine {
     const node = this.nodeAt(world);
 
     if (node) {
+      if (!event.shiftKey && !event.metaKey && !event.ctrlKey && node.id === this.primarySelectedNodeId) {
+        const region = this.interactionRegionAt(node, world);
+        if (region && this.startNodeInteraction(node, region, 'pointer')) {
+          event.stopPropagation();
+          return;
+        }
+      }
       const mode = event.shiftKey || event.metaKey || event.ctrlKey ? 'toggle' : this.selectedNodeIds.has(node.id) ? 'add' : 'replace';
       this.executeCommand({ type: 'select-node', nodeId: node.id, mode, source: 'pointer' });
       if (!this.selectedNodeIds.has(node.id)) {
@@ -811,6 +848,7 @@ export class CanvasEngine {
       moved: false,
     };
     this.interaction = 'Pan viewport';
+    this.closeNodeInteraction();
     this.capturePointer(event.pointerId);
     this.markDirty();
     this.emitStatus();
@@ -850,6 +888,7 @@ export class CanvasEngine {
     } else if (this.drag?.mode === 'pan') {
       this.camera.x = this.drag.camX + point.x - this.drag.sx;
       this.camera.y = this.drag.camY + point.y - this.drag.sy;
+      this.positionNodeInteraction();
       this.drag.moved = true;
       this.markDirty();
     } else {
@@ -910,6 +949,7 @@ export class CanvasEngine {
 
     if (movement) {
       event.preventDefault();
+      this.closeNodeInteraction();
       if (this.resizeMode) this.executeCommand({ type: 'resize-primary', dw: movement.x, dh: movement.y, source: 'keyboard' });
       else this.executeCommand({ type: 'move-selection', dx: movement.x, dy: movement.y, source: 'keyboard' });
       return;
@@ -917,6 +957,10 @@ export class CanvasEngine {
 
     if (event.key === 'Escape') {
       event.preventDefault();
+      if (this.activeNodeInteraction) {
+        this.closeNodeInteraction();
+        return;
+      }
       this.finishPointerInteraction(null, false);
       this.finishTouchGesture();
       this.touchPoints.clear();
@@ -935,6 +979,10 @@ export class CanvasEngine {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       const selected = this.selectedNode();
+      if (selected) {
+        const region = this.interactionRegionsFor(selected)[0] ?? null;
+        if (region && this.startNodeInteraction(selected, region, 'keyboard')) return;
+      }
       const action = selected ? describeNode(selected).actions.find((candidate) => candidate.available && candidate.id === 'enter-child-canvas') : null;
       if (selected && action && this.routeNodeAction(selected.id, action.id, 'keyboard')) {
         this.interaction = 'Keyboard node action';
@@ -983,6 +1031,7 @@ export class CanvasEngine {
     event.preventDefault();
     const point = this.eventPoint(event);
     if (event.ctrlKey || event.metaKey) {
+      this.positionNodeInteraction();
       const factor = Math.exp(-event.deltaY * 0.0015);
       this.zoomAt(point.x, point.y, factor);
       this.interaction = 'Wheel zoom';
@@ -995,6 +1044,7 @@ export class CanvasEngine {
     const panY = event.shiftKey && delta.x === 0 ? 0 : delta.y;
     this.camera.x -= panX;
     this.camera.y -= panY;
+    this.positionNodeInteraction();
     this.cursorWorld = this.screenToWorld(point.x, point.y);
     this.interaction = 'Scroll pan';
     this.markDirty();
@@ -1011,6 +1061,14 @@ export class CanvasEngine {
     const point = this.eventPoint(event);
     const world = this.screenToWorld(point.x, point.y);
     const node = this.nodeAt(world);
+    if (node) {
+      if (!this.selectedNodeIds.has(node.id)) this.executeCommand({ type: 'select-node', nodeId: node.id, mode: 'replace', source: 'pointer' });
+      const region = this.interactionRegionAt(node, world) ?? this.interactionRegionsFor(node)[0] ?? null;
+      if (region && this.startNodeInteraction(node, region, 'pointer')) {
+        event.preventDefault();
+        return;
+      }
+    }
     const action = node ? describeNode(node).actions.find((candidate) => candidate.available && candidate.id === 'enter-child-canvas') : null;
     if (node && action && this.routeNodeAction(node.id, action.id, 'pointer')) {
       this.interaction = 'Pointer node action';
@@ -1031,6 +1089,7 @@ export class CanvasEngine {
     this.camera.x = screenX - (screenX - this.camera.x) * k;
     this.camera.y = screenY - (screenY - this.camera.y) * k;
     this.camera.scale = next;
+    this.positionNodeInteraction();
     this.markDirty();
     this.emitStatus();
   }
@@ -1082,9 +1141,112 @@ export class CanvasEngine {
     });
   }
 
+  private interactionRegionsFor(node: CanvasNode): NodeInteractionRegion[] {
+    if (!this.onNodeDataChange) return [];
+    const definition = nodeDefinitionFor(node);
+    const data = parseNodeData(node);
+    return nodeInteractionRegions({
+      definition,
+      node,
+      data,
+      theme: this.theme,
+      contentRect: this.nodeContentRect(node),
+    }).filter((region) => region.id.trim() && region.rect.w > 0 && region.rect.h > 0);
+  }
+
+  private interactionRegionAt(node: CanvasNode, point: WorldPoint): NodeInteractionRegion | null {
+    const regions = this.interactionRegionsFor(node);
+    for (let index = regions.length - 1; index >= 0; index -= 1) {
+      const region = regions[index];
+      if (pointInRect(point, region.rect)) return region;
+    }
+    return null;
+  }
+
+  private startNodeInteraction(node: CanvasNode, region: NodeInteractionRegion, source: CanvasEditSource) {
+    if (!this.inlineLayer || !this.onNodeDataChange) return false;
+    this.closeNodeInteraction();
+    const definition = nodeDefinitionFor(node);
+    const data = parseNodeData(node);
+    const mount = document.createElement('div');
+    mount.className = 'node-inline-editor-mount';
+    mount.dataset.nodeId = node.id;
+    mount.dataset.regionId = region.id;
+    this.inlineLayer.append(mount);
+    const controller = createNodeInteraction({
+      definition,
+      node,
+      data,
+      theme: this.theme,
+      contentRect: this.nodeContentRect(node),
+      region,
+      mount,
+      requestCommit: (nextData, commitSource = source) => {
+        const current = this.model.nodes.find((candidate) => candidate.id === node.id);
+        if (!current) return;
+        const committed = this.onNodeDataChange?.(node.id, current.data, nextData, commitSource) ?? false;
+        this.interaction = committed ? 'Edited panel' : 'Panel edit unchanged';
+        this.emitStatus();
+      },
+      requestClose: () => this.closeNodeInteraction(),
+    });
+    if (!controller) {
+      mount.remove();
+      return false;
+    }
+    this.activeNodeInteraction = { nodeId: node.id, regionId: region.id, region, mount, controller };
+    this.positionNodeInteraction();
+    this.interaction = region.label ? `Editing ${region.label}` : 'Editing panel';
+    this.emitStatus();
+    requestAnimationFrame(() => {
+      if (this.activeNodeInteraction?.controller === controller) controller.focus?.();
+    });
+    return true;
+  }
+
+  private closeNodeInteraction() {
+    const active = this.activeNodeInteraction;
+    if (!active) return;
+    this.activeNodeInteraction = null;
+    active.controller.dispose();
+    active.mount.remove();
+    this.emitStatus();
+  }
+
+  private reconcileNodeInteraction() {
+    const active = this.activeNodeInteraction;
+    if (!active) return;
+    const node = this.model.nodes.find((candidate) => candidate.id === active.nodeId && this.isNodeVisible(candidate));
+    if (!node || this.primarySelectedNodeId !== active.nodeId) {
+      this.closeNodeInteraction();
+      return;
+    }
+    const region = this.interactionRegionsFor(node).find((candidate) => candidate.id === active.regionId);
+    if (!region) {
+      this.closeNodeInteraction();
+      return;
+    }
+    active.region = region;
+    this.positionNodeInteraction();
+  }
+
+  private positionNodeInteraction() {
+    const active = this.activeNodeInteraction;
+    if (!active) return;
+    const rect = this.worldToScreenRect(active.region.rect);
+    active.mount.style.left = `${rect.x}px`;
+    active.mount.style.top = `${rect.y}px`;
+    active.mount.style.width = `${Math.max(1, rect.w)}px`;
+    active.mount.style.height = `${Math.max(1, rect.h)}px`;
+  }
+
   private cursorFor(point: WorldPoint, node: CanvasNode | null) {
     const selectedNode = this.selectedNode();
     if (selectedNode && this.isInsideResizeHandle(point, selectedNode)) return 'nwse-resize';
+    if (node && node.id === this.primarySelectedNodeId) {
+      const region = this.interactionRegionAt(node, point);
+      if (region) return region.cursor ?? 'pointer';
+    }
     return node ? 'grab' : 'default';
   }
 
@@ -1114,6 +1276,7 @@ export class CanvasEngine {
     this.selectedNodeIds = new Set(state.selectedNodeIds);
     this.primarySelectedNodeId = state.primarySelectedNodeId;
     this.resizeMode = state.resizeMode;
+    this.reconcileNodeInteraction();
   }
 
   private reconcileSelection(selectedNodeIds: Set<string>, primarySelectedNodeId: string | null) {
@@ -1542,6 +1705,10 @@ function intersectsNode(node: CanvasNode, bounds: VisibleWorldBounds) {
 
 function intersectsRect(rect: { x: number; y: number; w: number; h: number }, bounds: VisibleWorldBounds) {
   return !(rect.x > bounds.x1 || rect.x + rect.w < bounds.x0 || rect.y > bounds.y1 || rect.y + rect.h < bounds.y0);
+}
+
+function pointInRect(point: WorldPoint, rect: { x: number; y: number; w: number; h: number }) {
+  return point.x >= rect.x && point.x <= rect.x + rect.w && point.y >= rect.y && point.y <= rect.y + rect.h;
 }
 
 function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {

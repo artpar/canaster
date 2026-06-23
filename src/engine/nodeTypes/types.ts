@@ -1,4 +1,4 @@
-import type { CanvasNode, JsonObject, NodeData, NodeTypeId, WorldPoint } from '../types';
+import type { CanvasEditSource, CanvasNode, JsonObject, NodeData, NodeTypeId, WorldPoint } from '../types';
 import type { CanvasTheme } from '../theme';
 
 export type NodeSize = {
@@ -43,6 +43,36 @@ export type NodeHitTestContext<TData extends NodeData = NodeData> = {
   contentRect: NodeContentRect;
 };
 
+export type NodeInteractionRegion = {
+  id: string;
+  rect: NodeContentRect;
+  cursor?: string;
+  label?: string;
+};
+
+export type NodeInteractionRegionContext<TData extends NodeData = NodeData> = {
+  node: CanvasNode & { data: TData };
+  data: TData;
+  contentRect: NodeContentRect;
+  theme: CanvasTheme;
+};
+
+export type NodeInteractionContext<TData extends NodeData = NodeData> = {
+  node: CanvasNode & { data: TData };
+  data: TData;
+  contentRect: NodeContentRect;
+  theme: CanvasTheme;
+  region: NodeInteractionRegion;
+  mount: HTMLElement;
+  requestCommit(nextData: TData, source?: CanvasEditSource): void;
+  requestClose(): void;
+};
+
+export type NodeInteractionController = {
+  focus?(): void;
+  dispose(): void;
+};
+
 export type NodeDescription = {
   label: string;
   roleDescription: string;
@@ -77,5 +107,7 @@ export type NodeDefinition<TData extends NodeData = NodeData> = {
   parseData(raw: JsonObject): TData;
   render(context: NodeRenderContext<TData>): void;
   hitTest?(context: NodeHitTestContext<TData>): NodeHitTarget | null;
+  getInteractionRegions?(context: NodeInteractionRegionContext<TData>): NodeInteractionRegion[];
+  createInteraction?(context: NodeInteractionContext<TData>): NodeInteractionController | null;
   describe(context: NodeDescribeContext<TData>): NodeDescription;
 };

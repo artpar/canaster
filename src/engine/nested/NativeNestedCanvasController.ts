@@ -416,6 +416,10 @@ export class NativeNestedCanvasController {
         this.executeDocumentCommand({ type: 'execute-node-action', canvasId: this.collectionRef.current.activeCanvasId, nodeId, actionId, source });
         return true;
       },
+      onNodeDataChange: (nodeId, from, to, source) => {
+        this.executeDocumentCommand({ type: 'set-node-data', canvasId: this.collectionRef.current.activeCanvasId, nodeId, from, to, source });
+        return true;
+      },
       onFrameMetrics: (metrics) => this.handleFrameMetrics(metrics.frameMs),
       beforeCommand: (command) => this.handleBeforeCommand(command),
       transformPastedNode: stripPortalChildReferenceOnPaste,

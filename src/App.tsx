@@ -6,7 +6,6 @@ import {
   FolderOpen,
   LayoutGrid,
   LayoutList,
-  ListTree,
   Loader2,
   LogIn,
   LogOut,
@@ -52,14 +51,13 @@ import { defaultStarterCollection, STARTER_WORKSPACE_STORAGE_KEY } from './catal
 import { portalDataForNode } from './engine/documentModel';
 import {
   NestedCanvasWorkspace,
-  NodeAccessPanel,
   initialViewportStatus,
   type NestedCanvasWorkspaceChromeState,
   type NestedCanvasWorkspaceHandle,
 } from './engine/nested/NestedCanvasWorkspace';
 import { describeNode, parseNodeData } from './engine/nodeTypes/registry';
 import { cacheAssetImage, hasCachedAssetImage } from './engine/nodeTypes/imageAssets';
-import { BuiltInNodeTypes, type CanvasArrangeLayout, type CanvasCommand, type CanvasNode, type ThemeName } from './engine/types';
+import { BuiltInNodeTypes, type CanvasArrangeLayout, type CanvasNode, type ThemeName } from './engine/types';
 import type { CanvasDocumentCollection, CanvasDocumentId, CanvasWorkspaceSnapshot, DocumentCommand } from './engine/documentTypes';
 import { saveWorkspaceSnapshot } from './engine/workspaceStorage';
 import { createWorkspaceHistory, createWorkspaceSnapshot } from './engine/workspaceHistory';
@@ -79,7 +77,7 @@ const PANEL_CREATE_OPTIONS = [
   { type: BuiltInNodeTypes.check, label: 'Checklist', detail: 'Actionable list with done count', badge: 'LIST' },
 ] as const;
 
-type UtilityDrawerMode = 'documents' | 'work-items' | null;
+type UtilityDrawerMode = 'documents' | null;
 type AuthStep = 'email' | 'otp';
 type SyncStatus = 'anonymous' | 'loading' | 'clean' | 'dirty' | 'saving' | 'error';
 type ArrangeMenuPosition = { top: number; left: number };
@@ -123,7 +121,6 @@ export function App() {
   const initialCollection = useMemo(() => defaultStarterCollection(), []);
   const workspaceStorageKey = activeDocumentId ? remoteWorkspaceStorageKey(activeDocumentId) : STARTER_WORKSPACE_STORAGE_KEY;
   const fitWorkspaceOnFirstLoad = !activeDocumentId && !preserveCameraOnNextLocalMountRef.current;
-  const workItemsOpen = !accountOpen && utilityDrawerMode === 'work-items';
   const documentsOpen = !accountOpen && utilityDrawerMode === 'documents';
   const [chromeState, setChromeState] = useState<NestedCanvasWorkspaceChromeState>(() => ({
     collection: initialCollection,
@@ -155,11 +152,6 @@ export function App() {
     setSyncStatus((current) => current === 'loading' || current === 'saving' || current === 'error' ? current : 'dirty');
     setSyncMessage((current) => current === 'Opening workspace' || current === 'Saving workspace' ? current : 'Unsaved online changes');
   }, [activeDocumentId, signedIn]);
-
-  const executeActiveCanvasCommand = useCallback(
-    (command: CanvasCommand) => workspaceRef.current?.executeActiveCanvasCommand(command) ?? false,
-    [],
-  );
 
   const executeDocumentCommand = useCallback((command: DocumentCommand) => {
     workspaceRef.current?.executeDocumentCommand(command);
@@ -480,20 +472,6 @@ export function App() {
     setUtilityDrawerMode(nextMode);
   }, [dismissOnboarding, utilityDrawerMode]);
 
-  const handleOpenNodePanel = useCallback(() => {
-    const nextMode = utilityDrawerMode === 'work-items' ? null : 'work-items';
-    if (nextMode) {
-      setAccountOpen(false);
-      dismissOnboarding();
-    }
-    setUtilityDrawerMode(nextMode);
-  }, [dismissOnboarding, utilityDrawerMode]);
-
-  const handleShowWorkItems = useCallback(() => {
-    setUtilityDrawerMode('work-items');
-    dismissOnboarding();
-  }, [dismissOnboarding]);
-
   const updateArrangeMenuPosition = useCallback(() => {
     const button = arrangeButtonRef.current;
     if (!button) return;
@@ -751,9 +729,6 @@ export function App() {
               >
                 {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
               </IconButton>
-              <IconButton label={workItemsOpen ? 'Close work items' : 'Open work items'} pressed={workItemsOpen} onClick={handleOpenNodePanel}>
-                <ListTree size={17} />
-              </IconButton>
             </div>
             <div className="toolbar-group account-command-group" aria-label="Account">
               <IconButton
@@ -889,7 +864,6 @@ export function App() {
               <FirstRunGuide
                 onDismiss={dismissOnboarding}
                 onFitSample={() => workspaceRef.current?.fitActiveCanvas()}
-                onShowWorkItems={handleShowWorkItems}
               />
             ) : null}
             {documentsOpen ? (
@@ -908,14 +882,6 @@ export function App() {
                 onOpenDocument={(documentRef) => void loadDaptinDocument(documentRef, documents)}
                 onRefresh={() => void handleRefreshDocuments()}
                 onSaveOnline={() => void handleSaveOnline()}
-              />
-            ) : null}
-            {workItemsOpen ? (
-              <NodeAccessPanel
-                collection={chromeState.collection}
-                status={chromeState.status}
-                executeActiveCanvasCommand={executeActiveCanvasCommand}
-                executeDocumentCommand={executeDocumentCommand}
               />
             ) : null}
           </div>
@@ -1164,10 +1130,9 @@ function ViewTreeItem({
 type FirstRunGuideProps = {
   onDismiss: () => void;
   onFitSample: () => void;
-  onShowWorkItems: () => void;
 };
 
-function FirstRunGuide({ onDismiss, onFitSample, onShowWorkItems }: FirstRunGuideProps) {
+function FirstRunGuide({ onDismiss, onFitSample }: FirstRunGuideProps) {
   return (
     <aside className="first-run-guide" aria-label="Start with the sample workspace">
       <button className="guide-close" type="button" aria-label="Dismiss getting started guide" onClick={onDismiss}>
@@ -1180,16 +1145,12 @@ function FirstRunGuide({ onDismiss, onFitSample, onShowWorkItems }: FirstRunGuid
       </p>
       <ul>
         <li>Your changes stay on this device.</li>
-        <li>The work-items panel gives a plain list when the map feels busy.</li>
+        <li>Select a panel, then click its content to edit inline.</li>
       </ul>
       <div className="guide-actions" aria-label="Getting started actions">
         <button className="guide-action primary" type="button" onClick={onFitSample}>
           <Maximize2 size={15} />
           Center sample
-        </button>
-        <button className="guide-action" type="button" onClick={onShowWorkItems}>
-          <ListTree size={15} />
-          Show work items
         </button>
         <button className="guide-action quiet" type="button" onClick={onDismiss}>
           Got it
@@ -1225,7 +1186,7 @@ function DocumentsDrawer({
   onSaveOnline,
 }: DocumentsDrawerProps) {
   return (
-    <aside className="node-access-panel utility-drawer document-drawer" aria-label="Saved workspaces">
+    <aside className="utility-drawer document-drawer" aria-label="Saved workspaces">
       <div className="utility-drawer-header">
         <div>
           <span>Documents</span>

@@ -5,14 +5,18 @@ import { checkNodeDefinition } from './checkNode';
 import { imageNodeDefinition } from './imageNode';
 import {
   safeDescribeNodeContent,
+  safeCreateNodeInteraction,
   safeHitTestNodeContent,
+  safeNodeInteractionRegions,
   safeParseNodeData,
   safeRenderNodeContent,
+  type DefinitionInteractionContext,
+  type DefinitionInteractionRegionContext,
   type DefinitionHitTestContext,
   type DefinitionRenderContext,
 } from './safety';
 import { textNodeDefinition } from './textNode';
-import type { NodeDefinition, NodeDescription, NodeHitTarget, NodeHitTestContext, NodeRenderContext } from './types';
+import type { NodeDefinition, NodeDescription, NodeHitTarget, NodeHitTestContext, NodeInteractionController, NodeInteractionRegion, NodeRenderContext } from './types';
 import { unknownNodeDefinition } from './unknownNode';
 
 const definitions = createRegistry([cardNodeDefinition, textNodeDefinition, imageNodeDefinition, canvasNodeDefinition, checkNodeDefinition]);
@@ -49,6 +53,14 @@ export function renderNodeContent(context: DefinitionRenderContext | (NodeRender
 
 export function hitTestNodeContent(context: DefinitionHitTestContext | (NodeHitTestContext & { definition: NodeDefinition })): NodeHitTarget | null {
   return safeHitTestNodeContent(context);
+}
+
+export function nodeInteractionRegions(context: DefinitionInteractionRegionContext): NodeInteractionRegion[] {
+  return safeNodeInteractionRegions(context);
+}
+
+export function createNodeInteraction(context: DefinitionInteractionContext): NodeInteractionController | null {
+  return safeCreateNodeInteraction(context);
 }
 
 export function describeNode(node: CanvasNode): NodeDescription {
