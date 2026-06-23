@@ -86,7 +86,7 @@ export type CanvasCommand =
   | { type: 'select-node'; nodeId: string; mode?: 'replace' | 'toggle' | 'add'; source: CanvasEditSource }
   | { type: 'clear-selection'; source: CanvasEditSource }
   | { type: 'move-selection'; dx: number; dy: number; source: CanvasEditSource }
-  | { type: 'resize-primary'; dw: number; dh: number; source: CanvasEditSource }
+  | { type: 'resize-selection'; dw: number; dh: number; source: CanvasEditSource }
   | { type: 'arrange-nodes'; layout: CanvasArrangeLayout; source: CanvasEditSource }
   | { type: 'delete-selection'; source: CanvasEditSource }
   | { type: 'copy-selection'; source: CanvasEditSource }

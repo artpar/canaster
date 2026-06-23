@@ -391,8 +391,8 @@ export class CanvasEngine {
         return this.planClearSelection(command.source);
       case 'move-selection':
         return this.planMoveSelection(command.dx, command.dy, command.source);
-      case 'resize-primary':
-        return this.planResizePrimary(command.dw, command.dh, command.source);
+      case 'resize-selection':
+        return this.planResizeSelection(command.dw, command.dh, command.source);
       case 'arrange-nodes':
         return this.planArrangeNodes(command.layout, command.source);
       case 'delete-selection':
@@ -471,20 +471,24 @@ export class CanvasEngine {
     };
   }
 
-  private planResizePrimary(dw: number, dh: number, source: CanvasEditSource): CommandPlan {
-    const node = this.selectedNode();
-    if (!node) return { operations: [], interaction: 'Resize no selection' };
+  private planResizeSelection(dw: number, dh: number, source: CanvasEditSource): CommandPlan {
+    const nodes = this.selectedNodes();
+    if (!nodes.length) return { operations: [], interaction: 'Resize no selection' };
     if (dw === 0 && dh === 0) return { operations: [], interaction: 'Resize unchanged' };
-    const from = nodeGeometry(node);
-    const to = {
-      ...from,
-      w: dw === 0 ? node.w : snapNodeWidth(node, node.w + dw),
-      h: dh === 0 ? node.h : snapNodeHeight(node, node.h + dh),
-    };
-    const operations: CanvasOperation[] = sameGeometry(from, to) ? [] : [{ type: 'set-node-geometry', nodeId: node.id, from, to }];
+    const operations: CanvasOperation[] = [];
+    for (const node of nodes) {
+      const from = nodeGeometry(node);
+      const to = {
+        ...from,
+        w: dw === 0 ? node.w : snapNodeWidth(node, node.w + dw),
+        h: dh === 0 ? node.h : snapNodeHeight(node, node.h + dh),
+      };
+      if (!sameGeometry(from, to)) operations.push({ type: 'set-node-geometry', nodeId: node.id, from, to });
+    }
+    const nodeIds = operations.map((operation) => operation.type === 'set-node-geometry' ? operation.nodeId : '').filter(Boolean);
     return {
       operations,
-      change: operations.length ? { kind: 'node-resize', nodeId: node.id, nodeIds: [node.id], source } : undefined,
+      change: operations.length ? { kind: 'node-resize', nodeId: this.primarySelectedNodeId ?? nodeIds[0] ?? nodes[0].id, nodeIds, source } : undefined,
       interaction: operations.length ? sourceInteraction(source, 'resize') : 'Resize unchanged',
     };
   }
@@ -707,7 +711,7 @@ export class CanvasEngine {
       state,
     });
     ctx.restore();
-    if (state.primary) this.drawResizeHandle(renderNode);
+    if (state.selected) this.drawResizeHandle(renderNode);
   }
 
   private drawNodeShell(node: CanvasNode, state: { selected: boolean; primary: boolean; hovered: boolean; compact: boolean }) {
@@ -784,18 +788,21 @@ export class CanvasEngine {
     }
 
     const world = this.screenToWorld(point.x, point.y);
-    const selectedNode = this.selectedNode();
+    const selectedResizeNode = this.selectedResizeNodeAt(world);
 
-    if (selectedNode && this.isInsideResizeHandle(world, selectedNode)) {
+    if (selectedResizeNode) {
       this.closeNodeInteraction();
+      if (selectedResizeNode.id !== this.primarySelectedNodeId) {
+        this.applyCommandPlan(this.planSelectNode(selectedResizeNode.id, 'pointer', 'add'), false);
+      }
       this.drag = {
         mode: 'resize',
         pointerId: event.pointerId,
-        node: selectedNode,
-        ox: world.x - (selectedNode.x + selectedNode.w),
-        oy: world.y - (selectedNode.y + selectedNode.h),
+        node: selectedResizeNode,
+        ox: world.x - (selectedResizeNode.x + selectedResizeNode.w),
+        oy: world.y - (selectedResizeNode.y + selectedResizeNode.h),
         moved: false,
-        original: nodeGeometry(selectedNode),
+        original: nodeGeometry(selectedResizeNode),
         command: null,
       };
       this.interaction = 'Resize node';
@@ -881,7 +888,7 @@ export class CanvasEngine {
       const minSize = nodeDefinitionFor(this.drag.node).minSize;
       const rawW = Math.max(minSize.w, world.x - this.drag.ox - this.drag.node.x);
       const rawH = Math.max(minSize.h, world.y - this.drag.oy - this.drag.node.y);
-      const command: CanvasCommand = { type: 'resize-primary', dw: rawW - this.drag.original.w, dh: rawH - this.drag.original.h, source: 'pointer' };
+      const command: CanvasCommand = { type: 'resize-selection', dw: rawW - this.drag.original.w, dh: rawH - this.drag.original.h, source: 'pointer' };
       const plan = this.applyPreviewPlan(this.planCommand(command));
       this.drag.command = plan.operations.length ? command : null;
       this.drag.moved = plan.operations.length > 0;
@@ -950,7 +957,7 @@ export class CanvasEngine {
     if (movement) {
       event.preventDefault();
       this.closeNodeInteraction();
-      if (this.resizeMode) this.executeCommand({ type: 'resize-primary', dw: movement.x, dh: movement.y, source: 'keyboard' });
+      if (this.resizeMode) this.executeCommand({ type: 'resize-selection', dw: movement.x, dh: movement.y, source: 'keyboard' });
       else this.executeCommand({ type: 'move-selection', dx: movement.x, dy: movement.y, source: 'keyboard' });
       return;
     }
@@ -1129,6 +1136,15 @@ export class CanvasEngine {
     return null;
   }
 
+  private selectedResizeNodeAt(point: WorldPoint) {
+    for (let i = this.model.nodes.length - 1; i >= 0; i--) {
+      const node = this.model.nodes[i];
+      if (!this.selectedNodeIds.has(node.id) || !this.isNodeVisible(node)) continue;
+      if (this.isInsideResizeHandle(point, node)) return node;
+    }
+    return null;
+  }
+
   private nodeInternalHit(node: CanvasNode, point: WorldPoint) {
     const definition = nodeDefinitionFor(node);
     const data = parseNodeData(node);
@@ -1241,8 +1257,7 @@ export class CanvasEngine {
   }
 
   private cursorFor(point: WorldPoint, node: CanvasNode | null) {
-    const selectedNode = this.selectedNode();
-    if (selectedNode && this.isInsideResizeHandle(point, selectedNode)) return 'nwse-resize';
+    if (this.selectedResizeNodeAt(point)) return 'nwse-resize';
     if (node && node.id === this.primarySelectedNodeId) {
       const region = this.interactionRegionAt(node, point);
       if (region) return region.cursor ?? 'pointer';
