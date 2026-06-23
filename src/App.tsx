@@ -1,5 +1,6 @@
 import {
   CheckCircle2,
+  ChevronDown,
   Columns3,
   FilePlus2,
   FolderOpen,
@@ -12,6 +13,8 @@ import {
   Maximize2,
   Minus,
   Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
   PanelsTopLeft,
   Plus,
   Redo2,
@@ -24,7 +27,7 @@ import {
   UserCircle,
   X,
 } from 'lucide-react';
-import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, type Ref } from 'react';
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Ref } from 'react';
 import {
   createDocument,
   listDocuments,
@@ -54,11 +57,10 @@ import {
   type NestedCanvasWorkspaceChromeState,
   type NestedCanvasWorkspaceHandle,
 } from './engine/nested/NestedCanvasWorkspace';
-import { PARENT_CONTEXT_REGIONS, regionForContextVector } from './engine/nested/parentContextField';
 import { describeNode, parseNodeData } from './engine/nodeTypes/registry';
 import { cacheAssetImage, hasCachedAssetImage } from './engine/nodeTypes/imageAssets';
 import { BuiltInNodeTypes, type CanvasArrangeLayout, type CanvasCommand, type CanvasNode, type ThemeName } from './engine/types';
-import type { CanvasDocument, CanvasDocumentCollection, CanvasDocumentId, CanvasWorkspaceSnapshot, DocumentCommand, ParentContextRegion, StackFrame } from './engine/documentTypes';
+import type { CanvasDocumentCollection, CanvasDocumentId, CanvasWorkspaceSnapshot, DocumentCommand } from './engine/documentTypes';
 import { saveWorkspaceSnapshot } from './engine/workspaceStorage';
 import { createWorkspaceHistory, createWorkspaceSnapshot } from './engine/workspaceHistory';
 
@@ -67,11 +69,6 @@ const DEFAULT_DOCUMENT_TITLE = 'Canaster Workspace';
 const LOCAL_SAVE_MESSAGE = 'Saved on this device';
 const ONLINE_READY_MESSAGE = 'Ready to save online';
 const SAVED_MESSAGE = 'Saved online';
-const NAVIGATOR_VIEWBOX = { width: 360, height: 150 };
-const NAVIGATOR_MID_Y = 76;
-const CURRENT_GRAPH_POINT: GraphPoint = { x: 150, y: NAVIGATOR_MID_Y };
-const NEXT_GRAPH_ELBOW_X = 232;
-const NEXT_GRAPH_X = 260;
 const ARRANGE_MENU_WIDTH = 208;
 const ADD_PANEL_MENU_WIDTH = 224;
 const PANEL_CREATE_OPTIONS = [
@@ -110,6 +107,7 @@ export function App() {
   const [addPanelMenuPosition, setAddPanelMenuPosition] = useState<ArrangeMenuPosition | null>(null);
   const [addPanelQuery, setAddPanelQuery] = useState('');
   const [addPanelActiveIndex, setAddPanelActiveIndex] = useState(0);
+  const [viewTreeOpen, setViewTreeOpen] = useState(() => window.matchMedia('(min-width: 641px)').matches);
   const [workspaceToast, setWorkspaceToast] = useState<WorkspaceToast>(null);
   const [authStep, setAuthStep] = useState<AuthStep>('email');
   const [parentContextVisible, setParentContextVisible] = useState(true);
@@ -644,10 +642,7 @@ export function App() {
     };
   }, [addPanelMenuOpen, closeAddPanelMenu, updateAddPanelMenuPosition]);
 
-  const navigation = useMemo(
-    () => buildNestedNavigation(chromeState.collection, chromeState.status.selectedNodeId),
-    [chromeState.collection, chromeState.status.selectedNodeId],
-  );
+  const viewTree = useMemo(() => buildViewTree(chromeState.collection), [chromeState.collection]);
   const zoomReadout = `${Math.round(chromeState.status.zoom * 100)}%`;
   const saveButtonLabel = saveActionLabel(syncStatus, syncMessage, signedIn);
 
@@ -704,6 +699,13 @@ export function App() {
               </IconButton>
             </div>
             <div className="toolbar-group" aria-label="View controls">
+              <IconButton
+                label={viewTreeOpen ? 'Hide view tree' : 'Show view tree'}
+                pressed={viewTreeOpen}
+                onClick={() => setViewTreeOpen((open) => !open)}
+              >
+                {viewTreeOpen ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}
+              </IconButton>
               <button
                 ref={addPanelButtonRef}
                 className="icon-button"
@@ -844,69 +846,80 @@ export function App() {
           />
         ) : null}
 
-        <NestedCanvasWorkspace
-          ref={workspaceRef}
-          initialCollection={initialCollection}
-          theme={theme}
-          parentContextVisible={parentContextVisible}
-          fitOnFirstLoad={fitWorkspaceOnFirstLoad}
-          storageKey={workspaceStorageKey}
-          onCollectionChange={handleWorkspaceCollectionChange}
-          onChromeStateChange={handleChromeStateChange}
-        />
-        {chromeState.collection.view.deleteConfirmation ? (
-          <DeleteConfirmationPrompt
-            collection={chromeState.collection}
-            onCancel={() => executeDocumentCommand({ type: 'cancel-delete-confirmation', source: 'nonvisual' })}
-            onConfirm={() => executeDocumentCommand({ type: 'confirm-delete-selection', canvasId: chromeState.collection.view.deleteConfirmation?.canvasId ?? chromeState.collection.activeCanvasId, source: 'nonvisual' })}
-          />
-        ) : null}
-        {workspaceToast ? (
-          <WorkspaceToastView toast={workspaceToast} onDismiss={() => setWorkspaceToast(null)} />
-        ) : null}
-        <div className="toolbar-group zoom-toolbar" aria-label="Zoom controls">
-          <IconButton label="Zoom out" onClick={() => workspaceRef.current?.zoomActiveBy(0.82)}>
-            <Minus size={17} />
-          </IconButton>
-          <span className="zoom-readout" aria-label={`Zoom ${zoomReadout}`}>{zoomReadout}</span>
-          <IconButton label="Zoom in" onClick={() => workspaceRef.current?.zoomActiveBy(1.22)}>
-            <Plus size={17} />
-          </IconButton>
+        <div className={`workspace-body ${viewTreeOpen ? 'tree-open' : 'tree-closed'}`}>
+          {viewTreeOpen ? (
+            <ViewTreePanel
+              tree={viewTree}
+              activeCanvasId={chromeState.collection.activeCanvasId}
+              executeDocumentCommand={executeDocumentCommand}
+              onClose={() => setViewTreeOpen(false)}
+            />
+          ) : null}
+          <div className="workspace-canvas-region">
+            <NestedCanvasWorkspace
+              ref={workspaceRef}
+              initialCollection={initialCollection}
+              theme={theme}
+              parentContextVisible={parentContextVisible}
+              fitOnFirstLoad={fitWorkspaceOnFirstLoad}
+              storageKey={workspaceStorageKey}
+              onCollectionChange={handleWorkspaceCollectionChange}
+              onChromeStateChange={handleChromeStateChange}
+            />
+            {chromeState.collection.view.deleteConfirmation ? (
+              <DeleteConfirmationPrompt
+                collection={chromeState.collection}
+                onCancel={() => executeDocumentCommand({ type: 'cancel-delete-confirmation', source: 'nonvisual' })}
+                onConfirm={() => executeDocumentCommand({ type: 'confirm-delete-selection', canvasId: chromeState.collection.view.deleteConfirmation?.canvasId ?? chromeState.collection.activeCanvasId, source: 'nonvisual' })}
+              />
+            ) : null}
+            {workspaceToast ? (
+              <WorkspaceToastView toast={workspaceToast} onDismiss={() => setWorkspaceToast(null)} />
+            ) : null}
+            <div className="toolbar-group zoom-toolbar" aria-label="Zoom controls">
+              <IconButton label="Zoom out" onClick={() => workspaceRef.current?.zoomActiveBy(0.82)}>
+                <Minus size={17} />
+              </IconButton>
+              <span className="zoom-readout" aria-label={`Zoom ${zoomReadout}`}>{zoomReadout}</span>
+              <IconButton label="Zoom in" onClick={() => workspaceRef.current?.zoomActiveBy(1.22)}>
+                <Plus size={17} />
+              </IconButton>
+            </div>
+            {showOnboarding ? (
+              <FirstRunGuide
+                onDismiss={dismissOnboarding}
+                onFitSample={() => workspaceRef.current?.fitActiveCanvas()}
+                onShowWorkItems={handleShowWorkItems}
+              />
+            ) : null}
+            {documentsOpen ? (
+              <DocumentsDrawer
+                activeDocumentId={activeDocumentId}
+                documents={documents}
+                signedIn={signedIn}
+                syncStatus={syncStatus}
+                onClose={() => setUtilityDrawerMode(null)}
+                onNew={() => void handleNewLocalDraft()}
+                onOpenAccount={() => {
+                  setAuthStep('email');
+                  setAccountOpen(true);
+                  setUtilityDrawerMode(null);
+                }}
+                onOpenDocument={(documentRef) => void loadDaptinDocument(documentRef, documents)}
+                onRefresh={() => void handleRefreshDocuments()}
+                onSaveOnline={() => void handleSaveOnline()}
+              />
+            ) : null}
+            {workItemsOpen ? (
+              <NodeAccessPanel
+                collection={chromeState.collection}
+                status={chromeState.status}
+                executeActiveCanvasCommand={executeActiveCanvasCommand}
+                executeDocumentCommand={executeDocumentCommand}
+              />
+            ) : null}
+          </div>
         </div>
-        <ViewNavigator navigation={navigation} executeDocumentCommand={executeDocumentCommand} />
-        {showOnboarding ? (
-          <FirstRunGuide
-            onDismiss={dismissOnboarding}
-            onFitSample={() => workspaceRef.current?.fitActiveCanvas()}
-            onShowWorkItems={handleShowWorkItems}
-          />
-        ) : null}
-        {documentsOpen ? (
-          <DocumentsDrawer
-            activeDocumentId={activeDocumentId}
-            documents={documents}
-            signedIn={signedIn}
-            syncStatus={syncStatus}
-            onClose={() => setUtilityDrawerMode(null)}
-            onNew={() => void handleNewLocalDraft()}
-            onOpenAccount={() => {
-              setAuthStep('email');
-              setAccountOpen(true);
-              setUtilityDrawerMode(null);
-            }}
-            onOpenDocument={(documentRef) => void loadDaptinDocument(documentRef, documents)}
-            onRefresh={() => void handleRefreshDocuments()}
-            onSaveOnline={() => void handleSaveOnline()}
-          />
-        ) : null}
-        {workItemsOpen ? (
-          <NodeAccessPanel
-            collection={chromeState.collection}
-            status={chromeState.status}
-            executeActiveCanvasCommand={executeActiveCanvasCommand}
-            executeDocumentCommand={executeDocumentCommand}
-          />
-        ) : null}
       </section>
     </main>
   );
@@ -1058,110 +1071,93 @@ function DeleteConfirmationPrompt({
   );
 }
 
-type NestedNavigation = {
-  activeCanvasId: CanvasDocumentId;
-  activeTitle: string;
-  depthLabel: string;
-  parentCanvasId: CanvasDocumentId | null;
-  parentTitle: string | null;
-  selectedChildView: ChildViewTarget | null;
-  childViews: ChildViewTarget[];
-  parentSiblings: SiblingViewTarget[];
-  trail: ViewTrailItem[];
-  siblings: Partial<Record<ParentContextRegion, SiblingViewTarget>>;
+type ChildViewTarget = {
+  canvasId: CanvasDocumentId;
+  title: string;
 };
 
-type ViewTrailItem = {
+type ViewTreeNode = {
   canvasId: CanvasDocumentId;
   title: string;
   depth: number;
-  active: boolean;
+  children: ViewTreeNode[];
 };
 
-type ChildViewTarget = {
-  portalNodeId: string;
-  canvasId: CanvasDocumentId;
-  title: string;
-};
+function ViewTreePanel({
+  tree,
+  activeCanvasId,
+  executeDocumentCommand,
+  onClose,
+}: {
+  tree: ViewTreeNode | null;
+  activeCanvasId: CanvasDocumentId;
+  executeDocumentCommand: (command: DocumentCommand) => void;
+  onClose: () => void;
+}) {
+  const viewCount = tree ? countViewTreeNodes(tree) : 0;
+  return (
+    <aside className="view-tree-panel" aria-label="View tree">
+      <div className="view-tree-header">
+        <div>
+          <span>Views</span>
+          <span>{viewCount === 1 ? '1 view' : `${viewCount} views`}</span>
+        </div>
+        <button className="utility-close" type="button" aria-label="Close view tree" onClick={onClose}>
+          <X size={15} />
+        </button>
+      </div>
+      <nav className="view-tree-list" aria-label="Canvas views">
+        {tree ? (
+          <ViewTreeItem
+            node={tree}
+            activeCanvasId={activeCanvasId}
+            executeDocumentCommand={executeDocumentCommand}
+          />
+        ) : (
+          <div className="view-tree-empty">No views</div>
+        )}
+      </nav>
+    </aside>
+  );
+}
 
-type SiblingViewTarget = {
-  region: ParentContextRegion;
-  parentCanvasId: CanvasDocumentId;
-  portalNodeId: string;
-  title: string;
-  canOpen: boolean;
-  distance: number;
-};
-
-type GraphPoint = {
-  x: number;
-  y: number;
-};
-
-type NavigatorLabelPlacement = 'above' | 'below';
-
-type NavigatorGraphNode = GraphPoint & {
-  id: string;
-  title: string;
-  kind: 'ancestor' | 'current' | 'parent-sibling' | 'sibling' | 'child';
-  labelPlacement: NavigatorLabelPlacement;
-  active?: boolean;
-  command?: DocumentCommand;
-};
-
-type NavigatorGraphLink = {
-  id: string;
-  path: string;
-  kind: 'lineage' | 'branch';
-};
-
-type NavigatorGraph = {
-  nodes: NavigatorGraphNode[];
-  links: NavigatorGraphLink[];
-};
-
-function ViewNavigator({
-  navigation,
+function ViewTreeItem({
+  node,
+  activeCanvasId,
   executeDocumentCommand,
 }: {
-  navigation: NestedNavigation;
+  node: ViewTreeNode;
+  activeCanvasId: CanvasDocumentId;
   executeDocumentCommand: (command: DocumentCommand) => void;
 }) {
-  const graph = buildNavigatorGraph(navigation);
+  const active = node.canvasId === activeCanvasId;
   return (
-    <aside className="view-navigator" aria-label="Bird's-eye view map">
-      <svg className="navigator-links" viewBox={`0 0 ${NAVIGATOR_VIEWBOX.width} ${NAVIGATOR_VIEWBOX.height}`} aria-hidden="true">
-        <defs>
-          <marker id="navigator-arrow" markerWidth="5" markerHeight="5" refX="4.2" refY="2.5" orient="auto">
-            <path className="navigator-arrow" d="M0 0 L4.6 2.5 L0 5 Z" />
-          </marker>
-        </defs>
-        {graph.links.map((link) => (
-          <path
-            key={link.id}
-            className={`navigator-link ${link.kind}`}
-            d={link.path}
-          />
-        ))}
-      </svg>
-      {graph.nodes.map((node) => (
-        <button
-          key={node.id}
-          className={`navigator-node ${node.kind} label-${node.labelPlacement}${node.active ? ' current' : ''}`}
-          type="button"
-          style={{ left: node.x, top: node.y }}
-          aria-current={node.active ? 'page' : undefined}
-          aria-label={node.active ? `Current view: ${node.title}` : `Go to ${node.title}`}
-          disabled={!node.command}
-          onClick={() => {
-            if (node.command) executeDocumentCommand(node.command);
-          }}
-        >
-          <span className="navigator-dot" />
-          <span className="navigator-label">{node.title}</span>
-        </button>
-      ))}
-    </aside>
+    <div className="view-tree-branch">
+      <button
+        className={`view-tree-row${active ? ' active' : ''}`}
+        type="button"
+        style={{ '--depth': node.depth } as CSSProperties}
+        aria-current={active ? 'page' : undefined}
+        onClick={() => executeDocumentCommand({ type: 'select-canvas', canvasId: node.canvasId, source: 'nonvisual' })}
+      >
+        <span className={`view-tree-disclosure${node.children.length ? '' : ' empty'}`} aria-hidden="true">
+          {node.children.length ? <ChevronDown size={13} /> : null}
+        </span>
+        <span className="view-tree-title">{node.title}</span>
+      </button>
+      {node.children.length ? (
+        <div className="view-tree-children">
+          {node.children.map((child) => (
+            <ViewTreeItem
+              key={child.canvasId}
+              node={child}
+              activeCanvasId={activeCanvasId}
+              executeDocumentCommand={executeDocumentCommand}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -1461,237 +1457,43 @@ function IconButton({ label, disabled = false, pressed, onClick, children }: Ico
   );
 }
 
-function buildNestedNavigation(collection: CanvasDocumentCollection, selectedNodeId: string | null): NestedNavigation {
-  const active = collection.documents[collection.activeCanvasId] ?? collection.documents[collection.rootCanvasId];
-  const trail = stackTrailFor(collection, active.id);
-  const selectedNode = selectedNodeId ? active.model.nodes.find((node) => node.id === selectedNodeId) ?? null : null;
-  const selectedChildView = selectedNode ? childViewTargetFor(collection, selectedNode) : null;
-  const childViews = active.model.nodes
-    .map((node) => childViewTargetFor(collection, node))
-    .filter((target): target is ChildViewTarget => Boolean(target));
-  const parent = active.parentCanvasId ? collection.documents[active.parentCanvasId] ?? null : null;
-  const parentSiblingMap = parent ? siblingTargetsFor(collection, parent.id) : {};
-  const parentSiblings = PARENT_CONTEXT_REGIONS
-    .map((region) => parentSiblingMap[region])
-    .filter((target): target is SiblingViewTarget => Boolean(target?.canOpen));
-  return {
-    activeCanvasId: active.id,
-    activeTitle: active.title,
-    depthLabel: trail.length > 1 ? `Level ${trail.length}` : 'Top view',
-    parentCanvasId: parent?.id ?? null,
-    parentTitle: parent?.title ?? null,
-    selectedChildView,
-    childViews,
-    parentSiblings,
-    trail,
-    siblings: siblingTargetsFor(collection, active.id),
+function buildViewTree(collection: CanvasDocumentCollection): ViewTreeNode | null {
+  const root = collection.documents[collection.rootCanvasId];
+  if (!root) return null;
+  const visited = new Set<CanvasDocumentId>();
+
+  const buildNode = (canvasId: CanvasDocumentId, depth: number, fallbackTitle?: string): ViewTreeNode | null => {
+    if (visited.has(canvasId)) return null;
+    const document = collection.documents[canvasId];
+    if (!document) return null;
+    visited.add(canvasId);
+    const children = document.model.nodes
+      .map((node) => childViewTargetFor(collection, node))
+      .filter((target): target is ChildViewTarget => Boolean(target))
+      .map((target) => buildNode(target.canvasId, depth + 1, target.title))
+      .filter((node): node is ViewTreeNode => Boolean(node));
+    return {
+      canvasId: document.id,
+      title: document.title || fallbackTitle || 'Untitled view',
+      depth,
+      children,
+    };
   };
+
+  return buildNode(root.id, 0);
 }
 
-function buildNavigatorGraph(navigation: NestedNavigation): NavigatorGraph {
-  const nodes: NavigatorGraphNode[] = [];
-  const links: NavigatorGraphLink[] = [];
-  const ancestors = navigation.trail.filter((item) => !item.active).slice(-2);
-  const ancestorStartX = ancestors.length > 1 ? 22 : 58;
-  let previousAncestor: NavigatorGraphNode | null = null;
-  const ancestorNodes: NavigatorGraphNode[] = [];
-
-  ancestors.forEach((item, index) => {
-    const point = {
-      x: ancestorStartX + index * 64,
-      y: NAVIGATOR_MID_Y,
-    };
-    const node: NavigatorGraphNode = {
-      ...point,
-      id: `trail-${item.canvasId}`,
-      title: item.depth === 0 ? 'Top' : item.title,
-      kind: 'ancestor',
-      labelPlacement: 'below',
-      command: { type: 'select-canvas', canvasId: item.canvasId, source: 'nonvisual' },
-    };
-    nodes.push(node);
-    ancestorNodes.push(node);
-    if (previousAncestor) links.push({ id: `trail-link-${item.canvasId}`, path: orthogonalPath(previousAncestor, node), kind: 'lineage' });
-    previousAncestor = node;
-  });
-
-  const grandparentNode = ancestorNodes.length > 1 ? ancestorNodes[ancestorNodes.length - 2] : null;
-  const parentNode = ancestorNodes.length ? ancestorNodes[ancestorNodes.length - 1] : null;
-  const parentSiblingRows = parentSiblingRowsFor(navigation.parentSiblings.length);
-  navigation.parentSiblings.slice(0, 3).forEach((sibling, index) => {
-    if (!grandparentNode || !parentNode) return;
-    const node: NavigatorGraphNode = {
-      x: parentNode.x,
-      y: parentSiblingRows[index] ?? NAVIGATOR_MID_Y + 52,
-      id: `parent-sibling-${sibling.portalNodeId}`,
-      title: sibling.title,
-      kind: 'parent-sibling',
-      labelPlacement: labelPlacementForRow(parentSiblingRows[index] ?? NAVIGATOR_MID_Y + 52),
-      command: {
-        type: 'activate-neighbor-portal',
-        parentCanvasId: sibling.parentCanvasId,
-        portalNodeId: sibling.portalNodeId,
-        source: 'nonvisual',
-      },
-    };
-    nodes.push(node);
-    links.push({ id: `parent-sibling-link-${sibling.portalNodeId}`, path: orthogonalPath(grandparentNode, node), kind: 'branch' });
-  });
-
-  const currentNode: NavigatorGraphNode = {
-    ...CURRENT_GRAPH_POINT,
-    id: `current-${navigation.activeCanvasId}`,
-    title: navigation.activeTitle,
-    kind: 'current',
-    labelPlacement: 'above',
-    active: true,
-  };
-  nodes.push(currentNode);
-  if (previousAncestor) {
-    links.push({ id: `trail-current-${navigation.activeCanvasId}`, path: orthogonalPath(previousAncestor, currentNode), kind: 'lineage' });
-  }
-
-  const siblings = PARENT_CONTEXT_REGIONS
-    .map((region) => navigation.siblings[region])
-    .filter((target): target is SiblingViewTarget => Boolean(target?.canOpen));
-  const childTargets: NavigatorGraphNode[] = navigation.childViews.map((child) => ({
-      x: NEXT_GRAPH_X,
-      y: NAVIGATOR_MID_Y,
-      id: `child-${child.canvasId}`,
-      title: child.title,
-      kind: 'child' as const,
-      labelPlacement: 'below' as const,
-      command: {
-        type: 'enter-child-canvas' as const,
-        parentCanvasId: navigation.activeCanvasId,
-        portalNodeId: child.portalNodeId,
-        source: 'nonvisual' as const,
-      },
-    }));
-  const siblingTargets: NavigatorGraphNode[] = siblings.slice(0, Math.max(0, 7 - childTargets.length)).map((sibling) => ({
-      x: NEXT_GRAPH_X,
-      y: NAVIGATOR_MID_Y,
-      id: `sibling-${sibling.portalNodeId}`,
-      title: sibling.title,
-      kind: 'sibling' as const,
-      labelPlacement: 'below' as const,
-      command: {
-        type: 'activate-neighbor-portal' as const,
-        parentCanvasId: sibling.parentCanvasId,
-        portalNodeId: sibling.portalNodeId,
-        source: 'nonvisual' as const,
-      },
-    }));
-  const nextTargets = [...childTargets, ...siblingTargets];
-  const nextRows = graphRows(nextTargets.length);
-  nextTargets.forEach((node, index) => {
-    node.y = nextRows[index] ?? NAVIGATOR_MID_Y;
-    node.labelPlacement = labelPlacementForRow(node.y);
-    nodes.push(node);
-    links.push({ id: `next-link-${node.id}`, path: orthogonalPath(currentNode, node, NEXT_GRAPH_ELBOW_X), kind: 'branch' });
-  });
-
-  return { nodes, links };
-}
-
-function graphRows(count: number): number[] {
-  if (count <= 1) return [NAVIGATOR_MID_Y];
-  const step = Math.min(28, 116 / (count - 1));
-  const start = NAVIGATOR_MID_Y - ((count - 1) * step) / 2;
-  return Array.from({ length: count }, (_, index) => Math.round(start + index * step));
-}
-
-function parentSiblingRowsFor(count: number): number[] {
-  if (count <= 1) return [NAVIGATOR_MID_Y - 28];
-  if (count === 2) return [NAVIGATOR_MID_Y - 28, NAVIGATOR_MID_Y + 28];
-  return [NAVIGATOR_MID_Y - 42, NAVIGATOR_MID_Y + 28, NAVIGATOR_MID_Y + 52];
-}
-
-function labelPlacementForRow(y: number): NavigatorLabelPlacement {
-  return y < NAVIGATOR_MID_Y ? 'above' : 'below';
-}
-
-function orthogonalPath(from: GraphPoint, to: GraphPoint, elbowX?: number): string {
-  if (from.y === to.y) return `M ${from.x} ${from.y} H ${to.x}`;
-  const midX = elbowX ?? Math.round((from.x + to.x) / 2);
-  return `M ${from.x} ${from.y} H ${midX} V ${to.y} H ${to.x}`;
-}
-
-function stackTrailFor(collection: CanvasDocumentCollection, activeCanvasId: CanvasDocumentId): ViewTrailItem[] {
-  const frames = collection.view.stackPath.length ? collection.view.stackPath : fallbackStackPathFor(collection, activeCanvasId);
-  return frames
-    .map((frame) => {
-      const document = collection.documents[frame.canvasId];
-      if (!document) return null;
-      return {
-        canvasId: document.id,
-        title: document.title,
-        depth: frame.depth,
-        active: document.id === activeCanvasId,
-      };
-    })
-    .filter((item): item is ViewTrailItem => Boolean(item));
-}
-
-function fallbackStackPathFor(collection: CanvasDocumentCollection, activeCanvasId: CanvasDocumentId): StackFrame[] {
-  const frames: StackFrame[] = [];
-  let currentId: CanvasDocumentId | null = activeCanvasId;
-  while (currentId) {
-    const current: CanvasDocument = collection.documents[currentId];
-    frames.unshift({
-      canvasId: current.id,
-      parentCanvasId: current.parentCanvasId,
-      parentNodeId: current.parentNodeId,
-      depth: 0,
-    });
-    currentId = current.parentCanvasId;
-  }
-  return frames.map((frame, depth) => ({ ...frame, depth }));
+function countViewTreeNodes(node: ViewTreeNode): number {
+  return 1 + node.children.reduce((count, child) => count + countViewTreeNodes(child), 0);
 }
 
 function childViewTargetFor(collection: CanvasDocumentCollection, node: CanvasNode): ChildViewTarget | null {
   const data = portalDataForNode(node);
   if (!data?.childCanvasId || !collection.documents[data.childCanvasId]) return null;
   return {
-    portalNodeId: node.id,
     canvasId: data.childCanvasId,
     title: collection.documents[data.childCanvasId].title || data.title || describeNode(node).label,
   };
-}
-
-function siblingTargetsFor(collection: CanvasDocumentCollection, activeCanvasId: CanvasDocumentId): Partial<Record<ParentContextRegion, SiblingViewTarget>> {
-  const active = collection.documents[activeCanvasId];
-  const parent = active?.parentCanvasId ? collection.documents[active.parentCanvasId] : null;
-  const source = parent && active?.parentNodeId ? parent.model.nodes.find((node) => node.id === active.parentNodeId) : null;
-  if (!parent || !source) return {};
-
-  const sourceCenter = nodeCenter(source);
-  const siblings: Partial<Record<ParentContextRegion, SiblingViewTarget>> = {};
-  for (const node of parent.model.nodes) {
-    if (node.id === source.id) continue;
-    const center = nodeCenter(node);
-    const distance = Math.hypot(center.x - sourceCenter.x, center.y - sourceCenter.y);
-    const region = regionForContextVector(center.x - sourceCenter.x, center.y - sourceCenter.y);
-    const data = portalDataForNode(node);
-    const childDocument = data?.childCanvasId ? collection.documents[data.childCanvasId] : null;
-    const target: SiblingViewTarget = {
-      region,
-      parentCanvasId: parent.id,
-      portalNodeId: node.id,
-      title: childDocument?.title ?? data?.title ?? describeNode(node).label,
-      canOpen: Boolean(childDocument),
-      distance,
-    };
-    if (!siblings[region] || target.distance < siblings[region].distance) siblings[region] = target;
-  }
-  return PARENT_CONTEXT_REGIONS.reduce<Partial<Record<ParentContextRegion, SiblingViewTarget>>>((next, region) => {
-    if (siblings[region]) next[region] = siblings[region];
-    return next;
-  }, {});
-}
-
-function nodeCenter(node: CanvasNode) {
-  return { x: node.x + node.w / 2, y: node.y + node.h / 2 };
 }
 
 function remoteWorkspaceStorageKey(documentRef: string): string {
