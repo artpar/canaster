@@ -5,15 +5,15 @@ import {
   useRef,
 } from 'react';
 import { cloneDocumentCollection } from '../documentModel';
-import { type Camera, type CanvasCommand, type CanvasModelChange, type ThemeName, type ViewportStatus } from '../types';
+import { type CanvasCommand, type CanvasModelChange, type ThemeName, type ViewportStatus } from '../types';
 import type {
   CanvasDocumentCollection,
-  CanvasDocumentId,
   CanvasWorkspaceSnapshot,
   DocumentCommand,
   DocumentModelChange,
 } from '../documentTypes';
 import { createWorkspaceHistory, createWorkspaceSnapshot } from '../workspaceHistory';
+import type { WorkspaceUrlState } from '../workspaceUrlLocation';
 import { NativeNestedCanvasController } from './NativeNestedCanvasController';
 
 export type NestedCanvasWorkspaceProps = {
@@ -38,11 +38,6 @@ export type NestedCanvasWorkspaceChromeState = {
   storageReady: boolean;
 };
 
-export type WorkspaceViewLocation = {
-  canvasId: CanvasDocumentId;
-  camera: Camera | null;
-};
-
 export type NestedCanvasWorkspaceHandle = {
   fitActiveCanvas(): void;
   refreshActiveCanvas(): void;
@@ -53,8 +48,8 @@ export type NestedCanvasWorkspaceHandle = {
   executeActiveCanvasCommand(command: CanvasCommand): boolean;
   executeDocumentCommand(command: DocumentCommand): void;
   collection(): CanvasDocumentCollection;
-  openWorkspaceLocation(location: WorkspaceViewLocation): boolean;
-  currentWorkspaceLocation(): WorkspaceViewLocation | null;
+  openWorkspaceUrlState(state: WorkspaceUrlState): boolean;
+  currentWorkspaceUrlState(documentId: string | null): WorkspaceUrlState | null;
   getWorkspaceSnapshot(): CanvasWorkspaceSnapshot;
   loadWorkspaceSnapshot(snapshot: CanvasWorkspaceSnapshot, interaction?: string): void;
   flushWorkspaceSnapshot(): Promise<void>;
@@ -130,8 +125,8 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     executeActiveCanvasCommand: (command: CanvasCommand) => controllerRef.current?.executeActiveCanvasCommand(command) ?? false,
     executeDocumentCommand: (command: DocumentCommand) => controllerRef.current?.executeDocumentCommand(command),
     collection: () => controllerRef.current?.collection() ?? cloneDocumentCollection(initialCollection),
-    openWorkspaceLocation: (location: WorkspaceViewLocation) => controllerRef.current?.openWorkspaceLocation(location) ?? false,
-    currentWorkspaceLocation: () => controllerRef.current?.currentWorkspaceLocation() ?? null,
+    openWorkspaceUrlState: (state: WorkspaceUrlState) => controllerRef.current?.openWorkspaceUrlState(state) ?? false,
+    currentWorkspaceUrlState: (documentId: string | null) => controllerRef.current?.currentWorkspaceUrlState(documentId) ?? null,
     getWorkspaceSnapshot: () => controllerRef.current?.getWorkspaceSnapshot() ?? createWorkspaceSnapshot(createWorkspaceHistory(initialCollection), null),
     loadWorkspaceSnapshot: (snapshot: CanvasWorkspaceSnapshot, interaction?: string) => controllerRef.current?.loadWorkspaceSnapshot(snapshot, interaction),
     flushWorkspaceSnapshot: () => controllerRef.current?.flushWorkspaceSnapshot() ?? Promise.resolve(),

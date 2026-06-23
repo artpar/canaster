@@ -59,7 +59,7 @@ import {
 } from './parentContextField';
 import { portalOverlayStyle } from './portalLayout';
 import type { NestedCanvasWorkspaceChromeState } from './NestedCanvasWorkspace';
-import type { WorkspaceViewLocation } from './NestedCanvasWorkspace';
+import type { WorkspaceUrlPaneCamera, WorkspaceUrlState } from '../workspaceUrlLocation';
 
 export type NativeNestedCanvasControllerOptions = {
   root: HTMLElement;
@@ -343,16 +343,29 @@ export class NativeNestedCanvasController {
     });
   }
 
-  openWorkspaceLocation(location: WorkspaceViewLocation): boolean {
+  openWorkspaceUrlState(state: WorkspaceUrlState): boolean {
     const base = this.saveActiveViewport(this.collectionRef.current);
-    if (!base.documents[location.canvasId]) return false;
+    if (!base.documents[state.activeCanvasId]) return false;
     const next = cloneDocumentCollection(base);
-    next.activeCanvasId = location.canvasId;
-    next.view.activeCanvasId = location.canvasId;
-    next.view.focusedEngineId = location.canvasId;
+    next.activeCanvasId = state.activeCanvasId;
+    next.view.activeCanvasId = state.activeCanvasId;
+    next.view.focusedEngineId = state.activeCanvasId;
     next.view.previewFocus = null;
     next.view.deleteConfirmation = null;
-    if (location.camera) next.view.cameras[location.canvasId] = { ...location.camera };
+    next.view.cameras[state.activeCanvasId] = { ...state.activeCamera };
+    for (const pane of state.paneCameras) {
+      const key = parentContextPaneViewportKey({
+        ownerCanvasId: pane.ownerCanvasId,
+        parentCanvasId: pane.parentCanvasId,
+        sourceNodeId: pane.sourceNodeId,
+        region: pane.region,
+      });
+      next.view.viewportMemory.contextPanes[key] = {
+        camera: { ...pane.camera },
+        targetSignature: pane.targetSignature,
+        updatedAt: Date.now(),
+      };
+    }
     this.commitCollection(syncDerivedView(next), [], {
       recordHistory: false,
       persist: true,
@@ -362,12 +375,25 @@ export class NativeNestedCanvasController {
     return true;
   }
 
-  currentWorkspaceLocation(): WorkspaceViewLocation | null {
+  currentWorkspaceUrlState(documentId: string | null): WorkspaceUrlState | null {
     const collection = this.saveActiveViewport(this.collectionRef.current);
     if (!collection.documents[collection.activeCanvasId]) return null;
     return {
-      canvasId: collection.activeCanvasId,
-      camera: cameraForCanvas(collection, collection.activeCanvasId),
+      documentId,
+      activeCanvasId: collection.activeCanvasId,
+      activeCamera: cameraForCanvas(collection, collection.activeCanvasId),
+      paneCameras: [...this.parentContextSlots.values()]
+        .filter((slot) => slot.cameraInitialized && slot.memoryKey && slot.targetSignature)
+        .map((slot) => {
+          const identity = parentContextPaneIdentityFromKey(slot.memoryKey);
+          if (!identity) return null;
+          return {
+            ...identity,
+            targetSignature: slot.targetSignature,
+            camera: slot.engine.getCamera(),
+          };
+        })
+        .filter((pane): pane is WorkspaceUrlPaneCamera => Boolean(pane)),
     };
   }
 
@@ -523,6 +549,7 @@ export class NativeNestedCanvasController {
     this.historyRef.current = { ...this.historyRef.current, present: base };
     this.collectionRef.current = base;
     if (this.storageReady) this.scheduleViewportSnapshotMirror();
+    this.setLiveStatus(this.status);
   }
 
   private flushActiveCanvasRender() {
@@ -1013,6 +1040,7 @@ export class NativeNestedCanvasController {
     this.historyRef.current = { ...this.historyRef.current, present: base };
     this.collectionRef.current = base;
     if (this.storageReady) this.scheduleViewportSnapshotMirror();
+    this.setLiveStatus(this.status);
   }
 
   private handleParentContextPortalLayouts(slotKey: string, layouts: PortalLayout[]) {
@@ -1366,6 +1394,39 @@ export class NativeNestedCanvasController {
 }
 
 type ParentContextResizeHandle = 'left' | 'right' | 'top' | 'bottom' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+
+function parentContextPaneIdentityFromKey(key: string): Omit<WorkspaceUrlPaneCamera, 'targetSignature' | 'camera'> | null {
+  const [kind, rawOwnerCanvasId, rawParentCanvasId, rawSourceNodeId, rawRegion] = key.split('/');
+  if (kind !== 'parent-context-pane' || !rawOwnerCanvasId || !rawParentCanvasId || !rawSourceNodeId || !rawRegion) return null;
+  const region = parseParentContextRegion(rawRegion);
+  if (!region) return null;
+  try {
+    return {
+      ownerCanvasId: decodeURIComponent(rawOwnerCanvasId),
+      parentCanvasId: decodeURIComponent(rawParentCanvasId),
+      sourceNodeId: decodeURIComponent(rawSourceNodeId),
+      region,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function parseParentContextRegion(value: string): ParentContextRegion | null {
+  if (
+    value === 'top' ||
+    value === 'top-right' ||
+    value === 'right' ||
+    value === 'bottom-right' ||
+    value === 'bottom' ||
+    value === 'bottom-left' ||
+    value === 'left' ||
+    value === 'top-left'
+  ) {
+    return value;
+  }
+  return null;
+}
 
 function rectToDomRect(rect: DOMRect | DOMRectReadOnly): DOMRect {
   return new DOMRect(rect.x, rect.y, Math.max(1, rect.width), Math.max(1, rect.height));

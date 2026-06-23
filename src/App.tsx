@@ -61,7 +61,7 @@ import { BuiltInNodeTypes, type CanvasArrangeLayout, type CanvasNode, type Theme
 import type { CanvasDocumentCollection, CanvasDocumentId, CanvasWorkspaceSnapshot, DocumentCommand } from './engine/documentTypes';
 import { saveWorkspaceSnapshot } from './engine/workspaceStorage';
 import { createWorkspaceHistory, createWorkspaceSnapshot } from './engine/workspaceHistory';
-import { readWorkspaceUrlLocation, replaceWorkspaceUrlLocation, type WorkspaceUrlLocation } from './engine/workspaceUrlLocation';
+import { readWorkspaceUrlState, replaceWorkspaceUrlState, type WorkspaceUrlState } from './engine/workspaceUrlLocation';
 
 const ONBOARDING_DISMISSED_STORAGE_KEY = 'canaster:onboarding-dismissed:v1';
 const DEFAULT_DOCUMENT_TITLE = 'Canaster Workspace';
@@ -97,12 +97,12 @@ export function App() {
   const initialStoredSessionRef = useRef<boolean | null>(null);
   if (initialStoredSessionRef.current === null) initialStoredSessionRef.current = hasUsableStoredToken();
   const hasInitialStoredSession = initialStoredSessionRef.current === true;
-  const initialUrlLocationRef = useRef<WorkspaceUrlLocation | null>(null);
-  if (initialUrlLocationRef.current === null) initialUrlLocationRef.current = readWorkspaceUrlLocation();
-  const pendingUrlLocationRef = useRef<WorkspaceUrlLocation | null>(
-    initialUrlLocationRef.current?.documentId || initialUrlLocationRef.current?.viewId ? initialUrlLocationRef.current : null,
+  const initialUrlStateRef = useRef<WorkspaceUrlState | null>(null);
+  if (initialUrlStateRef.current === null) initialUrlStateRef.current = readWorkspaceUrlState();
+  const pendingUrlStateRef = useRef<WorkspaceUrlState | null>(
+    initialUrlStateRef.current,
   );
-  const urlLocationReadyRef = useRef(!pendingUrlLocationRef.current);
+  const urlStateReadyRef = useRef(!pendingUrlStateRef.current);
   const [theme, setTheme] = useState<ThemeName>('dark');
   const [utilityDrawerMode, setUtilityDrawerMode] = useState<UtilityDrawerMode>(null);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -121,7 +121,7 @@ export function App() {
   const [authOtp, setAuthOtp] = useState('');
   const [signedIn, setSignedIn] = useState(() => hasInitialStoredSession);
   const [documents, setDocuments] = useState<CanasterDocumentSummary[]>([]);
-  const [activeDocumentId, setActiveDocumentId] = useState(() => initialUrlLocationRef.current?.documentId ?? window.localStorage.getItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY) ?? '');
+  const [activeDocumentId, setActiveDocumentId] = useState(() => initialUrlStateRef.current?.documentId ?? window.localStorage.getItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY) ?? '');
   const [documentTitle, setDocumentTitle] = useState(DEFAULT_DOCUMENT_TITLE);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(() => (hasInitialStoredSession ? 'loading' : 'anonymous'));
   const [syncMessage, setSyncMessage] = useState(() => (hasInitialStoredSession ? 'Checking saved workspaces' : LOCAL_SAVE_MESSAGE));
@@ -165,20 +165,16 @@ export function App() {
     workspaceRef.current?.executeDocumentCommand(command);
   }, []);
 
-  const applyPendingUrlLocation = useCallback((documentRef: string | null) => {
-    const pending = pendingUrlLocationRef.current;
+  const applyPendingUrlState = useCallback((documentRef: string | null) => {
+    const pending = pendingUrlStateRef.current;
     if (!pending) {
-      urlLocationReadyRef.current = true;
+      urlStateReadyRef.current = true;
       return false;
     }
     if (pending.documentId !== documentRef) return false;
-    pendingUrlLocationRef.current = null;
-    urlLocationReadyRef.current = true;
-    if (!pending.viewId) return false;
-    return workspaceRef.current?.openWorkspaceLocation({
-      canvasId: pending.viewId,
-      camera: pending.camera,
-    }) ?? false;
+    pendingUrlStateRef.current = null;
+    urlStateReadyRef.current = true;
+    return workspaceRef.current?.openWorkspaceUrlState(pending) ?? false;
   }, []);
 
   useEffect(() => {
@@ -196,7 +192,7 @@ export function App() {
   }, [activeDocumentId, workspaceStorageKey]);
 
   useEffect(() => {
-    const pending = pendingUrlLocationRef.current;
+    const pending = pendingUrlStateRef.current;
     if (!pending?.documentId || signedIn) return;
     setAuthStep('email');
     setAccountOpen(true);
@@ -205,32 +201,22 @@ export function App() {
   }, [signedIn]);
 
   useEffect(() => {
-    const pending = pendingUrlLocationRef.current;
+    const pending = pendingUrlStateRef.current;
     if (!pending || pending.documentId || !chromeState.storageReady) return;
-    applyPendingUrlLocation(null);
-  }, [applyPendingUrlLocation, chromeState.collection, chromeState.storageReady]);
-
-  const activeUrlCamera = chromeState.collection.view.cameras[chromeState.collection.activeCanvasId] ?? null;
+    applyPendingUrlState(null);
+  }, [applyPendingUrlState, chromeState.collection, chromeState.storageReady]);
 
   useEffect(() => {
-    if (!urlLocationReadyRef.current || pendingUrlLocationRef.current || !chromeState.storageReady) return;
+    if (!urlStateReadyRef.current || pendingUrlStateRef.current || !chromeState.storageReady) return;
     const updateUrl = window.setTimeout(() => {
-      const location = workspaceRef.current?.currentWorkspaceLocation();
-      if (!location) return;
-      replaceWorkspaceUrlLocation({
-        documentId: activeDocumentId || null,
-        viewId: location.canvasId,
-        camera: location.camera,
-      });
+      const state = workspaceRef.current?.currentWorkspaceUrlState(activeDocumentId || null);
+      if (!state) return;
+      replaceWorkspaceUrlState(state);
     }, 200);
     return () => window.clearTimeout(updateUrl);
   }, [
     activeDocumentId,
-    chromeState.collection.activeCanvasId,
-    activeUrlCamera?.x,
-    activeUrlCamera?.y,
-    activeUrlCamera?.scale,
-    chromeState.storageReady,
+    chromeState,
   ]);
 
   useEffect(() => {
@@ -298,7 +284,7 @@ export function App() {
       lastSavedSnapshotSignatureRef.current = snapshotSignature(snapshot);
       ignoreDirtyUntilRef.current = Date.now() + 1200;
       workspaceRef.current?.loadWorkspaceSnapshot(snapshot, 'Document loaded');
-      applyPendingUrlLocation(documentRef);
+      applyPendingUrlState(documentRef);
       window.localStorage.setItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY, documentRef);
       setActiveDocumentId(documentRef);
       setDocumentTitle(title);
@@ -316,7 +302,7 @@ export function App() {
       setSyncStatus('error');
       setSyncMessage(workspaceErrorMessage(error, 'open'));
     }
-  }, [applyPendingUrlLocation, recoverSessionError]);
+  }, [applyPendingUrlState, recoverSessionError]);
 
   useEffect(() => {
     if (!signedIn) return;
