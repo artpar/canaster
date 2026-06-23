@@ -26,11 +26,11 @@ export function engineSlotId(canvasId: CanvasDocumentId, mode: EngineMode, owner
   return `${mode}:${ownerId}:${canvasId}`;
 }
 
-export function livePortalSlotsFor(collection: CanvasDocumentCollection, activeLayouts: PortalLayout[]): PortalLayout[] {
+export function livePortalSlotsFor(collection: CanvasDocumentCollection, activeLayouts: PortalLayout[], limit = MAX_LIVE_PORTAL_PREVIEWS): PortalLayout[] {
   return activeLayouts
     .filter((layout) => layout.childCanvasId && collection.documents[layout.childCanvasId] && isPortalLiveRenderable(layout))
     .sort((a, b) => b.screenRect.w * b.screenRect.h - a.screenRect.w * a.screenRect.h)
-    .slice(0, MAX_LIVE_PORTAL_PREVIEWS);
+    .slice(0, limit);
 }
 
 export function isPortalLiveRenderable(layout: PortalLayout): boolean {

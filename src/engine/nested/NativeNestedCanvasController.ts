@@ -102,6 +102,11 @@ type ParentContextPaneSlot = {
   sizeSignature: string;
 };
 
+type OverlayAllocation = {
+  slot: Slot;
+  depth: number;
+};
+
 type ResizeButtonState = {
   handle: ParentContextResizeHandle;
   paneLayout: ParentContextPaneLayout;
@@ -524,7 +529,8 @@ export class NativeNestedCanvasController {
 
   private renderOverlays() {
     const collection = this.collectionRef.current;
-    const liveLayouts = livePortalSlotsFor(collection, this.portalLayouts).slice(0, Math.min(this.previewCapacity, MAX_TOTAL_ENGINES - 1));
+    const firstLevelLimit = MAX_TOTAL_ENGINES - 1;
+    const liveLayouts = livePortalSlotsFor(collection, this.portalLayouts, firstLevelLimit);
     this.activeEngine?.setLivePortalNodeIds(portalNodeIdsFor(liveLayouts));
     const signature = liveLayouts.map((layout) => `${layout.portalNodeId}:${layout.childCanvasId}`).join('|');
     const topologyChanged = signature !== this.lastOverlaySignature;
@@ -544,9 +550,13 @@ export class NativeNestedCanvasController {
     });
     let remaining = MAX_TOTAL_ENGINES - 1;
     const seen = new Set<string>();
+    const queue: OverlayAllocation[] = [];
     for (const layout of liveLayouts) {
       if (remaining <= 0 || !layout.childCanvasId) break;
-      remaining -= this.createOverlayViewport(this.overlayLayer, layout.childCanvasId, layout, remaining, 0, 'active', seen);
+      const slot = this.createOverlayViewport(this.overlayLayer, layout.childCanvasId, layout, remaining, 0, 'active', seen);
+      if (!slot) continue;
+      remaining -= 1;
+      queue.push({ slot, depth: 1 });
     }
     for (const slot of this.parentContextSlots.values()) {
       const contextLayouts = remaining > 0 ? livePortalSlotsFor(collection, slot.portalLayouts).slice(0, remaining) : [];
@@ -554,25 +564,27 @@ export class NativeNestedCanvasController {
       if (!contextLayouts.length) continue;
       for (const layout of contextLayouts) {
         if (remaining <= 0 || !layout.childCanvasId) break;
-        remaining -= this.createOverlayViewport(slot.childOverlayLayer, layout.childCanvasId, layout, remaining, 0, `context:${slot.key}`, seen);
+        const embeddedSlot = this.createOverlayViewport(slot.childOverlayLayer, layout.childCanvasId, layout, remaining, 0, `context:${slot.key}`, seen);
+        if (!embeddedSlot) continue;
+        remaining -= 1;
+        queue.push({ slot: embeddedSlot, depth: 1 });
       }
     }
+    remaining = this.renderEmbeddedChildOverlaysBreadthFirst(queue, remaining, seen);
     this.disposeSlotsExcept(seen);
     this.emitChromeState();
   }
 
-  private createOverlayViewport(parent: HTMLElement, canvasId: CanvasDocumentId, layout: PortalLayout, remaining: number, depth: number, ownerPath: string, seen: Set<string>): number {
+  private createOverlayViewport(parent: HTMLElement, canvasId: CanvasDocumentId, layout: PortalLayout, remaining: number, depth: number, ownerPath: string, seen: Set<string>): Slot | null {
     const canvasDocument = this.collectionRef.current.documents[canvasId];
-    if (!canvasDocument || remaining <= 0) return 0;
+    if (!canvasDocument || remaining <= 0) return null;
     const key = `embedded:${ownerPath}:${depth}:${canvasId}:${layout.portalNodeId}`;
     seen.add(key);
     const existing = this.slots.get(key);
     if (existing) {
       if (existing.wrapper.parentElement !== parent) parent.append(existing.wrapper);
       this.updateOverlayViewport(existing, layout);
-      let used = 1;
-      used += this.renderEmbeddedChildOverlays(existing, remaining - used, depth + 1, seen);
-      return used;
+      return existing;
     }
     this.record('overlay:viewport:create', {
       canvasId,
@@ -640,15 +652,31 @@ export class NativeNestedCanvasController {
       engine.fit(16);
     });
 
-    const slot = this.slots.get(key);
-    return 1 + (slot ? this.renderEmbeddedChildOverlays(slot, remaining - 1, depth + 1, seen) : 0);
+    return this.slots.get(key) ?? null;
   }
 
-  private renderEmbeddedChildOverlays(slot: Slot, remaining: number, depth: number, seen: Set<string>): number {
+  private renderEmbeddedChildOverlaysBreadthFirst(queue: OverlayAllocation[], remaining: number, seen: Set<string>): number {
+    while (queue.length && remaining > 0) {
+      const currentDepth = queue[0].depth;
+      const currentLevel: OverlayAllocation[] = [];
+      while (queue.length && queue[0].depth === currentDepth) {
+        const allocation = queue.shift();
+        if (allocation) currentLevel.push(allocation);
+      }
+      for (const allocation of currentLevel) {
+        remaining = this.renderEmbeddedChildOverlayLevel(allocation, remaining, seen, queue);
+      }
+    }
+    for (const allocation of queue) allocation.slot.engine.setLivePortalNodeIds(new Set());
+    return remaining;
+  }
+
+  private renderEmbeddedChildOverlayLevel(allocation: OverlayAllocation, remaining: number, seen: Set<string>, queue: OverlayAllocation[]): number {
+    const { slot, depth } = allocation;
     const collection = this.collectionRef.current;
-    const liveLayouts = remaining > 0 ? livePortalSlotsFor(collection, slot.portalLayouts).slice(0, remaining) : [];
+    const liveLayouts = remaining > 0 ? livePortalSlotsFor(collection, slot.portalLayouts, Math.min(remaining, this.previewCapacity)) : [];
     slot.engine.setLivePortalNodeIds(portalNodeIdsFor(liveLayouts));
-    if (!liveLayouts.length && !slot.portalLayouts.length) return 0;
+    if (!liveLayouts.length && !slot.portalLayouts.length) return remaining;
     this.record('embedded:child-overlays:render', {
       canvasId: slot.canvasId,
       depth,
@@ -663,13 +691,15 @@ export class NativeNestedCanvasController {
         h: Math.round(layout.screenRect.h),
       })),
     });
-    if (!liveLayouts.length) return 0;
-    let used = 0;
+    if (!liveLayouts.length) return remaining;
     for (const layout of liveLayouts) {
-      if (remaining - used <= 0 || !layout.childCanvasId) break;
-      used += this.createOverlayViewport(slot.childOverlayLayer, layout.childCanvasId, layout, remaining - used, depth, slot.key, seen);
+      if (remaining <= 0 || !layout.childCanvasId) break;
+      const childSlot = this.createOverlayViewport(slot.childOverlayLayer, layout.childCanvasId, layout, remaining, depth, slot.key, seen);
+      if (!childSlot) continue;
+      remaining -= 1;
+      queue.push({ slot: childSlot, depth: depth + 1 });
     }
-    return used;
+    return remaining;
   }
 
   private handleEmbeddedPortalLayouts(slotKey: string, layouts: PortalLayout[]) {

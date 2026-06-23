@@ -1392,11 +1392,11 @@ export class CanvasEngine {
     return this.nodeVisibilityFilter ? this.model.nodes.filter((node) => this.isNodeVisible(node)) : this.model.nodes;
   }
 
-  private portalPreviewState(node: CanvasNode): 'none' | 'live' | 'unavailable' {
+  private portalPreviewState(node: CanvasNode): 'none' | 'live' {
     if (node.type !== BuiltInNodeTypes.canvas) return 'none';
     const data = parseNodeData(node) as CanvasPortalNodeData;
     if (!data.childCanvasId) return 'none';
-    return this.livePortalNodeIds.has(node.id) ? 'live' : 'unavailable';
+    return this.livePortalNodeIds.has(node.id) ? 'live' : 'none';
   }
 
   private routeNodeAction(nodeId: string, actionId: string, source: CanvasEditSource) {

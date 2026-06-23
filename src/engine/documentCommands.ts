@@ -170,7 +170,7 @@ function focusPortalPreview(collection: CanvasDocumentCollection, parentCanvasId
   const parent = collection.documents[parentCanvasId];
   const node = parent?.model.nodes.find((candidate) => candidate.id === portalNodeId);
   const data = node ? portalDataForNode(node) : null;
-  if (!parent || !node || !data?.childCanvasId || !collection.documents[data.childCanvasId]) return noChange(collection, 'Preview unavailable');
+  if (!parent || !node || !data?.childCanvasId || !collection.documents[data.childCanvasId]) return noChange(collection, 'Child canvas unavailable');
   const next = cloneDocumentCollection(collection);
   next.view.previewFocus = { parentCanvasId, portalNodeId, childCanvasId: data.childCanvasId };
   return {

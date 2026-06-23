@@ -37,9 +37,6 @@ export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = {
       ctx.font = '12px ui-sans-serif, system-ui, sans-serif';
       if (!data.childCanvasId) {
         ctx.fillText('No view inside', previewX + 10, previewY + 10);
-      } else if (state.portalPreview === 'unavailable') {
-        ctx.fillText('Preview unavailable', previewX + 10, previewY + 10);
-        ctx.fillText(`${data.nodeCount} item${data.nodeCount === 1 ? '' : 's'} inside`, previewX + 10, previewY + 28);
       } else if (state.portalPreview === 'none') {
         ctx.fillText(`${data.nodeCount} item${data.nodeCount === 1 ? '' : 's'} inside`, previewX + 10, previewY + 10);
       }

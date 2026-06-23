@@ -20,7 +20,7 @@ export type NodeRenderState = {
   primary: boolean;
   hovered: boolean;
   quality: NodeRenderQuality;
-  portalPreview: 'none' | 'live' | 'unavailable';
+  portalPreview: 'none' | 'live';
 };
 
 export type NodeRenderContext<TData extends NodeData = NodeData> = {
