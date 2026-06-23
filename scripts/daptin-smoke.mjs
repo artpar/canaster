@@ -486,7 +486,11 @@ async function main() {
     console.log('Canaster Daptin document and asset blob smoke passed');
   } finally {
     await stopProcess(daptin);
-    await rm(workDir, { recursive: true, force: true });
+    try {
+      await rm(workDir, { recursive: true, force: true });
+    } catch (error) {
+      console.warn(`Could not remove smoke temp directory ${workDir}: ${error?.message ?? error}`);
+    }
   }
 }
 
