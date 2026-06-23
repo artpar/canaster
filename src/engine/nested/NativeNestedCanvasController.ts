@@ -9,6 +9,7 @@ import {
   serializeCollectionViewState,
   setCameraForCanvas,
   setSelectionForCanvas,
+  syncDerivedView,
 } from '../documentModel';
 import {
   cloneViewState,
@@ -58,6 +59,7 @@ import {
 } from './parentContextField';
 import { portalOverlayStyle } from './portalLayout';
 import type { NestedCanvasWorkspaceChromeState } from './NestedCanvasWorkspace';
+import type { WorkspaceViewLocation } from './NestedCanvasWorkspace';
 
 export type NativeNestedCanvasControllerOptions = {
   root: HTMLElement;
@@ -339,6 +341,34 @@ export class NativeNestedCanvasController {
       persist: true,
       notify: true,
     });
+  }
+
+  openWorkspaceLocation(location: WorkspaceViewLocation): boolean {
+    const base = this.saveActiveViewport(this.collectionRef.current);
+    if (!base.documents[location.canvasId]) return false;
+    const next = cloneDocumentCollection(base);
+    next.activeCanvasId = location.canvasId;
+    next.view.activeCanvasId = location.canvasId;
+    next.view.focusedEngineId = location.canvasId;
+    next.view.previewFocus = null;
+    next.view.deleteConfirmation = null;
+    if (location.camera) next.view.cameras[location.canvasId] = { ...location.camera };
+    this.commitCollection(syncDerivedView(next), [], {
+      recordHistory: false,
+      persist: true,
+      notify: true,
+    });
+    this.setStatus({ ...this.status, interaction: 'Opened linked view' });
+    return true;
+  }
+
+  currentWorkspaceLocation(): WorkspaceViewLocation | null {
+    const collection = this.saveActiveViewport(this.collectionRef.current);
+    if (!collection.documents[collection.activeCanvasId]) return null;
+    return {
+      canvasId: collection.activeCanvasId,
+      camera: cameraForCanvas(collection, collection.activeCanvasId),
+    };
   }
 
   getWorkspaceSnapshot(): CanvasWorkspaceSnapshot {
@@ -1239,6 +1269,7 @@ export class NativeNestedCanvasController {
       lastCanvasModelChangeId: this.canvasModelChangeCount,
       canUndo: this.historyRef.current.undoStack.length > 0,
       canRedo: this.historyRef.current.redoStack.length > 0,
+      storageReady: this.storageReady,
     });
   }
 
