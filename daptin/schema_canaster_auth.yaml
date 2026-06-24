@@ -66,6 +66,7 @@ Actions:
           subject: 'Your Canaster sign-in code'
           from: 'login@mail.canaster.in'
           mail_server_hostname: 'mail.canaster.in'
+          send_immediately: true
       - Type: client.notify
         Method: ACTIONRESPONSE
         Attributes:
