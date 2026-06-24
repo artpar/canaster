@@ -106,13 +106,15 @@ Current production status as of 2026-06-24 15:29 IST:
 - Secret Manager secret `canaster-daptin-vm-db-connection` exists and points at the Cloud SQL public IP authorized only for the VM static IP.
 - VM `canaster-daptin-vm` exists in `asia-south1-c` with external IP `34.14.185.249`.
 - VM firewall rules allow public TCP `80`, `443`, `25`, `465`, `587`, and `993` for tag `canaster-vm`, plus IAP SSH from `35.235.240.0/20`.
-- Runtime image `asia-south1-docker.pkg.dev/agent4-471206/canaster/daptin:9f76f9ea947a8de04d7a6c214a9bb79999091de4` is deployed.
+- Runtime image `asia-south1-docker.pkg.dev/agent4-471206/canaster/daptin:ae020f7be75957c2661cb6b4a1fde23678282992` is deployed.
 - Daptin HTTP verification passed with `HTTP 200` for `Host: api.canaster.in` and `/api/world?page%5Bsize%5D=1`.
 - Daptin HTTPS verification passed with `curl --resolve api.canaster.in:443:34.14.185.249 https://api.canaster.in/api/world?page%5Bsize%5D=1`.
 - Daptin logs show `TLS server listening on port :6443`.
 - Daptin logs show SMTP server setup for `mail.canaster.in` on `0.0.0.0:25`, `0.0.0.0:465`, and `0.0.0.0:587`.
 - Daptin logs show IMAPS server setup for `imap.canaster.in` on `:993`.
 - Daptin `cloud_store.name=canaster-mail`, reference `019edc18-5fe3-7370-be4f-ac76ded67a78`, points at `canaster-mail:canaster-daptin-storage` with credential `canaster-site` for cloud-store-backed raw `mail.mail` and `outbox.mail` bodies.
+- Daptin `cloud_store.name=assets`, id `4`, points at `canaster-assets:canaster-daptin-storage` with credential `canaster-site` for image panel uploads.
+- Daptin `world.permission(asset)=561408`, `world_schema_json.DefaultPermission(asset)=16256`, and `world.usergroup_id -> users` relation permission `770048`. This is required for signed-in normal users to create/update private image assets while anonymous users cannot create assets.
 - VM outbound SMTP verification passed for `gmail-smtp-in.l.google.com:25` and `smtp.gmail.com:465`.
 - Public DNS is authoritative on Namecheap BasicDNS at `dns1.registrar-servers.com` and `dns2.registrar-servers.com`.
 - Daptin `/_config/backend/hostname`, `/_config/backend/imap.enabled`, `/_config/backend/imap.listen_interface`, `/_config/backend/imap.hostname`, and `/_config/backend/enable_https` work over the API host on the VM. `daptin-cli` does not currently have a config command; tracking issue: `daptin/daptin-cli#36`.
@@ -783,6 +785,12 @@ Final production mail smoke on 2026-06-19:
 - SMTP AUTH LOGIN over STARTTLS on `mail.canaster.in:587` succeeded for `login@mail.canaster.in`.
 - Fresh inbound SMTP to `login@mail.canaster.in` created a `mail` row with `mail` as a cloud-store file array.
 - Fresh `request_canaster_email_otp` plus `outbox.process_outbox` created a cloud-store outbox file array, marked the outbox row `sent=true`, and delivered the OTP into `mail` as a cloud-store file array.
+
+Production image panel upload RCA on 2026-06-24:
+
+- Symptom: signed-in image panel upload returned permission denied.
+- Cause: the `asset` table existed, but production did not yet have the `assets` cloud store or the `users -> asset` table-access relation. The schema smoke covered privileged/isolated asset creation, not the normal signed-in production user path.
+- Fix: created the GCS-backed `assets` cloud store, set `world.permission(asset)=561408`, added the `users -> asset` relation with permission `770048`, restarted Daptin so the cloud store was loaded, and verified with a real `artpar@100x.bot` OTP session that asset create, private permission patch, and `/asset/asset/<ref>/file` download succeed.
 
 Final production OTP smoke on 2026-06-24 after `daptin/daptin:v0.12.25`:
 
