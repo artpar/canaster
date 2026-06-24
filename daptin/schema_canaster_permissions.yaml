@@ -1,0 +1,45 @@
+Tables:
+  # Public auth uses action-level GuestExecute on the two OTP actions only.
+  # These table permissions intentionally allow guest Execute without guest
+  # Peek/Read/Create/Update/Delete so password auth and table CRUD stay closed.
+  - TableName: user_account
+    Permission: 561440
+
+  # Application-owned user data.
+  - TableName: document
+    Permission: 561408
+    DefaultPermission: 16256
+
+  - TableName: asset
+    Permission: 561408
+    DefaultPermission: 16256
+
+  - TableName: mail
+    Permission: 561408
+
+  # Sensitive system and operations tables must not be guest-listable.
+  - TableName: outbox
+    Permission: 561408
+
+  - TableName: credential
+    Permission: 561408
+
+  - TableName: certificate
+    Permission: 561408
+
+  - TableName: user_otp_account
+    Permission: 561408
+
+  - TableName: mail_account
+    Permission: 561408
+    DefaultPermission: 569633
+
+  - TableName: mail_box
+    Permission: 561408
+    DefaultPermission: 569633
+
+  - TableName: mail_server
+    Permission: 561408
+
+  - TableName: site
+    Permission: 561408

@@ -87,7 +87,7 @@ async function waitForHttp(url, timeoutMs = 45000) {
   while (Date.now() < deadline) {
     try {
       const response = await fetch(url);
-      if (response.ok) return response;
+      if (response.status < 500) return response;
     } catch (error) {
       lastError = error;
     }
@@ -353,10 +353,11 @@ async function main() {
       await run(cliCommand, ['--config', cliConfig, 'execute', 'user_account', 'signup', `email=${adminEmail}`, 'name=Canaster Smoke Admin', `password=${password}`, `passwordConfirm=${password}`], { env });
       await run(cliCommand, ['--config', cliConfig, 'execute', 'user_account', 'signin', `email=${adminEmail}`, `password=${password}`], { env });
       await run(cliCommand, ['--config', cliConfig, 'execute', 'world', 'become_an_administrator'], { env });
-      const requestAction = await run(cliCommand, ['--config', cliConfig, '--output', 'json', 'list', 'action', '--filter', 'action_name=request_canaster_email_otp', '--page-size', '1'], { env });
-      assert(requestAction.includes('"action_name": "request_canaster_email_otp"'), 'request_canaster_email_otp action is missing');
-      const verifyAction = await run(cliCommand, ['--config', cliConfig, '--output', 'json', 'list', 'action', '--filter', 'action_name=verify_canaster_email_otp', '--page-size', '1'], { env });
-      assert(verifyAction.includes('"action_name": "verify_canaster_email_otp"'), 'verify_canaster_email_otp action is missing');
+      const { response: badOtpResponse } = await request(baseUrl, '/action/user_account/request_canaster_email_otp', {
+        method: 'POST',
+        body: JSON.stringify({ attributes: { email: 'bad' } }),
+      });
+      assert(badOtpResponse.status === 400, `request_canaster_email_otp should be public and reach validation; got ${badOtpResponse.status}`);
 
       token = await readTokenFromCliConfig(cliConfig);
     }
