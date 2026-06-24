@@ -96,7 +96,7 @@ Fixed production defaults:
 
 The VM deployment intentionally runs a single Daptin process. Daptin’s DB state is in Cloud SQL. Static site files remain in the GCS-backed Daptin `canaster-site` `cloud_store`, while raw SMTP/IMAP message bodies use the GCS-backed Daptin `canaster-mail` `cloud_store`.
 
-Current production status as of 2026-06-19 12:05 IST:
+Current production status as of 2026-06-24 15:29 IST:
 
 - Google Cloud project: `agent4-471206`.
 - Artifact Registry repository `canaster` exists in `asia-south1`.
@@ -106,7 +106,7 @@ Current production status as of 2026-06-19 12:05 IST:
 - Secret Manager secret `canaster-daptin-vm-db-connection` exists and points at the Cloud SQL public IP authorized only for the VM static IP.
 - VM `canaster-daptin-vm` exists in `asia-south1-c` with external IP `34.14.185.249`.
 - VM firewall rules allow public TCP `80`, `443`, `25`, `465`, `587`, and `993` for tag `canaster-vm`, plus IAP SSH from `35.235.240.0/20`.
-- Runtime image `asia-south1-docker.pkg.dev/agent4-471206/canaster/daptin:999455fec932ef769b5ff677dc550940cb3e5f6d` is deployed.
+- Runtime image `asia-south1-docker.pkg.dev/agent4-471206/canaster/daptin:9f76f9ea947a8de04d7a6c214a9bb79999091de4` is deployed.
 - Daptin HTTP verification passed with `HTTP 200` for `Host: api.canaster.in` and `/api/world?page%5Bsize%5D=1`.
 - Daptin HTTPS verification passed with `curl --resolve api.canaster.in:443:34.14.185.249 https://api.canaster.in/api/world?page%5Bsize%5D=1`.
 - Daptin logs show `TLS server listening on port :6443`.
@@ -127,7 +127,11 @@ DNS cutover records for Namecheap:
 - `mail` A `34.14.185.249`
 - Domain SPF TXT: `v=spf1 ip4:34.14.185.249 -all`
 - `mail` SPF TXT: `v=spf1 ip4:34.14.185.249 -all`
+- `_dmarc` TXT: `v=DMARC1; p=none; adkim=s; aspf=r`
+- `_dmarc.mail` TXT: `v=DMARC1; p=none; adkim=s; aspf=r`
+- `d1._domainkey` and `d1._domainkey.mail` DKIM TXT records exist and publish Daptin certificate-derived public keys.
 - MX for the domain or `mail` subdomain as needed: `10 mail.canaster.in`
+- Google Cloud public PTR is enabled on the VM access config: `34.14.185.249 -> mail.canaster.in`.
 
 `.env.production` and `npm run dev:cloud` point `VITE_DAPTIN_ENDPOINT` at `https://api.canaster.in` for frontend builds and cloud-backed local development.
 
@@ -136,7 +140,7 @@ DNS cutover records for Namecheap:
 
 `deploy/daptin/Dockerfile` builds a thin Canaster Daptin image:
 
-- Base image: `daptin/daptin:v0.12.22`
+- Base image: `daptin/daptin:v0.12.25`
 - Copies `daptin/schema_*.yaml` into `/opt/canaster/schema` for schema-managed email OTP auth actions
 - Uses `/opt/canaster/entrypoint.sh`
 - Reads `PORT` and `HTTPS_PORT`
@@ -751,6 +755,8 @@ Current production Daptin SMTP/IMAP state as of 2026-06-19:
 - Daptin `v0.12.21` fixes `daptin/daptin#223` so IMAPS serves the full ACME certificate chain from `certificate_pem` plus `root_certificate` without a manual certificate row patch.
 - Daptin `v0.12.21` fixes `daptin/daptin#224` so schema import applies `IsForeignKey=true` and `ForeignKeyData` for the cloud-store-backed `mail.mail` and `outbox.mail` columns without a manual world row patch.
 - Daptin `v0.12.22` fixes `daptin/daptin#225` so schema import preserves deployer-authored generated join table metadata. Canaster declares `world_world_id_has_usergroup_usergroup_id.DefaultPermission=638976` in schema and verifies relation rows through normal relation APIs.
+- Daptin `v0.12.23` fixes `daptin/daptin#228`: `process_outbox` now sends fresh message readers across MX retry attempts, so Gmail no longer receives empty SMTP DATA and rejects with missing `From`.
+- Daptin `v0.12.25` fixes `daptin/daptin#229`: `mail.send` supports `send_immediately: true` for cloud-store-backed `outbox.mail` by committing the outbox row, reloading it with the mail file hydrated, attempting SMTP delivery, and leaving retry metadata if the immediate attempt fails.
 - The ignored local file `.tmp/daptin/prod-mail-login.env` stores the current `login@mail.canaster.in` mailbox credential for operational SMTP AUTH and IMAP smoke tests. Do not commit it.
 - `sync_mail_servers` and `process_outbox` both execute successfully as the production admin.
 
@@ -761,7 +767,7 @@ DNS records to create after the Daptin certificate row exists:
 - `mail.canaster.in`: TXT SPF record allowing the actual Daptin outbound SMTP IP. Do not use the load balancer IP here unless live send headers prove it is also the SMTP egress IP.
 - `_dmarc.mail.canaster.in`: TXT `v=DMARC1; p=none; adkim=s; aspf=r` for initial monitoring while delivery is being verified.
 
-`mail.canaster.in`, `imap.canaster.in`, and wildcard subdomains should resolve to the VM IP `34.14.185.249` after DNS cutover. VM outbound SMTP delivery has been verified from `canaster-daptin-vm`: TCP 25 to `gmail-smtp-in.l.google.com` succeeds, and TCP 465 to `smtp.gmail.com` succeeds. Public SMTP is verified on `25`, `465`, and `587`; public IMAPS is verified on `993`.
+`mail.canaster.in`, `imap.canaster.in`, and wildcard subdomains should resolve to the VM IP `34.14.185.249` after DNS cutover. VM outbound SMTP delivery has been verified from `canaster-daptin-vm`: TCP 25 to `gmail-smtp-in.l.google.com` succeeds, and TCP 465 to `smtp.gmail.com` succeeds. Public SMTP is verified on `25`, `465`, and `587`; public IMAPS is verified on `993`. Forward and reverse DNS are aligned: `mail.canaster.in A -> 34.14.185.249` and `34.14.185.249 PTR -> mail.canaster.in`.
 
 Final production mail smoke on 2026-06-19:
 
@@ -771,6 +777,15 @@ Final production mail smoke on 2026-06-19:
 - SMTP AUTH LOGIN over STARTTLS on `mail.canaster.in:587` succeeded for `login@mail.canaster.in`.
 - Fresh inbound SMTP to `login@mail.canaster.in` created a `mail` row with `mail` as a cloud-store file array.
 - Fresh `request_canaster_email_otp` plus `outbox.process_outbox` created a cloud-store outbox file array, marked the outbox row `sent=true`, and delivered the OTP into `mail` as a cloud-store file array.
+
+Final production OTP smoke on 2026-06-24 after `daptin/daptin:v0.12.25`:
+
+- Canaster image `asia-south1-docker.pkg.dev/agent4-471206/canaster/daptin:9f76f9ea947a8de04d7a6c214a9bb79999091de4` was deployed by GitHub Actions run `28090383127`.
+- Fresh `request_canaster_email_otp` to `artpar@gmail.com` generated the mail at `09:59:12 UTC`.
+- Daptin immediate delivery sent outbox row `31` at `09:59:14 UTC`.
+- The action POST returned `200` at `09:59:14 UTC`, after the immediate delivery attempt completed.
+- The recipient confirmed the OTP arrived in Gmail.
+- There was no `Failed to read outbox mail` cloud-store hydration error and no `From header is missing` Gmail rejection.
 
 ## CI/CD
 
