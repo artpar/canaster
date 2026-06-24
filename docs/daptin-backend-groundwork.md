@@ -129,7 +129,7 @@ DNS cutover records for Namecheap:
 - `mail` SPF TXT: `v=spf1 ip4:34.14.185.249 -all`
 - `_dmarc` TXT: `v=DMARC1; p=none; adkim=s; aspf=r`
 - `_dmarc.mail` TXT: `v=DMARC1; p=none; adkim=s; aspf=r`
-- `d1._domainkey` and `d1._domainkey.mail` DKIM TXT records exist and publish Daptin certificate-derived public keys.
+- `d1._domainkey` and `d1._domainkey.mail` DKIM TXT records exist and publish Daptin certificate-derived public keys. OTP mail sends from `login@canaster.in`, so `d1._domainkey` is the alignment-critical DKIM record for sign-in mail.
 - MX for the domain or `mail` subdomain as needed: `10 mail.canaster.in`
 - Google Cloud public PTR is enabled on the VM access config: `34.14.185.249 -> mail.canaster.in`.
 
@@ -723,13 +723,14 @@ curl -sS -o /tmp/canaster-otp-bad.json -w '%{http_code}\n' \
 
 Expected result is `400`, not `403`; that proves the public OTP request action is executable and validation is reached. A successful real-user OTP journey also requires Daptin SMTP to be configured for `mail.canaster.in`.
 
-Production OTP mail uses Daptin's `mail.send` performer, not `aws.mail.send`. Daptin queues the email in `outbox`, signs it when `mail_server_hostname` is present, and Canaster sets `send_immediately: true` so Daptin reloads the newly created cloud-store-backed outbox row and attempts delivery before returning. The scheduled `outbox.process` task still handles retries and any remaining pending rows. The Canaster OTP action sends from `login@canaster.in` with `mail_server_hostname=mail.canaster.in`, so the visible sender is on the main domain while the Daptin mail server, certificate, PTR, and SMTP identity remain `mail.canaster.in`.
+Production OTP mail uses Daptin's `mail.send` performer, not `aws.mail.send`. Daptin queues the email in `outbox`, signs it when `mail_server_hostname` is present, and Canaster sets `send_immediately: true` so Daptin reloads the newly created cloud-store-backed outbox row and attempts delivery before returning. The scheduled `outbox.process` task still handles retries and any remaining pending rows. The Canaster OTP action sends from `login@canaster.in` with `mail_server_hostname=mail.canaster.in`, so the visible sender is on the main domain while the SMTP listener, MX target, PTR, and server identity remain `mail.canaster.in`. Daptin signs outgoing mail with the `From` domain, so OTP delivery requires a `certificate.hostname=canaster.in` row with a private key and the matching `d1._domainkey.canaster.in` DNS record.
 
 Required Daptin mail rows and actions:
 
 ```bash
 DAPTIN_CLI_CONFIG=.tmp/daptin/prod-cli.yaml daptin-cli create mail_server hostname=mail.canaster.in is_enabled=true listen_interface=0.0.0.0:465 max_size=10000 max_clients=20 xclient_on=false always_on_tls=true authentication_required=true
 DAPTIN_CLI_CONFIG=.tmp/daptin/prod-cli.yaml daptin-cli execute mail_server sync_mail_servers
+DAPTIN_CLI_CONFIG=.tmp/daptin/prod-cli.yaml daptin-cli --output json list certificate --filter hostname=canaster.in --page-size 1
 DAPTIN_CLI_CONFIG=.tmp/daptin/prod-cli.yaml daptin-cli --output json list certificate --filter hostname=mail.canaster.in --page-size 1
 DAPTIN_CLI_CONFIG=.tmp/daptin/prod-cli.yaml daptin-cli execute outbox process_outbox
 ```
@@ -745,6 +746,7 @@ Current production Daptin SMTP/IMAP state as of 2026-06-19:
 
 - `mail_server.hostname=mail.canaster.in`, reference `019ed9f2-96b5-7131-af6f-b304ee8ff581`, enabled on `0.0.0.0:465`.
 - Additional `mail.canaster.in` SMTP rows are enabled on `0.0.0.0:25` and `0.0.0.0:587`.
+- `certificate.hostname=canaster.in`, id `9`, issuer `acme`, has private key, generated at `2026-06-18 09:52:46`; this is the DKIM signing identity for `login@canaster.in`.
 - `certificate.hostname=mail.canaster.in`, reference `019ed9f3-17a2-72a9-89bd-2696b295a52f`, issuer `acme`.
 - `/_config/backend/hostname=api.canaster.in`.
 - `/_config/backend/imap.enabled=true`.
@@ -757,14 +759,18 @@ Current production Daptin SMTP/IMAP state as of 2026-06-19:
 - Daptin `v0.12.22` fixes `daptin/daptin#225` so schema import preserves deployer-authored generated join table metadata. Canaster declares `world_world_id_has_usergroup_usergroup_id.DefaultPermission=638976` in schema and verifies relation rows through normal relation APIs.
 - Daptin `v0.12.23` fixes `daptin/daptin#228`: `process_outbox` now sends fresh message readers across MX retry attempts, so Gmail no longer receives empty SMTP DATA and rejects with missing `From`.
 - Daptin `v0.12.25` fixes `daptin/daptin#229`: `mail.send` supports `send_immediately: true` for cloud-store-backed `outbox.mail` by committing the outbox row, reloading it with the mail file hydrated, attempting SMTP delivery, and leaving retry metadata if the immediate attempt fails.
-- The ignored local file `.tmp/daptin/prod-mail-login.env` stores the current `login@mail.canaster.in` mailbox credential for operational SMTP AUTH and IMAP smoke tests. Do not commit it.
+- The ignored local file `.tmp/daptin/prod-mail-login.env` stores the current `login@mail.canaster.in` mailbox credential for operational SMTP AUTH and IMAP smoke tests. OTP mail now uses the visible sender `login@canaster.in`; the mailbox credential can remain a server-auth operational account unless direct mailbox login for `login@canaster.in` is needed. Do not commit it.
 - `sync_mail_servers` and `process_outbox` both execute successfully as the production admin.
 
 DNS records to create after the Daptin certificate row exists:
 
-- `mail.canaster.in`: point to the public Canaster/Daptin endpoint if inbound SMTP or ACME HTTP validation is needed.
+- `canaster.in`: TXT SPF record `v=spf1 ip4:34.14.185.249 -all`.
+- `d1._domainkey.canaster.in`: TXT `v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuEDAP9hFXxLpTYDODdNwLpkvDnPyvE9U/NTZ+mR2sppgHTRgbOSDbaV1seKHc2dy6u7pKEccjvQByOisIFdHF/g4lBi14F2V9Qoew/lqLa0uT99sar+9EYqa5FkDPAIAE0F4GqQ1VTnNJxFWL492g1DITK0lG1/WJSTRN1s72tUFw9uZtEm+kVdXrW9igjlj+4jT8e4UGr3RHCE0rKVUQKjYL1rp8zl301hfWD6/Ig1c1FHh/x81WAuzijjaZbDd+OgDBpdj8CyjP0lC/w2V8bPss0+1eHvPoZKEo1p8jK4Nh6FyQTFDMndlR1Du0ElznT1HuU0a2Z8rcptPjBPxnQIDAQAB`
+- `_dmarc.canaster.in`: TXT `v=DMARC1; p=none; adkim=s; aspf=r` while delivery is being verified.
+- `canaster.in`: MX `10 mail.canaster.in`.
+- `mail.canaster.in`: A `34.14.185.249`.
 - `d1._domainkey.mail.canaster.in`: TXT `v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmbAxB5g2/ybmiBbuwPJelJIkf2WfcVJqZAl9QJTRwDohKjAzwygGIuDdvuKLud+2wZcoVr57I4gUUHWhT9K/Cn6PA6BPn7HvcCQR5VI0KHo5CFeRMs8IWdjoONl3WXbTdsxq7ntpdb2vCvXnYMR+JZ2kViz7OnkHYNwQRJ6akRAPZ5DbIotr6NV12sJXTiLGildN/T54NnjsF/1QZW8vr2wbeqkqYvwr5rYDTiihqTqtsuHCCJ7WwszA2fa7DlwJZ9/NMYaV4zYbFXopKMHAaFYO3TUqPs+KggU7krTuuAalauFNbEUBMlS4meFcIHi1ei8xLmmigsPqJhUu7kYQ/wIDAQAB`
-- `mail.canaster.in`: TXT SPF record allowing the actual Daptin outbound SMTP IP. Do not use the load balancer IP here unless live send headers prove it is also the SMTP egress IP.
+- `mail.canaster.in`: TXT SPF record `v=spf1 ip4:34.14.185.249 -all`.
 - `_dmarc.mail.canaster.in`: TXT `v=DMARC1; p=none; adkim=s; aspf=r` for initial monitoring while delivery is being verified.
 
 `mail.canaster.in`, `imap.canaster.in`, and wildcard subdomains should resolve to the VM IP `34.14.185.249` after DNS cutover. VM outbound SMTP delivery has been verified from `canaster-daptin-vm`: TCP 25 to `gmail-smtp-in.l.google.com` succeeds, and TCP 465 to `smtp.gmail.com` succeeds. Public SMTP is verified on `25`, `465`, and `587`; public IMAPS is verified on `993`. Forward and reverse DNS are aligned: `mail.canaster.in A -> 34.14.185.249` and `34.14.185.249 PTR -> mail.canaster.in`.
