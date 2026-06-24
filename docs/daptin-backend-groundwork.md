@@ -719,7 +719,7 @@ curl -sS -o /tmp/canaster-otp-bad.json -w '%{http_code}\n' \
 
 Expected result is `400`, not `403`; that proves the public OTP request action is executable and validation is reached. A successful real-user OTP journey also requires Daptin SMTP to be configured for `mail.canaster.in`.
 
-Production OTP mail uses Daptin's `mail.send` performer, not `aws.mail.send`. Daptin queues the email in `outbox`, signs it when `mail_server_hostname` is present, and Canaster sets `send_immediately: true` so Daptin attempts delivery for the newly created outbox row before returning. The scheduled `outbox.process` task still handles retries and any remaining pending rows. The Canaster OTP action sends from `login@mail.canaster.in` with `mail_server_hostname=mail.canaster.in`, so the Daptin mail server row, certificate row, and DNS identity should all use `mail.canaster.in`.
+Production OTP mail uses Daptin's `mail.send` performer, not `aws.mail.send`. Daptin queues the email in `outbox`, signs it when `mail_server_hostname` is present, and the scheduled `outbox.process` task sends pending rows. Keep `send_immediately` disabled for cloud-store-backed `outbox.mail` until `daptin/daptin#229`'s immediate-read regression is fixed. The Canaster OTP action sends from `login@mail.canaster.in` with `mail_server_hostname=mail.canaster.in`, so the Daptin mail server row, certificate row, and DNS identity should all use `mail.canaster.in`.
 
 Required Daptin mail rows and actions:
 
