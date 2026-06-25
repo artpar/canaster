@@ -52,6 +52,8 @@ export type NestedCanvasWorkspaceHandle = {
   currentWorkspaceUrlState(documentId: string | null): WorkspaceUrlState | null;
   getWorkspaceSnapshot(): CanvasWorkspaceSnapshot;
   loadWorkspaceSnapshot(snapshot: CanvasWorkspaceSnapshot, interaction?: string): void;
+  replaceWorkspaceSnapshot(snapshot: CanvasWorkspaceSnapshot, options?: { storageKey?: string; interaction?: string; persist?: boolean }): void;
+  setStorageKey(storageKey: string): void;
   flushWorkspaceSnapshot(): Promise<void>;
 };
 
@@ -105,7 +107,11 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
       controller.dispose();
       controllerRef.current = null;
     };
-  }, [fitOnFirstLoad, storageKey]);
+  }, [fitOnFirstLoad]);
+
+  useEffect(() => {
+    if (storageKey) controllerRef.current?.setStorageKey(storageKey);
+  }, [storageKey]);
 
   useEffect(() => {
     controllerRef.current?.setTheme(theme);
@@ -129,6 +135,8 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     currentWorkspaceUrlState: (documentId: string | null) => controllerRef.current?.currentWorkspaceUrlState(documentId) ?? null,
     getWorkspaceSnapshot: () => controllerRef.current?.getWorkspaceSnapshot() ?? createWorkspaceSnapshot(createWorkspaceHistory(initialCollection), null),
     loadWorkspaceSnapshot: (snapshot: CanvasWorkspaceSnapshot, interaction?: string) => controllerRef.current?.loadWorkspaceSnapshot(snapshot, interaction),
+    replaceWorkspaceSnapshot: (snapshot: CanvasWorkspaceSnapshot, options?: { storageKey?: string; interaction?: string; persist?: boolean }) => controllerRef.current?.replaceWorkspaceSnapshot(snapshot, options),
+    setStorageKey: (nextStorageKey: string) => controllerRef.current?.setStorageKey(nextStorageKey),
     flushWorkspaceSnapshot: () => controllerRef.current?.flushWorkspaceSnapshot() ?? Promise.resolve(),
   }), [initialCollection]);
 

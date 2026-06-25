@@ -136,7 +136,7 @@ const initialStatus: ViewportStatus = {
 
 export class NativeNestedCanvasController {
   private readonly root: HTMLElement;
-  private readonly storageKey: string;
+  private storageKey: string;
   private readonly fitOnFirstLoad: boolean;
   private readonly onCollectionChange?: (collection: CanvasDocumentCollection, changes: DocumentModelChange[]) => void;
   private readonly onChromeStateChange?: (state: NestedCanvasWorkspaceChromeState) => void;
@@ -403,15 +403,34 @@ export class NativeNestedCanvasController {
   }
 
   loadWorkspaceSnapshot(snapshot: CanvasWorkspaceSnapshot, interaction = 'Document loaded'): void {
+    this.replaceWorkspaceSnapshot(snapshot, { interaction });
+  }
+
+  replaceWorkspaceSnapshot(
+    snapshot: CanvasWorkspaceSnapshot,
+    options: { storageKey?: string; interaction?: string; persist?: boolean } = {},
+  ): void {
+    if (options.storageKey) this.storageKey = options.storageKey;
+    const interaction = options.interaction ?? 'Document loaded';
+    const persist = options.persist ?? true;
     const hydrated = hydrateWorkspaceSnapshot(snapshot);
     this.historyRef.current = hydrated.history;
     this.collectionRef.current = hydrated.history.present;
     this.lastModelChangeRef.current = hydrated.lastModelChange;
     this.setStatus({ ...this.status, interaction });
-    this.mirrorWorkspaceSnapshot(hydrated);
-    void saveWorkspaceSnapshot(hydrated, this.storageKey);
+    if (persist) {
+      this.mirrorWorkspaceSnapshot(hydrated);
+      void saveWorkspaceSnapshot(hydrated, this.storageKey);
+    }
     this.onCollectionChange?.(hydrated.history.present, []);
     this.renderCollection();
+  }
+
+  setStorageKey(storageKey: string): void {
+    if (this.storageKey === storageKey) return;
+    this.storageKey = storageKey;
+    this.restoredFromStorage = Boolean(loadWorkspaceSnapshotMirror(this.storageKey));
+    this.emitChromeState();
   }
 
   async flushWorkspaceSnapshot(): Promise<void> {

@@ -270,10 +270,14 @@ export function App() {
       const loadedDocument = await loadDocumentDetails(documentRef);
       const snapshot = loadedDocument.snapshot;
       const title = knownDocuments.find((document) => document.id === documentRef)?.title ?? loadedDocument.title ?? titleFromSnapshot(snapshot);
-      await saveWorkspaceSnapshot(snapshot, remoteWorkspaceStorageKey(documentRef));
+      const nextStorageKey = remoteWorkspaceStorageKey(documentRef);
+      await saveWorkspaceSnapshot(snapshot, nextStorageKey);
       lastSavedSnapshotSignatureRef.current = snapshotSignature(snapshot);
       ignoreDirtyUntilRef.current = Date.now() + 1200;
-      workspaceRef.current?.loadWorkspaceSnapshot(snapshot, 'Document loaded');
+      workspaceRef.current?.replaceWorkspaceSnapshot(snapshot, {
+        storageKey: nextStorageKey,
+        interaction: 'Document loaded',
+      });
       applyPendingUrlState(documentRef);
       window.localStorage.setItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY, documentRef);
       setActiveDocumentId(documentRef);
@@ -435,7 +439,10 @@ export function App() {
     setDocumentTitle(DEFAULT_DOCUMENT_TITLE);
     setSyncStatus(signedIn ? 'dirty' : 'anonymous');
     setSyncMessage(signedIn ? ONLINE_READY_MESSAGE : LOCAL_SAVE_MESSAGE);
-    workspaceRef.current?.loadWorkspaceSnapshot(snapshot, 'New workspace');
+    workspaceRef.current?.replaceWorkspaceSnapshot(snapshot, {
+      storageKey: STARTER_WORKSPACE_STORAGE_KEY,
+      interaction: 'New workspace',
+    });
   }, [signedIn]);
 
   const handleSaveOnline = useCallback(async () => {
