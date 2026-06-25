@@ -24,7 +24,7 @@ import {
   stripPortalChildReferenceOnPaste,
 } from '../documentCommands';
 import { parseNodeData } from '../nodeTypes/registry';
-import { BuiltInNodeTypes, type Camera, type CanvasCommand, type CanvasModel, type CanvasModelChange, type CanvasNode, type CanvasPortalNodeData, type CanvasSelectionState, type PortalLayout, type ThemeName, type ViewportStatus } from '../types';
+import { BuiltInNodeTypes, type Camera, type CanvasCommand, type CanvasModel, type CanvasModelChange, type CanvasNode, type CanvasPortalNodeData, type CanvasSelectionState, type PortalLayout, type ScreenRect, type ThemeName, type ViewportStatus } from '../types';
 import type {
   CanvasDocumentCollection,
   CanvasDocumentId,
@@ -610,7 +610,7 @@ export class NativeNestedCanvasController {
   private renderOverlays() {
     const collection = this.collectionRef.current;
     const firstLevelLimit = MAX_TOTAL_ENGINES - 1;
-    const liveLayouts = livePortalSlotsFor(collection, this.portalLayouts, firstLevelLimit);
+    const liveLayouts = livePortalSlotsFor(collection, this.portalLayouts, firstLevelLimit, viewportRectFor(this.activeCanvas));
     this.activeEngine?.setLivePortalNodeIds(portalNodeIdsFor(liveLayouts));
     const signature = liveLayouts.map((layout) => `${layout.portalNodeId}:${layout.childCanvasId}`).join('|');
     const topologyChanged = signature !== this.lastOverlaySignature;
@@ -639,7 +639,7 @@ export class NativeNestedCanvasController {
       queue.push({ slot, depth: 1 });
     }
     for (const slot of this.parentContextSlots.values()) {
-      const contextLayouts = remaining > 0 ? livePortalSlotsFor(collection, slot.portalLayouts).slice(0, remaining) : [];
+      const contextLayouts = remaining > 0 ? livePortalSlotsFor(collection, slot.portalLayouts, remaining, viewportRectFor(slot.canvas)) : [];
       slot.engine.setLivePortalNodeIds(portalNodeIdsFor(contextLayouts));
       if (!contextLayouts.length) continue;
       for (const layout of contextLayouts) {
@@ -754,7 +754,7 @@ export class NativeNestedCanvasController {
   private renderEmbeddedChildOverlayLevel(allocation: OverlayAllocation, remaining: number, seen: Set<string>, queue: OverlayAllocation[]): number {
     const { slot, depth } = allocation;
     const collection = this.collectionRef.current;
-    const liveLayouts = remaining > 0 ? livePortalSlotsFor(collection, slot.portalLayouts, Math.min(remaining, this.previewCapacity)) : [];
+    const liveLayouts = remaining > 0 ? livePortalSlotsFor(collection, slot.portalLayouts, Math.min(remaining, this.previewCapacity), viewportRectFor(slot.canvas)) : [];
     slot.engine.setLivePortalNodeIds(portalNodeIdsFor(liveLayouts));
     if (!liveLayouts.length && !slot.portalLayouts.length) return remaining;
     this.record('embedded:child-overlays:render', {
@@ -1461,6 +1461,11 @@ function rectSizeSignature(rect: { w: number; h: number }) {
 
 function screenRectToDomRect(rect: { x: number; y: number; w: number; h: number }): DOMRect {
   return new DOMRect(rect.x, rect.y, Math.max(1, rect.w), Math.max(1, rect.h));
+}
+
+function viewportRectFor(element: HTMLElement): ScreenRect {
+  const rect = element.getBoundingClientRect();
+  return { x: 0, y: 0, w: Math.max(1, rect.width), h: Math.max(1, rect.height) };
 }
 
 function applyParentContextClipStyle(element: HTMLElement, rect: { x: number; y: number; w: number; h: number }) {
