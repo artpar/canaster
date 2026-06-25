@@ -11,7 +11,6 @@ import {
   Maximize2,
   Minus,
   Moon,
-  PanelLeftClose,
   PanelLeftOpen,
   PanelsTopLeft,
   Plus,
@@ -690,13 +689,6 @@ export function App() {
               </IconButton>
             </div>
             <div className="toolbar-group" aria-label="View controls">
-              <IconButton
-                label={viewTreeOpen ? 'Hide view tree' : 'Show view tree'}
-                pressed={viewTreeOpen}
-                onClick={() => setViewTreeOpen((open) => !open)}
-              >
-                {viewTreeOpen ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}
-              </IconButton>
               <button
                 ref={addPanelButtonRef}
                 className="icon-button"
@@ -855,6 +847,17 @@ export function App() {
               onRefreshDocuments={() => void handleRefreshDocuments()}
               onSaveOnline={() => void handleSaveOnline()}
             />
+          ) : null}
+          {!viewTreeOpen ? (
+            <button
+              className="icon-button sidepanel-open-button"
+              type="button"
+              aria-label="Open views and documents panel"
+              title="Open views and documents"
+              onClick={() => setViewTreeOpen(true)}
+            >
+              <PanelLeftOpen size={17} />
+            </button>
           ) : null}
           <div className="workspace-canvas-region">
             <NestedCanvasWorkspace
@@ -1094,8 +1097,8 @@ function ViewTreePanel({
   return (
     <aside className="view-tree-panel" aria-label="Views and documents">
       <section className="sidepanel-section views-section" aria-label="Views">
-        <div className="view-tree-header">
-          <div>
+        <div className="sidepanel-section-row">
+          <div className="sidepanel-section-title">
             <span>Views</span>
             <span>{viewCount === 1 ? '1 view' : `${viewCount} views`}</span>
           </div>
@@ -1234,36 +1237,34 @@ function DocumentsPanel({
 }: DocumentsPanelProps) {
   return (
     <section className="sidepanel-section documents-section" aria-label="Saved workspaces">
-      <div className="utility-drawer-header document-panel-header">
-        <div>
+      <div className="sidepanel-section-row document-panel-header">
+        <div className="sidepanel-section-title">
           <span>Documents</span>
           <span>{signedIn ? `${documents.length} saved` : 'Local only'}</span>
         </div>
-        <button
-          className={`save-online-button ${syncStatus}`}
-          type="button"
-          aria-label={saveButtonLabel}
-          title={syncMessage}
-          disabled={syncStatus === 'loading' || syncStatus === 'saving'}
-          onClick={onSaveOnline}
-        >
-          <Save size={16} />
-          <span className="save-status-badge" aria-hidden="true">
-            <SyncStatusIcon status={syncStatus} />
-          </span>
-        </button>
+        <div className="document-panel-actions" aria-label="Document commands">
+          <button className="sidepanel-icon-button" type="button" aria-label="New workspace" title="New workspace" onClick={onNew}>
+            <FilePlus2 size={15} />
+          </button>
+          <button
+            className={`sidepanel-icon-button save-online-button ${syncStatus}`}
+            type="button"
+            aria-label={saveButtonLabel}
+            title={syncMessage}
+            disabled={syncStatus === 'loading' || syncStatus === 'saving'}
+            onClick={onSaveOnline}
+          >
+            <Save size={15} />
+            <span className="save-status-badge" aria-hidden="true">
+              <SyncStatusIcon status={syncStatus} />
+            </span>
+          </button>
+          <button className="sidepanel-icon-button" type="button" aria-label="Refresh saved workspaces" title="Refresh saved workspaces" disabled={!signedIn || syncStatus === 'loading'} onClick={onRefresh}>
+            <RefreshCw size={15} />
+          </button>
+        </div>
       </div>
       <div className="document-panel-status" role="status" aria-live="polite">{syncMessage}</div>
-      <div className="utility-drawer-actions" aria-label="Document commands">
-        <button className="drawer-action" type="button" onClick={onNew}>
-          <FilePlus2 size={15} />
-          New
-        </button>
-        <button className="drawer-action" type="button" disabled={!signedIn || syncStatus === 'loading'} onClick={onRefresh}>
-          <RefreshCw size={15} />
-          Refresh
-        </button>
-      </div>
       {signedIn ? (
         documents.length ? (
           <ul className="document-list" aria-label="Saved workspaces">
