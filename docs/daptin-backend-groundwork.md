@@ -106,7 +106,7 @@ Current production status as of 2026-06-24 15:29 IST:
 - Secret Manager secret `canaster-daptin-vm-db-connection` exists and points at the Cloud SQL public IP authorized only for the VM static IP.
 - VM `canaster-daptin-vm` exists in `asia-south1-c` with external IP `34.14.185.249`.
 - VM firewall rules allow public TCP `80`, `443`, `25`, `465`, `587`, and `993` for tag `canaster-vm`, plus IAP SSH from `35.235.240.0/20`.
-- Runtime image `asia-south1-docker.pkg.dev/agent4-471206/canaster/daptin:ae020f7be75957c2661cb6b4a1fde23678282992` is deployed.
+- Runtime image `asia-south1-docker.pkg.dev/agent4-471206/canaster/daptin:daptinfix-72c5f7d-20260625071519`, digest `sha256:721e8da70e401caa39e24b229936a439277b4485b3283beadcabdaefb44078e3`, is deployed.
 - Daptin HTTP verification passed with `HTTP 200` for `Host: api.canaster.in` and `/api/world?page%5Bsize%5D=1`.
 - Daptin HTTPS verification passed with `curl --resolve api.canaster.in:443:34.14.185.249 https://api.canaster.in/api/world?page%5Bsize%5D=1`.
 - Daptin logs show `TLS server listening on port :6443`.
@@ -114,7 +114,7 @@ Current production status as of 2026-06-24 15:29 IST:
 - Daptin logs show IMAPS server setup for `imap.canaster.in` on `:993`.
 - Daptin `cloud_store.name=canaster-mail`, reference `019edc18-5fe3-7370-be4f-ac76ded67a78`, points at `canaster-mail:canaster-daptin-storage` with credential `canaster-site` for cloud-store-backed raw `mail.mail` and `outbox.mail` bodies.
 - Daptin `cloud_store.name=assets`, id `4`, points at `canaster-assets:canaster-daptin-storage` with credential `canaster-site` for image panel uploads.
-- Daptin `world.permission(asset)=561408`, `world_schema_json.DefaultPermission(asset)=16256`, and `world.usergroup_id -> users` relation permission `770048`. This is required for signed-in normal users to create/update private image assets while anonymous users cannot create assets.
+- Daptin `world.permission(document)=741632` and `world.permission(asset)=741632`, both with `world_schema_json.DefaultPermission=16256`, and `world.usergroup_id -> users` relation permission `770048`. This gives signed-in users table-level create/update and row-level owner reads while keeping guest table CRUD closed.
 - Production permission hardening on 2026-06-24 removed guest table access from sensitive system tables. `signin`, `signup`, `reset-password`, and `reset-password-verify` are not guest-executable. `request_canaster_email_otp` and `verify_canaster_email_otp` remain the only guest-executable auth actions. Daptin still serves `/api/world` and `/api/action` metadata to guests; do not store secrets in action schemas or world metadata.
 - VM outbound SMTP verification passed for `gmail-smtp-in.l.google.com:25` and `smtp.gmail.com:465`.
 - Public DNS is authoritative on Namecheap BasicDNS at `dns1.registrar-servers.com` and `dns2.registrar-servers.com`.
@@ -143,7 +143,7 @@ DNS cutover records for Namecheap:
 
 `deploy/daptin/Dockerfile` builds a thin Canaster Daptin image:
 
-- Base image: `daptin/daptin:v0.12.25`
+- Base image: `daptin/daptin@sha256:82f9bb30551403bf4cef03a35c8e75fa0a8160ac0af92bde3ac9b3197ea7f0e6`, a master image after Daptin commit `af6ff72b` that fixes `daptin/daptin#232`.
 - Copies `daptin/schema_*.yaml` into `/opt/canaster/schema` for schema-managed email OTP auth actions
 - Uses `/opt/canaster/entrypoint.sh`
 - Reads `PORT` and `HTTPS_PORT`
@@ -792,7 +792,8 @@ Production image panel upload RCA on 2026-06-24:
 
 - Symptom: signed-in image panel upload returned permission denied.
 - Cause: the `asset` table existed, but production did not yet have the `assets` cloud store or the `users -> asset` table-access relation. The schema smoke covered privileged/isolated asset creation, not the normal signed-in production user path.
-- Fix: created the GCS-backed `assets` cloud store, set `world.permission(asset)=561408`, added the `users -> asset` relation with permission `770048`, restarted Daptin so the cloud store was loaded, and verified with a real `artpar@100x.bot` OTP session that asset create, private permission patch, and `/asset/asset/<ref>/file` download succeed.
+- Fix: created the GCS-backed `assets` cloud store, set `world.permission(asset)=741632`, added the `users -> asset` relation with permission `770048`, restarted Daptin so the cloud store was loaded, and verified with real OTP sessions that asset create, private permission patch, owner JSON:API read, and owner artifact download succeed.
+- Security note: on 2026-06-24, production testing showed Daptin served raw file bytes from `/asset/asset/<ref>/file` even when JSON:API row access returned `403` to guests and non-owners. This is tracked as `daptin/daptin#232` and fixed in Daptin commit `af6ff72b`. Canaster should use the artifact route through authenticated `fetch`, not direct `<img src>`, so the bearer token is sent and Daptin can enforce row permissions.
 
 Final production OTP smoke on 2026-06-24 after `daptin/daptin:v0.12.25`:
 
@@ -809,7 +810,7 @@ CI (`.github/workflows/ci.yml`) runs:
 
 - `npm ci`
 - TypeScript and Vite build
-- Daptin schema smoke against the real Daptin `daptin/daptin:v0.12.25` image and Postgres 16
+- Daptin schema smoke against the real pinned Daptin base image and Postgres 16
 
 Production deploy (`.github/workflows/deploy-daptin.yml`) builds the Daptin image, builds/uploads the frontend, deploys the image to `canaster-daptin-vm` over IAP SSH, and smokes the VM runtime.
 

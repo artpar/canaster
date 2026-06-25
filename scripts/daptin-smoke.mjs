@@ -168,13 +168,22 @@ function encodeBlobFile(name, mime, content) {
 }
 
 function decodeSnapshotFile(documentContent) {
-  const files = typeof documentContent === 'string' ? JSON.parse(documentContent) : documentContent;
-  assert(Array.isArray(files), 'document_content is not a file array JSON string');
+  const file = decodeSingleFile(documentContent, 'document_content');
+  assert(file.type === 'application/json', `expected application/json file, got ${file.type}`);
+  return JSON.parse(Buffer.from(file.base64, 'base64').toString('utf8'));
+}
+
+function decodeSingleFile(fileContent, label) {
+  const files = typeof fileContent === 'string' ? JSON.parse(fileContent) : fileContent;
+  assert(Array.isArray(files), `${label} is not a file array`);
   assert(files.length === 1, `expected exactly one file, got ${files.length}`);
-  assert(files[0].type === 'application/json', `expected application/json file, got ${files[0].type}`);
+  assert(typeof files[0]?.file === 'string', `${label} file payload is missing`);
   const [, base64] = files[0].file.split(',');
-  assert(base64, 'file data URI did not contain a base64 payload');
-  return JSON.parse(Buffer.from(base64, 'base64').toString('utf8'));
+  assert(base64, `${label} data URI did not contain a base64 payload`);
+  return {
+    type: files[0].type,
+    base64,
+  };
 }
 
 async function ensureAssetsCloudStore({ authenticatedClient, baseUrl, token, startDaptin, storageDir }) {
@@ -462,13 +471,18 @@ async function main() {
     const assetGetBody = await authenticatedClient.jsonApi.find('asset', assetRef);
     assert(rowAttr(assetGetBody.data, 'name') === `${assetKey}.svg`, 'asset read returned wrong name');
     assert(rowAttr(assetGetBody.data, 'mime') === 'image/svg+xml', 'asset read returned wrong MIME type');
+    const guestAssetDownloadResponse = await fetch(`${baseUrl}/asset/asset/${assetRef}/file`);
+    assert(
+      guestAssetDownloadResponse.status === 403 || guestAssetDownloadResponse.status === 404,
+      `private asset artifact should not be guest-readable; got ${guestAssetDownloadResponse.status}`,
+    );
     const assetDownloadResponse = await fetch(`${baseUrl}/asset/asset/${assetRef}/file`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    assert(assetDownloadResponse.status === 200, `asset download returned ${assetDownloadResponse.status}`);
-    assert(assetDownloadResponse.headers.get('content-type')?.startsWith('image/svg+xml'), 'asset download returned wrong MIME type');
+    assert(assetDownloadResponse.status === 200, `asset artifact download returned ${assetDownloadResponse.status}`);
+    assert(assetDownloadResponse.headers.get('content-type')?.startsWith('image/svg+xml'), 'asset artifact returned wrong MIME type');
     const decodedAssetContent = await assetDownloadResponse.text();
-    assert(decodedAssetContent === imageSvg, 'downloaded asset content mismatch');
+    assert(decodedAssetContent === imageSvg, 'asset artifact content mismatch');
 
     console.log(JSON.stringify({
       baseUrl,

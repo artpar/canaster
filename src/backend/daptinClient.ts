@@ -5,6 +5,7 @@ export const DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY = 'canaster:daptin:active-docume
 export const DAPTIN_LAST_EMAIL_STORAGE_KEY = 'canaster:daptin:last-email';
 
 const DEFAULT_DAPTIN_ENDPOINT = 'http://localhost:6336';
+const DAPTIN_TOKEN_COOKIE_NAME = 'token';
 
 let client: DaptinClient | null = null;
 let modelsLoadPromise: Promise<void> | null = null;
@@ -36,10 +37,12 @@ export function getToken(): string {
 
 export function setToken(token: string): void {
   window.localStorage.setItem(DAPTIN_TOKEN_STORAGE_KEY, token);
+  setTokenCookie(token);
 }
 
 export function clearToken(): void {
   window.localStorage.removeItem(DAPTIN_TOKEN_STORAGE_KEY);
+  clearTokenCookie();
   modelsLoadPromise = null;
 }
 
@@ -128,6 +131,49 @@ export function getDaptinClient(): DaptinClient {
     client = new DaptinClient(getDaptinEndpoint(), false, { getToken }, {});
   }
   return client;
+}
+
+function setTokenCookie(token: string): void {
+  const attributes = tokenCookieAttributes();
+  const encoded = encodeURIComponent(token);
+  document.cookie = `${DAPTIN_TOKEN_COOKIE_NAME}=${encoded}; ${attributes.join('; ')}`;
+}
+
+function clearTokenCookie(): void {
+  for (const attributes of tokenCookieAttributeVariants()) {
+    document.cookie = `${DAPTIN_TOKEN_COOKIE_NAME}=; ${attributes.join('; ')}; Max-Age=0`;
+  }
+}
+
+function tokenCookieAttributes(): string[] {
+  const attributes = ['Path=/', 'SameSite=Lax', `Max-Age=${60 * 60 * 24 * 7}`];
+  if (window.location.protocol === 'https:') attributes.push('Secure');
+  const domain = sharedCookieDomain();
+  if (domain) attributes.push(`Domain=${domain}`);
+  return attributes;
+}
+
+function tokenCookieAttributeVariants(): string[][] {
+  const base = ['Path=/', 'SameSite=Lax'];
+  if (window.location.protocol === 'https:') base.push('Secure');
+  const domain = sharedCookieDomain();
+  return domain ? [base, [...base, `Domain=${domain}`]] : [base];
+}
+
+function sharedCookieDomain(): string {
+  const endpointHostname = endpointHostnameOrNull();
+  const pageHostname = window.location.hostname;
+  if (!endpointHostname || endpointHostname === pageHostname) return '';
+  if (pageHostname.endsWith('.canaster.in') || pageHostname === 'canaster.in') return '.canaster.in';
+  return '';
+}
+
+function endpointHostnameOrNull(): string {
+  try {
+    return new URL(getDaptinEndpoint(), window.location.href).hostname;
+  } catch {
+    return '';
+  }
 }
 
 export async function ensureDaptinModelsLoaded(): Promise<void> {

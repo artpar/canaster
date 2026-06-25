@@ -7,11 +7,11 @@ Tables:
 
   # Application-owned user data.
   - TableName: document
-    Permission: 561408
+    Permission: 741632
     DefaultPermission: 16256
 
   - TableName: asset
-    Permission: 561408
+    Permission: 741632
     DefaultPermission: 16256
 
   - TableName: mail

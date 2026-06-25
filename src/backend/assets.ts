@@ -129,25 +129,17 @@ async function encodeAssetFile(file: File): Promise<DaptinBlobFileObject> {
   };
 }
 
-function decodeAssetFile(fileValue: unknown): Blob {
-  const files = typeof fileValue === 'string' ? JSON.parse(fileValue) as DaptinBlobFileObject[] : fileValue;
-  if (!Array.isArray(files) || files.length < 1) throw new Error('Daptin asset file is empty');
-  const first = files[0];
-  if (!first || typeof first.file !== 'string') throw new Error('Daptin asset file is missing its payload');
-  const [header, base64] = first.file.split(',');
-  if (!base64) throw new Error('Daptin asset file is missing base64 data');
-  const mime = first.type || header.match(/^data:([^;]+)/)?.[1] || 'application/octet-stream';
-  const bytes = base64ToBytes(base64);
-  const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-  return new Blob([buffer], { type: mime });
-}
-
 async function fetchAssetBlob(assetRef: string): Promise<Blob> {
-  const response = await fetch(`${getDaptinEndpoint()}/asset/${ASSET_TABLE}/${encodeURIComponent(assetRef)}/file`, {
+  const response = await fetch(assetFileUrl(assetRef), {
     headers: { Authorization: `Bearer ${getToken()}` },
+    credentials: 'include',
   });
   if (!response.ok) throw new Error(`Daptin asset download failed with ${response.status}`);
   return response.blob();
+}
+
+function assetFileUrl(assetRef: string): string {
+  return `${getDaptinEndpoint()}/asset/${ASSET_TABLE}/${encodeURIComponent(assetRef)}/file`;
 }
 
 function objectUrlForAsset(assetRef: string, blob: Blob): { objectUrl: string } {
@@ -165,13 +157,6 @@ function fileToDataUri(file: File): Promise<string> {
     reader.addEventListener('error', () => reject(reader.error ?? new Error('Could not read image file')));
     reader.readAsDataURL(file);
   });
-}
-
-function base64ToBytes(base64: string): Uint8Array {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-  return bytes;
 }
 
 function assetId(row: DaptinAssetRow): string {

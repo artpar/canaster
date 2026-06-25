@@ -23,7 +23,7 @@ These points were verified against Daptin `v0.12.17`, local Daptin docs/source, 
 - PATCHing the created row to `permission: 16256` works.
 - After PATCH to `16256`, unauthenticated GET returns `403`.
 - PATCHing the row to `permission: 16259` makes the row public-readable.
-- Production after admin lockdown must separately allow `document` table create/update for the intended caller. As of the 2026-06-18 real-user release check, production uses `world.permission(document)=561408`, a `world.usergroup_id -> users` relation with `permission=770048`, and `world_schema_json.DefaultPermission=16256`. This lets authenticated normal users create/update `document` rows while anonymous `POST`, `GET`, and `PATCH` on `document` return `403`.
+- Production after admin lockdown must separately allow `document` table create/update for the intended caller. As of the 2026-06-24 permission hardening pass, production uses `world.permission(document)=741632`, a `world.usergroup_id -> users` relation with `permission=770048`, and `world_schema_json.DefaultPermission=16256`. This lets authenticated normal users create/update and owner-read `document` rows while anonymous `POST`, `GET`, and `PATCH` on `document` return `403`.
 
 ## MVP Decisions
 
@@ -107,7 +107,7 @@ Because Daptin deployments can create built-in `document` rows with broad defaul
 
 On production, grant the built-in `users` usergroup access to the `document` world row:
 
-- `world.permission(document)=561408` (`Guest: (none)`, `Owner: Read, Execute`, `Group: Read, Execute`)
+- `world.permission(document)=741632` (`Guest: (none)`, `Owner: Read, Execute`, `Group: Peek, Create, Update, Execute`)
 - `world.usergroup_id -> users` relation permission `770048` (`Group: Peek, Read, Create, Update, Execute`)
 - `world_schema_json.DefaultPermission=16256`
 
