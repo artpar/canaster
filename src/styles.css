@@ -55,7 +55,7 @@ button {
 .workspace-body {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -1340,6 +1340,22 @@ button {
   background: rgba(22, 22, 22, 0.96);
 }
 
+.sidepanel-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.views-section {
+  flex: 0 1 42%;
+  min-height: 164px;
+  border-bottom: 1px solid rgba(149, 149, 149, 0.16);
+}
+
+.documents-section {
+  flex: 1 1 auto;
+}
+
 .view-tree-header {
   display: flex;
   align-items: center;
@@ -1444,6 +1460,10 @@ button {
   border-right-color: rgba(32, 32, 32, 0.12);
   color: #454545;
   background: rgba(255, 255, 255, 0.96);
+}
+
+:root[data-theme='light'] .views-section {
+  border-bottom-color: rgba(32, 32, 32, 0.1);
 }
 
 :root[data-theme='light'] .view-tree-header {
@@ -1653,28 +1673,6 @@ button {
   background: transparent;
 }
 
-.utility-drawer {
-  position: absolute;
-  top: 68px;
-  right: 14px;
-  bottom: 62px;
-  z-index: 20;
-  display: flex;
-  flex-direction: column;
-  width: min(310px, calc(100% - 28px));
-  border: 1px solid rgba(149, 149, 149, 0.22);
-  border-radius: 8px;
-  background: rgba(29, 29, 29, 0.84);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(16px);
-}
-
-:root[data-theme='light'] .utility-drawer {
-  border-color: rgba(132, 132, 132, 0.28);
-  background: rgba(255, 255, 255, 0.86);
-  box-shadow: 0 12px 28px rgba(49, 49, 49, 0.14);
-}
-
 .account-popover {
   position: absolute;
   top: 68px;
@@ -1710,6 +1708,10 @@ button {
 
 .utility-drawer-header {
   padding: 8px;
+}
+
+.document-panel-header {
+  align-items: flex-start;
 }
 
 .utility-drawer-header > div,
@@ -1768,6 +1770,18 @@ button {
 :root[data-theme='light'] .utility-close:hover {
   color: #202020;
   background: rgba(32, 32, 32, 0.08);
+}
+
+.document-panel-status {
+  min-height: 16px;
+  padding: 0 8px 8px;
+  color: #959595;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+:root[data-theme='light'] .document-panel-status {
+  color: #767676;
 }
 
 .utility-drawer-actions {
@@ -2255,14 +2269,6 @@ button {
     box-shadow: 12px 0 28px rgba(49, 49, 49, 0.16);
   }
 
-  .utility-drawer {
-    top: 202px;
-    bottom: 250px;
-    left: 14px;
-    right: 14px;
-    width: auto;
-  }
-
   .account-popover {
     top: 202px;
     right: 14px;
@@ -2288,10 +2294,6 @@ button {
 }
 
 @media (max-width: 460px) {
-  .utility-drawer {
-    top: 238px;
-  }
-
   .account-popover {
     top: 238px;
   }

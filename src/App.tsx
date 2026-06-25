@@ -3,7 +3,6 @@ import {
   ChevronDown,
   Columns3,
   FilePlus2,
-  FolderOpen,
   LayoutGrid,
   LayoutList,
   Loader2,
@@ -78,7 +77,6 @@ const PANEL_CREATE_OPTIONS = [
   { type: BuiltInNodeTypes.check, label: 'Checklist', detail: 'Actionable list with done count', badge: 'LIST' },
 ] as const;
 
-type UtilityDrawerMode = 'documents' | null;
 type AuthStep = 'email' | 'otp';
 type SyncStatus = 'anonymous' | 'loading' | 'clean' | 'dirty' | 'saving' | 'error';
 type ArrangeMenuPosition = { top: number; left: number };
@@ -104,7 +102,6 @@ export function App() {
   );
   const urlStateReadyRef = useRef(!pendingUrlStateRef.current);
   const [theme, setTheme] = useState<ThemeName>('dark');
-  const [utilityDrawerMode, setUtilityDrawerMode] = useState<UtilityDrawerMode>(null);
   const [accountOpen, setAccountOpen] = useState(false);
   const [arrangeMenuOpen, setArrangeMenuOpen] = useState(false);
   const [arrangeMenuPosition, setArrangeMenuPosition] = useState<ArrangeMenuPosition | null>(null);
@@ -128,7 +125,6 @@ export function App() {
   const initialCollection = useMemo(() => defaultStarterCollection(), []);
   const workspaceStorageKey = activeDocumentId ? remoteWorkspaceStorageKey(activeDocumentId) : STARTER_WORKSPACE_STORAGE_KEY;
   const fitWorkspaceOnFirstLoad = !activeDocumentId && !preserveCameraOnNextLocalMountRef.current;
-  const documentsOpen = !accountOpen && utilityDrawerMode === 'documents';
   const [chromeState, setChromeState] = useState<NestedCanvasWorkspaceChromeState>(() => ({
     collection: initialCollection,
     status: initialViewportStatus,
@@ -180,10 +176,6 @@ export function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
-
-  useEffect(() => {
-    if (accountOpen && utilityDrawerMode) setUtilityDrawerMode(null);
-  }, [accountOpen, utilityDrawerMode]);
 
   useEffect(() => {
     if (!activeDocumentId && preserveCameraOnNextLocalMountRef.current) {
@@ -252,7 +244,6 @@ export function App() {
     setAuthOtp('');
     setAuthStep('email');
     setAccountOpen(true);
-    setUtilityDrawerMode(null);
     setSyncStatus('error');
     setSyncMessage(savedLocally
       ? 'Session expired. Your workspace is saved on this device. Sign in again to save online.'
@@ -445,7 +436,6 @@ export function App() {
     setDocumentTitle(DEFAULT_DOCUMENT_TITLE);
     setSyncStatus(signedIn ? 'dirty' : 'anonymous');
     setSyncMessage(signedIn ? ONLINE_READY_MESSAGE : LOCAL_SAVE_MESSAGE);
-    setUtilityDrawerMode(null);
     workspaceRef.current?.loadWorkspaceSnapshot(snapshot, 'New workspace');
   }, [signedIn]);
 
@@ -453,7 +443,6 @@ export function App() {
     if (!signedIn) {
       setAuthStep('email');
       setAccountOpen(true);
-      setUtilityDrawerMode(null);
       setSyncStatus('anonymous');
       setSyncMessage('Sign in to save online');
       return;
@@ -494,7 +483,6 @@ export function App() {
     if (!signedIn) {
       setAuthStep('email');
       setAccountOpen(true);
-      setUtilityDrawerMode(null);
       setSyncStatus('anonymous');
       setSyncMessage('Sign in to see saved workspaces');
       return;
@@ -511,15 +499,6 @@ export function App() {
       setSyncMessage(workspaceErrorMessage(error, 'refresh'));
     }
   }, [activeDocumentId, recoverSessionError, refreshDocuments, signedIn]);
-
-  const handleOpenDocumentsDrawer = useCallback(() => {
-    const nextMode = utilityDrawerMode === 'documents' ? null : 'documents';
-    if (nextMode) {
-      setAccountOpen(false);
-      dismissOnboarding();
-    }
-    setUtilityDrawerMode(nextMode);
-  }, [dismissOnboarding, utilityDrawerMode]);
 
   const updateArrangeMenuPosition = useCallback(() => {
     const button = arrangeButtonRef.current;
@@ -673,7 +652,7 @@ export function App() {
   const zoomReadout = `${Math.round(chromeState.status.zoom * 100)}%`;
   const saveButtonLabel = saveActionLabel(syncStatus, syncMessage, signedIn);
 
-  const showOnboarding = !activeDocumentId && !onboardingDismissed && utilityDrawerMode === null;
+  const showOnboarding = !activeDocumentId && !onboardingDismissed;
 
   return (
     <main className="app-shell">
@@ -685,7 +664,7 @@ export function App() {
             </div>
             <form
               className="toolbar-group document-command-group"
-              aria-label="Documents"
+              aria-label="Workspace name"
               onSubmit={(event) => {
                 event.preventDefault();
                 void handleSaveOnline();
@@ -698,21 +677,6 @@ export function App() {
                 value={documentTitle}
                 onChange={(event) => setDocumentTitle(event.target.value)}
               />
-              <IconButton label={documentsOpen ? 'Close saved workspaces' : 'Open saved workspaces'} pressed={documentsOpen} onClick={handleOpenDocumentsDrawer}>
-                <FolderOpen size={17} />
-              </IconButton>
-              <button
-                className={`save-online-button ${syncStatus}`}
-                type="submit"
-                aria-label={saveButtonLabel}
-                title={syncMessage}
-                disabled={syncStatus === 'loading' || syncStatus === 'saving'}
-              >
-                <Save size={16} />
-                <span className="save-status-badge" aria-hidden="true">
-                  <SyncStatusIcon status={syncStatus} />
-                </span>
-              </button>
               <span className="sync-status-reader" role="status" aria-live="polite">{syncMessage}</span>
             </form>
           </div>
@@ -786,7 +750,6 @@ export function App() {
                 onClick={() => {
                   const nextOpen = !accountOpen;
                   if (nextOpen) {
-                    setUtilityDrawerMode(null);
                     dismissOnboarding();
                   }
                   setAccountOpen(nextOpen);
@@ -875,8 +838,22 @@ export function App() {
             <ViewTreePanel
               tree={viewTree}
               activeCanvasId={chromeState.collection.activeCanvasId}
+              activeDocumentId={activeDocumentId}
+              documents={documents}
+              saveButtonLabel={saveButtonLabel}
+              signedIn={signedIn}
+              syncMessage={syncMessage}
+              syncStatus={syncStatus}
               executeDocumentCommand={executeDocumentCommand}
               onClose={() => setViewTreeOpen(false)}
+              onNewDocument={() => void handleNewLocalDraft()}
+              onOpenAccount={() => {
+                setAuthStep('email');
+                setAccountOpen(true);
+              }}
+              onOpenDocument={(documentRef) => void loadDaptinDocument(documentRef, documents)}
+              onRefreshDocuments={() => void handleRefreshDocuments()}
+              onSaveOnline={() => void handleSaveOnline()}
             />
           ) : null}
           <div className="workspace-canvas-region">
@@ -913,24 +890,6 @@ export function App() {
               <FirstRunGuide
                 onDismiss={dismissOnboarding}
                 onFitSample={() => workspaceRef.current?.fitActiveCanvas()}
-              />
-            ) : null}
-            {documentsOpen ? (
-              <DocumentsDrawer
-                activeDocumentId={activeDocumentId}
-                documents={documents}
-                signedIn={signedIn}
-                syncStatus={syncStatus}
-                onClose={() => setUtilityDrawerMode(null)}
-                onNew={() => void handleNewLocalDraft()}
-                onOpenAccount={() => {
-                  setAuthStep('email');
-                  setAccountOpen(true);
-                  setUtilityDrawerMode(null);
-                }}
-                onOpenDocument={(documentRef) => void loadDaptinDocument(documentRef, documents)}
-                onRefresh={() => void handleRefreshDocuments()}
-                onSaveOnline={() => void handleSaveOnline()}
               />
             ) : null}
           </div>
@@ -1101,37 +1060,74 @@ type ViewTreeNode = {
 function ViewTreePanel({
   tree,
   activeCanvasId,
+  activeDocumentId,
+  documents,
+  saveButtonLabel,
+  signedIn,
+  syncMessage,
+  syncStatus,
   executeDocumentCommand,
   onClose,
+  onNewDocument,
+  onOpenAccount,
+  onOpenDocument,
+  onRefreshDocuments,
+  onSaveOnline,
 }: {
   tree: ViewTreeNode | null;
   activeCanvasId: CanvasDocumentId;
+  activeDocumentId: string;
+  documents: CanasterDocumentSummary[];
+  saveButtonLabel: string;
+  signedIn: boolean;
+  syncMessage: string;
+  syncStatus: SyncStatus;
   executeDocumentCommand: (command: DocumentCommand) => void;
   onClose: () => void;
+  onNewDocument: () => void;
+  onOpenAccount: () => void;
+  onOpenDocument: (documentRef: string) => void;
+  onRefreshDocuments: () => void;
+  onSaveOnline: () => void;
 }) {
   const viewCount = tree ? countViewTreeNodes(tree) : 0;
   return (
-    <aside className="view-tree-panel" aria-label="View tree">
-      <div className="view-tree-header">
-        <div>
-          <span>Views</span>
-          <span>{viewCount === 1 ? '1 view' : `${viewCount} views`}</span>
+    <aside className="view-tree-panel" aria-label="Views and documents">
+      <section className="sidepanel-section views-section" aria-label="Views">
+        <div className="view-tree-header">
+          <div>
+            <span>Views</span>
+            <span>{viewCount === 1 ? '1 view' : `${viewCount} views`}</span>
+          </div>
+          <button className="utility-close" type="button" aria-label="Close view tree" onClick={onClose}>
+            <X size={15} />
+          </button>
         </div>
-        <button className="utility-close" type="button" aria-label="Close view tree" onClick={onClose}>
-          <X size={15} />
-        </button>
-      </div>
-      <nav className="view-tree-list" aria-label="Canvas views">
-        {tree ? (
-          <ViewTreeItem
-            node={tree}
-            activeCanvasId={activeCanvasId}
-            executeDocumentCommand={executeDocumentCommand}
-          />
-        ) : (
-          <div className="view-tree-empty">No views</div>
-        )}
-      </nav>
+        <nav className="view-tree-list" aria-label="Canvas views">
+          {tree ? (
+            <ViewTreeItem
+              node={tree}
+              activeCanvasId={activeCanvasId}
+              executeDocumentCommand={executeDocumentCommand}
+            />
+          ) : (
+            <div className="view-tree-empty">No views</div>
+          )}
+        </nav>
+      </section>
+      <DocumentsPanel
+        activeDocumentId={activeDocumentId}
+        documents={documents}
+        saveButtonLabel={saveButtonLabel}
+        signedIn={signedIn}
+        syncMessage={syncMessage}
+        syncStatus={syncStatus}
+        onNew={onNewDocument}
+        onOpenAccount={onOpenAccount}
+        onOpenDocument={onOpenDocument}
+        onRefresh={onRefreshDocuments}
+        onSaveOnline={onSaveOnline}
+      />
     </aside>
   );
 }
@@ -1209,12 +1205,13 @@ function FirstRunGuide({ onDismiss, onFitSample }: FirstRunGuideProps) {
   );
 }
 
-type DocumentsDrawerProps = {
+type DocumentsPanelProps = {
   activeDocumentId: string;
   documents: CanasterDocumentSummary[];
+  saveButtonLabel: string;
   signedIn: boolean;
+  syncMessage: string;
   syncStatus: SyncStatus;
-  onClose: () => void;
   onNew: () => void;
   onOpenAccount: () => void;
   onOpenDocument: (documentRef: string) => void;
@@ -1222,37 +1219,45 @@ type DocumentsDrawerProps = {
   onSaveOnline: () => void;
 };
 
-function DocumentsDrawer({
+function DocumentsPanel({
   activeDocumentId,
   documents,
+  saveButtonLabel,
   signedIn,
+  syncMessage,
   syncStatus,
-  onClose,
   onNew,
   onOpenAccount,
   onOpenDocument,
   onRefresh,
   onSaveOnline,
-}: DocumentsDrawerProps) {
+}: DocumentsPanelProps) {
   return (
-    <aside className="utility-drawer document-drawer" aria-label="Saved workspaces">
-      <div className="utility-drawer-header">
+    <section className="sidepanel-section documents-section" aria-label="Saved workspaces">
+      <div className="utility-drawer-header document-panel-header">
         <div>
           <span>Documents</span>
           <span>{signedIn ? `${documents.length} saved` : 'Local only'}</span>
         </div>
-        <button className="utility-close" type="button" aria-label="Close documents" onClick={onClose}>
-          <X size={15} />
+        <button
+          className={`save-online-button ${syncStatus}`}
+          type="button"
+          aria-label={saveButtonLabel}
+          title={syncMessage}
+          disabled={syncStatus === 'loading' || syncStatus === 'saving'}
+          onClick={onSaveOnline}
+        >
+          <Save size={16} />
+          <span className="save-status-badge" aria-hidden="true">
+            <SyncStatusIcon status={syncStatus} />
+          </span>
         </button>
       </div>
+      <div className="document-panel-status" role="status" aria-live="polite">{syncMessage}</div>
       <div className="utility-drawer-actions" aria-label="Document commands">
         <button className="drawer-action" type="button" onClick={onNew}>
           <FilePlus2 size={15} />
           New
-        </button>
-        <button className="drawer-action primary" type="button" disabled={syncStatus === 'loading' || syncStatus === 'saving'} onClick={onSaveOnline}>
-          <Save size={15} />
-          Save online
         </button>
         <button className="drawer-action" type="button" disabled={!signedIn || syncStatus === 'loading'} onClick={onRefresh}>
           <RefreshCw size={15} />
@@ -1300,7 +1305,7 @@ function DocumentsDrawer({
           </button>
         </div>
       )}
-    </aside>
+    </section>
   );
 }
 
