@@ -18,6 +18,8 @@ const smokeCliConfig = process.env.DAPTIN_SMOKE_CLI_CONFIG || '';
 
 const PRIVATE_PERMISSION = 16256;
 const PUBLIC_READ_PERMISSION = 16259;
+const DOCUMENT_TABLE_PERMISSION = 1003779;
+const DOCUMENT_USERS_RELATION_PERMISSION = 1032192;
 const MAIL_OWNER_REFER_PERMISSION = 569633;
 const WORLD_USERGROUP_RELATION_PERMISSION = 638976;
 const USER_ACCOUNT_AUTH_PERMISSION = 561440;
@@ -131,6 +133,15 @@ async function authenticatedJsonApiRequest(baseUrl, token, pathName, options = {
   });
 }
 
+async function action(baseUrl, pathName, attributes) {
+  const { response, body } = await request(baseUrl, pathName, {
+    method: 'POST',
+    body: JSON.stringify({ attributes }),
+  });
+  assert(response.status >= 200 && response.status < 300, `${pathName} failed with ${response.status}: ${JSON.stringify(body).slice(0, 500)}`);
+  return body;
+}
+
 function createDaptinClient(baseUrl, getToken) {
   return new DaptinClient(baseUrl, false, { getToken }, {});
 }
@@ -142,6 +153,10 @@ function rowId(row) {
 function rowAttr(row, key) {
   const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
   return row?.attributes?.[key] ?? row?.attributes?.[camelKey] ?? row?.[key] ?? row?.[camelKey];
+}
+
+function extractToken(response) {
+  return JSON.stringify(response).match(/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/)?.[0] || '';
 }
 
 function rowWorldSchema(row) {
@@ -342,6 +357,77 @@ async function ensureCanasterAuthPermissions({ authenticatedClient, baseUrl, tok
   }
 }
 
+async function ensureDocumentUsersRelationPermission({ authenticatedClient, baseUrl, token }) {
+  const worldBody = await authenticatedClient.jsonApi.findAll('world', { page: { size: 500 } });
+  const documentWorld = (worldBody.data ?? []).find((row) => rowAttr(row, 'table_name') === 'document');
+  assert(documentWorld, 'Daptin built-in document table is missing');
+  const documentWorldRef = rowId(documentWorld);
+  assert(documentWorldRef, 'document world row has no reference id');
+
+  if (rowAttr(documentWorld, 'permission') !== DOCUMENT_TABLE_PERMISSION) {
+    const { response } = await authenticatedJsonApiRequest(baseUrl, token, `/api/world/${documentWorldRef}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        data: {
+          type: 'world',
+          id: documentWorldRef,
+          attributes: { permission: DOCUMENT_TABLE_PERMISSION },
+        },
+      }),
+    });
+    assert(response.status === 200, `document world permission patch failed with ${response.status}`);
+  }
+
+  const usergroupsBody = await authenticatedClient.jsonApi.findAll('usergroup', { page: { size: 100 } });
+  const usersGroup = (usergroupsBody.data ?? []).find((row) => rowAttr(row, 'name') === 'users');
+  assert(usersGroup, 'Daptin users usergroup is missing');
+  const usersGroupRef = rowId(usersGroup);
+  assert(usersGroupRef, 'users usergroup has no reference id');
+
+  let relationRow = await documentUsersRelationRow(baseUrl, token, documentWorldRef, usersGroupRef);
+  if (!relationRow) {
+    const { response } = await authenticatedJsonApiRequest(baseUrl, token, `/api/world/${documentWorldRef}/relationships/usergroup_id`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        data: [{
+          type: 'usergroup',
+          id: usersGroupRef,
+          attributes: { permission: DOCUMENT_USERS_RELATION_PERMISSION },
+        }],
+      }),
+    });
+    assert(response.status === 200 || response.status === 204, `document/users relation add failed with ${response.status}`);
+    relationRow = await documentUsersRelationRow(baseUrl, token, documentWorldRef, usersGroupRef);
+  }
+  assert(relationRow, 'document/users relation is missing after repair');
+
+  if (rowAttr(relationRow, 'permission') !== DOCUMENT_USERS_RELATION_PERMISSION) {
+    const relationRef = rowId(relationRow);
+    assert(relationRef, 'document/users relation row has no reference id');
+    const { response } = await authenticatedJsonApiRequest(baseUrl, token, `/api/world_world_id_has_usergroup_usergroup_id/${relationRef}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        data: {
+          type: 'world_world_id_has_usergroup_usergroup_id',
+          id: relationRef,
+          attributes: { permission: DOCUMENT_USERS_RELATION_PERMISSION },
+        },
+      }),
+    });
+    assert(response.status === 200, `document/users relation permission patch failed with ${response.status}`);
+    relationRow = await documentUsersRelationRow(baseUrl, token, documentWorldRef, usersGroupRef);
+  }
+
+  assert(rowAttr(relationRow, 'permission') === DOCUMENT_USERS_RELATION_PERMISSION, 'document/users relation permission mismatch');
+  return { documentWorldRef, usersGroupRef, relationRef: rowId(relationRow) };
+}
+
+async function documentUsersRelationRow(baseUrl, token, documentWorldRef, usersGroupRef) {
+  const { response, body } = await authenticatedJsonApiRequest(baseUrl, token, `/api/world/${documentWorldRef}/usergroup_id`);
+  assert(response.status === 200, `document related usergroups returned ${response.status}`);
+  return (body?.data ?? []).find((row) => rowAttr(row, 'name') === 'users' || rowAttr(row, 'relation_reference_id') === usersGroupRef || rowId(row) === usersGroupRef) ?? null;
+}
+
 async function assertCanasterOtpMailServerReferPath(baseUrl) {
   const email = `canaster-smoke-${Date.now()}@example.com`;
   const { response, body } = await request(baseUrl, '/action/user_account/request_canaster_email_otp', {
@@ -488,6 +574,7 @@ async function main() {
     await waitForHttp(`${baseUrl}/api/world?page%5Bsize%5D=1`);
 
     let token;
+    let normalUserToken = '';
     if (smokeCliConfig && !startDaptin) {
       token = await readTokenFromCliConfig(cliConfig);
     } else {
@@ -502,7 +589,11 @@ async function main() {
       await run(cliCommand, ['--config', cliConfig, 'context', 'set', 'canaster-smoke'], { env });
 
       const adminEmail = `smoke-admin-${Date.now()}@canaster.local`;
+      const normalUserEmail = `smoke-user-${Date.now()}@canaster.local`;
       const password = 'CanasterSmoke1234';
+      await action(baseUrl, '/action/user_account/signup', { email: normalUserEmail, name: 'Canaster Smoke User', password, passwordConfirm: password });
+      normalUserToken = extractToken(await action(baseUrl, '/action/user_account/signin', { email: normalUserEmail, password }));
+      assert(normalUserToken, 'normal smoke user signin did not return a token');
       await run(cliCommand, ['--config', cliConfig, 'execute', 'user_account', 'signup', `email=${adminEmail}`, 'name=Canaster Smoke Admin', `password=${password}`, `passwordConfirm=${password}`], { env });
       await run(cliCommand, ['--config', cliConfig, 'execute', 'user_account', 'signin', `email=${adminEmail}`, `password=${password}`], { env });
       await run(cliCommand, ['--config', cliConfig, 'execute', 'world', 'become_an_administrator'], { env });
@@ -510,6 +601,7 @@ async function main() {
 
       token = await readTokenFromCliConfig(cliConfig);
     }
+    if (!normalUserToken) normalUserToken = token;
 
     const authenticatedClient = createDaptinClient(baseUrl, () => token);
     await authenticatedClient.worldManager.loadModels();
@@ -518,6 +610,11 @@ async function main() {
       baseUrl,
       token,
       startDaptin,
+    });
+    const documentUsersRelation = await ensureDocumentUsersRelationPermission({
+      authenticatedClient,
+      baseUrl,
+      token,
     });
     const assetsCloudStoreRef = await ensureAssetsCloudStore({
       authenticatedClient,
@@ -546,6 +643,8 @@ async function main() {
       startDaptin,
     });
     if (startDaptin) await assertCanasterOtpMailServerReferPath(baseUrl);
+    const normalUserClient = createDaptinClient(baseUrl, () => normalUserToken);
+    await normalUserClient.worldManager.loadModels();
 
     const worldBody = await authenticatedClient.jsonApi.findAll('world', { page: { size: 500 } });
     const tableNames = new Set((worldBody.data ?? []).map((row) => rowAttr(row, 'table_name')));
@@ -569,7 +668,7 @@ async function main() {
 
     const documentKey = `smoke-${Date.now()}`;
     const placeholderFile = encodeSnapshotFile('pending.canaster.json', { schemaVersion: 1, pending: true });
-    const createBody = await authenticatedClient.jsonApi.create('document', {
+    const createBody = await normalUserClient.jsonApi.create('document', {
       document_name: 'pending.canaster.json',
       document_path: `/canaster/pending/${documentKey}.canaster.json`,
       document_extension: 'json',
@@ -582,7 +681,7 @@ async function main() {
     assert(typeof createPermission === 'number', `document create did not return numeric permission, got ${createPermission}`);
 
     // daptin-client@0.7.12 runtime expects update(model, { id, ...attrs }).
-    const privatePatchBody = await authenticatedClient.jsonApi.update('document', {
+    const privatePatchBody = await normalUserClient.jsonApi.update('document', {
       id: documentRef,
       permission: PRIVATE_PERMISSION,
     });
@@ -590,7 +689,7 @@ async function main() {
 
     const snapshot = canasterSnapshot();
     const realFile = encodeSnapshotFile(`${documentKey}.canaster.json`, snapshot);
-    await authenticatedClient.jsonApi.update('document', {
+    await normalUserClient.jsonApi.update('document', {
       id: documentRef,
       document_name: `${documentKey}.canaster.json`,
       document_path: `/canaster/documents/${documentRef}.canaster.json`,
@@ -602,14 +701,14 @@ async function main() {
     const { response: rawGuestPrivateResponse } = await request(baseUrl, `/api/document/${documentRef}`);
     assert(rawGuestPrivateResponse.status === 403, `private document should return 403 to guest; raw status ${rawGuestPrivateResponse.status}`);
 
-    const getBody = await authenticatedClient.jsonApi.find('document', documentRef);
+    const getBody = await normalUserClient.jsonApi.find('document', documentRef);
     const decoded = decodeSnapshotFile(rowAttr(getBody.data, 'document_content'));
     assert(decoded.schemaVersion === 1, 'decoded snapshot schemaVersion mismatch');
     assert(decoded.history.present.activeCanvasId === 'root', 'decoded activeCanvasId mismatch');
     assert(decoded.history.present.view.cameras.root.zoom === 0.8, 'decoded camera zoom mismatch');
     assert(decoded.history.present.documents.root.model.nodes[0].id === 'smoke-node', 'decoded node mismatch');
 
-    const publicPatchBody = await authenticatedClient.jsonApi.update('document', {
+    const publicPatchBody = await normalUserClient.jsonApi.update('document', {
       id: documentRef,
       permission: PUBLIC_READ_PERMISSION,
     });
@@ -618,6 +717,17 @@ async function main() {
     const { response: rawGuestPublicResponse, body: rawGuestPublicBody } = await request(baseUrl, `/api/document/${documentRef}`);
     assert(rawGuestPublicResponse.status === 200, `public document should return 200 to guest; raw status ${rawGuestPublicResponse.status}`);
     assert(rowAttr(rawGuestPublicBody.data, 'document_name') === `${documentKey}.canaster.json`, 'guest public read returned wrong document');
+
+    const { response: rawGuestDeleteResponse } = await request(baseUrl, `/api/document/${documentRef}`, { method: 'DELETE' });
+    assert(rawGuestDeleteResponse.status === 403, `public document should not be guest-deletable; raw status ${rawGuestDeleteResponse.status}`);
+
+    const ownerDeleteResponse = await authenticatedJsonApiRequest(baseUrl, normalUserToken, `/api/document/${documentRef}`, { method: 'DELETE' });
+    assert(
+      ownerDeleteResponse.response.status === 200 || ownerDeleteResponse.response.status === 204,
+      `owner document delete returned ${ownerDeleteResponse.response.status}`,
+    );
+    const { response: rawDeletedDocumentResponse } = await request(baseUrl, `/api/document/${documentRef}`);
+    assert(rawDeletedDocumentResponse.status === 403 || rawDeletedDocumentResponse.status === 404, `deleted document should not be guest-readable; raw status ${rawDeletedDocumentResponse.status}`);
 
     const assetKey = `smoke-image-${Date.now()}`;
     const imageSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><rect width="2" height="2" fill="#5aa7ff"/></svg>`;
@@ -660,8 +770,11 @@ async function main() {
       canasterMailCloudStoreRef,
       canasterMailServerRef,
       canasterDkimCertificateRef,
+      documentUsersRelation,
       privatePermission: PRIVATE_PERMISSION,
       publicPermission: PUBLIC_READ_PERMISSION,
+      documentTablePermission: DOCUMENT_TABLE_PERMISSION,
+      documentUsersRelationPermission: DOCUMENT_USERS_RELATION_PERMISSION,
       createPermission,
       decodedActiveCanvasId: decoded.history.present.activeCanvasId,
       decodedNodeCount: decoded.history.present.documents.root.model.nodes.length,

@@ -23,7 +23,7 @@ These points were verified against Daptin `v0.12.17`, local Daptin docs/source, 
 - PATCHing the created row to `permission: 16256` works.
 - After PATCH to `16256`, unauthenticated GET returns `403`.
 - PATCHing the row to `permission: 16259` makes the row public-readable.
-- Production after admin lockdown must separately allow `document` table create/update for the intended caller. As of the 2026-06-27 Daptin v0.12.26 pass, production uses `world.permission(document)=741635`, a `world.usergroup_id -> users` relation with `permission=770048`, and `world_schema_json.DefaultPermission=16256`. This lets authenticated normal users create/update and owner-read `document` rows while anonymous `POST` and `PATCH` on `document` return `403`; anonymous `GET` only works for rows explicitly patched public-readable.
+- Production after admin lockdown must separately allow `document` table create/update/delete for the intended caller. As of the 2026-06-27 Daptin v0.12.26 pass, production uses `world.permission(document)=1003779`, a `world.usergroup_id -> users` relation with `permission=1032192`, and `world_schema_json.DefaultPermission=16256`. This lets authenticated normal users create/update/delete and owner-read `document` rows while anonymous `POST`, `PATCH`, and `DELETE` on `document` return `403`; anonymous `GET` only works for rows explicitly patched public-readable.
 
 ## MVP Decisions
 
@@ -107,11 +107,11 @@ Because Daptin deployments can create built-in `document` rows with broad defaul
 
 On production, grant the built-in `users` usergroup access to the `document` world row:
 
-- `world.permission(document)=741635` (`Guest: Peek, Read`, `Owner: Read, Execute`, `Group: Peek, Create, Update, Execute`)
-- `world.usergroup_id -> users` relation permission `770048` (`Group: Peek, Read, Create, Update, Execute`)
+- `world.permission(document)=1003779` (`Guest: Peek, Read`, `Owner: Read, Execute`, `Group: Peek, Create, Update, Delete, Execute`)
+- `world.usergroup_id -> users` relation permission `1032192` (`Group: Peek, Read, Create, Update, Delete, Execute`)
 - `world_schema_json.DefaultPermission=16256`
 
-Use `PATCH /api/world/<document_world_ref>/relationships/usergroup_id` with relation data for the `users` group and `attributes.permission=770048`, then verify with `GET /api/world/<document_world_ref>/usergroup_id`. Do not use `GuestCreate` or `GuestUpdate` to make signed-in saves work.
+Use Daptin JSON:API to ensure the `document -> users` generated relation row has `permission=1032192`, then verify with `GET /api/world/<document_world_ref>/usergroup_id`. Do not use direct SQL, `GuestCreate`, or `GuestUpdate` to make signed-in saves work.
 
 Use this exact sequence:
 

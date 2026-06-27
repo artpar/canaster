@@ -87,11 +87,11 @@ Email OTP and mailbox provisioning were separately verified in production on 202
 
 Document storage uses the Daptin-standard access shape:
 
-- `world.permission(document)=561408`
-- `world.usergroup_id -> users` relation permission: `770048`
+- `world.permission(document)=1003779`
+- `world.usergroup_id -> users` relation permission: `1032192`
 - `world_schema_json.DefaultPermission(document)=16256`
 
-This lets authenticated users in the built-in `users` group create/update documents while keeping anonymous clients out and keeping new document rows private to the owner. Do not replace this with guest create/update bits, and do not manipulate generated join tables directly.
+This lets authenticated users in the built-in `users` group create/update/delete owned documents while keeping anonymous clients out and keeping new document rows private to the owner. Do not replace this with guest create/update/delete bits, and do not manipulate generated join tables directly.
 
 Mailbox provisioning uses table defaults:
 
@@ -105,7 +105,7 @@ The auth action must continue using normal entity foreign-key fields and support
 
 - Deployed frontend no longer requires normal users to load full `/api/world`.
 - Account error text wraps instead of clipping.
-- Daptin document create/update is available to authenticated users through the `users` group relation, not guest access.
+- Daptin document create/update/delete is available to authenticated users through the `users` group relation, not guest access.
 - Email OTP request/verify works from production frontend.
 - Daptin SMTP/outbox/mail storage works through Daptin-managed mail rows and GCS-backed assets.
 - Sign-out no longer refits or shifts the canvas camera.
