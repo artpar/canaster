@@ -45,6 +45,7 @@ import {
   normalizeDaptinError,
   tokenEmail,
 } from './backend/daptinClient';
+import { connectDaptinLive, type DaptinLiveEvent } from './backend/daptinLive';
 import { defaultStarterCollection, STARTER_WORKSPACE_STORAGE_KEY } from './catalog/starterCatalog';
 import { portalDataForNode } from './engine/documentModel';
 import {
@@ -121,6 +122,8 @@ export function App() {
   const [documentTitle, setDocumentTitle] = useState(DEFAULT_DOCUMENT_TITLE);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(() => (hasInitialStoredSession ? 'loading' : 'anonymous'));
   const [syncMessage, setSyncMessage] = useState(() => (hasInitialStoredSession ? 'Checking saved workspaces' : LOCAL_SAVE_MESSAGE));
+  const activeDocumentIdRef = useRef(activeDocumentId);
+  const syncStatusRef = useRef(syncStatus);
   const initialCollection = useMemo(() => defaultStarterCollection(), []);
   const workspaceStorageKey = activeDocumentId ? remoteWorkspaceStorageKey(activeDocumentId) : STARTER_WORKSPACE_STORAGE_KEY;
   const fitWorkspaceOnFirstLoad = !activeDocumentId && !preserveCameraOnNextLocalMountRef.current;
@@ -160,6 +163,13 @@ export function App() {
     workspaceRef.current?.executeDocumentCommand(command);
   }, []);
 
+  const handleDocumentTitleChange = useCallback((value: string) => {
+    setDocumentTitle(value);
+    if (!signedIn || !activeDocumentId) return;
+    setSyncStatus((current) => current === 'loading' || current === 'saving' || current === 'error' ? current : 'dirty');
+    setSyncMessage((current) => current === 'Opening workspace' || current === 'Saving workspace' ? current : 'Unsaved online changes');
+  }, [activeDocumentId, signedIn]);
+
   const applyPendingUrlState = useCallback((documentRef: string | null) => {
     const pending = pendingUrlStateRef.current;
     if (!pending) {
@@ -181,6 +191,14 @@ export function App() {
       preserveCameraOnNextLocalMountRef.current = false;
     }
   }, [activeDocumentId, workspaceStorageKey]);
+
+  useEffect(() => {
+    activeDocumentIdRef.current = activeDocumentId;
+  }, [activeDocumentId]);
+
+  useEffect(() => {
+    syncStatusRef.current = syncStatus;
+  }, [syncStatus]);
 
   useEffect(() => {
     const pending = pendingUrlStateRef.current;
@@ -342,6 +360,47 @@ export function App() {
       canceled = true;
     };
   }, [signedIn]);
+
+  const handleDocumentLiveEvent = useCallback(async (event: DaptinLiveEvent) => {
+    if (event.topic !== 'document') return;
+    try {
+      const rows = await refreshDocuments();
+      const liveDocumentRef = liveDocumentId(event);
+      const currentDocumentRef = activeDocumentIdRef.current;
+      if (!liveDocumentRef || !currentDocumentRef || liveDocumentRef !== currentDocumentRef) return;
+      if (syncStatusRef.current === 'saving' || syncStatusRef.current === 'loading') return;
+      const currentSnapshot = workspaceRef.current?.getWorkspaceSnapshot();
+      const isClean = syncStatusRef.current !== 'dirty'
+        && currentSnapshot
+        && snapshotSignature(currentSnapshot) === lastSavedSnapshotSignatureRef.current;
+      if (!isClean) {
+        setSyncStatus('dirty');
+        setSyncMessage('Online copy changed elsewhere. Save or refresh before continuing.');
+        return;
+      }
+      await loadDaptinDocument(currentDocumentRef, rows);
+    } catch (error) {
+      if (await recoverSessionError(error)) return;
+      setSyncStatus('error');
+      setSyncMessage(workspaceErrorMessage(error, 'refresh'));
+    }
+  }, [loadDaptinDocument, recoverSessionError, refreshDocuments]);
+
+  useEffect(() => {
+    if (!signedIn || !hasUsableStoredToken()) return;
+    const connection = connectDaptinLive({
+      topicName: 'document',
+      onEvent: (event) => {
+        void handleDocumentLiveEvent(event);
+      },
+      onUnauthorized: () => {
+        void handleSessionExpired();
+      },
+    });
+    return () => {
+      connection.close();
+    };
+  }, [handleDocumentLiveEvent, handleSessionExpired, signedIn]);
 
   useEffect(() => {
     if (!signedIn || !hasUsableStoredToken()) return;
@@ -681,7 +740,7 @@ export function App() {
                 aria-label="Workspace name"
                 name="document-title"
                 value={documentTitle}
-                onChange={(event) => setDocumentTitle(event.target.value)}
+                onChange={(event) => handleDocumentTitleChange(event.target.value)}
               />
               <span className="sync-status-reader" role="status" aria-live="polite">{syncMessage}</span>
             </form>
@@ -1557,6 +1616,29 @@ function accountErrorMessage(error: unknown, action: 'send-code' | 'verify-code'
   if (apiError.kind === 'server' && action === 'send-code') return 'Accounts are unavailable right now. Try sending the code again.';
   if (action === 'send-code') return 'Could not send a sign-in code. Check the email and try again.';
   return 'Could not verify that code. Check the code and try again.';
+}
+
+function liveDocumentId(event: DaptinLiveEvent): string {
+  return documentIdFromLivePayload(event.data) || documentIdFromLivePayload(event.raw);
+}
+
+function documentIdFromLivePayload(value: unknown): string {
+  if (!isRecord(value)) return '';
+  const direct = stringField(value.reference_id) || stringField(value.referenceId) || stringField(value.id);
+  if (direct) return direct;
+  const attributes = isRecord(value.attributes) ? value.attributes : null;
+  if (!attributes) return '';
+  return stringField(attributes.reference_id) || stringField(attributes.referenceId) || stringField(attributes.id);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function stringField(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return '';
 }
 
 function emailFromStoredToken(): string {
