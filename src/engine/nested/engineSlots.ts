@@ -22,6 +22,14 @@ export type EngineSlot = {
   zIndex: number;
 };
 
+type PortalSlotCandidate = {
+  layout: PortalLayout;
+  distanceRatio: number;
+  visibleArea: number;
+  area: number;
+  keepAlive: boolean;
+};
+
 export function engineSlotId(canvasId: CanvasDocumentId, mode: EngineMode, ownerId = 'stage'): EngineSlotId {
   return `${mode}:${ownerId}:${canvasId}`;
 }
@@ -31,14 +39,13 @@ export function livePortalSlotsFor(
   activeLayouts: PortalLayout[],
   limit = MAX_LIVE_PORTAL_PREVIEWS,
   viewport: ScreenRect | null = null,
+  keepPortalNodeIds: Set<string> | null = null,
 ): PortalLayout[] {
   return activeLayouts
     .filter((layout) => layout.childCanvasId && collection.documents[layout.childCanvasId] && isPortalLiveRenderable(layout, viewport))
-    .sort((a, b) => {
-      const visibleAreaDelta = visibleScreenArea(b.screenRect, viewport) - visibleScreenArea(a.screenRect, viewport);
-      if (visibleAreaDelta !== 0) return visibleAreaDelta;
-      return screenArea(b.screenRect) - screenArea(a.screenRect);
-    })
+    .map((layout) => rankPortalSlot(layout, viewport, keepPortalNodeIds))
+    .sort(comparePortalSlotCandidates)
+    .map((candidate) => candidate.layout)
     .slice(0, limit);
 }
 
@@ -48,6 +55,35 @@ export function isPortalLiveRenderable(layout: PortalLayout, viewport: ScreenRec
 
 function visibleScreenArea(rect: ScreenRect, viewport: ScreenRect | null): number {
   return visibleScreenWidth(rect, viewport) * visibleScreenHeight(rect, viewport);
+}
+
+function rankPortalSlot(layout: PortalLayout, viewport: ScreenRect | null, keepPortalNodeIds: Set<string> | null): PortalSlotCandidate {
+  return {
+    layout,
+    distanceRatio: centerDistanceRatio(layout.screenRect, viewport),
+    visibleArea: visibleScreenArea(layout.screenRect, viewport),
+    area: screenArea(layout.screenRect),
+    keepAlive: keepPortalNodeIds?.has(layout.portalNodeId) ?? false,
+  };
+}
+
+function comparePortalSlotCandidates(a: PortalSlotCandidate, b: PortalSlotCandidate): number {
+  const distanceDelta = a.distanceRatio - b.distanceRatio;
+  if (Math.abs(distanceDelta) > 0.08) return distanceDelta;
+  if (a.keepAlive !== b.keepAlive) return a.keepAlive ? -1 : 1;
+  const visibleAreaDelta = b.visibleArea - a.visibleArea;
+  if (Math.abs(visibleAreaDelta) > 1) return visibleAreaDelta;
+  const areaDelta = b.area - a.area;
+  if (Math.abs(areaDelta) > 1) return areaDelta;
+  return a.layout.portalNodeId.localeCompare(b.layout.portalNodeId);
+}
+
+function centerDistanceRatio(rect: ScreenRect, viewport: ScreenRect | null): number {
+  if (!viewport) return 0;
+  const dx = rect.x + rect.w / 2 - (viewport.x + viewport.w / 2);
+  const dy = rect.y + rect.h / 2 - (viewport.y + viewport.h / 2);
+  const diagonal = Math.hypot(Math.max(1, viewport.w), Math.max(1, viewport.h));
+  return Math.hypot(dx, dy) / diagonal;
 }
 
 function visibleScreenWidth(rect: ScreenRect, viewport: ScreenRect | null): number {
