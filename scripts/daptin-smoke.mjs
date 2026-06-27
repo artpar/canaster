@@ -10,7 +10,7 @@ const daptinCliSourceDir = process.env.DAPTIN_CLI_SOURCE_DIR || '/Users/artpar/w
 const daptinCli = process.env.DAPTIN_CLI || '/Users/artpar/workspace/code/github.com/daptin/daptin-cli/out/bin/daptin-cli';
 const daptinBinary = process.env.DAPTIN_BINARY || '';
 const smokeRuntime = process.env.DAPTIN_SMOKE_RUNTIME || 'docker';
-const daptinDockerImage = process.env.DAPTIN_DOCKER_IMAGE || 'daptin/daptin:v0.12.25';
+const daptinDockerImage = process.env.DAPTIN_DOCKER_IMAGE || 'daptin/daptin:v0.12.26';
 const smokeDbType = process.env.DAPTIN_SMOKE_DB_TYPE || 'sqlite3';
 const smokeDbConnectionString = process.env.DAPTIN_SMOKE_DB_CONNECTION_STRING || '';
 const smokeEndpoint = process.env.DAPTIN_SMOKE_ENDPOINT || '';
@@ -20,6 +20,8 @@ const PRIVATE_PERMISSION = 16256;
 const PUBLIC_READ_PERMISSION = 16259;
 const MAIL_OWNER_REFER_PERMISSION = 569633;
 const WORLD_USERGROUP_RELATION_PERMISSION = 638976;
+const USER_ACCOUNT_AUTH_PERMISSION = 561440;
+const GUEST_ACTION_EXECUTE_PERMISSION = 32;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -187,12 +189,36 @@ function decodeSingleFile(fileContent, label) {
 }
 
 async function ensureAssetsCloudStore({ authenticatedClient, baseUrl, token, startDaptin, storageDir }) {
-  const cloudStoresBody = await authenticatedClient.jsonApi.findAll('cloud_store', { page: { size: 500 } });
-  const existing = (cloudStoresBody.data ?? []).find((row) => rowAttr(row, 'name') === 'assets');
-  if (existing) return rowId(existing);
-  assert(startDaptin, 'Daptin cloud_store named assets is missing');
+  return ensureLocalCloudStore({
+    authenticatedClient,
+    baseUrl,
+    token,
+    startDaptin,
+    storageDir,
+    name: 'assets',
+    storageSubdir: 'assets',
+  });
+}
 
-  const rootPath = smokeRuntime === 'docker' && !daptinBinary ? '/data/storage/assets' : path.join(storageDir, 'assets');
+async function ensureCanasterMailCloudStore({ authenticatedClient, baseUrl, token, startDaptin, storageDir }) {
+  return ensureLocalCloudStore({
+    authenticatedClient,
+    baseUrl,
+    token,
+    startDaptin,
+    storageDir,
+    name: 'canaster-mail',
+    storageSubdir: 'canaster-mail',
+  });
+}
+
+async function ensureLocalCloudStore({ authenticatedClient, baseUrl, token, startDaptin, storageDir, name, storageSubdir }) {
+  const cloudStoresBody = await authenticatedClient.jsonApi.findAll('cloud_store', { page: { size: 500 } });
+  const existing = (cloudStoresBody.data ?? []).find((row) => rowAttr(row, 'name') === name);
+  if (existing) return rowId(existing);
+  assert(startDaptin, `Daptin cloud_store named ${name} is missing`);
+
+  const rootPath = smokeRuntime === 'docker' && !daptinBinary ? `/data/storage/${storageSubdir}` : path.join(storageDir, storageSubdir);
   if (!(smokeRuntime === 'docker' && !daptinBinary)) await mkdir(rootPath, { recursive: true });
   const { response, body } = await authenticatedJsonApiRequest(baseUrl, token, '/api/cloud_store', {
     method: 'POST',
@@ -200,7 +226,7 @@ async function ensureAssetsCloudStore({ authenticatedClient, baseUrl, token, sta
       data: {
         type: 'cloud_store',
         attributes: {
-          name: 'assets',
+          name,
           store_type: 'local',
           store_provider: 'local',
           root_path: rootPath,
@@ -209,10 +235,122 @@ async function ensureAssetsCloudStore({ authenticatedClient, baseUrl, token, sta
       },
     }),
   });
-  assert(response.status === 201, `assets cloud_store create failed with ${response.status}`);
+  assert(response.status === 201, `${name} cloud_store create failed with ${response.status}`);
   const ref = rowId(body?.data);
-  assert(ref, 'assets cloud_store create did not return a reference id');
+  assert(ref, `${name} cloud_store create did not return a reference id`);
   return ref;
+}
+
+async function ensureCanasterMailServer({ authenticatedClient, baseUrl, token, startDaptin }) {
+  const mailServersBody = await authenticatedClient.jsonApi.findAll('mail_server', { page: { size: 100 } });
+  const existing = (mailServersBody.data ?? []).find((row) => rowAttr(row, 'hostname') === 'mail.canaster.in');
+  if (existing) return rowId(existing);
+  assert(startDaptin, 'Daptin mail_server named mail.canaster.in is missing');
+
+  const { response, body } = await authenticatedJsonApiRequest(baseUrl, token, '/api/mail_server', {
+    method: 'POST',
+    body: JSON.stringify({
+      data: {
+        type: 'mail_server',
+        attributes: {
+          hostname: 'mail.canaster.in',
+          is_enabled: true,
+          listen_interface: '127.0.0.1:0',
+          max_size: 10000,
+          max_clients: 20,
+          xclient_on: false,
+          always_on_tls: false,
+          authentication_required: false,
+        },
+      },
+    }),
+  });
+  assert(response.status === 201, `mail_server create failed with ${response.status}`);
+  const ref = rowId(body?.data);
+  assert(ref, 'mail_server create did not return a reference id');
+  return ref;
+}
+
+async function ensureCanasterDkimCertificate({ authenticatedClient, baseUrl, token, startDaptin }) {
+  const certificateBody = await authenticatedClient.jsonApi.findAll('certificate', { page: { size: 100 } });
+  const existing = (certificateBody.data ?? []).find((row) => rowAttr(row, 'hostname') === 'canaster.in');
+  if (existing) return rowId(existing);
+  assert(startDaptin, 'Daptin certificate named canaster.in is missing');
+
+  const { response, body } = await authenticatedJsonApiRequest(baseUrl, token, '/api/certificate', {
+    method: 'POST',
+    body: JSON.stringify({
+      data: {
+        type: 'certificate',
+        attributes: {
+          hostname: 'canaster.in',
+          issuer: 'self',
+        },
+      },
+    }),
+  });
+  assert(response.status === 201, `certificate create failed with ${response.status}`);
+  const ref = rowId(body?.data);
+  assert(ref, 'certificate create did not return a reference id');
+
+  const generateResponse = await authenticatedJsonApiRequest(baseUrl, token, '/action/certificate/generate_self_certificate', {
+    method: 'POST',
+    body: JSON.stringify({ attributes: { certificate_id: ref } }),
+  });
+  assert(generateResponse.response.status === 200, `certificate generation failed with ${generateResponse.response.status}`);
+  return ref;
+}
+
+async function ensureCanasterAuthPermissions({ authenticatedClient, baseUrl, token, startDaptin }) {
+  if (!startDaptin) return;
+
+  const worldBody = await authenticatedClient.jsonApi.findAll('world', { page: { size: 500 } });
+  const userAccountWorld = (worldBody.data ?? []).find((row) => rowAttr(row, 'table_name') === 'user_account');
+  const userAccountWorldRef = rowId(userAccountWorld);
+  assert(userAccountWorldRef, 'user_account world row is missing');
+  if (rowAttr(userAccountWorld, 'permission') !== USER_ACCOUNT_AUTH_PERMISSION) {
+    const { response } = await authenticatedJsonApiRequest(baseUrl, token, `/api/world/${userAccountWorldRef}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        data: {
+          type: 'world',
+          id: userAccountWorldRef,
+          attributes: { permission: USER_ACCOUNT_AUTH_PERMISSION },
+        },
+      }),
+    });
+    assert(response.status === 200, `user_account world permission patch failed with ${response.status}`);
+  }
+
+  const actionBody = await authenticatedClient.jsonApi.findAll('action', { page: { size: 500 } });
+  for (const actionName of ['request_canaster_email_otp', 'verify_canaster_email_otp']) {
+    const action = (actionBody.data ?? []).find((row) => rowAttr(row, 'action_name') === actionName);
+    const actionRef = rowId(action);
+    assert(actionRef, `${actionName} action row is missing`);
+    if (rowAttr(action, 'permission') === GUEST_ACTION_EXECUTE_PERMISSION) continue;
+    const { response } = await authenticatedJsonApiRequest(baseUrl, token, `/api/action/${actionRef}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        data: {
+          type: 'action',
+          id: actionRef,
+          attributes: { permission: GUEST_ACTION_EXECUTE_PERMISSION },
+        },
+      }),
+    });
+    assert(response.status === 200, `${actionName} action permission patch failed with ${response.status}`);
+  }
+}
+
+async function assertCanasterOtpMailServerReferPath(baseUrl) {
+  const email = `canaster-smoke-${Date.now()}@example.com`;
+  const { response, body } = await request(baseUrl, '/action/user_account/request_canaster_email_otp', {
+    method: 'POST',
+    body: JSON.stringify({ attributes: { email } }),
+  });
+  const serializedBody = JSON.stringify(body);
+  assert(!/refer object not allowed \[mail_server\]/.test(serializedBody), `OTP request hit mail_server refer regression: ${serializedBody}`);
+  assert(response.status === 200, `request_canaster_email_otp returned ${response.status}: ${serializedBody}`);
 }
 
 function canasterSnapshot() {
@@ -353,6 +491,12 @@ async function main() {
     if (smokeCliConfig && !startDaptin) {
       token = await readTokenFromCliConfig(cliConfig);
     } else {
+      const { response: badOtpResponse } = await request(baseUrl, '/action/user_account/request_canaster_email_otp', {
+        method: 'POST',
+        body: JSON.stringify({ attributes: { email: 'bad' } }),
+      });
+      assert(badOtpResponse.status === 400, `request_canaster_email_otp should be public and reach validation; got ${badOtpResponse.status}`);
+
       const env = { ...process.env, DAPTIN_CLI_CONFIG: cliConfig };
       await run(cliCommand, ['--config', cliConfig, 'context', 'add', 'canaster-smoke', baseUrl], { env });
       await run(cliCommand, ['--config', cliConfig, 'context', 'set', 'canaster-smoke'], { env });
@@ -362,17 +506,19 @@ async function main() {
       await run(cliCommand, ['--config', cliConfig, 'execute', 'user_account', 'signup', `email=${adminEmail}`, 'name=Canaster Smoke Admin', `password=${password}`, `passwordConfirm=${password}`], { env });
       await run(cliCommand, ['--config', cliConfig, 'execute', 'user_account', 'signin', `email=${adminEmail}`, `password=${password}`], { env });
       await run(cliCommand, ['--config', cliConfig, 'execute', 'world', 'become_an_administrator'], { env });
-      const { response: badOtpResponse } = await request(baseUrl, '/action/user_account/request_canaster_email_otp', {
-        method: 'POST',
-        body: JSON.stringify({ attributes: { email: 'bad' } }),
-      });
-      assert(badOtpResponse.status === 400, `request_canaster_email_otp should be public and reach validation; got ${badOtpResponse.status}`);
+      await run(cliCommand, ['--config', cliConfig, 'execute', 'user_account', 'signin', `email=${adminEmail}`, `password=${password}`], { env });
 
       token = await readTokenFromCliConfig(cliConfig);
     }
 
     const authenticatedClient = createDaptinClient(baseUrl, () => token);
     await authenticatedClient.worldManager.loadModels();
+    await ensureCanasterAuthPermissions({
+      authenticatedClient,
+      baseUrl,
+      token,
+      startDaptin,
+    });
     const assetsCloudStoreRef = await ensureAssetsCloudStore({
       authenticatedClient,
       baseUrl,
@@ -380,6 +526,26 @@ async function main() {
       startDaptin,
       storageDir,
     });
+    const canasterMailCloudStoreRef = await ensureCanasterMailCloudStore({
+      authenticatedClient,
+      baseUrl,
+      token,
+      startDaptin,
+      storageDir,
+    });
+    const canasterMailServerRef = await ensureCanasterMailServer({
+      authenticatedClient,
+      baseUrl,
+      token,
+      startDaptin,
+    });
+    const canasterDkimCertificateRef = await ensureCanasterDkimCertificate({
+      authenticatedClient,
+      baseUrl,
+      token,
+      startDaptin,
+    });
+    if (startDaptin) await assertCanasterOtpMailServerReferPath(baseUrl);
 
     const worldBody = await authenticatedClient.jsonApi.findAll('world', { page: { size: 500 } });
     const tableNames = new Set((worldBody.data ?? []).map((row) => rowAttr(row, 'table_name')));
@@ -491,6 +657,9 @@ async function main() {
       documentRef,
       assetRef,
       assetsCloudStoreRef,
+      canasterMailCloudStoreRef,
+      canasterMailServerRef,
+      canasterDkimCertificateRef,
       privatePermission: PRIVATE_PERMISSION,
       publicPermission: PUBLIC_READ_PERMISSION,
       createPermission,

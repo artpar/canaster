@@ -1,4 +1,4 @@
-FROM daptin/daptin@sha256:82f9bb30551403bf4cef03a35c8e75fa0a8160ac0af92bde3ac9b3197ea7f0e6
+FROM daptin/daptin@sha256:da432637f648ab5e5e60a4b226a45a447c03d677f06ede0f9b7c0f63b3f6d7d6
 
 WORKDIR /opt/daptin
 

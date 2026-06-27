@@ -114,7 +114,7 @@ Current production status as of 2026-06-24 15:29 IST:
 - Daptin logs show IMAPS server setup for `imap.canaster.in` on `:993`.
 - Daptin `cloud_store.name=canaster-mail`, reference `019edc18-5fe3-7370-be4f-ac76ded67a78`, points at `canaster-mail:canaster-daptin-storage` with credential `canaster-site` for cloud-store-backed raw `mail.mail` and `outbox.mail` bodies.
 - Daptin `cloud_store.name=assets`, id `4`, points at `canaster-assets:canaster-daptin-storage` with credential `canaster-site` for image panel uploads.
-- Daptin `world.permission(document)=741632` and `world.permission(asset)=741632`, both with `world_schema_json.DefaultPermission=16256`, and `world.usergroup_id -> users` relation permission `770048`. This gives signed-in users table-level create/update and row-level owner reads while keeping guest table CRUD closed.
+- Daptin `world.permission(document)=741635` and `world.permission(asset)=741632`, both with `world_schema_json.DefaultPermission=16256`, and `world.usergroup_id -> users` relation permission `770048`. This gives signed-in users table-level create/update and row-level owner reads, allows guests to read only rows explicitly patched public, and keeps guest create/update/delete closed.
 - Production permission hardening on 2026-06-24 removed guest table access from sensitive system tables. `signin`, `signup`, `reset-password`, and `reset-password-verify` are not guest-executable. `request_canaster_email_otp` and `verify_canaster_email_otp` remain the only guest-executable auth actions. Daptin still serves `/api/world` and `/api/action` metadata to guests; do not store secrets in action schemas or world metadata.
 - VM outbound SMTP verification passed for `gmail-smtp-in.l.google.com:25` and `smtp.gmail.com:465`.
 - Public DNS is authoritative on Namecheap BasicDNS at `dns1.registrar-servers.com` and `dns2.registrar-servers.com`.
@@ -143,7 +143,7 @@ DNS cutover records for Namecheap:
 
 `deploy/daptin/Dockerfile` builds a thin Canaster Daptin image:
 
-- Base image: `daptin/daptin@sha256:82f9bb30551403bf4cef03a35c8e75fa0a8160ac0af92bde3ac9b3197ea7f0e6`, a master image after Daptin commit `af6ff72b` that fixes `daptin/daptin#232`.
+- Base image: `daptin/daptin@sha256:da432637f648ab5e5e60a4b226a45a447c03d677f06ede0f9b7c0f63b3f6d7d6`, the `v0.12.26` release containing `daptin/daptin#232`, `daptin/daptin#233`, and `daptin/daptin#234` fixes.
 - Copies `daptin/schema_*.yaml` into `/opt/canaster/schema` for schema-managed email OTP auth actions
 - Uses `/opt/canaster/entrypoint.sh`
 - Reads `PORT` and `HTTPS_PORT`
@@ -763,6 +763,7 @@ Current production Daptin SMTP/IMAP state as of 2026-06-19:
 - Daptin `v0.12.22` fixes `daptin/daptin#225` so schema import preserves deployer-authored generated join table metadata. Canaster declares `world_world_id_has_usergroup_usergroup_id.DefaultPermission=638976` in schema and verifies relation rows through normal relation APIs.
 - Daptin `v0.12.23` fixes `daptin/daptin#228`: `process_outbox` now sends fresh message readers across MX retry attempts, so Gmail no longer receives empty SMTP DATA and rejects with missing `From`.
 - Daptin `v0.12.25` fixes `daptin/daptin#229`: `mail.send` supports `send_immediately: true` for cloud-store-backed `outbox.mail` by committing the outbox row, reloading it with the mail file hydrated, attempting SMTP delivery, and leaving retry metadata if the immediate attempt fails.
+- Daptin `v0.12.26` includes `daptin/daptin#233`, so `mail.send` creates its internal outbox row with a server-side admin context and no longer requires the switched end user to have `Refer` permission on the configured `mail_server` row. It also includes `daptin/daptin#234`, preserving built-in certificate columns when Canaster declares certificate table permissions.
 - The ignored local file `.tmp/daptin/prod-mail-login.env` stores the current `login@mail.canaster.in` mailbox credential for operational SMTP AUTH and IMAP smoke tests. OTP mail now uses the visible sender `login@canaster.in`; the mailbox credential can remain a server-auth operational account unless direct mailbox login for `login@canaster.in` is needed. Do not commit it.
 - `sync_mail_servers` and `process_outbox` both execute successfully as the production admin.
 

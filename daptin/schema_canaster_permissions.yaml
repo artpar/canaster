@@ -7,7 +7,7 @@ Tables:
 
   # Application-owned user data.
   - TableName: document
-    Permission: 741632
+    Permission: 741635
     DefaultPermission: 16256
 
   - TableName: asset
