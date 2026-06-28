@@ -335,14 +335,12 @@ export class NativeNestedCanvasController {
     if (!recursive) return [slot];
     const targets = [slot];
     const seenSlotKeys = new Set([slot.key]);
-    const pendingCanvasIds = [slot.canvasId];
-    for (let index = 0; index < pendingCanvasIds.length; index++) {
-      const parentCanvasId = pendingCanvasIds[index];
+    for (let index = 0; index < targets.length; index++) {
+      const parentSlot = targets[index];
       for (const candidate of this.slots.values()) {
-        if (candidate.parentCanvasId !== parentCanvasId || seenSlotKeys.has(candidate.key)) continue;
+        if (candidate.viewportSlot.wrapper.parentElement !== parentSlot.childOverlayLayer || seenSlotKeys.has(candidate.key)) continue;
         seenSlotKeys.add(candidate.key);
         targets.push(candidate.viewportSlot);
-        pendingCanvasIds.push(candidate.viewportSlot.canvasId);
       }
     }
     return targets;

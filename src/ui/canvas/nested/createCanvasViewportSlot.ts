@@ -161,7 +161,12 @@ function wireViewportControls(
   controls: HTMLDivElement,
   onControl: CanvasViewportSlotOptions['onControl'],
 ): void {
-  controls.addEventListener('pointerdown', stopViewportControlEvent);
+  const recursiveByButton = new WeakMap<HTMLButtonElement, boolean>();
+  controls.addEventListener('pointerdown', (event) => {
+    stopViewportControlEvent(event);
+    const button = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-control]');
+    if (button) recursiveByButton.set(button, event.metaKey || event.ctrlKey);
+  });
   controls.addEventListener('dblclick', stopViewportControlEvent);
   controls.addEventListener('contextmenu', stopViewportControlEvent);
   controls.addEventListener('click', (event) => {
@@ -170,9 +175,11 @@ function wireViewportControls(
     const button = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-control]');
     const control = parseViewportControl(button?.dataset.control);
     if (!button || !control) return;
+    const recursive = recursiveByButton.get(button) ?? false;
+    recursiveByButton.delete(button);
     onControl?.(slot, control, {
       anchor: rectToScreenRect(button.getBoundingClientRect()),
-      recursive: event.metaKey || event.ctrlKey,
+      recursive,
     });
   });
 }
