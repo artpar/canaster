@@ -32,6 +32,7 @@ const MAX_SCALE = 4;
 const MAX_DPR = 2;
 const GRID_STEP = 32;
 const NODE_RADIUS = 8;
+const DRAG_HANDLE = 12;
 const RESIZE_HANDLE = 12;
 const CULL_MARGIN_SCREEN = 96;
 const SNAP_STEP = GRID_STEP;
@@ -710,7 +711,10 @@ export class CanvasEngine {
       state,
     });
     ctx.restore();
-    if (state.selected) this.drawResizeHandle(renderNode);
+    if (state.selected) {
+      this.drawDragHandle(renderNode);
+      this.drawResizeHandle(renderNode);
+    }
   }
 
   private drawNodeShell(node: CanvasNode, state: { selected: boolean; primary: boolean; hovered: boolean; compact: boolean }) {
@@ -746,6 +750,31 @@ export class CanvasEngine {
     this.ctx.fillStyle = this.theme.resizeFill;
     roundRectPath(this.ctx, handle.x, handle.y, handle.w, handle.h, 3);
     this.ctx.fill();
+  }
+
+  private drawDragHandle(node: CanvasNode) {
+    const handle = this.dragHandleRect(node);
+    const { ctx, theme } = this;
+    ctx.save();
+    ctx.fillStyle = theme.nodeBg;
+    ctx.strokeStyle = theme.selected;
+    ctx.lineWidth = 1.4;
+    roundRectPath(ctx, handle.x, handle.y, handle.w, handle.h, 3);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    const dotRadius = Math.max(0.8, handle.w / 12);
+    const x1 = handle.x + handle.w * 0.35;
+    const x2 = handle.x + handle.w * 0.65;
+    const y1 = handle.y + handle.h * 0.35;
+    const y2 = handle.y + handle.h * 0.65;
+    for (const [x, y] of [[x1, y1], [x2, y1], [x1, y2], [x2, y2]] as const) {
+      ctx.moveTo(x + dotRadius, y);
+      ctx.arc(x, y, dotRadius, 0, Math.PI * 2);
+    }
+    ctx.fillStyle = theme.selected;
+    ctx.fill();
+    ctx.restore();
   }
 
   private nodeContentRect(node: CanvasNode): NodeContentRect {
@@ -809,16 +838,33 @@ export class CanvasEngine {
       return;
     }
 
+    const selectedDragNode = this.selectedDragNodeAt(world);
+
+    if (selectedDragNode) {
+      this.closeNodeInteraction();
+      if (selectedDragNode.id !== this.primarySelectedNodeId) {
+        this.applyCommandPlan(this.planSelectNode(selectedDragNode.id, 'pointer', 'add'), false);
+      }
+      this.drag = {
+        mode: 'node',
+        pointerId: event.pointerId,
+        node: selectedDragNode,
+        dx: world.x - selectedDragNode.x,
+        dy: world.y - selectedDragNode.y,
+        moved: false,
+        original: nodeGeometry(selectedDragNode),
+        command: null,
+      };
+      this.interaction = 'Drag node';
+      this.capturePointer(event.pointerId);
+      this.markDirty();
+      this.emitStatus();
+      return;
+    }
+
     const node = this.nodeAt(world);
 
     if (node) {
-      if (!event.shiftKey && !event.metaKey && !event.ctrlKey && node.id === this.primarySelectedNodeId) {
-        const region = this.interactionRegionAt(node, world);
-        if (region && this.startNodeInteraction(node, region, 'pointer')) {
-          event.stopPropagation();
-          return;
-        }
-      }
       const mode = event.shiftKey || event.metaKey || event.ctrlKey ? 'toggle' : this.selectedNodeIds.has(node.id) ? 'add' : 'replace';
       this.executeCommand({ type: 'select-node', nodeId: node.id, mode, source: 'pointer' });
       if (!this.selectedNodeIds.has(node.id)) {
@@ -827,18 +873,7 @@ export class CanvasEngine {
         this.emitStatus();
         return;
       }
-      this.drag = {
-        mode: 'node',
-        pointerId: event.pointerId,
-        node,
-        dx: world.x - node.x,
-        dy: world.y - node.y,
-        moved: false,
-        original: nodeGeometry(node),
-        command: null,
-      };
-      this.interaction = 'Drag node';
-      this.capturePointer(event.pointerId);
+      this.interaction = 'Pointer selection';
       this.markDirty();
       this.emitStatus();
       return;
@@ -1066,6 +1101,10 @@ export class CanvasEngine {
     }
     const point = this.eventPoint(event);
     const world = this.screenToWorld(point.x, point.y);
+    if (this.selectedResizeNodeAt(world) || this.selectedDragNodeAt(world)) {
+      event.preventDefault();
+      return;
+    }
     const node = this.nodeAt(world);
     if (node) {
       if (!this.selectedNodeIds.has(node.id)) this.executeCommand({ type: 'select-node', nodeId: node.id, mode: 'replace', source: 'pointer' });
@@ -1140,6 +1179,15 @@ export class CanvasEngine {
       const node = this.model.nodes[i];
       if (!this.selectedNodeIds.has(node.id) || !this.isNodeVisible(node)) continue;
       if (this.isInsideResizeHandle(point, node)) return node;
+    }
+    return null;
+  }
+
+  private selectedDragNodeAt(point: WorldPoint) {
+    for (let i = this.model.nodes.length - 1; i >= 0; i--) {
+      const node = this.model.nodes[i];
+      if (!this.selectedNodeIds.has(node.id) || !this.isNodeVisible(node)) continue;
+      if (this.isInsideDragHandle(point, node)) return node;
     }
     return null;
   }
@@ -1257,11 +1305,12 @@ export class CanvasEngine {
 
   private cursorFor(point: WorldPoint, node: CanvasNode | null) {
     if (this.selectedResizeNodeAt(point)) return 'nwse-resize';
+    if (this.selectedDragNodeAt(point)) return this.drag?.mode === 'node' ? 'grabbing' : 'grab';
     if (node && node.id === this.primarySelectedNodeId) {
       const region = this.interactionRegionAt(node, point);
       if (region) return region.cursor ?? 'pointer';
     }
-    return node ? 'grab' : 'default';
+    return 'default';
   }
 
   private selectedNode() {
@@ -1329,8 +1378,22 @@ export class CanvasEngine {
     };
   }
 
+  private dragHandleRect(node: CanvasNode) {
+    return {
+      x: node.x - DRAG_HANDLE / 2,
+      y: node.y - DRAG_HANDLE / 2,
+      w: DRAG_HANDLE,
+      h: DRAG_HANDLE,
+    };
+  }
+
   private isInsideResizeHandle(point: WorldPoint, node: CanvasNode) {
     const rect = this.resizeHandleRect(node);
+    return point.x >= rect.x && point.x <= rect.x + rect.w && point.y >= rect.y && point.y <= rect.y + rect.h;
+  }
+
+  private isInsideDragHandle(point: WorldPoint, node: CanvasNode) {
+    const rect = this.dragHandleRect(node);
     return point.x >= rect.x && point.x <= rect.x + rect.w && point.y >= rect.y && point.y <= rect.y + rect.h;
   }
 
@@ -1389,7 +1452,7 @@ export class CanvasEngine {
       this.interaction = 'Interaction canceled';
     }
 
-    this.canvas.style.cursor = this.hoverNodeId ? 'grab' : 'default';
+    this.canvas.style.cursor = 'default';
     if (!commandCommitted) {
       this.markDirty();
       this.emitStatus();
