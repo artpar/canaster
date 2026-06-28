@@ -696,6 +696,12 @@ export function App() {
         });
     }, []);
 
+    const closeArrangeMenu = useCallback(() => {
+        setArrangeMenuOpen(false);
+        setArrangeMenuPosition(null);
+        setArrangeMenuTarget(null);
+    }, []);
+
     const handleArrangeCanvasMenuRequest = useCallback((request: ArrangeCanvasMenuRequest) => {
         setArrangeMenuTarget({
             canvasId  : request.canvasId,
@@ -721,18 +727,23 @@ export function App() {
     const handleToggleAddPanelMenu = useCallback(() => {
         setAddPanelMenuOpen((open) => {
             if (!open) updateAddPanelMenuPosition();
-            if (!open) setArrangeMenuOpen(false);
+            if (!open) closeArrangeMenu();
             if (!open) {
                 setAddPanelQuery('');
                 setAddPanelActiveIndex(0);
             }
             return !open;
         });
-    }, [updateAddPanelMenuPosition]);
+    }, [closeArrangeMenu, updateAddPanelMenuPosition]);
 
     const handleArrangeCanvas = useCallback((layout: CanvasArrangeLayout) => {
-        const targetCanvasId = arrangeMenuTarget?.canvasId ?? chromeState.collection.activeCanvasId;
-        const targetCanvasIds = arrangeMenuTarget?.recursive ?
+        const target = arrangeMenuTarget ?? {
+            canvasId  : chromeState.collection.activeCanvasId,
+            recursive: false
+        };
+        closeArrangeMenu();
+        const targetCanvasId = target.canvasId;
+        const targetCanvasIds = target.recursive ?
             canvasIdsWithDescendants(chromeState.collection, targetCanvasId) :
             [targetCanvasId];
         const activeTarget = targetCanvasIds.includes(chromeState.collection.activeCanvasId);
@@ -745,9 +756,8 @@ export function App() {
                 source: 'nonvisual'
             }) ?? false) || changed;
         }
-        setArrangeMenuOpen(false);
         if (activeTarget && changed) window.requestAnimationFrame(() => workspaceRef.current?.fitActiveCanvas());
-    }, [arrangeMenuTarget?.canvasId, arrangeMenuTarget?.recursive, chromeState.collection]);
+    }, [arrangeMenuTarget, chromeState.collection, closeArrangeMenu]);
 
     const handleCreatePanel = useCallback((nodeType: string) => {
         workspaceRef.current?.executeActiveCanvasCommand({
@@ -802,10 +812,10 @@ export function App() {
             const target = event.target;
             if (!(target instanceof Node)) return;
             if (arrangeMenuRef.current?.contains(target)) return;
-            setArrangeMenuOpen(false);
+            closeArrangeMenu();
         };
         const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') setArrangeMenuOpen(false);
+            if (event.key === 'Escape') closeArrangeMenu();
         };
         document.addEventListener('pointerdown', handlePointerDown);
         document.addEventListener('keydown', handleKeyDown);
@@ -813,7 +823,7 @@ export function App() {
             document.removeEventListener('pointerdown', handlePointerDown);
             document.removeEventListener('keydown', handleKeyDown);
         };
-    }, [arrangeMenuOpen]);
+    }, [arrangeMenuOpen, closeArrangeMenu]);
 
     useEffect(() => {
         if (!addPanelMenuOpen) return;
