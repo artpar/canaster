@@ -19,6 +19,11 @@ export type CanvasViewportSlot = {
   engine: CanvasEngine;
 };
 
+export type CanvasViewportControlEvent = {
+  anchor: ScreenRect;
+  recursive: boolean;
+};
+
 export type CanvasViewportSlotOptions = {
   key: string;
   canvasId: CanvasDocumentId;
@@ -30,7 +35,7 @@ export type CanvasViewportSlotOptions = {
   controls: CanvasViewportControl[];
   engineOptions: EngineOptions;
   includePaneLayers?: boolean;
-  onControl?: (slot: CanvasViewportSlot, control: CanvasViewportControl, anchor: ScreenRect) => void;
+  onControl?: (slot: CanvasViewportSlot, control: CanvasViewportControl, event: CanvasViewportControlEvent) => void;
 };
 
 const controlLabels: Record<CanvasViewportControl, string> = {
@@ -158,13 +163,17 @@ function wireViewportControls(
 ): void {
   controls.addEventListener('pointerdown', stopViewportControlEvent);
   controls.addEventListener('dblclick', stopViewportControlEvent);
+  controls.addEventListener('contextmenu', stopViewportControlEvent);
   controls.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
     const button = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-control]');
     const control = parseViewportControl(button?.dataset.control);
     if (!button || !control) return;
-    onControl?.(slot, control, rectToScreenRect(button.getBoundingClientRect()));
+    onControl?.(slot, control, {
+      anchor: rectToScreenRect(button.getBoundingClientRect()),
+      recursive: event.metaKey || event.ctrlKey,
+    });
   });
 }
 

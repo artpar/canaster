@@ -47,7 +47,7 @@ import {
 } from '../../../domain/workspaceHistory';
 import { DEFAULT_WORKSPACE_STORAGE_ID, loadWorkspaceSnapshot, loadWorkspaceSnapshotMirror, saveWorkspaceSnapshot, saveWorkspaceSnapshotMirror } from '../../../infra/browser/workspaceStorage';
 import { ACTIVE_ENGINE_FRAME_BUDGET_MS, livePortalSlotsFor, MAX_LIVE_PORTAL_PREVIEWS, MAX_TOTAL_ENGINES } from './engineSlots';
-import { createCanvasViewportSlot, type CanvasViewportControl, type CanvasViewportSlot } from './createCanvasViewportSlot';
+import { createCanvasViewportSlot, type CanvasViewportControl, type CanvasViewportControlEvent, type CanvasViewportSlot } from './createCanvasViewportSlot';
 import {
   buildParentContextField,
   DEFAULT_PARENT_CONTEXT_PANE_LAYOUT,
@@ -313,25 +313,39 @@ export class NativeNestedCanvasController {
     return plan.changes.length > 0;
   }
 
-  private handleViewportControl(slot: CanvasViewportSlot, control: CanvasViewportControl, anchor: ScreenRect): void {
+  private handleViewportControl(slot: CanvasViewportSlot, control: CanvasViewportControl, event: CanvasViewportControlEvent): void {
     if (control === 'arrange') {
-      this.onArrangeCanvasMenuRequest?.({ canvasId: slot.canvasId, anchor });
+      this.onArrangeCanvasMenuRequest?.({ canvasId: slot.canvasId, anchor: event.anchor, recursive: event.recursive });
       this.setStatus({ ...this.status, interaction: 'Choose arrangement' });
       return;
     }
+    const targets = this.viewportControlTargets(slot, event.recursive);
     if (control === 'fit') {
-      slot.engine.fit(slot.mode === 'active' ? undefined : 16);
-      if (slot.mode === 'active') this.persistViewportFromActiveEngine();
-      this.setStatus({ ...this.status, interaction: 'Centered view' });
+      for (const target of targets) target.engine.fit(target.mode === 'active' ? undefined : 16);
+      if (this.activeSlot && targets.includes(this.activeSlot)) this.persistViewportFromActiveEngine();
+      this.setStatus({ ...this.status, interaction: event.recursive && targets.length > 1 ? `Centered ${targets.length} views` : 'Centered view' });
       return;
     }
-    if (control === 'zoom-in') {
-      slot.engine.zoomBy(1.22);
-      if (slot.mode === 'active') this.persistViewportFromActiveEngine();
-      return;
+    const factor = control === 'zoom-in' ? 1.22 : 0.82;
+    for (const target of targets) target.engine.zoomBy(factor);
+    if (this.activeSlot && targets.includes(this.activeSlot)) this.persistViewportFromActiveEngine();
+  }
+
+  private viewportControlTargets(slot: CanvasViewportSlot, recursive: boolean): CanvasViewportSlot[] {
+    if (!recursive) return [slot];
+    const targets = [slot];
+    const seenSlotKeys = new Set([slot.key]);
+    const pendingCanvasIds = [slot.canvasId];
+    for (let index = 0; index < pendingCanvasIds.length; index++) {
+      const parentCanvasId = pendingCanvasIds[index];
+      for (const candidate of this.slots.values()) {
+        if (candidate.parentCanvasId !== parentCanvasId || seenSlotKeys.has(candidate.key)) continue;
+        seenSlotKeys.add(candidate.key);
+        targets.push(candidate.viewportSlot);
+        pendingCanvasIds.push(candidate.viewportSlot.canvasId);
+      }
     }
-    slot.engine.zoomBy(0.82);
-    if (slot.mode === 'active') this.persistViewportFromActiveEngine();
+    return targets;
   }
 
   collection(): CanvasDocumentCollection {

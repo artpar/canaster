@@ -109,6 +109,7 @@ type ArrangePanelMenuProps = {
 
 type ArrangeMenuTarget = {
     canvasId: CanvasDocumentId;
+    recursive: boolean;
 };
 
 const ArrangePanelMenu = forwardRef<HTMLDivElement, ArrangePanelMenuProps>(function ArrangePanelMenu(props, ref) {
@@ -696,7 +697,10 @@ export function App() {
     }, []);
 
     const handleArrangeCanvasMenuRequest = useCallback((request: ArrangeCanvasMenuRequest) => {
-        setArrangeMenuTarget({canvasId: request.canvasId});
+        setArrangeMenuTarget({
+            canvasId  : request.canvasId,
+            recursive: request.recursive ?? false
+        });
         const anchor = request.anchor ?? {x: window.innerWidth - 18, y: window.innerHeight - 18, w: 1, h: 1};
         updateArrangeMenuPositionForRect({
             right : anchor.x + anchor.w,
@@ -728,16 +732,22 @@ export function App() {
 
     const handleArrangeCanvas = useCallback((layout: CanvasArrangeLayout) => {
         const targetCanvasId = arrangeMenuTarget?.canvasId ?? chromeState.collection.activeCanvasId;
-        const activeTarget = targetCanvasId === chromeState.collection.activeCanvasId;
-        const changed = workspaceRef.current?.executeDocumentCommand({
-            type    : 'arrange-canvas',
-            canvasId: targetCanvasId,
-            layout,
-            source: 'nonvisual'
-        }) ?? false;
+        const targetCanvasIds = arrangeMenuTarget?.recursive ?
+            canvasIdsWithDescendants(chromeState.collection, targetCanvasId) :
+            [targetCanvasId];
+        const activeTarget = targetCanvasIds.includes(chromeState.collection.activeCanvasId);
+        let changed = false;
+        for (const canvasId of targetCanvasIds) {
+            changed = (workspaceRef.current?.executeDocumentCommand({
+                type    : 'arrange-canvas',
+                canvasId,
+                layout,
+                source: 'nonvisual'
+            }) ?? false) || changed;
+        }
         setArrangeMenuOpen(false);
         if (activeTarget && changed) window.requestAnimationFrame(() => workspaceRef.current?.fitActiveCanvas());
-    }, [arrangeMenuTarget?.canvasId, chromeState.collection.activeCanvasId]);
+    }, [arrangeMenuTarget?.canvasId, arrangeMenuTarget?.recursive, chromeState.collection]);
 
     const handleCreatePanel = useCallback((nodeType: string) => {
         workspaceRef.current?.executeActiveCanvasCommand({
@@ -983,6 +993,19 @@ function imageAssetIdsInCollection(collection: CanvasDocumentCollection): string
         }
     }
     return [...ids];
+}
+
+function canvasIdsWithDescendants(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId): CanvasDocumentId[] {
+    const ids: CanvasDocumentId[] = [];
+    const visit = (currentCanvasId: CanvasDocumentId) => {
+        if (ids.includes(currentCanvasId) || !collection.documents[currentCanvasId]) return;
+        ids.push(currentCanvasId);
+        for (const document of Object.values(collection.documents)) {
+            if (document.parentCanvasId === currentCanvasId) visit(document.id);
+        }
+    };
+    visit(canvasId);
+    return ids;
 }
 
 function buildViewTree(collection: CanvasDocumentCollection): ViewTreeNode | null {

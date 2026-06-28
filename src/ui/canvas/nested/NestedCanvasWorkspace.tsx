@@ -31,6 +31,7 @@ export type NestedCanvasWorkspaceProps = {
 export type ArrangeCanvasMenuRequest = {
   canvasId: string;
   anchor?: ScreenRect;
+  recursive?: boolean;
 };
 
 export type NestedCanvasWorkspaceChromeState = {
