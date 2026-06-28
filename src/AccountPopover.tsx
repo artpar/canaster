@@ -11,6 +11,7 @@ export type AccountPopoverProps = {
     authEmail: string;
     authOtp: string;
     authStep: AuthStep;
+    docked?: boolean;
     signedIn: boolean;
     syncMessage: string;
     syncStatus: SyncStatus;
@@ -27,6 +28,7 @@ export function AccountPopover({
                                    authEmail,
                                    authOtp,
                                    authStep,
+                                   docked = false,
                                    signedIn,
                                    syncMessage,
                                    syncStatus,
@@ -40,7 +42,7 @@ export function AccountPopover({
                                }: AccountPopoverProps) {
     const busy = syncStatus === 'loading' || syncStatus === 'saving';
     const submitDisabled = busy || !authEmail.trim() || (authStep === 'otp' && !authOtp.trim());
-    return (<aside className="account-popover" aria-label="Account">
+    return (<aside className={`account-popover${docked ? ' account-popover-docked' : ''}`} aria-label="Account">
         <div className="account-popover-header">
             <div>
                 <span>Account</span>
@@ -72,9 +74,7 @@ export function AccountPopover({
             }}
         >
             <div className="account-auth-copy">
-                <span>{authStep === 'otp' ? 'Check your email' : 'Save workspaces online'}</span>
-                <p>{authStep === 'otp' ? `Enter the code sent to ${authEmail.trim()}.` :
-                    'Canaster sends a short code and creates the account if needed.'}</p>
+                <span>{authStep === 'otp' ? 'Check email' : ''}</span>
             </div>
             <label className="account-field">
                 <span>Email</span>

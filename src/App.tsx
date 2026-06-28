@@ -93,7 +93,6 @@ import {
     WorkspaceToastView
 } from "./WorkspaceToastView";
 import {DeleteConfirmationPrompt} from "./DeleteConfirmationPrompt";
-import {AccountPopover} from "./AccountPopover";
 import {IconButton} from "./IconButton";
 import {HeaderToolbar} from "./HeaderToolbar";
 import {KeyboardShortcutsProvider, useKeyboardShortcut} from "./KeyboardShortcuts";
@@ -302,6 +301,7 @@ export function App() {
         const pending = pendingUrlStateRef.current;
         if (!pending?.documentId || signedIn) return;
         setAuthStep('email');
+        setSidePanelOpen(true);
         setAccountOpen(true);
         setSyncStatus('anonymous');
         setSyncMessage('Sign in to open shared workspace');
@@ -353,6 +353,7 @@ export function App() {
         setDocuments([]);
         setAuthOtp('');
         setAuthStep('email');
+        setSidePanelOpen(true);
         setAccountOpen(true);
         setSyncStatus('error');
         setSyncMessage(
@@ -608,6 +609,7 @@ export function App() {
     const handleSaveOnline = useCallback(async () => {
         if (!signedIn) {
             setAuthStep('email');
+            setSidePanelOpen(true);
             setAccountOpen(true);
             setSyncStatus('anonymous');
             setSyncMessage('Sign in to save online');
@@ -648,6 +650,7 @@ export function App() {
     const handleRefreshDocuments = useCallback(async () => {
         if (!signedIn) {
             setAuthStep('email');
+            setSidePanelOpen(true);
             setAccountOpen(true);
             setSyncStatus('anonymous');
             setSyncMessage('Sign in to see saved workspaces');
@@ -872,14 +875,6 @@ export function App() {
                     name    : theme,
                     onToggle: () => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))
                 }}
-                account={{
-                    signedIn,
-                    open    : accountOpen,
-                    onToggle: () => {
-                        const nextOpen = !accountOpen;
-                        setAccountOpen(nextOpen);
-                    }
-                }}
             />
             {addPanelMenuOpen ? (<AddPanelPopover
                 ref={addPanelMenuRef}
@@ -899,27 +894,28 @@ export function App() {
             {arrangeMenuOpen ? (<ArrangePanelMenu ref={arrangeMenuRef} arrangeMenuPosition={arrangeMenuPosition}
                                                   onSelect={(layout: CanvasArrangeLayout) => handleArrangeCanvas(
                                                       layout)}/>) : null}
-            {accountOpen ? (<AccountPopover
-                authEmail={authEmail}
-                authOtp={authOtp}
-                authStep={authStep}
-                signedIn={signedIn}
-                syncMessage={syncMessage}
-                syncStatus={syncStatus}
-                onAuthStepChange={setAuthStep}
-                onClose={() => setAccountOpen(false)}
-                onEmailChange={handleAuthEmailChange}
-                onOtpChange={setAuthOtp}
-                onRequestEmailOtp={() => void handleRequestEmailOtp()}
-                onSignOut={() => void handleSignOut()}
-                onVerifyEmailOtp={() => void handleVerifyEmailOtp()}
-            />) : null}
-
             <div className={`workspace-body ${sidePanelOpen ? 'tree-open' : 'tree-closed'}`}>
                 {sidePanelOpen ? (<SidePanel
                     tree={viewTree}
                     activeCanvasId={chromeState.collection.activeCanvasId}
                     activeDocumentId={activeDocumentId}
+                    account={{
+                        authEmail,
+                        authOtp,
+                        authStep,
+                        open             : accountOpen,
+                        signedIn,
+                        syncMessage,
+                        syncStatus,
+                        onAuthStepChange : setAuthStep,
+                        onClose          : () => setAccountOpen(false),
+                        onEmailChange    : handleAuthEmailChange,
+                        onOtpChange      : setAuthOtp,
+                        onRequestEmailOtp: () => void handleRequestEmailOtp(),
+                        onSignOut        : () => void handleSignOut(),
+                        onToggle         : () => setAccountOpen((open) => !open),
+                        onVerifyEmailOtp : () => void handleVerifyEmailOtp()
+                    }}
                     documents={documents}
                     saveButtonLabel={saveButtonLabel}
                     signedIn={signedIn}
@@ -930,6 +926,7 @@ export function App() {
                     onNewDocument={() => void handleNewLocalDraft()}
                     onOpenAccount={() => {
                         setAuthStep('email');
+                        setSidePanelOpen(true);
                         setAccountOpen(true);
                     }}
                     onOpenDocument={(documentRef) => void loadDaptinDocument(documentRef, documents)}

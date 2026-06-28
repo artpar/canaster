@@ -2,8 +2,6 @@ import type {MutableRefObject} from "react";
 import {
     FilePlus2,
     LayoutGrid,
-    LogIn,
-    Maximize2,
     Moon,
     PanelLeftClose,
     PanelLeftOpen,
@@ -11,8 +9,7 @@ import {
     Redo2,
     RotateCcw,
     Sun,
-    Undo2,
-    UserCircle
+    Undo2
 } from "lucide-react";
 import {IconButton} from "./IconButton";
 
@@ -50,11 +47,6 @@ export type HeaderToolbarProps = {
     },
     theme: {
         name: "dark" | "light",
-        onToggle: () => void
-    },
-    account: {
-        signedIn: boolean,
-        open: boolean,
         onToggle: () => void
     }
 };
@@ -144,15 +136,6 @@ export function HeaderToolbar(props: HeaderToolbarProps) {
                     onClick={props.theme.onToggle}
                 >
                     {props.theme.name === "dark" ? <Sun size={17}/> : <Moon size={17}/>}
-                </IconButton>
-            </div>
-            <div className="toolbar-group account-command-group" aria-label="Account">
-                <IconButton
-                    label={props.account.signedIn ? "Open account" : "Sign in"}
-                    pressed={props.account.open}
-                    onClick={props.account.onToggle}
-                >
-                    {props.account.signedIn ? <UserCircle size={17}/> : <LogIn size={17}/>}
                 </IconButton>
             </div>
         </div>

@@ -1,7 +1,6 @@
 import {
     CheckCircle2,
     FilePlus2,
-    LogIn,
     RefreshCw,
     Save
 } from "lucide-react";
@@ -112,13 +111,9 @@ export function DocumentsPanel({
                     </div>
                 )
             ) : (
-                <div className="drawer-empty">
-                    <p>Sign in to save and open workspaces from other devices.</p>
-                    <button className="drawer-action primary" type="button" onClick={onOpenAccount}>
-                        <LogIn size={15}/>
-                        Sign in
-                    </button>
-                </div>
+                <button className="document-signin-note" type="button" onClick={onOpenAccount}>
+                    Online documents appear after sign-in
+                </button>
             )}
         </section>
     );

@@ -25,7 +25,7 @@ Do not be vague in responses. Responding with a "what" of the problem isnt usefu
 
 ## Current Development Context
 
-- The Canaster dev server is usually already running in hot-reload mode. 
+- The Canaster dev server is usually already running in hot-reload mode. Only use localhost:5173. never kill or restart or start another process.
 - Do not start another dev server unless you have verified one is needed.
 - Never execute npm run build
 - This is the user's local machine. It is acceptable to show credentials in local terminal output.
