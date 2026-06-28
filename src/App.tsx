@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import {
     forwardRef,
+    type MutableRefObject,
     useCallback,
     useEffect,
     useMemo,
@@ -96,6 +97,7 @@ import {DeleteConfirmationPrompt} from "./DeleteConfirmationPrompt";
 import {AccountPopover} from "./AccountPopover";
 import {IconButton} from "./IconButton";
 import {HeaderToolbar} from "./HeaderToolbar";
+import {KeyboardShortcutsProvider, useKeyboardShortcut} from "./KeyboardShortcuts";
 
 const DEFAULT_DOCUMENT_TITLE = 'Canaster Workspace';
 const LOCAL_SAVE_MESSAGE = 'Saved on this device';
@@ -155,6 +157,21 @@ const ArrangePanelMenu = forwardRef<HTMLDivElement, ArrangePanelMenuProps>(funct
         </button>
     </div>;
 });
+
+function WorkspaceHistoryShortcuts({workspaceRef}: { workspaceRef: MutableRefObject<NestedCanvasWorkspaceHandle | null> }) {
+    useKeyboardShortcut({
+        key       : 'z',
+        metaOrCtrl: true,
+        handler   : () => workspaceRef.current?.undoWorkspace() ?? false,
+    });
+    useKeyboardShortcut({
+        key       : 'z',
+        metaOrCtrl: true,
+        shift     : true,
+        handler   : () => workspaceRef.current?.redoWorkspace() ?? false,
+    });
+    return null;
+}
 
 export function App() {
     const workspaceRef = useRef<NestedCanvasWorkspaceHandle | null>(null);
@@ -816,7 +833,9 @@ export function App() {
     const viewTree = useMemo(() => buildViewTree(chromeState.collection), [chromeState.collection]);
     const saveButtonLabel = saveActionLabel(syncStatus, syncMessage, signedIn);
 
-    return (<main className="app-shell">
+    return (<KeyboardShortcutsProvider>
+        <WorkspaceHistoryShortcuts workspaceRef={workspaceRef}/>
+        <main className="app-shell">
         <section className="workspace" aria-label="Workspace map">
             <HeaderToolbar
                 sidePanel={{
@@ -837,7 +856,6 @@ export function App() {
                 }}
                 view={{
                     parentContextVisible,
-                    onCenterMap          : () => workspaceRef.current?.fitActiveCanvas(),
                     onResetZoom          : () => workspaceRef.current?.resetActiveZoom(),
                     onToggleParentContext: () => setParentContextVisible((visible) => !visible)
                 }}
@@ -960,7 +978,8 @@ export function App() {
                 </div>
             </div>
         </section>
-    </main>);
+    </main>
+    </KeyboardShortcutsProvider>);
 }
 
 

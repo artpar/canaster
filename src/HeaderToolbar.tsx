@@ -35,7 +35,6 @@ export type HeaderToolbarProps = {
     },
     view: {
         parentContextVisible: boolean,
-        onCenterMap: () => void,
         onResetZoom: () => void,
         onToggleParentContext: () => void
     },
@@ -116,9 +115,6 @@ export function HeaderToolbar(props: HeaderToolbarProps) {
                 >
                     <FilePlus2 size={17}/>
                 </button>
-                <IconButton label="Center map" onClick={props.view.onCenterMap}>
-                    <Maximize2 size={17}/>
-                </IconButton>
                 <IconButton label="Reset map zoom" onClick={props.view.onResetZoom}>
                     <RotateCcw size={17}/>
                 </IconButton>
