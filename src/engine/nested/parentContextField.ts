@@ -1,5 +1,6 @@
 import { cloneNode } from '../documentModel';
-import { BuiltInNodeTypes, type CanvasNode, type CanvasPortalNodeData } from '../types';
+import { portalInfoForNode } from '../nodeTypes/registry';
+import type { CanvasNode } from '../types';
 import type {
   CanvasDocumentCollection,
   ParentContextPaneLayout,
@@ -58,17 +59,17 @@ export function buildParentContextField(
       const distance = Math.hypot(dx, dy);
       const region = parentContextRegionForNode(source, node);
       const detail = detailForDistance(distance);
-      const portalData = node.type === BuiltInNodeTypes.canvas ? (node.data as CanvasPortalNodeData) : null;
+      const portal = portalInfoForNode(node);
       const shape = {
         region,
         parentCanvasId: parent.id,
         node: cloneNode(node),
         distance,
         projectedRect: paneRectForRegion(region, stageRect, paneLayout, paneLayoutConstraints),
-        childCanvasId: portalData?.childCanvasId ?? null,
+        childCanvasId: portal?.childCanvasId ?? null,
         opacity: 0.22 + detail * 0.58,
         detail,
-        portal: node.type === BuiltInNodeTypes.canvas,
+        portal: Boolean(portal),
       };
       const previous = nearestByRegion.get(region);
       if (!previous || shape.distance < previous.distance) nearestByRegion.set(region, shape);

@@ -23,8 +23,8 @@ import {
   selectedPortalNodesWithChildren,
   stripPortalChildReferenceOnPaste,
 } from '../documentCommands';
-import { parseNodeData } from '../nodeTypes/registry';
-import { BuiltInNodeTypes, type Camera, type CanvasCommand, type CanvasModel, type CanvasModelChange, type CanvasNode, type CanvasPortalNodeData, type CanvasSelectionState, type PortalLayout, type ScreenRect, type ThemeName, type ViewportStatus } from '../types';
+import { portalInfoForNode, updatePortalSummaryForNode } from '../nodeTypes/registry';
+import type { Camera, CanvasCommand, CanvasModel, CanvasModelChange, CanvasNode, CanvasSelectionState, PortalLayout, ScreenRect, ThemeName, ViewportStatus } from '../types';
 import type {
   CanvasDocumentCollection,
   CanvasDocumentId,
@@ -498,7 +498,7 @@ export class NativeNestedCanvasController {
       onFrameMetrics: (metrics) => this.handleFrameMetrics(metrics.frameMs),
       beforeCommand: (command) => this.handleBeforeCommand(command),
       transformPastedNode: stripPortalChildReferenceOnPaste,
-      pasteInteractionForNodes: (nodes) => nodes.some((node) => node.type === BuiltInNodeTypes.canvas) ? 'Pasted canvas node without child contents' : null,
+      pasteInteractionForNodes: (nodes) => nodes.some((node) => portalInfoForNode(node)) ? 'Pasted canvas node without child contents' : null,
     });
     if (active) this.activeEngine.setModel(active.model);
     this.activeEngine.setTheme(this.theme);
@@ -1050,7 +1050,7 @@ export class NativeNestedCanvasController {
         return true;
       },
       transformPastedNode: stripPortalChildReferenceOnPaste,
-      pasteInteractionForNodes: (nodes) => nodes.some((node) => node.type === BuiltInNodeTypes.canvas) ? 'Pasted canvas node without child contents' : null,
+      pasteInteractionForNodes: (nodes) => nodes.some((node) => portalInfoForNode(node)) ? 'Pasted canvas node without child contents' : null,
     });
     engine.setTheme(this.theme);
     this.record('parent-context:pane:create', { ownerKey, canvasId, region });
@@ -1569,18 +1569,11 @@ function updateParentPortalSummary(collection: CanvasDocumentCollection, canvasI
   if (!parent) return;
   let changed = false;
   const nodes = parent.model.nodes.map((node) => {
-    if (node.id !== document.parentNodeId || node.type !== BuiltInNodeTypes.canvas) return node;
-    const data = parseNodeData(node) as CanvasPortalNodeData;
-    if (data.title === document.title && data.nodeCount === document.model.nodes.length) return node;
+    if (node.id !== document.parentNodeId || !portalInfoForNode(node)) return node;
+    const nextNode = updatePortalSummaryForNode(node, { title: document.title, nodeCount: document.model.nodes.length });
+    if (nextNode === node) return node;
     changed = true;
-    return {
-      ...node,
-      data: {
-        ...data,
-        title: document.title,
-        nodeCount: document.model.nodes.length,
-      },
-    };
+    return nextNode;
   });
   if (!changed) return;
   collection.documents[parent.id] = {

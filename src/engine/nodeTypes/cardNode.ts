@@ -1,23 +1,22 @@
-import { BuiltInNodeTypes, type CardAccent, type CardNodeData } from '../types';
 import { asEnum, asString } from './data';
+import { defineNodeType } from './define';
 import { createInlineTextarea, createInlineTextInput } from './inlineEditorDom';
+import type { JsonObject } from './primitives';
 import { drawAccentMark, drawCompactNode, drawNodeBodyLines, drawNodeTitle, drawTypeBadge, nodeLayout, wrapText } from './rendering';
+import { nodeTypeSpecs } from './specs';
 import type { NodeDefinition, NodeContentRect, NodeInteractionRegion } from './types';
+
+type CardAccent = 'task' | 'data' | 'system';
+type CardNodeData = {
+  title: string;
+  detail: string;
+  accent: CardAccent;
+} & JsonObject;
 
 const CARD_ACCENTS: readonly CardAccent[] = ['task', 'data', 'system'];
 
-export const cardNodeDefinition: NodeDefinition<CardNodeData> = {
-  type: BuiltInNodeTypes.card,
-  displayName: 'Card',
-  roleDescription: 'Work item',
-  typeBadge: 'WORK',
-  addMenu: {
-    label: 'Work item',
-    detail: 'Title, detail, and work accent',
-    badge: 'WORK',
-  },
-  defaultSize: { w: 256, h: 128 },
-  minSize: { w: 140, h: 76 },
+export const cardNodeDefinition: NodeDefinition<CardNodeData> = defineNodeType({
+  ...nodeTypeSpecs.card,
   createDefaultData() {
     return { title: 'Untitled card', detail: '', accent: 'task' };
   },
@@ -84,7 +83,7 @@ export const cardNodeDefinition: NodeDefinition<CardNodeData> = {
     }
     return null;
   },
-};
+});
 
 function cardRegions(contentRect: NodeContentRect): NodeInteractionRegion[] {
   return [

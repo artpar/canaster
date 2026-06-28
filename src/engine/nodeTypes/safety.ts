@@ -1,5 +1,5 @@
-import type { CanvasNode, NodeData } from '../types';
 import { asJsonObject } from './data';
+import type { CanvasNode, NodeData } from './primitives';
 import { unknownNodeDefinition } from './unknownNode';
 import type {
   NodeDefinition,

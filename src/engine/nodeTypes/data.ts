@@ -1,4 +1,4 @@
-import type { JsonObject, JsonValue, NodeData } from '../types';
+import type { JsonObject, JsonValue, NodeData } from './primitives';
 
 export function asString(value: unknown, fallback: string) {
   return typeof value === 'string' ? value : fallback;

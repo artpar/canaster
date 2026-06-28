@@ -1,21 +1,17 @@
-import { BuiltInNodeTypes, type TextNodeData } from '../types';
 import { asString } from './data';
+import { defineNodeType } from './define';
 import { createInlineTextarea } from './inlineEditorDom';
+import type { JsonObject } from './primitives';
 import { drawCompactNode, drawNodeBodyLines, drawTypeBadge, nodeLayout, wrapText } from './rendering';
+import { nodeTypeSpecs } from './specs';
 import type { NodeDefinition } from './types';
 
-export const textNodeDefinition: NodeDefinition<TextNodeData> = {
-  type: BuiltInNodeTypes.text,
-  displayName: 'Text',
-  roleDescription: 'Note',
-  typeBadge: 'NOTE',
-  addMenu: {
-    label: 'Note',
-    detail: 'Plain text for local context',
-    badge: 'NOTE',
-  },
-  defaultSize: { w: 240, h: 140 },
-  minSize: { w: 140, h: 76 },
+type TextNodeData = {
+  text: string;
+} & JsonObject;
+
+export const textNodeDefinition: NodeDefinition<TextNodeData> = defineNodeType({
+  ...nodeTypeSpecs.text,
   createDefaultData() {
     return { text: '' };
   },
@@ -67,7 +63,7 @@ export const textNodeDefinition: NodeDefinition<TextNodeData> = {
       close: ctx.requestClose,
     });
   },
-};
+});
 
 function firstLine(text: string) {
   return text.split(/\r?\n/).find((line) => line.trim())?.trim() ?? '';

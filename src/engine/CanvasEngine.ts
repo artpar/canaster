@@ -2,7 +2,7 @@ import { THEMES, type CanvasTheme } from './theme';
 import { arrangeLayoutLabel, arrangeNodeGeometries } from './arrangeLayout';
 import { cloneNodeData } from './nodeTypes/data';
 import { canvasPortalViewportRect } from './nodeTypes/canvasNode';
-import { createNodeInteraction, describeNode, hitTestNodeContent, nodeDefinitionFor, nodeDefinitionForType, nodeInteractionRegions, parseNodeData, renderNodeContent } from './nodeTypes/registry';
+import { createNodeInteraction, describeNode, hitTestNodeContent, nodeDefinitionFor, nodeDefinitionForType, nodeInteractionRegions, parseNodeData, portalInfoForNode, renderNodeContent } from './nodeTypes/registry';
 import type { NodeContentRect, NodeInteractionController, NodeInteractionRegion } from './nodeTypes/types';
 import type {
   Camera,
@@ -15,7 +15,6 @@ import type {
   CanvasNode,
   CanvasNodeVisibilityFilter,
   CanvasOperation,
-  CanvasPortalNodeData,
   CanvasSelectionState,
   EngineInteractionMode,
   EngineOptions,
@@ -1547,19 +1546,20 @@ export class CanvasEngine {
   private portalLayoutsFor(visibleNodes: CanvasNode[]): PortalLayout[] {
     const cullBounds = this.visibleWorldBounds();
     return visibleNodes
-      .filter((node) => node.type === BuiltInNodeTypes.canvas)
       .map((node) => {
-        const data = parseNodeData(node) as CanvasPortalNodeData;
+        const portal = portalInfoForNode(node);
+        if (!portal) return null;
         const worldRect = canvasPortalViewportRect(this.nodeContentRect(node));
         return {
           parentCanvasId: this.canvasId,
           portalNodeId: node.id,
-          childCanvasId: data.childCanvasId,
+          childCanvasId: portal.childCanvasId,
           worldRect,
           screenRect: this.worldToScreenRect(worldRect),
           visible: intersectsRect(worldRect, cullBounds),
         };
-      });
+      })
+      .filter((layout): layout is PortalLayout => Boolean(layout));
   }
 
   private isNodeVisible(node: CanvasNode) {
@@ -1571,9 +1571,8 @@ export class CanvasEngine {
   }
 
   private portalPreviewState(node: CanvasNode): 'none' | 'live' {
-    if (node.type !== BuiltInNodeTypes.canvas) return 'none';
-    const data = parseNodeData(node) as CanvasPortalNodeData;
-    if (!data.childCanvasId) return 'none';
+    const portal = portalInfoForNode(node);
+    if (!portal?.childCanvasId) return 'none';
     return this.livePortalNodeIds.has(node.id) ? 'live' : 'none';
   }
 

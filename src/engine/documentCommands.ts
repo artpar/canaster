@@ -11,9 +11,9 @@ import {
   updateNodeData,
 } from './documentModel';
 import { asJsonObject, assertJsonValue } from './nodeTypes/data';
-import { nodeDefinitionFor, parseNodeData } from './nodeTypes/registry';
+import { nodeDefinitionFor, portalInfoForNode, stripNodeForPaste } from './nodeTypes/registry';
 import type { NodeActionDescriptor } from './nodeTypes/types';
-import { BuiltInNodeTypes, type CanvasEditSource, type CanvasNode, type CanvasPortalNodeData } from './types';
+import type { CanvasEditSource, CanvasNode } from './types';
 import type { CanvasDocumentCollection, CanvasDocumentId, DocumentCommand, DocumentModelChange, PortalNode } from './documentTypes';
 import { cloneViewState } from './viewState';
 
@@ -70,17 +70,7 @@ export function commandForNodeAction(action: NodeActionDescriptor, canvasId: Can
 }
 
 export function stripPortalChildReferenceOnPaste(node: CanvasNode): CanvasNode {
-  if (node.type !== BuiltInNodeTypes.canvas) return cloneNode(node);
-  const data = parseNodeData(node) as CanvasPortalNodeData;
-  return {
-    ...cloneNode(node),
-    data: {
-      ...data,
-      childCanvasId: null,
-      nodeCount: 0,
-      title: `${data.title || 'Canvas'} copy`,
-    },
-  };
+  return stripNodeForPaste(cloneNode(node));
 }
 
 export function selectedPortalNodesWithChildren(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId): PortalNode[] {
@@ -88,9 +78,9 @@ export function selectedPortalNodesWithChildren(collection: CanvasDocumentCollec
   if (!document) return [];
   const selected = new Set(collection.view.selections[canvasId]?.selectedNodeIds ?? []);
   return document.model.nodes.filter((node): node is PortalNode => {
-    if (!selected.has(node.id) || node.type !== BuiltInNodeTypes.canvas) return false;
-    const data = parseNodeData(node) as CanvasPortalNodeData;
-    return Boolean(data.childCanvasId && collection.documents[data.childCanvasId]);
+    if (!selected.has(node.id)) return false;
+    const portal = portalInfoForNode(node);
+    return Boolean(portal?.childCanvasId && collection.documents[portal.childCanvasId]);
   });
 }
 

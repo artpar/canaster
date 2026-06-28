@@ -53,14 +53,13 @@ import {
 } from './engine/nested/NestedCanvasWorkspace';
 import {
     describeNode,
-    parseNodeData
+    referencedAssetIdsForNode
 } from './engine/nodeTypes/registry';
 import {
     cacheAssetImage,
     hasCachedAssetImage
 } from './engine/nodeTypes/imageAssets';
 import {
-    BuiltInNodeTypes,
     type CanvasArrangeLayout,
     type CanvasNode,
     type ThemeName
@@ -1001,10 +1000,7 @@ function imageAssetIdsInCollection(collection: CanvasDocumentCollection): string
     const ids = new Set<string>();
     for (const document of Object.values(collection.documents)) {
         for (const node of document.model.nodes) {
-            if (node.type !== BuiltInNodeTypes.image) continue;
-            const data = parseNodeData(node);
-            const assetId = typeof data.assetId === 'string' ? data.assetId : '';
-            if (assetId) ids.add(assetId);
+            for (const assetId of referencedAssetIdsForNode(node)) ids.add(assetId);
         }
     }
     return [...ids];

@@ -1,3 +1,18 @@
+export type {
+  CanvasEditSource,
+  CanvasNode,
+  JsonArray,
+  JsonObject,
+  JsonPrimitive,
+  JsonValue,
+  NodeData,
+  NodeTypeId,
+  WorldPoint,
+} from './nodeTypes/primitives';
+export { BuiltInNodeTypes } from './nodeTypes/specs';
+export type { BuiltInNodeType } from './nodeTypes/specs';
+import type { CanvasEditSource, CanvasNode, NodeData, NodeTypeId, WorldPoint } from './nodeTypes/primitives';
+
 export type ThemeName = 'dark' | 'light';
 
 export type Camera = {
@@ -6,78 +21,12 @@ export type Camera = {
   scale: number;
 };
 
-export const BuiltInNodeTypes = {
-  card: 'card',
-  text: 'text',
-  image: 'image',
-  canvas: 'canvas',
-  check: 'check',
-} as const;
-
-export type BuiltInNodeType = (typeof BuiltInNodeTypes)[keyof typeof BuiltInNodeTypes];
-export type NodeTypeId = string;
-
-export type JsonPrimitive = null | boolean | number | string;
-export type JsonObject = { [key: string]: JsonValue };
-export type JsonArray = JsonValue[];
-export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
-
-export type NodeData = JsonObject;
-
-export type CanvasNode<TData extends NodeData = NodeData> = {
-  id: string;
-  type: NodeTypeId;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  data: TData;
-};
-
 export type CanvasModel = {
   schemaVersion: 2;
   nodes: CanvasNode[];
 };
 
 export type CanvasNodeVisibilityFilter = (node: CanvasNode) => boolean;
-
-export type CardAccent = 'task' | 'data' | 'system';
-
-export type CardNodeData = {
-  title: string;
-  detail: string;
-  accent: CardAccent;
-} & JsonObject;
-
-export type TextNodeData = {
-  text: string;
-} & JsonObject;
-
-export type ImageNodeData = {
-  assetId: string | null;
-  alt: string;
-  fit: 'contain' | 'cover';
-  caption?: string;
-} & JsonObject;
-
-export type CanvasPortalNodeData = {
-  childCanvasId: string | null;
-  title: string;
-  nodeCount: number;
-} & JsonObject;
-
-export type CheckNodeItem = {
-  id: string;
-  text: string;
-  checked: boolean;
-} & JsonObject;
-
-export type CheckNodeData = {
-  title: string;
-  items: CheckNodeItem[];
-} & JsonObject;
-
-export type CanvasEditSource = 'pointer' | 'keyboard' | 'nonvisual' | 'ai';
 
 export type CanvasArrangeLayout = 'grid' | 'rows' | 'columns' | 'list';
 
@@ -118,11 +67,6 @@ export type CanvasModelChange =
   | { kind: 'node-resize'; nodeId: string; nodeIds: string[]; source: CanvasEditSource }
   | { kind: 'node-delete'; nodeId: string | null; nodeIds: string[]; source: CanvasEditSource }
   | { kind: 'node-create'; nodeId: string | null; nodeIds: string[]; source: CanvasEditSource };
-
-export type WorldPoint = {
-  x: number;
-  y: number;
-};
 
 export type ViewportStatus = {
   zoom: number;

@@ -1,24 +1,27 @@
-import { BuiltInNodeTypes, type CheckNodeData, type CheckNodeItem, type JsonObject } from '../types';
 import { asString } from './data';
+import { defineNodeType } from './define';
 import { createInlineTextInput, prepareInlineEditorMount, stopEvent } from './inlineEditorDom';
+import type { JsonObject } from './primitives';
 import { clipText, drawCompactNode, drawNodeMeta, drawNodeTitle, drawTypeBadge, nodeLayout, nodeText } from './rendering';
+import { nodeTypeSpecs } from './specs';
 import type { NodeContentRect, NodeDefinition, NodeInteractionRegion } from './types';
 
 const MAX_ITEMS = 100;
 const CHECKBOX_SIZE = 12;
 
-export const checkNodeDefinition: NodeDefinition<CheckNodeData> = {
-  type: BuiltInNodeTypes.check,
-  displayName: 'Checklist',
-  roleDescription: 'Checklist',
-  typeBadge: 'LIST',
-  addMenu: {
-    label: 'Checklist',
-    detail: 'Actionable list with done count',
-    badge: 'LIST',
-  },
-  defaultSize: { w: 280, h: 180 },
-  minSize: { w: 180, h: 110 },
+type CheckNodeItem = {
+  id: string;
+  text: string;
+  checked: boolean;
+} & JsonObject;
+
+type CheckNodeData = {
+  title: string;
+  items: CheckNodeItem[];
+} & JsonObject;
+
+export const checkNodeDefinition: NodeDefinition<CheckNodeData> = defineNodeType({
+  ...nodeTypeSpecs.check,
   createDefaultData() {
     return { title: 'Checklist', items: [] };
   },
@@ -133,7 +136,7 @@ export const checkNodeDefinition: NodeDefinition<CheckNodeData> = {
       }, 'pointer');
     }, ctx.requestClose);
   },
-};
+});
 
 function checklistRegions(contentRect: NodeContentRect, data: CheckNodeData): NodeInteractionRegion[] {
   const regions: NodeInteractionRegion[] = [{

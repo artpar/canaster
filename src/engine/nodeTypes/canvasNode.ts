@@ -1,20 +1,18 @@
-import { BuiltInNodeTypes, type CanvasPortalNodeData } from '../types';
 import { asNullableString, asNumber, asString } from './data';
+import { defineNodeType } from './define';
+import type { JsonObject } from './primitives';
 import { drawCompactNode, drawNodeMeta, drawNodeTitle, drawTypeBadge, nodeText } from './rendering';
+import { nodeTypeSpecs } from './specs';
 import type { NodeContentRect, NodeDefinition } from './types';
 
-export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = {
-  type: BuiltInNodeTypes.canvas,
-  displayName: 'View',
-  roleDescription: 'View inside',
-  typeBadge: 'VIEW',
-  addMenu: {
-    label: 'View',
-    detail: 'A child workspace view',
-    badge: 'VIEW',
-  },
-  defaultSize: { w: 300, h: 180 },
-  minSize: { w: 160, h: 100 },
+type CanvasPortalNodeData = {
+  childCanvasId: string | null;
+  title: string;
+  nodeCount: number;
+} & JsonObject;
+
+export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = defineNodeType({
+  ...nodeTypeSpecs.canvas,
   createDefaultData() {
     return { childCanvasId: null, title: 'View', nodeCount: 0 };
   },
@@ -78,7 +76,36 @@ export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = {
         : [{ id: 'create-child-canvas', label: 'Add view inside', available: true }],
     };
   },
-};
+  portalInfo({ data }) {
+    return {
+      childCanvasId: data.childCanvasId,
+      title: data.title,
+      nodeCount: data.nodeCount,
+    };
+  },
+  createPortalData(info) {
+    return {
+      childCanvasId: info.childCanvasId,
+      title: info.title,
+      nodeCount: info.nodeCount,
+    };
+  },
+  updatePortalSummary({ data }, summary) {
+    if (data.title === summary.title && data.nodeCount === summary.nodeCount) return data;
+    return { ...data, title: summary.title, nodeCount: summary.nodeCount };
+  },
+  stripForPaste({ node, data }) {
+    return {
+      ...node,
+      data: {
+        ...data,
+        childCanvasId: null,
+        nodeCount: 0,
+        title: `${data.title || 'Canvas'} copy`,
+      },
+    };
+  },
+});
 
 export function canvasPortalViewportRect(contentRect: NodeContentRect): NodeContentRect {
   return {

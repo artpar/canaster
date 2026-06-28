@@ -3,7 +3,6 @@ import type {
   CanvasEditSource,
   CanvasModel,
   CanvasNode,
-  CanvasPortalNodeData,
   CanvasSelectionState,
   NodeData,
 } from './types';
@@ -163,4 +162,4 @@ export type DocumentModelChange =
   | { kind: 'delete-confirmation-close'; source: CanvasEditSource }
   | { kind: 'document-delete'; canvasIds: CanvasDocumentId[]; source: CanvasEditSource };
 
-export type PortalNode = CanvasNode<CanvasPortalNodeData>;
+export type PortalNode = CanvasNode;

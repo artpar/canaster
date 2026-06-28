@@ -1,5 +1,5 @@
-import type { CanvasEditSource, CanvasNode, JsonObject, NodeData, NodeTypeId, WorldPoint } from '../types';
 import type { CanvasTheme } from '../theme';
+import type { CanvasEditSource, CanvasNode, JsonObject, NodeData, NodeTypeId, WorldPoint } from './primitives';
 
 export type NodeSize = {
   w: number;
@@ -104,6 +104,22 @@ export type NodeDescribeContext<TData extends NodeData = NodeData> = {
   data: TData;
 };
 
+export type NodePortalInfo = {
+  childCanvasId: string | null;
+  title: string;
+  nodeCount: number;
+};
+
+export type NodePortalSummary = {
+  title: string;
+  nodeCount: number;
+};
+
+export type NodeCapabilityContext<TData extends NodeData = NodeData> = {
+  node: CanvasNode & { data: TData };
+  data: TData;
+};
+
 export type NodeDefinition<TData extends NodeData = NodeData> = {
   type: NodeTypeId;
   displayName: string;
@@ -119,4 +135,9 @@ export type NodeDefinition<TData extends NodeData = NodeData> = {
   getInteractionRegions?(context: NodeInteractionRegionContext<TData>): NodeInteractionRegion[];
   createInteraction?(context: NodeInteractionContext<TData>): NodeInteractionController | null;
   describe(context: NodeDescribeContext<TData>): NodeDescription;
+  portalInfo?(context: NodeCapabilityContext<TData>): NodePortalInfo | null;
+  createPortalData?(info: NodePortalInfo): TData;
+  updatePortalSummary?(context: NodeCapabilityContext<TData>, summary: NodePortalSummary): TData;
+  stripForPaste?(context: NodeCapabilityContext<TData>): CanvasNode<TData>;
+  referencedAssetIds?(context: NodeCapabilityContext<TData>): string[];
 };

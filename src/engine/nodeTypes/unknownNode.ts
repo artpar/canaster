@@ -1,20 +1,12 @@
-import type { NodeData } from '../types';
 import { asJsonObject } from './data';
+import { defineNodeType } from './define';
+import type { NodeData } from './primitives';
 import { clipText, drawTypeBadge, wrapText } from './rendering';
+import { nodeTypeSpecs } from './specs';
 import type { NodeDefinition } from './types';
 
-export const unknownNodeDefinition: NodeDefinition<NodeData> = {
-  type: 'unknown',
-  displayName: 'Unknown',
-  roleDescription: 'Unknown item',
-  typeBadge: 'UNKNOWN',
-  addMenu: {
-    label: 'Unknown item',
-    detail: 'Unsupported saved item type',
-    badge: 'UNKNOWN',
-  },
-  defaultSize: { w: 220, h: 120 },
-  minSize: { w: 140, h: 76 },
+export const unknownNodeDefinition: NodeDefinition<NodeData> = defineNodeType({
+  ...nodeTypeSpecs.unknown,
   createDefaultData() {
     return {};
   },
@@ -46,4 +38,4 @@ export const unknownNodeDefinition: NodeDefinition<NodeData> = {
       actions: [],
     };
   },
-};
+});

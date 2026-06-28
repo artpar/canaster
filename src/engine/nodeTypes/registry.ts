@@ -1,8 +1,9 @@
-import type { CanvasNode } from '../types';
 import { cardNodeDefinition } from './cardNode';
 import { canvasNodeDefinition } from './canvasNode';
 import { checkNodeDefinition } from './checkNode';
 import { imageNodeDefinition } from './imageNode';
+import { cloneNodeData } from './data';
+import type { CanvasNode, NodeData } from './primitives';
 import {
   safeDescribeNodeContent,
   safeCreateNodeInteraction,
@@ -16,7 +17,7 @@ import {
   type DefinitionRenderContext,
 } from './safety';
 import { textNodeDefinition } from './textNode';
-import type { NodeAddMenuMetadata, NodeDefinition, NodeDescription, NodeHitTarget, NodeHitTestContext, NodeInteractionController, NodeInteractionRegion, NodeRenderContext } from './types';
+import type { NodeAddMenuMetadata, NodeDefinition, NodeDescription, NodeHitTarget, NodeHitTestContext, NodeInteractionController, NodeInteractionRegion, NodePortalInfo, NodePortalSummary, NodeRenderContext } from './types';
 import { unknownNodeDefinition } from './unknownNode';
 
 const definitions = createRegistry([cardNodeDefinition, textNodeDefinition, imageNodeDefinition, canvasNodeDefinition, checkNodeDefinition]);
@@ -84,4 +85,61 @@ export function describeNode(node: CanvasNode): NodeDescription {
   const definition = nodeDefinitionFor(node);
   const data = safeParseNodeData(definition, node);
   return safeDescribeNodeContent(definition, node, data);
+}
+
+export function portalInfoForNode(node: CanvasNode): NodePortalInfo | null {
+  const definition = nodeDefinitionFor(node);
+  const data = safeParseNodeData(definition, node);
+  try {
+    return definition.portalInfo?.({ node: node as CanvasNode & { data: NodeData }, data }) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function isPortalNode(node: CanvasNode | undefined): node is CanvasNode {
+  return Boolean(node && portalInfoForNode(node));
+}
+
+export function createCanvasPortalData(info: NodePortalInfo): NodeData {
+  return canvasNodeDefinition.createPortalData?.(info) ?? canvasNodeDefinition.createDefaultData();
+}
+
+export function createCanvasPortalNode(node: CanvasNode, info: NodePortalInfo): CanvasNode {
+  return {
+    ...node,
+    type: canvasNodeDefinition.type,
+    data: createCanvasPortalData(info),
+  };
+}
+
+export function updatePortalSummaryForNode(node: CanvasNode, summary: NodePortalSummary): CanvasNode {
+  const definition = nodeDefinitionFor(node);
+  const data = safeParseNodeData(definition, node);
+  try {
+    const nextData = definition.updatePortalSummary?.({ node: node as CanvasNode & { data: NodeData }, data }, summary);
+    return nextData && nextData !== data ? { ...node, data: nextData } : node;
+  } catch {
+    return node;
+  }
+}
+
+export function stripNodeForPaste(node: CanvasNode): CanvasNode {
+  const definition = nodeDefinitionFor(node);
+  const data = safeParseNodeData(definition, node);
+  try {
+    return definition.stripForPaste?.({ node: node as CanvasNode & { data: NodeData }, data }) ?? { ...node, data: cloneNodeData(node.data) };
+  } catch {
+    return { ...node, data: cloneNodeData(node.data) };
+  }
+}
+
+export function referencedAssetIdsForNode(node: CanvasNode): string[] {
+  const definition = nodeDefinitionFor(node);
+  const data = safeParseNodeData(definition, node);
+  try {
+    return definition.referencedAssetIds?.({ node: node as CanvasNode & { data: NodeData }, data }) ?? [];
+  } catch {
+    return [];
+  }
 }

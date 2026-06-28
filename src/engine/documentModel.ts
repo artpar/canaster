@@ -1,11 +1,16 @@
 import { cloneNodeData } from './nodeTypes/data';
-import { parseNodeData } from './nodeTypes/registry';
 import {
-  BuiltInNodeTypes,
+  createCanvasPortalNode,
+  describeNode,
+  isPortalNode,
+  portalInfoForNode,
+  updatePortalSummaryForNode,
+} from './nodeTypes/registry';
+import type { NodePortalInfo } from './nodeTypes/types';
+import {
   type Camera,
   type CanvasModel,
   type CanvasNode,
-  type CanvasPortalNodeData,
   type CanvasSelectionState,
   type NodeData,
 } from './types';
@@ -98,9 +103,8 @@ export function portalNodeForChild(collection: CanvasDocumentCollection, childCa
 export function childDocumentForPortal(collection: CanvasDocumentCollection, parentCanvasId: CanvasDocumentId, portalNodeId: string): CanvasDocument | null {
   const parent = canvasDocumentFor(collection, parentCanvasId);
   const node = parent.model.nodes.find((candidate) => candidate.id === portalNodeId);
-  if (!isPortalNode(node)) return null;
-  const data = parseNodeData(node) as CanvasPortalNodeData;
-  return data.childCanvasId ? collection.documents[data.childCanvasId] ?? null : null;
+  const portal = node ? portalInfoForNode(node) : null;
+  return portal?.childCanvasId ? collection.documents[portal.childCanvasId] ?? null : null;
 }
 
 export function updateCanvasModel(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId, model: CanvasModel): CanvasDocumentCollection {
@@ -131,25 +135,18 @@ export function createChildCanvasForNode(collection: CanvasDocumentCollection, p
   const parent = canvasDocumentFor(collection, parentCanvasId);
   const node = parent.model.nodes.find((candidate) => candidate.id === nodeId);
   if (!node) throw new Error(`Node not found: ${nodeId}`);
-  if (isPortalNode(node)) {
-    const data = parseNodeData(node) as CanvasPortalNodeData;
-    if (data.childCanvasId && collection.documents[data.childCanvasId]) return collection;
-  }
+  const existingPortal = portalInfoForNode(node);
+  if (existingPortal?.childCanvasId && collection.documents[existingPortal.childCanvasId]) return collection;
 
   const childCanvasId = nextCanvasId(collection);
   const title = descriptionLabel(node);
-  const portalData: CanvasPortalNodeData = { childCanvasId, title, nodeCount: 0 };
   const next = cloneDocumentCollection(collection);
   const nextParent = canvasDocumentFor(next, parentCanvasId);
   nextParent.model = {
     schemaVersion: 2,
     nodes: nextParent.model.nodes.map((candidate) =>
       candidate.id === nodeId
-        ? {
-            ...candidate,
-            type: BuiltInNodeTypes.canvas,
-            data: portalData,
-          }
+        ? createCanvasPortalNode(candidate, { childCanvasId, title, nodeCount: 0 })
         : candidate,
     ),
   };
@@ -172,12 +169,12 @@ export function syncPortalSummaries(collection: CanvasDocumentCollection): Canva
     document.model = {
       schemaVersion: 2,
       nodes: document.model.nodes.map((node) => {
-        if (!isPortalNode(node)) return node;
-        const data = parseNodeData(node) as CanvasPortalNodeData;
-        if (!data.childCanvasId) return { ...node, data: { ...data, childCanvasId: null, nodeCount: 0 } };
-        const child = next.documents[data.childCanvasId];
-        if (!child) return { ...node, data };
-        return { ...node, data: { ...data, title: child.title, nodeCount: child.model.nodes.length } };
+        const portal = portalInfoForNode(node);
+        if (!portal) return node;
+        if (!portal.childCanvasId) return updatePortalSummaryForNode(node, { title: portal.title, nodeCount: 0 });
+        const child = next.documents[portal.childCanvasId];
+        if (!child) return node;
+        return updatePortalSummaryForNode(node, { title: child.title, nodeCount: child.model.nodes.length });
       }),
     };
   }
@@ -251,9 +248,9 @@ export function deleteNodesAndDescendants(collection: CanvasDocumentCollection, 
   const document = canvasDocumentFor(collection, canvasId);
   const descendantIds = new Set<CanvasDocumentId>();
   for (const node of document.model.nodes) {
-    if (!deleteSet.has(node.id) || !isPortalNode(node)) continue;
-    const data = parseNodeData(node) as CanvasPortalNodeData;
-    if (data.childCanvasId) collectDescendants(collection, data.childCanvasId, descendantIds);
+    if (!deleteSet.has(node.id)) continue;
+    const portal = portalInfoForNode(node);
+    if (portal?.childCanvasId) collectDescendants(collection, portal.childCanvasId, descendantIds);
   }
 
   const next = cloneDocumentCollection(collection);
@@ -274,9 +271,8 @@ export function deleteNodesAndDescendants(collection: CanvasDocumentCollection, 
   return syncPortalSummaries(syncDerivedView(next));
 }
 
-export function portalDataForNode(node: CanvasNode): CanvasPortalNodeData | null {
-  if (!isPortalNode(node)) return null;
-  return parseNodeData(node) as CanvasPortalNodeData;
+export function portalDataForNode(node: CanvasNode): NodePortalInfo | null {
+  return portalInfoForNode(node);
 }
 
 export function cloneModel(model: CanvasModel): CanvasModel {
@@ -323,10 +319,6 @@ function collectDescendants(collection: CanvasDocumentCollection, canvasId: Canv
   }
 }
 
-function isPortalNode(node: CanvasNode | undefined): node is PortalNode {
-  return node?.type === BuiltInNodeTypes.canvas;
-}
-
 function nextCanvasId(collection: CanvasDocumentCollection): CanvasDocumentId {
   let counter = Object.keys(collection.documents).length + 1;
   let id = `canvas-${counter}`;
@@ -335,9 +327,5 @@ function nextCanvasId(collection: CanvasDocumentCollection): CanvasDocumentId {
 }
 
 function descriptionLabel(node: CanvasNode) {
-  const rawTitle = (node.data as { title?: unknown }).title;
-  if (typeof rawTitle === 'string' && rawTitle.trim()) return rawTitle.trim();
-  const rawText = (node.data as { text?: unknown }).text;
-  if (typeof rawText === 'string' && rawText.trim()) return rawText.trim().slice(0, 42);
-  return 'Canvas';
+  return describeNode(node).label || 'Canvas';
 }

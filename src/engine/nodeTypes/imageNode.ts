@@ -1,26 +1,25 @@
 import { listImageAssets, loadAssetObject, uploadImageAsset, type CanasterAssetSummary } from '../../backend/assets';
 import { hasUsableStoredToken, normalizeDaptinError } from '../../backend/daptinClient';
-import { BuiltInNodeTypes, type ImageNodeData } from '../types';
 import { asEnum, asNullableString, asString } from './data';
+import { defineNodeType } from './define';
 import { cachedAssetImage, cacheAssetImage } from './imageAssets';
 import { createInlineTextInput, prepareInlineEditorMount, stopEvent } from './inlineEditorDom';
+import type { JsonObject } from './primitives';
 import { clipText, drawCompactNode, drawPlaceholderIcon, drawTypeBadge, nodeText, wrapText } from './rendering';
+import { nodeTypeSpecs } from './specs';
 import type { NodeContentRect, NodeDefinition, NodeInteractionRegion } from './types';
 
 const IMAGE_FITS = ['contain', 'cover'] as const;
+type ImageFit = (typeof IMAGE_FITS)[number];
+type ImageNodeData = {
+  assetId: string | null;
+  alt: string;
+  fit: ImageFit;
+  caption?: string;
+} & JsonObject;
 
-export const imageNodeDefinition: NodeDefinition<ImageNodeData> = {
-  type: BuiltInNodeTypes.image,
-  displayName: 'Image',
-  roleDescription: 'Image',
-  typeBadge: 'IMAGE',
-  addMenu: {
-    label: 'Image',
-    detail: 'Visual reference with alt text',
-    badge: 'IMAGE',
-  },
-  defaultSize: { w: 280, h: 180 },
-  minSize: { w: 140, h: 96 },
+export const imageNodeDefinition: NodeDefinition<ImageNodeData> = defineNodeType<ImageNodeData>({
+  ...nodeTypeSpecs.image,
   createDefaultData() {
     return { assetId: null, alt: '', fit: 'contain', caption: '' };
   },
@@ -116,7 +115,10 @@ export const imageNodeDefinition: NodeDefinition<ImageNodeData> = {
     if (ctx.region.id !== 'image-frame') return null;
     return createImagePicker(ctx.mount, ctx.data, (nextData) => ctx.requestCommit(nextData, 'pointer'), ctx.requestClose);
   },
-};
+  referencedAssetIds({ data }) {
+    return data.assetId ? [data.assetId] : [];
+  },
+});
 
 function imageRegions(contentRect: NodeContentRect): NodeInteractionRegion[] {
   const frame = imageFrame(contentRect);
