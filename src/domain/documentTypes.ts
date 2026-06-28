@@ -1,5 +1,6 @@
 import type {
   Camera,
+  CanvasArrangeLayout,
   CanvasEditSource,
   CanvasModel,
   CanvasNode,
@@ -146,6 +147,7 @@ export type DocumentCommand =
   | { type: 'go-to-parent-canvas'; source: CanvasEditSource }
   | { type: 'activate-neighbor-portal'; parentCanvasId: CanvasDocumentId; portalNodeId: string; source: CanvasEditSource }
   | { type: 'focus-portal-preview'; parentCanvasId: CanvasDocumentId; portalNodeId: string; source: CanvasEditSource }
+  | { type: 'arrange-canvas'; canvasId: CanvasDocumentId; layout: CanvasArrangeLayout; source: CanvasEditSource }
   | { type: 'create-child-canvas'; parentCanvasId: CanvasDocumentId; nodeId: string; source: CanvasEditSource }
   | { type: 'create-canvas-portal'; parentCanvasId: CanvasDocumentId; nodeId: string; source: CanvasEditSource }
   | { type: 'set-node-data'; canvasId: CanvasDocumentId; nodeId: string; from: NodeData; to: NodeData; source: CanvasEditSource }
@@ -157,6 +159,7 @@ export type DocumentModelChange =
   | { kind: 'active-canvas-change'; from: CanvasDocumentId; to: CanvasDocumentId; source: CanvasEditSource }
   | { kind: 'canvas-create'; canvasId: CanvasDocumentId; parentCanvasId: CanvasDocumentId; parentNodeId: string; source: CanvasEditSource }
   | { kind: 'node-data-change'; canvasId: CanvasDocumentId; nodeId: string; source: CanvasEditSource }
+  | { kind: 'canvas-arrange'; canvasId: CanvasDocumentId; nodeIds: string[]; source: CanvasEditSource }
   | { kind: 'portal-preview-focus'; canvasId: CanvasDocumentId; nodeId: string; source: CanvasEditSource }
   | { kind: 'delete-confirmation-open'; canvasId: CanvasDocumentId; nodeIds: string[]; source: CanvasEditSource }
   | { kind: 'delete-confirmation-close'; source: CanvasEditSource }

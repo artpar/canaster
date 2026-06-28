@@ -36,7 +36,6 @@ export type CanvasCommand =
   | { type: 'clear-selection'; source: CanvasEditSource }
   | { type: 'move-selection'; dx: number; dy: number; source: CanvasEditSource }
   | { type: 'resize-selection'; dw: number; dh: number; source: CanvasEditSource }
-  | { type: 'arrange-nodes'; layout: CanvasArrangeLayout; source: CanvasEditSource }
   | { type: 'delete-selection'; source: CanvasEditSource }
   | { type: 'copy-selection'; source: CanvasEditSource }
   | { type: 'paste-clipboard'; source: CanvasEditSource };

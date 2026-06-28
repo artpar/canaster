@@ -5,7 +5,7 @@ import {
   useRef,
 } from 'react';
 import { cloneDocumentCollection } from '../../../domain/documentModel';
-import { type CanvasCommand, type CanvasModelChange, type ThemeName, type ViewportStatus } from '../../../domain/types';
+import { type CanvasCommand, type CanvasModelChange, type ScreenRect, type ThemeName, type ViewportStatus } from '../../../domain/types';
 import type {
   CanvasDocumentCollection,
   CanvasWorkspaceSnapshot,
@@ -25,6 +25,12 @@ export type NestedCanvasWorkspaceProps = {
   storageKey?: string;
   onCollectionChange?: (collection: CanvasDocumentCollection, changes: DocumentModelChange[]) => void;
   onChromeStateChange?: (state: NestedCanvasWorkspaceChromeState) => void;
+  onArrangeCanvasMenuRequest?: (request: ArrangeCanvasMenuRequest) => void;
+};
+
+export type ArrangeCanvasMenuRequest = {
+  canvasId: string;
+  anchor?: ScreenRect;
 };
 
 export type NestedCanvasWorkspaceChromeState = {
@@ -46,7 +52,7 @@ export type NestedCanvasWorkspaceHandle = {
   undoWorkspace(): boolean;
   redoWorkspace(): boolean;
   executeActiveCanvasCommand(command: CanvasCommand): boolean;
-  executeDocumentCommand(command: DocumentCommand): void;
+  executeDocumentCommand(command: DocumentCommand): boolean;
   collection(): CanvasDocumentCollection;
   openWorkspaceUrlState(state: WorkspaceUrlState): boolean;
   currentWorkspaceUrlState(documentId: string | null): WorkspaceUrlState | null;
@@ -77,17 +83,18 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     storageKey,
     onCollectionChange,
     onChromeStateChange,
+    onArrangeCanvasMenuRequest,
   },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const controllerRef = useRef<NativeNestedCanvasController | null>(null);
-  const callbacksRef = useRef({ onCollectionChange, onChromeStateChange });
+  const callbacksRef = useRef({ onCollectionChange, onChromeStateChange, onArrangeCanvasMenuRequest });
   const initialCollectionRef = useRef(initialCollection);
 
   useEffect(() => {
-    callbacksRef.current = { onCollectionChange, onChromeStateChange };
-  }, [onCollectionChange, onChromeStateChange]);
+    callbacksRef.current = { onCollectionChange, onChromeStateChange, onArrangeCanvasMenuRequest };
+  }, [onCollectionChange, onChromeStateChange, onArrangeCanvasMenuRequest]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -101,6 +108,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
       storageKey,
       onCollectionChange: (collection, changes) => callbacksRef.current.onCollectionChange?.(collection, changes),
       onChromeStateChange: (state) => callbacksRef.current.onChromeStateChange?.(state),
+      onArrangeCanvasMenuRequest: (request) => callbacksRef.current.onArrangeCanvasMenuRequest?.(request),
     });
     controllerRef.current = controller;
     return () => {
@@ -129,7 +137,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     undoWorkspace: () => controllerRef.current?.undoWorkspace() ?? false,
     redoWorkspace: () => controllerRef.current?.redoWorkspace() ?? false,
     executeActiveCanvasCommand: (command: CanvasCommand) => controllerRef.current?.executeActiveCanvasCommand(command) ?? false,
-    executeDocumentCommand: (command: DocumentCommand) => controllerRef.current?.executeDocumentCommand(command),
+    executeDocumentCommand: (command: DocumentCommand) => controllerRef.current?.executeDocumentCommand(command) ?? false,
     collection: () => controllerRef.current?.collection() ?? cloneDocumentCollection(initialCollection),
     openWorkspaceUrlState: (state: WorkspaceUrlState) => controllerRef.current?.openWorkspaceUrlState(state) ?? false,
     currentWorkspaceUrlState: (documentId: string | null) => controllerRef.current?.currentWorkspaceUrlState(documentId) ?? null,

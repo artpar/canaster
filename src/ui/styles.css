@@ -142,6 +142,19 @@ button {
   inset: 0;
 }
 
+.canvas-viewport {
+  position: absolute;
+  inset: 0;
+}
+
+.active-canvas-viewport,
+.parent-context-canvas-viewport {
+  display: grid;
+  grid-template-columns: 0 minmax(0, 1fr) 0;
+  grid-template-rows: 0 minmax(0, 1fr) 0;
+  overflow: hidden;
+}
+
 .node-inline-editor-layer {
   position: absolute;
   inset: 0;
@@ -437,16 +450,20 @@ button {
   pointer-events: auto;
 }
 
+.parent-context-canvas-viewport {
+  inset: var(--nested-pane-gutter);
+}
+
 .parent-context-canvas {
   position: absolute;
-  inset: var(--nested-pane-gutter);
-  width: calc(100% - 12px);
-  height: calc(100% - 12px);
+  inset: 0;
+  width: 100%;
+  height: 100%;
   border-radius: 4px;
 }
 
-.parent-context-canvas-clip > .portal-overlays {
-  inset: var(--nested-pane-gutter);
+.parent-context-canvas-viewport .portal-overlays {
+  inset: 0;
 }
 
 .parent-context-resizers {
@@ -1315,12 +1332,13 @@ button {
   color: #454545;
 }
 
-.zoom-toolbar {
+.canvas-viewport-controls {
   position: absolute;
   bottom: 18px;
   right: 18px;
   left: auto;
   z-index: 18;
+  display: flex;
   flex-direction: column;
   gap: 6px;
   width: auto;
@@ -1329,9 +1347,10 @@ button {
   border: 0;
   background: transparent;
   box-shadow: none;
+  pointer-events: auto;
 }
 
-.zoom-toolbar .icon-button {
+.canvas-viewport-control-button {
   width: 32px;
   height: 32px;
   border-color: rgba(149, 149, 149, 0.2);
@@ -1340,13 +1359,25 @@ button {
   box-shadow: 0 6px 14px rgba(10, 10, 10, 0.22);
 }
 
-.zoom-toolbar .icon-button svg {
+.canvas-viewport-control-button svg {
   width: 17px;
   height: 17px;
   stroke-width: 2.4;
 }
 
-:root[data-theme='light'] .zoom-toolbar .icon-button {
+.embedded-nested-viewport .canvas-viewport-controls {
+  right: 6px;
+  bottom: 6px;
+  gap: 4px;
+}
+
+.embedded-nested-viewport .canvas-viewport-control-button {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+
+:root[data-theme='light'] .canvas-viewport-control-button {
   border-color: rgba(132, 132, 132, 0.24);
   background: rgba(255, 255, 255, 0.94);
   box-shadow: 0 12px 24px rgba(38, 50, 68, 0.14);
@@ -2447,13 +2478,13 @@ button {
     font-size: 12px;
   }
 
-  .zoom-toolbar {
+  .canvas-viewport-controls {
     bottom: 12px;
     right: 12px;
     left: auto;
   }
 
-.zoom-toolbar .icon-button {
+  .canvas-viewport-control-button {
     width: 28px;
     height: 28px;
     border-radius: 8px;
@@ -2520,7 +2551,7 @@ button {
     inset: auto;
   }
 
-  .zoom-toolbar {
+  .canvas-viewport-controls {
     transform: scale(0.92);
     transform-origin: right bottom;
   }

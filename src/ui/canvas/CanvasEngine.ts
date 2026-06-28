@@ -1,12 +1,10 @@
 import { THEMES, type CanvasTheme } from './theme';
-import { arrangeLayoutLabel, arrangeNodeGeometries } from '../../domain/arrangeLayout';
 import { cloneNodeData } from '../../core/nodeData';
 import { canvasPortalViewportRect } from './nodeTypes/canvasNode';
 import { createNodeInteraction, describeNode, hitTestNodeContent, nodeDefinitionFor, nodeDefinitionForType, nodeInteractionRegions, parseNodeData, portalInfoForNode, renderNodeContent } from './nodeRegistry';
 import type { NodeContentRect, NodeInteractionController, NodeInteractionRegion } from './nodeDefinition/nodeDefinitionTypes';
 import type {
   Camera,
-  CanvasArrangeLayout,
   CanvasCommand,
   CanvasEditSource,
   CanvasFrameMetrics,
@@ -393,8 +391,6 @@ export class CanvasEngine {
         return this.planMoveSelection(command.dx, command.dy, command.source);
       case 'resize-selection':
         return this.planResizeSelection(command.dw, command.dh, command.source);
-      case 'arrange-nodes':
-        return this.planArrangeNodes(command.layout, command.source);
       case 'delete-selection':
         return this.planDeleteSelection(command.source);
       case 'copy-selection':
@@ -490,25 +486,6 @@ export class CanvasEngine {
       operations,
       change: operations.length ? { kind: 'node-resize', nodeId: this.primarySelectedNodeId ?? nodeIds[0] ?? nodes[0].id, nodeIds, source } : undefined,
       interaction: operations.length ? sourceInteraction(source, 'resize') : 'Resize unchanged',
-    };
-  }
-
-  private planArrangeNodes(layout: CanvasArrangeLayout, source: CanvasEditSource): CommandPlan {
-    const nodes = this.projectedNodes();
-    if (nodes.length < 2) return { operations: [], interaction: nodes.length ? 'Arrange needs more panels' : 'Arrange no panels' };
-    const geometries = arrangeNodeGeometries(nodes, layout, SNAP_STEP);
-    const operations: CanvasOperation[] = [];
-    for (const node of nodes) {
-      const to = geometries.get(node.id);
-      if (!to) continue;
-      const from = nodeGeometry(node);
-      if (!sameGeometry(from, to)) operations.push({ type: 'set-node-geometry', nodeId: node.id, from, to });
-    }
-    const nodeIds = operations.map((operation) => operation.type === 'set-node-geometry' ? operation.nodeId : '').filter(Boolean);
-    return {
-      operations,
-      change: operations.length ? { kind: 'node-move', nodeId: nodeIds[0] ?? nodes[0].id, nodeIds, source } : undefined,
-      interaction: operations.length ? `Arranged ${nodes.length} panels as ${arrangeLayoutLabel(layout)}` : 'Arrangement unchanged',
     };
   }
 
@@ -865,18 +842,6 @@ export class CanvasEngine {
     const node = this.nodeAt(world);
 
     if (node) {
-      const hit = this.nodeInternalHit(node, world);
-      const liveCenterHit = hit?.type === 'activate' && hit.action === 'center-child-canvas' && this.portalPreviewState(node) === 'live';
-      const action = liveCenterHit && (event.metaKey || event.ctrlKey)
-        ? 'center-child-canvas-recursive'
-        : liveCenterHit ? hit.action : null;
-      if (action === 'center-child-canvas' || action === 'center-child-canvas-recursive') {
-        if (!this.routeNodeAction(node.id, action, 'pointer')) return;
-        this.interaction = 'Centered view';
-        this.markDirty();
-        this.emitStatus();
-        return;
-      }
       const mode = event.shiftKey || event.metaKey || event.ctrlKey ? 'toggle' : this.selectedNodeIds.has(node.id) ? 'add' : 'replace';
       this.executeCommand({ type: 'select-node', nodeId: node.id, mode, source: 'pointer' });
       if (!this.selectedNodeIds.has(node.id)) {
@@ -1319,8 +1284,6 @@ export class CanvasEngine {
   private cursorFor(point: WorldPoint, node: CanvasNode | null) {
     if (this.selectedResizeNodeAt(point)) return 'nwse-resize';
     if (this.selectedDragNodeAt(point)) return this.drag?.mode === 'node' ? 'grabbing' : 'grab';
-    const hit = node ? this.nodeInternalHit(node, point) : null;
-    if (node && hit?.type === 'activate' && hit.action === 'center-child-canvas' && this.portalPreviewState(node) === 'live') return 'pointer';
     if (node && node.id === this.primarySelectedNodeId) {
       const region = this.interactionRegionAt(node, point);
       if (region) return region.cursor ?? 'pointer';
@@ -1328,9 +1291,7 @@ export class CanvasEngine {
     return 'default';
   }
 
-  private tooltipFor(point: WorldPoint, node: CanvasNode | null) {
-    const hit = node ? this.nodeInternalHit(node, point) : null;
-    if (node && hit?.type === 'activate' && hit.action === 'center-child-canvas' && this.portalPreviewState(node) === 'live') return 'Center view. Cmd/Ctrl-click centers nested views.';
+  private tooltipFor(_point: WorldPoint, _node: CanvasNode | null) {
     return '';
   }
 

@@ -10,10 +10,11 @@ import {
   syncPortalSummaries,
   updateNodeData,
 } from './documentModel';
+import { arrangeLayoutLabel, arrangeNodeGeometries } from './arrangeLayout';
 import { asJsonObject, assertJsonValue } from '../core/nodeData';
 import { nodeDefinitionFor, portalInfoForNode, stripNodeForPaste } from '../ui/canvas/nodeRegistry';
 import type { NodeActionDescriptor } from '../ui/canvas/nodeDefinition/nodeDefinitionTypes';
-import type { CanvasEditSource, CanvasNode } from './types';
+import type { CanvasArrangeLayout, CanvasEditSource, CanvasNode } from './types';
 import type { CanvasDocumentCollection, CanvasDocumentId, DocumentCommand, DocumentModelChange, PortalNode } from './documentTypes';
 import { cloneViewState } from './viewState';
 
@@ -35,6 +36,8 @@ export function planDocumentCommand(collection: CanvasDocumentCollection, comman
       return enterChildCanvas(collection, command.parentCanvasId, command.portalNodeId, command.source);
     case 'focus-portal-preview':
       return focusPortalPreview(collection, command.parentCanvasId, command.portalNodeId, command.source);
+    case 'arrange-canvas':
+      return arrangeCanvas(collection, command.canvasId, command.layout, command.source);
     case 'create-child-canvas':
     case 'create-canvas-portal':
       return createChildCanvas(collection, command.parentCanvasId, command.nodeId, command.source);
@@ -170,6 +173,36 @@ function focusPortalPreview(collection: CanvasDocumentCollection, parentCanvasId
   };
 }
 
+function arrangeCanvas(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId, layout: CanvasArrangeLayout, source: CanvasEditSource): DocumentCommandPlan {
+  const document = collection.documents[canvasId];
+  if (!document) return noChange(collection, 'Canvas unavailable');
+  if (document.model.nodes.length < 2) return noChange(collection, document.model.nodes.length ? 'Arrange needs more panels' : 'Arrange no panels');
+
+  const geometries = arrangeNodeGeometries(document.model.nodes, layout, 32);
+  const nextNodes = document.model.nodes.map((candidate) => {
+    const geometry = geometries.get(candidate.id);
+    return geometry ? { ...candidate, ...geometry } : candidate;
+  });
+  const changedNodeIds = nextNodes
+    .filter((candidate, index) => !sameNodeGeometry(candidate, document.model.nodes[index]))
+    .map((candidate) => candidate.id);
+  if (!changedNodeIds.length) return noChange(collection, 'Arrangement unchanged');
+
+  const next = cloneDocumentCollection(collection);
+  next.documents[canvasId] = {
+    ...document,
+    model: {
+      schemaVersion: 2,
+      nodes: nextNodes,
+    },
+  };
+  return {
+    collection: syncDerivedView(next),
+    changes: [{ kind: 'canvas-arrange', canvasId, nodeIds: changedNodeIds, source }],
+    interaction: `Arranged canvas as ${arrangeLayoutLabel(layout)}`,
+  };
+}
+
 function createChildCanvas(collection: CanvasDocumentCollection, parentCanvasId: CanvasDocumentId, nodeId: string, source: CanvasEditSource): DocumentCommandPlan {
   const beforeIds = new Set(Object.keys(collection.documents));
   const next = createChildCanvasForNode(collection, parentCanvasId, nodeId);
@@ -220,4 +253,8 @@ function closeDeleteConfirmation(collection: CanvasDocumentCollection, source: C
 
 function noChange(collection: CanvasDocumentCollection, interaction: string): DocumentCommandPlan {
   return { collection, changes: [], interaction };
+}
+
+function sameNodeGeometry(a: CanvasNode, b: CanvasNode): boolean {
+  return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
 }

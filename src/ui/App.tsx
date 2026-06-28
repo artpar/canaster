@@ -2,9 +2,6 @@ import {
     Columns3,
     LayoutGrid,
     LayoutList,
-    Maximize2,
-    Minus,
-    Plus,
     Rows3,
 } from 'lucide-react';
 import {
@@ -48,6 +45,7 @@ import {portalDataForNode} from '../domain/documentModel';
 import {
     initialViewportStatus,
     NestedCanvasWorkspace,
+    type ArrangeCanvasMenuRequest,
     type NestedCanvasWorkspaceChromeState,
     type NestedCanvasWorkspaceHandle,
 } from './canvas/nested/NestedCanvasWorkspace';
@@ -93,7 +91,6 @@ import {
     WorkspaceToastView
 } from "./WorkspaceToastView";
 import {DeleteConfirmationPrompt} from "./DeleteConfirmationPrompt";
-import {IconButton} from "./IconButton";
 import {HeaderToolbar} from "./HeaderToolbar";
 import {KeyboardShortcutsProvider, useKeyboardShortcut} from "./KeyboardShortcuts";
 
@@ -108,6 +105,10 @@ const ADD_PANEL_MENU_WIDTH = 224;
 type ArrangePanelMenuProps = {
     arrangeMenuPosition: ArrangeMenuPosition | null,
     onSelect: (layout: CanvasArrangeLayout) => void
+};
+
+type ArrangeMenuTarget = {
+    canvasId: CanvasDocumentId;
 };
 
 const ArrangePanelMenu = forwardRef<HTMLDivElement, ArrangePanelMenuProps>(function ArrangePanelMenu(props, ref) {
@@ -173,7 +174,6 @@ function WorkspaceHistoryShortcuts({workspaceRef}: { workspaceRef: MutableRefObj
 
 export function App() {
     const workspaceRef = useRef<NestedCanvasWorkspaceHandle | null>(null);
-    const arrangeButtonRef = useRef<HTMLButtonElement | null>(null);
     const arrangeMenuRef = useRef<HTMLDivElement | null>(null);
     const addPanelButtonRef = useRef<HTMLButtonElement | null>(null);
     const addPanelMenuRef = useRef<HTMLDivElement | null>(null);
@@ -192,6 +192,7 @@ export function App() {
     const [accountOpen, setAccountOpen] = useState(false);
     const [arrangeMenuOpen, setArrangeMenuOpen] = useState(false);
     const [arrangeMenuPosition, setArrangeMenuPosition] = useState<ArrangeMenuPosition | null>(null);
+    const [arrangeMenuTarget, setArrangeMenuTarget] = useState<ArrangeMenuTarget | null>(null);
     const [addPanelMenuOpen, setAddPanelMenuOpen] = useState(false);
     const [addPanelMenuPosition, setAddPanelMenuPosition] = useState<ArrangeMenuPosition | null>(null);
     const [addPanelQuery, setAddPanelQuery] = useState('');
@@ -669,10 +670,7 @@ export function App() {
         }
     }, [activeDocumentId, recoverSessionError, refreshDocuments, signedIn]);
 
-    const updateArrangeMenuPosition = useCallback(() => {
-        const button = arrangeButtonRef.current;
-        if (!button) return;
-        const rect = button.getBoundingClientRect();
+    const updateArrangeMenuPositionForRect = useCallback((rect: Pick<DOMRect, 'bottom' | 'right'>) => {
         const margin = 12;
         const left = Math.max(margin,
             Math.min(window.innerWidth - ARRANGE_MENU_WIDTH - margin, rect.right - ARRANGE_MENU_WIDTH));
@@ -697,17 +695,18 @@ export function App() {
         });
     }, []);
 
-    const handleToggleArrangeMenu = useCallback(() => {
-        setArrangeMenuOpen((open) => {
-            if (!open) updateArrangeMenuPosition();
-            if (!open) {
-                setAddPanelMenuOpen(false);
-                setAddPanelQuery('');
-                setAddPanelActiveIndex(0);
-            }
-            return !open;
+    const handleArrangeCanvasMenuRequest = useCallback((request: ArrangeCanvasMenuRequest) => {
+        setArrangeMenuTarget({canvasId: request.canvasId});
+        const anchor = request.anchor ?? {x: window.innerWidth - 18, y: window.innerHeight - 18, w: 1, h: 1};
+        updateArrangeMenuPositionForRect({
+            right : anchor.x + anchor.w,
+            bottom: anchor.y + anchor.h,
         });
-    }, [updateArrangeMenuPosition]);
+        setAddPanelMenuOpen(false);
+        setAddPanelQuery('');
+        setAddPanelActiveIndex(0);
+        setArrangeMenuOpen(true);
+    }, [updateArrangeMenuPositionForRect]);
 
     const closeAddPanelMenu = useCallback(() => {
         setAddPanelMenuOpen(false);
@@ -728,14 +727,17 @@ export function App() {
     }, [updateAddPanelMenuPosition]);
 
     const handleArrangeCanvas = useCallback((layout: CanvasArrangeLayout) => {
-        const changed = workspaceRef.current?.executeActiveCanvasCommand({
-            type  : 'arrange-nodes',
+        const targetCanvasId = arrangeMenuTarget?.canvasId ?? chromeState.collection.activeCanvasId;
+        const activeTarget = targetCanvasId === chromeState.collection.activeCanvasId;
+        const changed = workspaceRef.current?.executeDocumentCommand({
+            type    : 'arrange-canvas',
+            canvasId: targetCanvasId,
             layout,
             source: 'nonvisual'
         }) ?? false;
         setArrangeMenuOpen(false);
-        if (changed) window.requestAnimationFrame(() => workspaceRef.current?.fitActiveCanvas());
-    }, []);
+        if (activeTarget && changed) window.requestAnimationFrame(() => workspaceRef.current?.fitActiveCanvas());
+    }, [arrangeMenuTarget?.canvasId, chromeState.collection.activeCanvasId]);
 
     const handleCreatePanel = useCallback((nodeType: string) => {
         workspaceRef.current?.executeActiveCanvasCommand({
@@ -786,11 +788,10 @@ export function App() {
 
     useEffect(() => {
         if (!arrangeMenuOpen) return;
-        updateArrangeMenuPosition();
         const handlePointerDown = (event: PointerEvent) => {
             const target = event.target;
             if (!(target instanceof Node)) return;
-            if (arrangeButtonRef.current?.contains(target) || arrangeMenuRef.current?.contains(target)) return;
+            if (arrangeMenuRef.current?.contains(target)) return;
             setArrangeMenuOpen(false);
         };
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -798,15 +799,11 @@ export function App() {
         };
         document.addEventListener('pointerdown', handlePointerDown);
         document.addEventListener('keydown', handleKeyDown);
-        window.addEventListener('resize', updateArrangeMenuPosition);
-        window.addEventListener('scroll', updateArrangeMenuPosition, true);
         return () => {
             document.removeEventListener('pointerdown', handlePointerDown);
             document.removeEventListener('keydown', handleKeyDown);
-            window.removeEventListener('resize', updateArrangeMenuPosition);
-            window.removeEventListener('scroll', updateArrangeMenuPosition, true);
         };
-    }, [arrangeMenuOpen, updateArrangeMenuPosition]);
+    }, [arrangeMenuOpen]);
 
     useEffect(() => {
         if (!addPanelMenuOpen) return;
@@ -865,11 +862,6 @@ export function App() {
                     buttonRef: addPanelButtonRef,
                     open     : addPanelMenuOpen,
                     onToggle : handleToggleAddPanelMenu
-                }}
-                arrange={{
-                    buttonRef: arrangeButtonRef,
-                    open     : arrangeMenuOpen,
-                    onToggle : handleToggleArrangeMenu
                 }}
                 theme={{
                     name    : theme,
@@ -943,6 +935,7 @@ export function App() {
                         storageKey={workspaceStorageKey}
                         onCollectionChange={handleWorkspaceCollectionChange}
                         onChromeStateChange={handleChromeStateChange}
+                        onArrangeCanvasMenuRequest={handleArrangeCanvasMenuRequest}
                     />
                     {chromeState.collection.view.deleteConfirmation ? (<DeleteConfirmationPrompt
                         collection={chromeState.collection}
@@ -960,17 +953,6 @@ export function App() {
                     {workspaceToast ?
                         (<WorkspaceToastView toast={workspaceToast} onDismiss={() => setWorkspaceToast(null)}/>) :
                         null}
-                    <div className="toolbar-group zoom-toolbar" aria-label="Zoom controls">
-                        <IconButton label="Zoom in" onClick={() => workspaceRef.current?.zoomActiveBy(1.22)}>
-                            <Plus size={17}/>
-                        </IconButton>
-                        <IconButton label="Center map" onClick={() => workspaceRef.current?.fitActiveCanvas()}>
-                            <Maximize2 size={17}/>
-                        </IconButton>
-                        <IconButton label="Zoom out" onClick={() => workspaceRef.current?.zoomActiveBy(0.82)}>
-                            <Minus size={17}/>
-                        </IconButton>
-                    </div>
                 </div>
             </div>
         </section>

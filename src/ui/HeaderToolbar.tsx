@@ -1,7 +1,6 @@
 import type {MutableRefObject} from "react";
 import {
     FilePlus2,
-    LayoutGrid,
     Moon,
     PanelLeftClose,
     PanelLeftOpen,
@@ -36,11 +35,6 @@ export type HeaderToolbarProps = {
         onToggleParentContext: () => void
     },
     addPanel: {
-        buttonRef: MutableRefObject<HTMLButtonElement | null>,
-        open: boolean,
-        onToggle: () => void
-    },
-    arrange: {
         buttonRef: MutableRefObject<HTMLButtonElement | null>,
         open: boolean,
         onToggle: () => void
@@ -117,18 +111,6 @@ export function HeaderToolbar(props: HeaderToolbarProps) {
                 >
                     <PanelsTopLeft size={17}/>
                 </IconButton>
-                <button
-                    ref={props.arrange.buttonRef}
-                    className="icon-button"
-                    type="button"
-                    aria-label="Arrange canvas panels"
-                    aria-haspopup="menu"
-                    aria-expanded={props.arrange.open}
-                    title="Arrange canvas panels"
-                    onClick={props.arrange.onToggle}
-                >
-                    <LayoutGrid size={17}/>
-                </button>
             </div>
             <div className="toolbar-group" aria-label="Panels">
                 <IconButton
