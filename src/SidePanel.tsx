@@ -15,7 +15,7 @@ export type ViewTreeNode = {
 };
 
 
-export function ViewTreePanel({
+export function SidePanel({
                                   tree,
                                   activeCanvasId,
                                   activeDocumentId,
@@ -49,39 +49,41 @@ export function ViewTreePanel({
     onSaveOnline: () => void;
 }) {
     const viewCount = tree ? countViewTreeNodes(tree) : 0;
-    return (<aside className="view-tree-panel" aria-label="Views and documents">
-        <section className="sidepanel-section views-section" aria-label="Views">
-            <div className="sidepanel-section-row">
-                <div className="sidepanel-section-title">
-                    <span>Views</span>
-                    <span>{viewCount === 1 ? '1 view' : `${viewCount} views`}</span>
+    return (
+        <aside className="view-tree-panel" aria-label="Views and documents">
+            <section className="sidepanel-section views-section" aria-label="Views">
+                <div className="sidepanel-section-row">
+                    <div className="sidepanel-section-title">
+                        <span>Views</span>
+                        <span>{viewCount === 1 ? '1 view' : `${viewCount} views`}</span>
+                    </div>
+                    <button className="utility-close" type="button" aria-label="Close view tree" onClick={onClose}>
+                        <X size={15}/>
+                    </button>
                 </div>
-                <button className="utility-close" type="button" aria-label="Close view tree" onClick={onClose}>
-                    <X size={15}/>
-                </button>
-            </div>
-            <nav className="view-tree-list" aria-label="Canvas views">
-                {tree ? (<ViewTreeItem
-                    node={tree}
-                    activeCanvasId={activeCanvasId}
-                    executeDocumentCommand={executeDocumentCommand}
-                />) : (<div className="view-tree-empty">No views</div>)}
-            </nav>
-        </section>
-        <DocumentsPanel
-            activeDocumentId={activeDocumentId}
-            documents={documents}
-            saveButtonLabel={saveButtonLabel}
-            signedIn={signedIn}
-            syncMessage={syncMessage}
-            syncStatus={syncStatus}
-            onNew={onNewDocument}
-            onOpenAccount={onOpenAccount}
-            onOpenDocument={onOpenDocument}
-            onRefresh={onRefreshDocuments}
-            onSaveOnline={onSaveOnline}
-        />
-    </aside>);
+                <nav className="view-tree-list" aria-label="Canvas views">
+                    {tree ? (<ViewTreeItem
+                        node={tree}
+                        activeCanvasId={activeCanvasId}
+                        executeDocumentCommand={executeDocumentCommand}
+                    />) : (<div className="view-tree-empty">No views</div>)}
+                </nav>
+            </section>
+            <DocumentsPanel
+                activeDocumentId={activeDocumentId}
+                documents={documents}
+                saveButtonLabel={saveButtonLabel}
+                signedIn={signedIn}
+                syncMessage={syncMessage}
+                syncStatus={syncStatus}
+                onNew={onNewDocument}
+                onOpenAccount={onOpenAccount}
+                onOpenDocument={onOpenDocument}
+                onRefresh={onRefreshDocuments}
+                onSaveOnline={onSaveOnline}
+            />
+        </aside>
+    );
 }
 
 function ViewTreeItem({

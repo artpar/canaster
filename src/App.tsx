@@ -1,27 +1,16 @@
 import {
     Columns3,
-    FilePlus2,
     LayoutGrid,
     LayoutList,
-    LogIn,
     Maximize2,
     Minus,
-    Moon,
-    PanelLeftClose,
-    PanelLeftOpen,
-    PanelsTopLeft,
     Plus,
-    Redo2,
-    RotateCcw,
     Rows3,
-    Sun,
-    Undo2,
-    UserCircle,
 } from 'lucide-react';
 import {
+    forwardRef,
     useCallback,
     useEffect,
-    forwardRef,
     useMemo,
     useRef,
     useState
@@ -96,9 +85,9 @@ import {
     PANEL_CREATE_OPTIONS
 } from "./AddPanelPopover";
 import {
-    ViewTreeNode,
-    ViewTreePanel
-} from "./ViewTreePanel";
+    SidePanel,
+    ViewTreeNode
+} from "./SidePanel";
 import {
     WorkspaceToast,
     WorkspaceToastView
@@ -106,6 +95,7 @@ import {
 import {DeleteConfirmationPrompt} from "./DeleteConfirmationPrompt";
 import {AccountPopover} from "./AccountPopover";
 import {IconButton} from "./IconButton";
+import {HeaderToolbar} from "./HeaderToolbar";
 
 const DEFAULT_DOCUMENT_TITLE = 'Canaster Workspace';
 const LOCAL_SAVE_MESSAGE = 'Saved on this device';
@@ -191,7 +181,7 @@ export function App() {
     const [addPanelMenuPosition, setAddPanelMenuPosition] = useState<ArrangeMenuPosition | null>(null);
     const [addPanelQuery, setAddPanelQuery] = useState('');
     const [addPanelActiveIndex, setAddPanelActiveIndex] = useState(0);
-    const [viewTreeOpen, setViewTreeOpen] = useState(() => window.matchMedia('(min-width: 641px)').matches);
+    const [sidePanelOpen, setSidePanelOpen] = useState(() => window.matchMedia('(min-width: 641px)').matches);
     const [workspaceToast, setWorkspaceToast] = useState<WorkspaceToast>(null);
     const [authStep, setAuthStep] = useState<AuthStep>('email');
     const [parentContextVisible, setParentContextVisible] = useState(true);
@@ -828,109 +818,52 @@ export function App() {
 
     return (<main className="app-shell">
         <section className="workspace" aria-label="Workspace map">
-            <div className="topbar" aria-label="Workspace tools">
-                <div className="topbar-zone topbar-identity">
-                    <button
-                        className="icon-button view-tree-toggle-button"
-                        type="button"
-                        aria-label={viewTreeOpen ? 'Close views and documents panel' :
-                            'Open views and documents panel'}
-                        title={viewTreeOpen ? 'Close views and documents' : 'Open views and documents'}
-                        aria-pressed={viewTreeOpen}
-                        onClick={() => setViewTreeOpen((open) => !open)}
-                    >
-                        {viewTreeOpen ? <PanelLeftClose size={17}/> : <PanelLeftOpen size={17}/>}
-                    </button>
-                    <form
-                        className="toolbar-group document-command-group"
-                        aria-label="Workspace name"
-                        onSubmit={(event) => {
-                            event.preventDefault();
-                            void handleSaveOnline();
-                        }}
-                    >
-                        <input
-                            className="document-title-input"
-                            aria-label="Workspace name"
-                            name="document-title"
-                            value={documentTitle}
-                            onChange={(event) => handleDocumentTitleChange(event.target.value)}
-                        />
-                        <span className="sync-status-reader" role="status" aria-live="polite">{syncMessage}</span>
-                    </form>
-                </div>
-                <div className="topbar-zone topbar-controls">
-                    <div className="toolbar-group" aria-label="History">
-                        <IconButton label="Undo" disabled={!chromeState.canUndo}
-                                    onClick={() => workspaceRef.current?.undoWorkspace()}>
-                            <Undo2 size={17}/>
-                        </IconButton>
-                        <IconButton label="Redo" disabled={!chromeState.canRedo}
-                                    onClick={() => workspaceRef.current?.redoWorkspace()}>
-                            <Redo2 size={17}/>
-                        </IconButton>
-                    </div>
-                    <div className="toolbar-group" aria-label="View controls">
-                        <button
-                            ref={addPanelButtonRef}
-                            className="icon-button"
-                            type="button"
-                            aria-label="Add panel"
-                            aria-haspopup="dialog"
-                            aria-expanded={addPanelMenuOpen}
-                            title="Add panel"
-                            onClick={handleToggleAddPanelMenu}
-                        >
-                            <FilePlus2 size={17}/>
-                        </button>
-                        <IconButton label="Center map" onClick={() => workspaceRef.current?.fitActiveCanvas()}>
-                            <Maximize2 size={17}/>
-                        </IconButton>
-                        <IconButton label="Reset map zoom" onClick={() => workspaceRef.current?.resetActiveZoom()}>
-                            <RotateCcw size={17}/>
-                        </IconButton>
-                        <IconButton
-                            label={parentContextVisible ? 'Hide parent context panes' : 'Show parent context panes'}
-                            pressed={parentContextVisible}
-                            onClick={() => setParentContextVisible((visible) => !visible)}
-                        >
-                            <PanelsTopLeft size={17}/>
-                        </IconButton>
-                        <button
-                            ref={arrangeButtonRef}
-                            className="icon-button"
-                            type="button"
-                            aria-label="Arrange canvas panels"
-                            aria-haspopup="menu"
-                            aria-expanded={arrangeMenuOpen}
-                            title="Arrange canvas panels"
-                            onClick={handleToggleArrangeMenu}
-                        >
-                            <LayoutGrid size={17}/>
-                        </button>
-                    </div>
-                    <div className="toolbar-group" aria-label="Panels">
-                        <IconButton
-                            label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-                            onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
-                        >
-                            {theme === 'dark' ? <Sun size={17}/> : <Moon size={17}/>}
-                        </IconButton>
-                    </div>
-                    <div className="toolbar-group account-command-group" aria-label="Account">
-                        <IconButton
-                            label={signedIn ? 'Open account' : 'Sign in'}
-                            pressed={accountOpen}
-                            onClick={() => {
-                                const nextOpen = !accountOpen;
-                                setAccountOpen(nextOpen);
-                            }}
-                        >
-                            {signedIn ? <UserCircle size={17}/> : <LogIn size={17}/>}
-                        </IconButton>
-                    </div>
-                </div>
-            </div>
+            <HeaderToolbar
+                sidePanel={{
+                    open    : sidePanelOpen,
+                    onToggle: () => setSidePanelOpen((open) => !open)
+                }}
+                document={{
+                    title        : documentTitle,
+                    syncMessage,
+                    onTitleChange: handleDocumentTitleChange,
+                    onSave       : () => void handleSaveOnline()
+                }}
+                history={{
+                    canUndo: chromeState.canUndo,
+                    canRedo: chromeState.canRedo,
+                    onUndo : () => workspaceRef.current?.undoWorkspace(),
+                    onRedo : () => workspaceRef.current?.redoWorkspace()
+                }}
+                view={{
+                    parentContextVisible,
+                    onCenterMap          : () => workspaceRef.current?.fitActiveCanvas(),
+                    onResetZoom          : () => workspaceRef.current?.resetActiveZoom(),
+                    onToggleParentContext: () => setParentContextVisible((visible) => !visible)
+                }}
+                addPanel={{
+                    buttonRef: addPanelButtonRef,
+                    open     : addPanelMenuOpen,
+                    onToggle : handleToggleAddPanelMenu
+                }}
+                arrange={{
+                    buttonRef: arrangeButtonRef,
+                    open     : arrangeMenuOpen,
+                    onToggle : handleToggleArrangeMenu
+                }}
+                theme={{
+                    name    : theme,
+                    onToggle: () => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))
+                }}
+                account={{
+                    signedIn,
+                    open    : accountOpen,
+                    onToggle: () => {
+                        const nextOpen = !accountOpen;
+                        setAccountOpen(nextOpen);
+                    }
+                }}
+            />
             {addPanelMenuOpen ? (<AddPanelPopover
                 ref={addPanelMenuRef}
                 searchRef={addPanelSearchRef}
@@ -947,7 +880,8 @@ export function App() {
                 onClose={closeAddPanelMenu}
             />) : null}
             {arrangeMenuOpen ? (<ArrangePanelMenu ref={arrangeMenuRef} arrangeMenuPosition={arrangeMenuPosition}
-                                                  onSelect={(layout: CanvasArrangeLayout) => handleArrangeCanvas(layout)}/>) : null}
+                                                  onSelect={(layout: CanvasArrangeLayout) => handleArrangeCanvas(
+                                                      layout)}/>) : null}
             {accountOpen ? (<AccountPopover
                 authEmail={authEmail}
                 authOtp={authOtp}
@@ -964,8 +898,8 @@ export function App() {
                 onVerifyEmailOtp={() => void handleVerifyEmailOtp()}
             />) : null}
 
-            <div className={`workspace-body ${viewTreeOpen ? 'tree-open' : 'tree-closed'}`}>
-                {viewTreeOpen ? (<ViewTreePanel
+            <div className={`workspace-body ${sidePanelOpen ? 'tree-open' : 'tree-closed'}`}>
+                {sidePanelOpen ? (<SidePanel
                     tree={viewTree}
                     activeCanvasId={chromeState.collection.activeCanvasId}
                     activeDocumentId={activeDocumentId}
@@ -975,7 +909,7 @@ export function App() {
                     syncMessage={syncMessage}
                     syncStatus={syncStatus}
                     executeDocumentCommand={executeDocumentCommand}
-                    onClose={() => setViewTreeOpen(false)}
+                    onClose={() => setSidePanelOpen(false)}
                     onNewDocument={() => void handleNewLocalDraft()}
                     onOpenAccount={() => {
                         setAuthStep('email');

@@ -6,7 +6,7 @@ Follow these or die. If instructions are too hard to follow, cry immediately.
 
 - The Canaster dev server is usually already running in hot-reload mode. 
 - Do not start another dev server unless you have verified one is needed.
-- Never run npm run build
+- Never execute npm run build
 - This is the user's local machine. It is acceptable to show credentials in local terminal output.
 
 ## Daptin Backend Interaction Rules
