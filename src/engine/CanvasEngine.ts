@@ -865,6 +865,18 @@ export class CanvasEngine {
     const node = this.nodeAt(world);
 
     if (node) {
+      const hit = this.nodeInternalHit(node, world);
+      const liveCenterHit = hit?.type === 'activate' && hit.action === 'center-child-canvas' && this.portalPreviewState(node) === 'live';
+      const action = liveCenterHit && (event.metaKey || event.ctrlKey)
+        ? 'center-child-canvas-recursive'
+        : liveCenterHit ? hit.action : null;
+      if (action === 'center-child-canvas' || action === 'center-child-canvas-recursive') {
+        if (!this.routeNodeAction(node.id, action, 'pointer')) return;
+        this.interaction = 'Centered view';
+        this.markDirty();
+        this.emitStatus();
+        return;
+      }
       const mode = event.shiftKey || event.metaKey || event.ctrlKey ? 'toggle' : this.selectedNodeIds.has(node.id) ? 'add' : 'replace';
       this.executeCommand({ type: 'select-node', nodeId: node.id, mode, source: 'pointer' });
       if (!this.selectedNodeIds.has(node.id)) {
@@ -940,6 +952,7 @@ export class CanvasEngine {
         this.markDirty();
       }
       this.canvas.style.cursor = this.cursorFor(world, node);
+      this.canvas.title = this.tooltipFor(world, node);
       this.interaction = node ? 'Hover node' : 'Idle';
     }
 
@@ -1306,11 +1319,19 @@ export class CanvasEngine {
   private cursorFor(point: WorldPoint, node: CanvasNode | null) {
     if (this.selectedResizeNodeAt(point)) return 'nwse-resize';
     if (this.selectedDragNodeAt(point)) return this.drag?.mode === 'node' ? 'grabbing' : 'grab';
+    const hit = node ? this.nodeInternalHit(node, point) : null;
+    if (node && hit?.type === 'activate' && hit.action === 'center-child-canvas' && this.portalPreviewState(node) === 'live') return 'pointer';
     if (node && node.id === this.primarySelectedNodeId) {
       const region = this.interactionRegionAt(node, point);
       if (region) return region.cursor ?? 'pointer';
     }
     return 'default';
+  }
+
+  private tooltipFor(point: WorldPoint, node: CanvasNode | null) {
+    const hit = node ? this.nodeInternalHit(node, point) : null;
+    if (node && hit?.type === 'activate' && hit.action === 'center-child-canvas' && this.portalPreviewState(node) === 'live') return 'Center view. Cmd/Ctrl-click centers nested views.';
+    return '';
   }
 
   private selectedNode() {

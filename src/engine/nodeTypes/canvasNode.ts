@@ -49,6 +49,7 @@ export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = define
         ctx.fillText(`${data.nodeCount} item${data.nodeCount === 1 ? '' : 's'} inside`, previewX + 10, previewY + 10);
       }
       if (state.portalPreview !== 'live') drawPreviewBoxes(ctx, previewX, previewY, previewW, previewH, theme);
+      if (data.childCanvasId && state.portalPreview === 'live') drawCenterViewButton(ctx, canvasPortalCenterButtonRect(contentRect), theme);
     } else {
       drawNodeMeta(ctx, contentRect, data.childCanvasId ? `${data.nodeCount} item${data.nodeCount === 1 ? '' : 's'} inside` : 'No view inside', theme);
     }
@@ -56,6 +57,9 @@ export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = define
     drawTypeBadge(ctx, contentRect, 'VIEW', theme);
   },
   hitTest({ data, point, contentRect }) {
+    if (data.childCanvasId && pointInRect(point, canvasPortalCenterButtonRect(contentRect))) {
+      return { type: 'activate', action: 'center-child-canvas' };
+    }
     const preview = canvasPortalViewportRect(contentRect);
     if (point.x >= preview.x && point.x <= preview.x + preview.w && point.y >= preview.y && point.y <= preview.y + preview.h) {
       return { type: 'activate', action: data.childCanvasId ? 'enter-child-canvas' : 'create-child-canvas' };
@@ -114,6 +118,53 @@ export function canvasPortalViewportRect(contentRect: NodeContentRect): NodeCont
     w: Math.max(0, contentRect.w - 12),
     h: Math.max(0, contentRect.h - 72),
   };
+}
+
+function canvasPortalCenterButtonRect(contentRect: NodeContentRect): NodeContentRect {
+  const size = 28;
+  const inset = 6;
+  return {
+    x: Math.max(contentRect.x + inset, contentRect.x + contentRect.w - size - inset),
+    y: contentRect.y + 4,
+    w: size,
+    h: size,
+  };
+}
+
+function drawCenterViewButton(ctx: CanvasRenderingContext2D, rect: NodeContentRect, theme: { nodeBorder: string; nodeBg: string; bodyText: string }) {
+  ctx.save();
+  ctx.fillStyle = theme.nodeBg;
+  ctx.strokeStyle = theme.nodeBorder;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(rect.x, rect.y, rect.w, rect.h, 6);
+  ctx.fill();
+  ctx.stroke();
+
+  const x = rect.x + 7;
+  const y = rect.y + 7;
+  const size = 14;
+  ctx.strokeStyle = theme.bodyText;
+  ctx.lineWidth = 1.8;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x + 9, y);
+  ctx.lineTo(x + size, y);
+  ctx.lineTo(x + size, y + 5);
+  ctx.moveTo(x + size, y);
+  ctx.lineTo(x + 8, y + 6);
+  ctx.moveTo(x + 5, y + size);
+  ctx.lineTo(x, y + size);
+  ctx.lineTo(x, y + 9);
+  ctx.moveTo(x, y + size);
+  ctx.lineTo(x + 6, y + 8);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function pointInRect(point: { x: number; y: number }, rect: NodeContentRect) {
+  return point.x >= rect.x && point.x <= rect.x + rect.w && point.y >= rect.y && point.y <= rect.y + rect.h;
 }
 
 function drawPreviewBoxes(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, theme: { nodeBorder: string }) {

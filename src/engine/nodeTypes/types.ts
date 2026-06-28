@@ -97,7 +97,9 @@ export type NodeAddMenuMetadata = {
 export type BuiltInNodeActionId =
   | 'enter-child-canvas'
   | 'create-child-canvas'
-  | 'focus-portal-preview';
+  | 'focus-portal-preview'
+  | 'center-child-canvas'
+  | 'center-child-canvas-recursive';
 
 export type NodeDescribeContext<TData extends NodeData = NodeData> = {
   node: CanvasNode & { data: TData };

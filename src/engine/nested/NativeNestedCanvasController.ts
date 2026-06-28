@@ -74,6 +74,8 @@ export type NativeNestedCanvasControllerOptions = {
 
 type Slot = {
   key: string;
+  parentCanvasId: CanvasDocumentId;
+  portalNodeId: string;
   canvasId: CanvasDocumentId;
   wrapper: HTMLDivElement;
   viewport: HTMLDivElement;
@@ -327,6 +329,37 @@ export class NativeNestedCanvasController {
     this.setStatus({ ...this.status, interaction: plan.interaction });
   }
 
+  private handleNodeAction(canvasId: CanvasDocumentId, nodeId: string, actionId: string): boolean {
+    const recursive = actionId === 'center-child-canvas-recursive';
+    if (actionId !== 'center-child-canvas' && !recursive) return false;
+    const slot = [...this.slots.values()].find((candidate) =>
+      candidate.parentCanvasId === canvasId && candidate.portalNodeId === nodeId
+    );
+    if (!slot) {
+      this.setStatus({ ...this.status, interaction: 'Preview unavailable' });
+      return true;
+    }
+    const centered = recursive ? this.fitSlotAndDescendants(slot) : this.fitSlot(slot);
+    this.setStatus({ ...this.status, interaction: centered > 1 ? `Centered ${centered} views` : 'Centered view' });
+    return true;
+  }
+
+  private fitSlot(slot: Slot): number {
+    slot.engine.fit(16);
+    return 1;
+  }
+
+  private fitSlotAndDescendants(slot: Slot, seen = new Set<string>()): number {
+    if (seen.has(slot.key)) return 0;
+    seen.add(slot.key);
+    let centered = this.fitSlot(slot);
+    for (const child of this.slots.values()) {
+      if (child.parentCanvasId !== slot.canvasId) continue;
+      centered += this.fitSlotAndDescendants(child, seen);
+    }
+    return centered;
+  }
+
   collection(): CanvasDocumentCollection {
     return cloneDocumentCollection(this.collectionRef.current);
   }
@@ -488,6 +521,7 @@ export class NativeNestedCanvasController {
       onModelChange: (model, change) => this.handleActiveModelChange(this.collectionRef.current.activeCanvasId, model, change),
       onPortalLayout: (layouts) => this.handleActivePortalLayouts(layouts),
       onNodeAction: (nodeId, actionId, source) => {
+        if (this.handleNodeAction(this.collectionRef.current.activeCanvasId, nodeId, actionId)) return true;
         this.executeDocumentCommand({ type: 'execute-node-action', canvasId: this.collectionRef.current.activeCanvasId, nodeId, actionId, source });
         return true;
       },
@@ -721,12 +755,18 @@ export class NativeNestedCanvasController {
         return true;
       },
       onPortalLayout: (layouts) => this.handleEmbeddedPortalLayouts(key, layouts),
+      onNodeAction: (nodeId, actionId, source) => {
+        if (this.handleNodeAction(canvasId, nodeId, actionId)) return true;
+        this.executeDocumentCommand({ type: 'execute-node-action', canvasId, nodeId, actionId, source });
+        return true;
+      },
     });
     engine.setModel(canvasDocument.model);
     engine.setTheme(this.theme);
     engine.setSelectionState(selectionForCanvas(this.collectionRef.current, canvasId));
-    this.slots.set(key, { key, canvasId, wrapper, viewport, parentContextField, parentContextOwnerKey, childOverlayLayer, resizers, canvas, engine, portalLayouts: [], sizeSignature: sizeSignature(stageRect) });
-    this.layoutEmbeddedSlot(this.slots.get(key) as Slot, stageRect);
+    const slot: Slot = { key, parentCanvasId: layout.parentCanvasId, portalNodeId: layout.portalNodeId, canvasId, wrapper, viewport, parentContextField, parentContextOwnerKey, childOverlayLayer, resizers, canvas, engine, portalLayouts: [], sizeSignature: sizeSignature(stageRect) };
+    this.slots.set(key, slot);
+    this.layoutEmbeddedSlot(slot, stageRect);
     requestAnimationFrame(() => {
       if (this.disposed || !this.slots.has(key)) return;
       engine.fit(16);
@@ -1046,6 +1086,7 @@ export class NativeNestedCanvasController {
       },
       onPortalLayout: (layouts) => this.handleParentContextPortalLayouts(key, layouts),
       onNodeAction: (nodeId, actionId, source) => {
+        if (this.handleNodeAction(canvasId, nodeId, actionId)) return true;
         this.executeDocumentCommand({ type: 'execute-node-action', canvasId, nodeId, actionId, source });
         return true;
       },
