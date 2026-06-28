@@ -65,27 +65,6 @@ button {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.sidepanel-open-button {
-  position: absolute;
-  top: 14px;
-  left: 0;
-  z-index: 22;
-  width: 30px;
-  height: 38px;
-  border-left: 0;
-  border-radius: 0 7px 7px 0;
-  border-color: rgba(149, 149, 149, 0.24);
-  background: rgba(29, 29, 29, 0.9);
-  box-shadow: 6px 8px 18px rgba(10, 10, 10, 0.2);
-  backdrop-filter: blur(14px);
-}
-
-:root[data-theme='light'] .sidepanel-open-button {
-  border-color: rgba(132, 132, 132, 0.28);
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 10px 22px rgba(49, 49, 49, 0.14);
-}
-
 .workspace-canvas-region {
   position: relative;
   min-width: 0;
@@ -726,7 +705,6 @@ button {
   background: #ffffff;
 }
 
-.brand,
 .toolbar-group {
   background: transparent;
 }
@@ -748,7 +726,7 @@ button {
   margin-left: auto;
 }
 
-.brand {
+.view-tree-toggle-button {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -756,22 +734,13 @@ button {
   height: 40px;
   padding: 0;
   border-radius: 6px;
-  color: #f1f1f1;
-  font-size: 14px;
-  font-weight: 700;
+  color: #cdcdcd;
   pointer-events: auto;
 }
 
-:root[data-theme='light'] .brand {
-  color: #202020;
-}
-
-.brand-mark {
-  width: 18px;
-  height: 18px;
-  border: 2px solid currentColor;
-  border-radius: 4px;
-  box-shadow: inset 6px -6px 0 rgba(241, 241, 241, 0.34);
+.view-tree-toggle-button:hover,
+.view-tree-toggle-button[aria-pressed='true'] {
+  color: #f1f1f1;
 }
 
 .toolbar-group {
@@ -1344,10 +1313,38 @@ button {
 .zoom-toolbar {
   position: absolute;
   bottom: 18px;
-  left: 18px;
+  right: 18px;
+  left: auto;
   z-index: 18;
+  flex-direction: column;
+  gap: 6px;
   width: auto;
-  box-shadow: 0 8px 20px rgba(10, 10, 10, 0.22);
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.zoom-toolbar .icon-button {
+  width: 32px;
+  height: 32px;
+  border-color: rgba(149, 149, 149, 0.2);
+  border-radius: 9px;
+  background: rgba(21, 24, 34, 0.92);
+  box-shadow: 0 6px 14px rgba(10, 10, 10, 0.22);
+}
+
+.zoom-toolbar .icon-button svg {
+  width: 17px;
+  height: 17px;
+  stroke-width: 2.4;
+}
+
+:root[data-theme='light'] .zoom-toolbar .icon-button {
+  border-color: rgba(132, 132, 132, 0.24);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 12px 24px rgba(38, 50, 68, 0.14);
 }
 
 .view-tree-panel {
@@ -2251,10 +2248,9 @@ button {
     flex: 0 0 auto;
   }
 
-  .brand {
+  .view-tree-toggle-button {
     width: 40px;
     height: 40px;
-    font-size: 13px;
   }
 
   .toolbar-group {
@@ -2289,7 +2285,14 @@ button {
 
   .zoom-toolbar {
     bottom: 12px;
-    left: 12px;
+    right: 12px;
+    left: auto;
+  }
+
+.zoom-toolbar .icon-button {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
   }
 
   .workspace-body {
@@ -2343,7 +2346,7 @@ button {
 
   .zoom-toolbar {
     transform: scale(0.92);
-    transform-origin: left bottom;
+    transform-origin: right bottom;
   }
 }
 
