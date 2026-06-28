@@ -1,10 +1,10 @@
 import { asEnum, asString } from '../../../core/nodeData';
-import { defineNodeType } from './define';
-import { createInlineTextarea, createInlineTextInput } from './inlineEditorDom';
+import { defineNodeType } from '../nodeDefinition/defineNodeType';
+import { createInlineTextarea, createInlineTextInput } from '../inlineEditorDom';
 import type { JsonObject } from '../../../core/nodePrimitives';
-import { drawAccentMark, drawCompactNode, drawNodeBodyLines, drawNodeTitle, drawTypeBadge, nodeLayout, wrapText } from './rendering';
-import { nodeTypeSpecs } from './specs';
-import type { NodeDefinition, NodeContentRect, NodeInteractionRegion } from './types';
+import { drawAccentMark, drawCompactNode, drawNodeBodyLines, drawNodeTitle, drawTypeBadge, nodeLayout, wrapText } from '../nodeRendering';
+import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
+import type { NodeDefinition, NodeContentRect, NodeInteractionRegion } from '../nodeDefinition/nodeDefinitionTypes';
 
 type CardAccent = 'task' | 'data' | 'system';
 type CardNodeData = {

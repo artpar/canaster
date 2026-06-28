@@ -1,9 +1,9 @@
 import { asNullableString, asNumber, asString } from '../../../core/nodeData';
-import { defineNodeType } from './define';
+import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import type { JsonObject } from '../../../core/nodePrimitives';
-import { drawCompactNode, drawNodeMeta, drawNodeTitle, drawTypeBadge, nodeText } from './rendering';
-import { nodeTypeSpecs } from './specs';
-import type { NodeContentRect, NodeDefinition } from './types';
+import { drawCompactNode, drawNodeMeta, drawNodeTitle, drawTypeBadge, nodeText } from '../nodeRendering';
+import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
+import type { NodeContentRect, NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
 
 type CanvasPortalNodeData = {
   childCanvasId: string | null;

@@ -11,8 +11,8 @@ import {
   updateNodeData,
 } from './documentModel';
 import { asJsonObject, assertJsonValue } from '../core/nodeData';
-import { nodeDefinitionFor, portalInfoForNode, stripNodeForPaste } from '../ui/canvas/nodeTypes/registry';
-import type { NodeActionDescriptor } from '../ui/canvas/nodeTypes/types';
+import { nodeDefinitionFor, portalInfoForNode, stripNodeForPaste } from '../ui/canvas/nodeRegistry';
+import type { NodeActionDescriptor } from '../ui/canvas/nodeDefinition/nodeDefinitionTypes';
 import type { CanvasEditSource, CanvasNode } from './types';
 import type { CanvasDocumentCollection, CanvasDocumentId, DocumentCommand, DocumentModelChange, PortalNode } from './documentTypes';
 import { cloneViewState } from './viewState';

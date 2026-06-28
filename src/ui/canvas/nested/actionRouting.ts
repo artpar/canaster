@@ -1,6 +1,6 @@
 import type { CanvasDocumentCollection, CanvasDocumentId, DocumentCommand } from '../../../domain/documentTypes';
 import type { CanvasEditSource, CanvasNode } from '../../../domain/types';
-import { describeNode } from '../nodeTypes/registry';
+import { describeNode } from '../nodeRegistry';
 
 export function commandForNodeActivation(
   collection: CanvasDocumentCollection,

@@ -1,5 +1,5 @@
-import type { CanvasTheme } from '../theme';
-import type { NodeContentRect } from './types';
+import type { CanvasTheme } from './theme';
+import type { NodeContentRect } from './nodeDefinition/nodeDefinitionTypes';
 
 const FONT_STACK = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 

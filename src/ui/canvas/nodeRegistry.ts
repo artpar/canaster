@@ -1,9 +1,9 @@
-import { cardNodeDefinition } from './cardNode';
-import { canvasNodeDefinition } from './canvasNode';
-import { checkNodeDefinition } from './checkNode';
-import { imageNodeDefinition } from './imageNode';
-import { cloneNodeData } from '../../../core/nodeData';
-import type { CanvasNode, NodeData } from '../../../core/nodePrimitives';
+import { cardNodeDefinition } from './nodeTypes/cardNode';
+import { canvasNodeDefinition } from './nodeTypes/canvasNode';
+import { checkNodeDefinition } from './nodeTypes/checkNode';
+import { imageNodeDefinition } from './nodeTypes/imageNode';
+import { cloneNodeData } from '../../core/nodeData';
+import type { CanvasNode, NodeData } from '../../core/nodePrimitives';
 import {
   safeDescribeNodeContent,
   safeCreateNodeInteraction,
@@ -15,10 +15,10 @@ import {
   type DefinitionInteractionRegionContext,
   type DefinitionHitTestContext,
   type DefinitionRenderContext,
-} from './safety';
-import { textNodeDefinition } from './textNode';
-import type { NodeAddMenuMetadata, NodeDefinition, NodeDescription, NodeHitTarget, NodeHitTestContext, NodeInteractionController, NodeInteractionRegion, NodePortalInfo, NodePortalSummary, NodeRenderContext } from './types';
-import { unknownNodeDefinition } from './unknownNode';
+} from './nodeDefinition/nodeDefinitionSafety';
+import { textNodeDefinition } from './nodeTypes/textNode';
+import type { NodeAddMenuMetadata, NodeDefinition, NodeDescription, NodeHitTarget, NodeHitTestContext, NodeInteractionController, NodeInteractionRegion, NodePortalInfo, NodePortalSummary, NodeRenderContext } from './nodeDefinition/nodeDefinitionTypes';
+import { unknownNodeDefinition } from './nodeTypes/unknownNode';
 
 const definitions = createRegistry([cardNodeDefinition, textNodeDefinition, imageNodeDefinition, canvasNodeDefinition, checkNodeDefinition]);
 

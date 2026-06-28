@@ -1,9 +1,9 @@
 import { asJsonObject } from '../../../core/nodeData';
-import { defineNodeType } from './define';
+import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import type { NodeData } from '../../../core/nodePrimitives';
-import { clipText, drawTypeBadge, wrapText } from './rendering';
-import { nodeTypeSpecs } from './specs';
-import type { NodeDefinition } from './types';
+import { clipText, drawTypeBadge, wrapText } from '../nodeRendering';
+import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
+import type { NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
 
 export const unknownNodeDefinition: NodeDefinition<NodeData> = defineNodeType({
   ...nodeTypeSpecs.unknown,

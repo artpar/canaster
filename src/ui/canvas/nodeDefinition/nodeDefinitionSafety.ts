@@ -1,6 +1,6 @@
 import { asJsonObject } from '../../../core/nodeData';
 import type { CanvasNode, NodeData } from '../../../core/nodePrimitives';
-import { unknownNodeDefinition } from './unknownNode';
+import { unknownNodeDefinition } from '../nodeTypes/unknownNode';
 import type {
   NodeDefinition,
   NodeDescription,
@@ -11,7 +11,7 @@ import type {
   NodeInteractionRegion,
   NodeInteractionRegionContext,
   NodeRenderContext,
-} from './types';
+} from './nodeDefinitionTypes';
 
 export type DefinitionRenderContext = Omit<NodeRenderContext, 'data'> & {
   definition: NodeDefinition;

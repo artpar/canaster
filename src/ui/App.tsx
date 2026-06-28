@@ -54,11 +54,11 @@ import {
 import {
     describeNode,
     referencedAssetIdsForNode
-} from './canvas/nodeTypes/registry';
+} from './canvas/nodeRegistry';
 import {
     cacheAssetImage,
     hasCachedAssetImage
-} from './canvas/nodeTypes/imageAssets';
+} from './canvas/imageAssets';
 import {
     type CanvasArrangeLayout,
     type CanvasNode,

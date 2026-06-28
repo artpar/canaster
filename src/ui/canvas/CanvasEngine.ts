@@ -2,8 +2,8 @@ import { THEMES, type CanvasTheme } from './theme';
 import { arrangeLayoutLabel, arrangeNodeGeometries } from '../../domain/arrangeLayout';
 import { cloneNodeData } from '../../core/nodeData';
 import { canvasPortalViewportRect } from './nodeTypes/canvasNode';
-import { createNodeInteraction, describeNode, hitTestNodeContent, nodeDefinitionFor, nodeDefinitionForType, nodeInteractionRegions, parseNodeData, portalInfoForNode, renderNodeContent } from './nodeTypes/registry';
-import type { NodeContentRect, NodeInteractionController, NodeInteractionRegion } from './nodeTypes/types';
+import { createNodeInteraction, describeNode, hitTestNodeContent, nodeDefinitionFor, nodeDefinitionForType, nodeInteractionRegions, parseNodeData, portalInfoForNode, renderNodeContent } from './nodeRegistry';
+import type { NodeContentRect, NodeInteractionController, NodeInteractionRegion } from './nodeDefinition/nodeDefinitionTypes';
 import type {
   Camera,
   CanvasArrangeLayout,

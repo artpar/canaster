@@ -1,13 +1,13 @@
 import { listImageAssets, loadAssetObject, uploadImageAsset, type CanasterAssetSummary } from '../../../infra/daptin/assets';
 import { hasUsableStoredToken, normalizeDaptinError } from '../../../infra/daptin/daptinClient';
 import { asEnum, asNullableString, asString } from '../../../core/nodeData';
-import { defineNodeType } from './define';
-import { cachedAssetImage, cacheAssetImage } from './imageAssets';
-import { createInlineTextInput, prepareInlineEditorMount, stopEvent } from './inlineEditorDom';
+import { defineNodeType } from '../nodeDefinition/defineNodeType';
+import { cachedAssetImage, cacheAssetImage } from '../imageAssets';
+import { createInlineTextInput, prepareInlineEditorMount, stopEvent } from '../inlineEditorDom';
 import type { JsonObject } from '../../../core/nodePrimitives';
-import { clipText, drawCompactNode, drawPlaceholderIcon, drawTypeBadge, nodeText, wrapText } from './rendering';
-import { nodeTypeSpecs } from './specs';
-import type { NodeContentRect, NodeDefinition, NodeInteractionRegion } from './types';
+import { clipText, drawCompactNode, drawPlaceholderIcon, drawTypeBadge, nodeText, wrapText } from '../nodeRendering';
+import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
+import type { NodeContentRect, NodeDefinition, NodeInteractionRegion } from '../nodeDefinition/nodeDefinitionTypes';
 
 const IMAGE_FITS = ['contain', 'cover'] as const;
 type ImageFit = (typeof IMAGE_FITS)[number];

@@ -1,5 +1,5 @@
 import { cloneNode } from '../../../domain/documentModel';
-import { portalInfoForNode } from '../nodeTypes/registry';
+import { portalInfoForNode } from '../nodeRegistry';
 import type { CanvasNode } from '../../../domain/types';
 import type {
   CanvasDocumentCollection,

@@ -1,10 +1,10 @@
 import { asString } from '../../../core/nodeData';
-import { defineNodeType } from './define';
-import { createInlineTextInput, prepareInlineEditorMount, stopEvent } from './inlineEditorDom';
+import { defineNodeType } from '../nodeDefinition/defineNodeType';
+import { createInlineTextInput, prepareInlineEditorMount, stopEvent } from '../inlineEditorDom';
 import type { JsonObject } from '../../../core/nodePrimitives';
-import { clipText, drawCompactNode, drawNodeMeta, drawNodeTitle, drawTypeBadge, nodeLayout, nodeText } from './rendering';
-import { nodeTypeSpecs } from './specs';
-import type { NodeContentRect, NodeDefinition, NodeInteractionRegion } from './types';
+import { clipText, drawCompactNode, drawNodeMeta, drawNodeTitle, drawTypeBadge, nodeLayout, nodeText } from '../nodeRendering';
+import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
+import type { NodeContentRect, NodeDefinition, NodeInteractionRegion } from '../nodeDefinition/nodeDefinitionTypes';
 
 const MAX_ITEMS = 100;
 const CHECKBOX_SIZE = 12;

@@ -1,5 +1,5 @@
 import type {NodeData} from '../../../core/nodePrimitives';
-import type {NodeDefinition} from './types';
+import type {NodeDefinition} from './nodeDefinitionTypes';
 
 export function defineNodeType<TData extends NodeData>(definition: NodeDefinition<TData>): NodeDefinition<TData> {
     if (!definition.type.trim()) throw new Error('Node type id cannot be empty');

@@ -23,7 +23,7 @@ import {
   selectedPortalNodesWithChildren,
   stripPortalChildReferenceOnPaste,
 } from '../../../domain/documentCommands';
-import { portalInfoForNode, updatePortalSummaryForNode } from '../nodeTypes/registry';
+import { portalInfoForNode, updatePortalSummaryForNode } from '../nodeRegistry';
 import type { Camera, CanvasCommand, CanvasModel, CanvasModelChange, CanvasNode, CanvasSelectionState, PortalLayout, ScreenRect, ThemeName, ViewportStatus } from '../../../domain/types';
 import type {
   CanvasDocumentCollection,

@@ -1,4 +1,4 @@
-import type { NodeSize } from './types';
+import type { NodeSize } from './nodeDefinitionTypes';
 
 export const BuiltInNodeTypes = {
   card: 'card',

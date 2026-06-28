@@ -3,7 +3,7 @@ import {
     type Ref
 } from "react";
 import {X} from "lucide-react";
-import {registeredNodeAddOptions, type RegisteredNodeAddOption} from "./canvas/nodeTypes/registry";
+import {registeredNodeAddOptions, type RegisteredNodeAddOption} from "./canvas/nodeRegistry";
 
 export const PANEL_CREATE_OPTIONS = registeredNodeAddOptions();
 

@@ -1,10 +1,10 @@
 import { asString } from '../../../core/nodeData';
-import { defineNodeType } from './define';
-import { createInlineTextarea } from './inlineEditorDom';
+import { defineNodeType } from '../nodeDefinition/defineNodeType';
+import { createInlineTextarea } from '../inlineEditorDom';
 import type { JsonObject } from '../../../core/nodePrimitives';
-import { drawCompactNode, drawNodeBodyLines, drawTypeBadge, nodeLayout, wrapText } from './rendering';
-import { nodeTypeSpecs } from './specs';
-import type { NodeDefinition } from './types';
+import { drawCompactNode, drawNodeBodyLines, drawTypeBadge, nodeLayout, wrapText } from '../nodeRendering';
+import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
+import type { NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
 
 type TextNodeData = {
   text: string;

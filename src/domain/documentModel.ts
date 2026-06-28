@@ -5,8 +5,8 @@ import {
   isPortalNode,
   portalInfoForNode,
   updatePortalSummaryForNode,
-} from '../ui/canvas/nodeTypes/registry';
-import type { NodePortalInfo } from '../ui/canvas/nodeTypes/types';
+} from '../ui/canvas/nodeRegistry';
+import type { NodePortalInfo } from '../ui/canvas/nodeDefinition/nodeDefinitionTypes';
 import {
   type Camera,
   type CanvasModel,
