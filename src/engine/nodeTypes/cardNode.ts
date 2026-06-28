@@ -1,13 +1,21 @@
 import { BuiltInNodeTypes, type CardAccent, type CardNodeData } from '../types';
 import { asEnum, asString } from './data';
-import { clipText, drawTypeBadge, wrapText } from './rendering';
-import type { NodeDefinition, NodeContentRect } from './types';
+import { createInlineTextarea, createInlineTextInput } from './inlineEditorDom';
+import { drawAccentMark, drawCompactNode, drawNodeBodyLines, drawNodeTitle, drawTypeBadge, nodeLayout, wrapText } from './rendering';
+import type { NodeDefinition, NodeContentRect, NodeInteractionRegion } from './types';
 
 const CARD_ACCENTS: readonly CardAccent[] = ['task', 'data', 'system'];
 
 export const cardNodeDefinition: NodeDefinition<CardNodeData> = {
   type: BuiltInNodeTypes.card,
   displayName: 'Card',
+  roleDescription: 'Work item',
+  typeBadge: 'WORK',
+  addMenu: {
+    label: 'Work item',
+    detail: 'Title, detail, and work accent',
+    badge: 'WORK',
+  },
   defaultSize: { w: 256, h: 128 },
   minSize: { w: 140, h: 76 },
   createDefaultData() {
@@ -22,27 +30,18 @@ export const cardNodeDefinition: NodeDefinition<CardNodeData> = {
   },
   render({ ctx, data, theme, contentRect, state }) {
     const accent = theme.kind[data.accent];
-    ctx.fillStyle = accent;
-    roundRectPath(ctx, contentRect.x, contentRect.y, 28, 6, 3);
-    ctx.fill();
+    drawAccentMark(ctx, contentRect, accent);
 
-    if (state.quality === 'compact' && !state.selected && !state.hovered) return;
+    if (state.quality === 'compact' && !state.selected && !state.hovered) {
+      drawCompactNode(ctx, { ...contentRect, y: contentRect.y + 14, h: Math.max(0, contentRect.h - 14) }, data.accent.toUpperCase(), data.title || 'Untitled work item', theme);
+      return;
+    }
 
-    ctx.fillStyle = theme.headerText;
-    ctx.font = '600 15px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    ctx.textBaseline = 'top';
-    ctx.textAlign = 'left';
-    ctx.fillText(clipText(ctx, data.title || 'Untitled card', Math.max(0, contentRect.w - 40)), contentRect.x + 4, contentRect.y + 16);
+    drawNodeTitle(ctx, contentRect, data.title || 'Untitled work item', theme, 16);
 
-    ctx.fillStyle = theme.bodyText;
-    ctx.font = '13px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
     const detailRect = { x: contentRect.x + 4, y: contentRect.y + 44, w: contentRect.w - 8, h: Math.max(0, contentRect.h - 70) };
     const lines = wrapText(ctx, data.detail, Math.max(0, detailRect.w), cardDetailLineCapacity(detailRect));
-    let y = detailRect.y;
-    for (const line of lines) {
-      ctx.fillText(line, detailRect.x, y);
-      y += 18;
-    }
+    drawNodeBodyLines(ctx, detailRect, lines, theme, { x: detailRect.x, y: detailRect.y });
 
     drawTypeBadge(ctx, contentRect, data.accent.toUpperCase(), theme);
   },
@@ -57,22 +56,56 @@ export const cardNodeDefinition: NodeDefinition<CardNodeData> = {
       actions: [],
     };
   },
+  getInteractionRegions({ contentRect }) {
+    return cardRegions(contentRect);
+  },
+  createInteraction(ctx) {
+    if (ctx.region.id === 'title') {
+      return createInlineTextInput({
+        mount: ctx.mount,
+        className: 'node-inline-card-title-editor',
+        value: ctx.data.title,
+        placeholder: 'Work item title',
+        ariaLabel: 'Edit work item title',
+        commit: (value) => ctx.requestCommit({ ...ctx.data, title: value }, 'pointer'),
+        close: ctx.requestClose,
+      });
+    }
+    if (ctx.region.id === 'detail') {
+      return createInlineTextarea({
+        mount: ctx.mount,
+        className: 'node-inline-card-detail-editor',
+        value: ctx.data.detail,
+        placeholder: 'Work item detail',
+        ariaLabel: 'Edit work item detail',
+        commit: (value) => ctx.requestCommit({ ...ctx.data, detail: value }, 'pointer'),
+        close: ctx.requestClose,
+      });
+    }
+    return null;
+  },
 };
+
+function cardRegions(contentRect: NodeContentRect): NodeInteractionRegion[] {
+  return [
+    {
+      id: 'title',
+      rect: { x: contentRect.x + nodeLayout.insetX, y: contentRect.y + 14, w: Math.max(0, contentRect.w - nodeLayout.insetX * 2), h: 22 },
+      cursor: 'text',
+      label: 'work item title',
+    },
+    {
+      id: 'detail',
+      rect: { x: contentRect.x + nodeLayout.insetX, y: contentRect.y + 42, w: Math.max(0, contentRect.w - nodeLayout.insetX * 2), h: Math.max(22, contentRect.h - 62) },
+      cursor: 'text',
+      label: 'work item detail',
+    },
+  ];
+}
 
 function cardDetailLineCapacity(rect: NodeContentRect) {
   const lineHeight = 18;
   const textHeight = 13;
   const available = rect.h - textHeight;
   return Math.max(0, Math.min(2, Math.floor(available / lineHeight) + 1));
-}
-
-function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  const radius = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.arcTo(x + w, y, x + w, y + h, radius);
-  ctx.arcTo(x + w, y + h, x, y + h, radius);
-  ctx.arcTo(x, y + h, x, y, radius);
-  ctx.arcTo(x, y, x + w, y, radius);
-  ctx.closePath();
 }

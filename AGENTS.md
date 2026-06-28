@@ -2,6 +2,27 @@
 
 Follow these or die. If instructions are too hard to follow, cry immediately. 
 
+- domain cannot import infra
+- pure functions go in core or domain
+- functions are sorted by dependency order
+- files are named after their primary exported symbol
+- one main abstraction per file
+- circular dependencies are illegal
+- imports are grouped and sorted
+- duplicated AST patterns above threshold are extracted
+- public APIs are never moved unless explicitly marked movable
+
+```
+src/
+    core/        pure utilities, types, primitives
+    domain/      business logic, no db/http imports
+    app/         use-cases, orchestration
+    infra/       db, http, filesystem, third-party APIs
+    ui/          components, views, handlers
+```
+
+Do not be vague in responses. Responding with a "what" of the problem isnt useful, your responses should always include "why", "where", "when", "what not", "why not" with the full context.
+
 ## Current Development Context
 
 - The Canaster dev server is usually already running in hot-reload mode. 

@@ -1,12 +1,19 @@
 import { BuiltInNodeTypes, type TextNodeData } from '../types';
 import { asString } from './data';
-import { commitInputOnBlur, prepareInlineEditorMount } from './inlineEditorDom';
-import { clipText, drawTypeBadge, wrapText } from './rendering';
+import { createInlineTextarea } from './inlineEditorDom';
+import { drawCompactNode, drawNodeBodyLines, drawTypeBadge, nodeLayout, wrapText } from './rendering';
 import type { NodeDefinition } from './types';
 
 export const textNodeDefinition: NodeDefinition<TextNodeData> = {
   type: BuiltInNodeTypes.text,
   displayName: 'Text',
+  roleDescription: 'Note',
+  typeBadge: 'NOTE',
+  addMenu: {
+    label: 'Note',
+    detail: 'Plain text for local context',
+    badge: 'NOTE',
+  },
   defaultSize: { w: 240, h: 140 },
   minSize: { w: 140, h: 76 },
   createDefaultData() {
@@ -21,22 +28,14 @@ export const textNodeDefinition: NodeDefinition<TextNodeData> = {
     ctx.textBaseline = 'top';
 
     if (state.quality === 'compact') {
-      ctx.font = '600 10px ui-sans-serif, system-ui, sans-serif';
-      ctx.fillText('TEXT', contentRect.x, contentRect.y);
-      ctx.font = '12px ui-sans-serif, system-ui, sans-serif';
-      ctx.fillText(clipText(ctx, firstLine(data.text) || 'Empty text', Math.max(0, contentRect.w - 4)), contentRect.x, contentRect.y + 18);
+      drawCompactNode(ctx, contentRect, 'NOTE', firstLine(data.text) || 'Empty note', theme);
       return;
     }
 
-    ctx.font = '14px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
     const text = data.text.trim() ? data.text : 'Empty text';
-    const lines = wrapText(ctx, text, Math.max(0, contentRect.w - 8), Math.max(1, Math.floor((contentRect.h - 26) / 18)));
-    let y = contentRect.y + 2;
-    for (const line of lines) {
-      ctx.fillText(line, contentRect.x + 4, y);
-      y += 18;
-    }
-    drawTypeBadge(ctx, contentRect, 'TEXT', theme);
+    const lines = wrapText(ctx, text, Math.max(0, contentRect.w - 8), Math.max(1, Math.floor((contentRect.h - 26) / nodeLayout.bodyLineHeight)));
+    drawNodeBodyLines(ctx, contentRect, lines, theme, { y: contentRect.y + 2 });
+    drawTypeBadge(ctx, contentRect, 'NOTE', theme);
   },
   describe({ data }) {
     const label = clipPlainText(firstLine(data.text), 60) || 'Empty note';
@@ -58,21 +57,15 @@ export const textNodeDefinition: NodeDefinition<TextNodeData> = {
   },
   createInteraction(ctx) {
     if (ctx.region.id !== 'body') return null;
-    prepareInlineEditorMount(ctx.mount, 'node-inline-text-editor');
-    const textarea = document.createElement('textarea');
-    textarea.value = ctx.data.text;
-    textarea.placeholder = 'Write note';
-    textarea.setAttribute('aria-label', 'Edit note');
-    ctx.mount.append(textarea);
-    const lifecycle = commitInputOnBlur({
-      input: textarea,
-      commit: () => ctx.requestCommit({ ...ctx.data, text: textarea.value }, 'pointer'),
+    return createInlineTextarea({
+      mount: ctx.mount,
+      className: 'node-inline-text-editor',
+      value: ctx.data.text,
+      placeholder: 'Write note',
+      ariaLabel: 'Edit note',
+      commit: (value) => ctx.requestCommit({ ...ctx.data, text: value }, 'pointer'),
       close: ctx.requestClose,
     });
-    return {
-      focus: lifecycle.focus,
-      dispose: lifecycle.dispose,
-    };
   },
 };
 

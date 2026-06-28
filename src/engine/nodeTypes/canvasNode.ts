@@ -1,11 +1,18 @@
 import { BuiltInNodeTypes, type CanvasPortalNodeData } from '../types';
 import { asNullableString, asNumber, asString } from './data';
-import { clipText, drawTypeBadge } from './rendering';
+import { drawCompactNode, drawNodeMeta, drawNodeTitle, drawTypeBadge, nodeText } from './rendering';
 import type { NodeContentRect, NodeDefinition } from './types';
 
 export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = {
   type: BuiltInNodeTypes.canvas,
   displayName: 'View',
+  roleDescription: 'View inside',
+  typeBadge: 'VIEW',
+  addMenu: {
+    label: 'View',
+    detail: 'A child workspace view',
+    badge: 'VIEW',
+  },
   defaultSize: { w: 300, h: 180 },
   minSize: { w: 160, h: 100 },
   createDefaultData() {
@@ -19,11 +26,12 @@ export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = {
     };
   },
   render({ ctx, data, theme, contentRect, state }) {
-    ctx.fillStyle = theme.headerText;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.font = '600 15px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    ctx.fillText(clipText(ctx, data.title || 'View', Math.max(0, contentRect.w - 8)), contentRect.x + 4, contentRect.y + 4);
+    if (state.quality === 'compact' && !state.selected && !state.hovered) {
+      drawCompactNode(ctx, contentRect, 'VIEW', data.title || 'View', theme);
+      return;
+    }
+
+    drawNodeTitle(ctx, contentRect, data.title || 'View', theme, 4);
 
     if (state.quality !== 'compact') {
       ctx.strokeStyle = theme.nodeBorder;
@@ -34,13 +42,17 @@ export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = {
       const previewH = preview.h;
       ctx.strokeRect(previewX, previewY, previewW, previewH);
       ctx.fillStyle = theme.mutedText;
-      ctx.font = '12px ui-sans-serif, system-ui, sans-serif';
+      ctx.font = nodeText.label;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
       if (!data.childCanvasId) {
         ctx.fillText('No view inside', previewX + 10, previewY + 10);
       } else if (state.portalPreview === 'none') {
         ctx.fillText(`${data.nodeCount} item${data.nodeCount === 1 ? '' : 's'} inside`, previewX + 10, previewY + 10);
       }
       if (state.portalPreview !== 'live') drawPreviewBoxes(ctx, previewX, previewY, previewW, previewH, theme);
+    } else {
+      drawNodeMeta(ctx, contentRect, data.childCanvasId ? `${data.nodeCount} item${data.nodeCount === 1 ? '' : 's'} inside` : 'No view inside', theme);
     }
 
     drawTypeBadge(ctx, contentRect, 'VIEW', theme);

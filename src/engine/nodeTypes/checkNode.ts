@@ -1,7 +1,7 @@
 import { BuiltInNodeTypes, type CheckNodeData, type CheckNodeItem, type JsonObject } from '../types';
 import { asString } from './data';
-import { commitInputOnBlur, prepareInlineEditorMount, stopEvent } from './inlineEditorDom';
-import { clipText, drawTypeBadge } from './rendering';
+import { createInlineTextInput, prepareInlineEditorMount, stopEvent } from './inlineEditorDom';
+import { clipText, drawCompactNode, drawNodeMeta, drawNodeTitle, drawTypeBadge, nodeLayout, nodeText } from './rendering';
 import type { NodeContentRect, NodeDefinition, NodeInteractionRegion } from './types';
 
 const MAX_ITEMS = 100;
@@ -10,6 +10,13 @@ const CHECKBOX_SIZE = 12;
 export const checkNodeDefinition: NodeDefinition<CheckNodeData> = {
   type: BuiltInNodeTypes.check,
   displayName: 'Checklist',
+  roleDescription: 'Checklist',
+  typeBadge: 'LIST',
+  addMenu: {
+    label: 'Checklist',
+    detail: 'Actionable list with done count',
+    badge: 'LIST',
+  },
   defaultSize: { w: 280, h: 180 },
   minSize: { w: 180, h: 110 },
   createDefaultData() {
@@ -25,20 +32,13 @@ export const checkNodeDefinition: NodeDefinition<CheckNodeData> = {
     const done = data.items.filter((item) => item.checked).length;
     const total = data.items.length;
 
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillStyle = theme.headerText;
-    ctx.font = '600 15px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    ctx.fillText(clipText(ctx, data.title || 'Checklist', Math.max(0, contentRect.w - 8)), contentRect.x + 4, contentRect.y + 2);
-
-    ctx.fillStyle = theme.mutedText;
-    ctx.font = '12px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText(total ? `${done}/${total} done` : 'No checklist items', contentRect.x + 4, contentRect.y + 25);
-
     if (state.quality === 'compact' && !state.selected && !state.hovered) {
-      drawTypeBadge(ctx, contentRect, 'LIST', theme);
+      drawCompactNode(ctx, contentRect, 'LIST', data.title || 'Checklist', theme);
       return;
     }
+
+    drawNodeTitle(ctx, contentRect, data.title || 'Checklist', theme);
+    drawNodeMeta(ctx, contentRect, total ? `${done}/${total} done` : 'No checklist items', theme);
 
     const rows = visibleRows(contentRect.h);
     const visibleItems = data.items.slice(0, rows);
@@ -46,12 +46,12 @@ export const checkNodeDefinition: NodeDefinition<CheckNodeData> = {
     for (const item of visibleItems) {
       drawCheckbox(ctx, contentRect.x + 4, y + 1, item.checked, theme);
       ctx.fillStyle = item.checked ? theme.mutedText : theme.bodyText;
-      ctx.font = '13px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      ctx.font = nodeText.body;
       const deleteSpace = state.selected || state.hovered ? 18 : 0;
       ctx.fillText(clipText(ctx, item.text || 'Untitled item', Math.max(0, contentRect.w - 28 - deleteSpace)), contentRect.x + 24, y);
       if (state.selected || state.hovered) {
         ctx.fillStyle = theme.mutedText;
-        ctx.font = '12px ui-sans-serif, system-ui, sans-serif';
+        ctx.font = nodeText.label;
         ctx.fillText('x', contentRect.x + contentRect.w - 13, y);
       }
       y += 19;
@@ -59,11 +59,11 @@ export const checkNodeDefinition: NodeDefinition<CheckNodeData> = {
 
     if (visibleItems.length < rows) {
       ctx.fillStyle = theme.bodyText;
-      ctx.font = '13px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      ctx.font = nodeText.body;
       ctx.fillText(visibleItems.length ? 'Add item' : 'Add first item', contentRect.x + 4, y);
     } else if (data.items.length > visibleItems.length) {
       ctx.fillStyle = theme.mutedText;
-      ctx.font = '12px ui-sans-serif, system-ui, sans-serif';
+      ctx.font = nodeText.label;
       ctx.fillText(`+${data.items.length - visibleItems.length} more`, contentRect.x + 4, contentRect.y + Math.max(0, contentRect.h - 18));
     }
 
@@ -138,7 +138,7 @@ export const checkNodeDefinition: NodeDefinition<CheckNodeData> = {
 function checklistRegions(contentRect: NodeContentRect, data: CheckNodeData): NodeInteractionRegion[] {
   const regions: NodeInteractionRegion[] = [{
     id: 'title',
-    rect: { x: contentRect.x + 4, y: contentRect.y + 2, w: Math.max(0, contentRect.w - 8), h: 19 },
+    rect: { x: contentRect.x + nodeLayout.insetX, y: contentRect.y + nodeLayout.titleY, w: Math.max(0, contentRect.w - nodeLayout.insetX * 2), h: 19 },
     cursor: 'text',
     label: 'checklist title',
   }];
@@ -281,23 +281,15 @@ function createChecklistListEditor(mount: HTMLElement, data: CheckNodeData, comm
 }
 
 function createChecklistInput(mount: HTMLElement, value: string, label: string, commit: (value: string) => void, close: () => void) {
-  prepareInlineEditorMount(mount, 'node-inline-checklist-editor');
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.value = value;
-  input.placeholder = label;
-  input.setAttribute('aria-label', label);
-  input.addEventListener('pointerdown', stopEvent);
-  mount.append(input);
-  const lifecycle = commitInputOnBlur({
-    input,
-    commit: () => commit(input.value),
+  return createInlineTextInput({
+    mount,
+    className: 'node-inline-checklist-editor',
+    value,
+    placeholder: label,
+    ariaLabel: label,
+    commit,
     close,
   });
-  return {
-    focus: lifecycle.focus,
-    dispose: lifecycle.dispose,
-  };
 }
 
 function parseItems(value: unknown): CheckNodeItem[] {

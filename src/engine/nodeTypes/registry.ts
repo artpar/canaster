@@ -16,7 +16,7 @@ import {
   type DefinitionRenderContext,
 } from './safety';
 import { textNodeDefinition } from './textNode';
-import type { NodeDefinition, NodeDescription, NodeHitTarget, NodeHitTestContext, NodeInteractionController, NodeInteractionRegion, NodeRenderContext } from './types';
+import type { NodeAddMenuMetadata, NodeDefinition, NodeDescription, NodeHitTarget, NodeHitTestContext, NodeInteractionController, NodeInteractionRegion, NodeRenderContext } from './types';
 import { unknownNodeDefinition } from './unknownNode';
 
 const definitions = createRegistry([cardNodeDefinition, textNodeDefinition, imageNodeDefinition, canvasNodeDefinition, checkNodeDefinition]);
@@ -25,6 +25,12 @@ function createRegistry(items: NodeDefinition[]) {
   const map = new Map<string, NodeDefinition>();
   for (const definition of items) {
     if (!definition.type.trim()) throw new Error('Node type id cannot be empty');
+    if (!definition.displayName.trim()) throw new Error(`Node type ${definition.type} must have a display name`);
+    if (!definition.roleDescription.trim()) throw new Error(`Node type ${definition.type} must have a role description`);
+    if (!definition.typeBadge.trim()) throw new Error(`Node type ${definition.type} must have a type badge`);
+    if (!definition.addMenu.label.trim() || !definition.addMenu.detail.trim() || !definition.addMenu.badge.trim()) {
+      throw new Error(`Node type ${definition.type} must have add menu metadata`);
+    }
     if (map.has(definition.type)) throw new Error(`Duplicate node type: ${definition.type}`);
     map.set(definition.type, definition);
   }
@@ -41,6 +47,17 @@ export function nodeDefinitionForType(type: string): NodeDefinition | null {
 
 export function registeredNodeDefinitions(): NodeDefinition[] {
   return [...definitions.values()];
+}
+
+export type RegisteredNodeAddOption = NodeAddMenuMetadata & {
+  type: string;
+};
+
+export function registeredNodeAddOptions(): RegisteredNodeAddOption[] {
+  return registeredNodeDefinitions().map((definition) => ({
+    type: definition.type,
+    ...definition.addMenu,
+  }));
 }
 
 export function parseNodeData(node: CanvasNode) {

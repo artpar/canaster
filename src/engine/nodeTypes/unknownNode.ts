@@ -6,6 +6,13 @@ import type { NodeDefinition } from './types';
 export const unknownNodeDefinition: NodeDefinition<NodeData> = {
   type: 'unknown',
   displayName: 'Unknown',
+  roleDescription: 'Unknown item',
+  typeBadge: 'UNKNOWN',
+  addMenu: {
+    label: 'Unknown item',
+    detail: 'Unsupported saved item type',
+    badge: 'UNKNOWN',
+  },
   defaultSize: { w: 220, h: 120 },
   minSize: { w: 140, h: 76 },
   createDefaultData() {

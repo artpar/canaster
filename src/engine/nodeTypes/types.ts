@@ -88,6 +88,12 @@ export type NodeActionDescriptor = {
   disabledReason?: string;
 };
 
+export type NodeAddMenuMetadata = {
+  label: string;
+  detail: string;
+  badge: string;
+};
+
 export type BuiltInNodeActionId =
   | 'enter-child-canvas'
   | 'create-child-canvas'
@@ -101,6 +107,9 @@ export type NodeDescribeContext<TData extends NodeData = NodeData> = {
 export type NodeDefinition<TData extends NodeData = NodeData> = {
   type: NodeTypeId;
   displayName: string;
+  roleDescription: string;
+  typeBadge: string;
+  addMenu: NodeAddMenuMetadata;
   defaultSize: NodeSize;
   minSize: NodeSize;
   createDefaultData(): TData;

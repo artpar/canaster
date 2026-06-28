@@ -3,8 +3,8 @@ import { hasUsableStoredToken, normalizeDaptinError } from '../../backend/daptin
 import { BuiltInNodeTypes, type ImageNodeData } from '../types';
 import { asEnum, asNullableString, asString } from './data';
 import { cachedAssetImage, cacheAssetImage } from './imageAssets';
-import { commitInputOnBlur, prepareInlineEditorMount, stopEvent } from './inlineEditorDom';
-import { clipText, drawPlaceholderIcon, drawTypeBadge, wrapText } from './rendering';
+import { createInlineTextInput, prepareInlineEditorMount, stopEvent } from './inlineEditorDom';
+import { clipText, drawCompactNode, drawPlaceholderIcon, drawTypeBadge, nodeText, wrapText } from './rendering';
 import type { NodeContentRect, NodeDefinition, NodeInteractionRegion } from './types';
 
 const IMAGE_FITS = ['contain', 'cover'] as const;
@@ -12,6 +12,13 @@ const IMAGE_FITS = ['contain', 'cover'] as const;
 export const imageNodeDefinition: NodeDefinition<ImageNodeData> = {
   type: BuiltInNodeTypes.image,
   displayName: 'Image',
+  roleDescription: 'Image',
+  typeBadge: 'IMAGE',
+  addMenu: {
+    label: 'Image',
+    detail: 'Visual reference with alt text',
+    badge: 'IMAGE',
+  },
   defaultSize: { w: 280, h: 180 },
   minSize: { w: 140, h: 96 },
   createDefaultData() {
@@ -30,8 +37,7 @@ export const imageNodeDefinition: NodeDefinition<ImageNodeData> = {
     ctx.fillStyle = theme.mutedText;
 
     if (state.quality === 'compact') {
-      drawPlaceholderIcon(ctx, { x: contentRect.x, y: contentRect.y + 8, w: contentRect.w, h: Math.max(0, contentRect.h - 26) }, 'IMAGE');
-      drawTypeBadge(ctx, contentRect, 'IMAGE', theme);
+      drawCompactNode(ctx, contentRect, 'IMAGE', data.alt || data.caption || 'Image', theme);
       return;
     }
 
@@ -44,7 +50,7 @@ export const imageNodeDefinition: NodeDefinition<ImageNodeData> = {
     }
 
     ctx.fillStyle = theme.bodyText;
-    ctx.font = '12px ui-sans-serif, system-ui, sans-serif';
+    ctx.font = nodeText.label;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     const status = cached ? (data.caption || data.alt || 'Image reference') : data.assetId ? 'Loading image' : 'Add an image source';
@@ -80,40 +86,26 @@ export const imageNodeDefinition: NodeDefinition<ImageNodeData> = {
   },
   createInteraction(ctx) {
     if (ctx.region.id === 'caption') {
-      prepareInlineEditorMount(ctx.mount, 'node-inline-image-caption-editor');
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.value = ctx.data.caption ?? '';
-      input.placeholder = 'Caption';
-      input.setAttribute('aria-label', 'Edit image caption');
-      ctx.mount.append(input);
-      const lifecycle = commitInputOnBlur({
-        input,
-        commit: () => ctx.requestCommit({ ...ctx.data, caption: input.value }, 'pointer'),
+      return createInlineTextInput({
+        mount: ctx.mount,
+        className: 'node-inline-image-caption-editor',
+        value: ctx.data.caption ?? '',
+        placeholder: 'Caption',
+        ariaLabel: 'Edit image caption',
+        commit: (value) => ctx.requestCommit({ ...ctx.data, caption: value }, 'pointer'),
         close: ctx.requestClose,
       });
-      return {
-        focus: lifecycle.focus,
-        dispose: lifecycle.dispose,
-      };
     }
     if (ctx.region.id === 'alt') {
-      prepareInlineEditorMount(ctx.mount, 'node-inline-image-alt-editor');
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.value = ctx.data.alt;
-      input.placeholder = 'Alt text';
-      input.setAttribute('aria-label', 'Edit image alt text');
-      ctx.mount.append(input);
-      const lifecycle = commitInputOnBlur({
-        input,
-        commit: () => ctx.requestCommit({ ...ctx.data, alt: input.value }, 'pointer'),
+      return createInlineTextInput({
+        mount: ctx.mount,
+        className: 'node-inline-image-alt-editor',
+        value: ctx.data.alt,
+        placeholder: 'Alt text',
+        ariaLabel: 'Edit image alt text',
+        commit: (value) => ctx.requestCommit({ ...ctx.data, alt: value }, 'pointer'),
         close: ctx.requestClose,
       });
-      return {
-        focus: lifecycle.focus,
-        dispose: lifecycle.dispose,
-      };
     }
     if (ctx.region.id === 'fit-contain' || ctx.region.id === 'fit-cover') {
       const fit = ctx.region.id === 'fit-cover' ? 'cover' : 'contain';
@@ -176,7 +168,7 @@ function drawFitPill(ctx: CanvasRenderingContext2D, rect: { x: number; y: number
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = active ? theme.nodeBg : theme.bodyText;
-  ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
+  ctx.font = nodeText.micro;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(label, rect.x + rect.w / 2, rect.y + rect.h / 2 + 0.5);

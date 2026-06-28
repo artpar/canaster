@@ -55,3 +55,72 @@ export function commitInputOnBlur({
     },
   };
 }
+
+export function createInlineTextInput({
+  mount,
+  className,
+  value,
+  placeholder,
+  ariaLabel,
+  commit,
+  close,
+}: {
+  mount: HTMLElement;
+  className: string;
+  value: string;
+  placeholder: string;
+  ariaLabel: string;
+  commit: (value: string) => void;
+  close: () => void;
+}) {
+  prepareInlineEditorMount(mount, className);
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = value;
+  input.placeholder = placeholder;
+  input.setAttribute('aria-label', ariaLabel);
+  mount.append(input);
+  const lifecycle = commitInputOnBlur({
+    input,
+    commit: () => commit(input.value),
+    close,
+  });
+  return {
+    focus: lifecycle.focus,
+    dispose: lifecycle.dispose,
+  };
+}
+
+export function createInlineTextarea({
+  mount,
+  className,
+  value,
+  placeholder,
+  ariaLabel,
+  commit,
+  close,
+}: {
+  mount: HTMLElement;
+  className: string;
+  value: string;
+  placeholder: string;
+  ariaLabel: string;
+  commit: (value: string) => void;
+  close: () => void;
+}) {
+  prepareInlineEditorMount(mount, className);
+  const textarea = document.createElement('textarea');
+  textarea.value = value;
+  textarea.placeholder = placeholder;
+  textarea.setAttribute('aria-label', ariaLabel);
+  mount.append(textarea);
+  const lifecycle = commitInputOnBlur({
+    input: textarea,
+    commit: () => commit(textarea.value),
+    close,
+  });
+  return {
+    focus: lifecycle.focus,
+    dispose: lifecycle.dispose,
+  };
+}

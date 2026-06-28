@@ -3,43 +3,12 @@ import {
     type Ref
 } from "react";
 import {X} from "lucide-react";
-import {BuiltInNodeTypes} from "./engine/types";
+import {registeredNodeAddOptions, type RegisteredNodeAddOption} from "./engine/nodeTypes/registry";
 
-export const PANEL_CREATE_OPTIONS = [
-    {
-        type  : BuiltInNodeTypes.card,
-        label : 'Work item',
-        detail: 'Title, detail, and work accent',
-        badge : 'WORK'
-    },
-    {
-        type  : BuiltInNodeTypes.text,
-        label : 'Note',
-        detail: 'Plain text for local context',
-        badge : 'NOTE'
-    },
-    {
-        type  : BuiltInNodeTypes.image,
-        label : 'Image',
-        detail: 'Visual reference with alt text',
-        badge : 'IMAGE'
-    },
-    {
-        type  : BuiltInNodeTypes.canvas,
-        label : 'View',
-        detail: 'A child canvas portal',
-        badge : 'VIEW'
-    },
-    {
-        type  : BuiltInNodeTypes.check,
-        label : 'Checklist',
-        detail: 'Actionable list with done count',
-        badge : 'LIST'
-    },
-] as const;
+export const PANEL_CREATE_OPTIONS = registeredNodeAddOptions();
 
 
-type PanelCreateOption = (typeof PANEL_CREATE_OPTIONS)[number];
+type PanelCreateOption = RegisteredNodeAddOption;
 
 type AddPanelPopoverProps = {
     searchRef: Ref<HTMLInputElement>;
