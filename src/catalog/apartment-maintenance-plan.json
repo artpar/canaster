@@ -1,0 +1,5147 @@
+{
+  "id": "apartment-maintenance-plan",
+  "title": "Riverton Court Maintenance Atlas",
+  "summary": "A realistic 64-unit apartment maintenance plan organized into nested views for systems, safety, inspections, emergencies, capital planning, vendors, and records.",
+  "audience": "Apartment property managers, maintenance supervisors, asset managers, and operations teams who need a practical building map instead of a flat checklist.",
+  "tags": [
+    "apartment-maintenance",
+    "multifamily",
+    "operations",
+    "safety",
+    "starter"
+  ],
+  "storageKey": "starter:apartment-maintenance-plan-v1",
+  "collection": {
+    "schemaVersion": 1,
+    "rootCanvasId": "root",
+    "activeCanvasId": "root",
+    "documents": {
+      "root": {
+        "id": "root",
+        "title": "Riverton Court Maintenance Atlas",
+        "parentCanvasId": null,
+        "parentNodeId": null,
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "building-snapshot",
+              "type": "card",
+              "x": 36,
+              "y": 58,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Riverton Court",
+                "detail": "64 apartments, four floors, one elevator, central hot water, split HVAC, flat roof, parking, laundry, trash room.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "operating-rule",
+              "type": "card",
+              "x": 36,
+              "y": 238,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Year-Round Care",
+                "detail": "Treat the building as a living system: inspect, document, correct, and learn before issues become emergencies.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "maintenance-plan-portal",
+              "type": "canvas",
+              "x": 334,
+              "y": 58,
+              "w": 404,
+              "h": 314,
+              "data": {
+                "childCanvasId": "maintenance-plan-canvas",
+                "title": "64-Unit Maintenance Plan",
+                "nodeCount": 9
+              }
+            },
+            {
+              "id": "resident-priority",
+              "type": "card",
+              "x": 774,
+              "y": 58,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Resident Safety",
+                "detail": "Life-safety, habitability, egress, heat, water, and communication outrank cosmetic work.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "records-priority",
+              "type": "card",
+              "x": 774,
+              "y": 238,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Proof and Records",
+                "detail": "Every inspection, vendor visit, photo, deficiency, and correction needs a durable place in the record.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "root-note",
+              "type": "text",
+              "x": 264,
+              "y": 420,
+              "w": 560,
+              "h": 108,
+              "data": {
+                "text": "Use this as a realistic apartment maintenance map: start broad, open a domain, then drill into one system, procedure, inspection, or record pack."
+              }
+            }
+          ]
+        }
+      },
+      "maintenance-plan-canvas": {
+        "id": "maintenance-plan-canvas",
+        "title": "64-Unit Maintenance Plan",
+        "parentCanvasId": "root",
+        "parentNodeId": "maintenance-plan-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "profile-portal",
+              "type": "canvas",
+              "x": -348,
+              "y": -240,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "building-profile-canvas",
+                "title": "Building Profile",
+                "nodeCount": 6
+              }
+            },
+            {
+              "id": "calendar-portal",
+              "type": "canvas",
+              "x": 8,
+              "y": -240,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "preventive-calendar-canvas",
+                "title": "Preventive Calendar",
+                "nodeCount": 6
+              }
+            },
+            {
+              "id": "life-safety-portal",
+              "type": "canvas",
+              "x": 364,
+              "y": -240,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "life-safety-canvas",
+                "title": "Life Safety",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "systems-portal",
+              "type": "canvas",
+              "x": -348,
+              "y": 8,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "building-systems-canvas",
+                "title": "Building Systems",
+                "nodeCount": 6
+              }
+            },
+            {
+              "id": "units-portal",
+              "type": "canvas",
+              "x": 8,
+              "y": 8,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "units-turnover-canvas",
+                "title": "Units and Turnover",
+                "nodeCount": 6
+              }
+            },
+            {
+              "id": "health-portal",
+              "type": "canvas",
+              "x": 364,
+              "y": 8,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "health-habitability-canvas",
+                "title": "Health and Habitability",
+                "nodeCount": 6
+              }
+            },
+            {
+              "id": "emergency-portal",
+              "type": "canvas",
+              "x": -348,
+              "y": 256,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "emergency-readiness-canvas",
+                "title": "Emergency Readiness",
+                "nodeCount": 6
+              }
+            },
+            {
+              "id": "capital-portal",
+              "type": "canvas",
+              "x": 8,
+              "y": 256,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "capital-plan-canvas",
+                "title": "Capital Plan",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "records-portal",
+              "type": "canvas",
+              "x": 364,
+              "y": 256,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "vendors-records-canvas",
+                "title": "Vendors and Records",
+                "nodeCount": 6
+              }
+            }
+          ]
+        }
+      },
+      "building-profile-canvas": {
+        "id": "building-profile-canvas",
+        "title": "Building Profile",
+        "parentCanvasId": "maintenance-plan-canvas",
+        "parentNodeId": "profile-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "property-facts",
+              "type": "card",
+              "x": -340,
+              "y": -168,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Property Facts",
+                "detail": "Built 1986. Four stories. 64 units. Elevator. Central domestic hot water. No on-site manager overnight.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "building-stack",
+              "type": "card",
+              "x": -24,
+              "y": -168,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Building Stack",
+                "detail": "Ground: lobby, laundry, trash. Floors 2-4: apartments. Roof: drains, exhaust, make-up air, antenna.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "resident-profile",
+              "type": "card",
+              "x": 292,
+              "y": -168,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Resident Profile",
+                "detail": "Families, older residents, shift workers, pets, delivery traffic, and accessibility needs shape maintenance timing.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "site-access-portal",
+              "type": "canvas",
+              "x": -184,
+              "y": 42,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "site-access-canvas",
+                "title": "Site Map and Access",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "utility-shutoffs-portal",
+              "type": "canvas",
+              "x": 172,
+              "y": 42,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "utility-shutoffs-canvas",
+                "title": "Utility Shutoffs",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "profile-note",
+              "type": "text",
+              "x": -232,
+              "y": 296,
+              "w": 604,
+              "h": 120,
+              "data": {
+                "text": "This view keeps orientation data close to the work. Every emergency flow and vendor visit depends on fast access to addresses, shutoffs, keys, and site constraints."
+              }
+            }
+          ]
+        }
+      },
+      "site-access-canvas": {
+        "id": "site-access-canvas",
+        "title": "Site Map and Access",
+        "parentCanvasId": "building-profile-canvas",
+        "parentNodeId": "site-access-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "front-entrance",
+              "type": "card",
+              "x": -340,
+              "y": -162,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Front Entrance",
+                "detail": "Main callbox, package shelf, lobby camera, fire panel, resident notices, and primary key box.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "service-entry",
+              "type": "card",
+              "x": -28,
+              "y": -162,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Service Entry",
+                "detail": "Trash room door, loading zone, janitor closet, vendor sign-in, and after-hours access route.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "parking-drainage",
+              "type": "card",
+              "x": 284,
+              "y": -162,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Parking and Drainage",
+                "detail": "Catch basins, snow pile zones, pothole tracking, lighting coverage, and tow/fire-lane markings.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "site-walk-check",
+              "type": "check",
+              "x": -340,
+              "y": 52,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Weekly Site Walk",
+                "items": [
+                  {
+                    "id": "site-walk-check-1",
+                    "text": "Clear fire lane and hydrant access",
+                    "checked": false
+                  },
+                  {
+                    "id": "site-walk-check-2",
+                    "text": "Check exterior lights and trip hazards",
+                    "checked": false
+                  },
+                  {
+                    "id": "site-walk-check-3",
+                    "text": "Inspect trash enclosure and bulk items",
+                    "checked": false
+                  },
+                  {
+                    "id": "site-walk-check-4",
+                    "text": "Look for ponding water or blocked drains",
+                    "checked": false
+                  },
+                  {
+                    "id": "site-walk-check-5",
+                    "text": "Confirm vendor access doors latch",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "site-note",
+              "type": "text",
+              "x": 36,
+              "y": 70,
+              "w": 520,
+              "h": 124,
+              "data": {
+                "text": "A site map is not decoration here. It is the operational memory for access, response time, resident impact, and recurring exterior issues."
+              }
+            }
+          ]
+        }
+      },
+      "utility-shutoffs-canvas": {
+        "id": "utility-shutoffs-canvas",
+        "title": "Utility Shutoffs",
+        "parentCanvasId": "building-profile-canvas",
+        "parentNodeId": "utility-shutoffs-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "water-main",
+              "type": "card",
+              "x": -340,
+              "y": -172,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Water Main",
+                "detail": "Mechanical room west wall. Tag valve, keep handle clear, and record every emergency shutoff.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "gas-electric",
+              "type": "card",
+              "x": -28,
+              "y": -172,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Gas and Electric",
+                "detail": "Meter room and main electrical panels require clear working space and controlled vendor access.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "fire-system-valves",
+              "type": "card",
+              "x": 284,
+              "y": -172,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Fire System Valves",
+                "detail": "Riser room valves, gauges, tamper switches, and drain paths need protection from storage creep.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "shutoff-check",
+              "type": "check",
+              "x": -340,
+              "y": 48,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Quarterly Shutoff Review",
+                "items": [
+                  {
+                    "id": "shutoff-check-1",
+                    "text": "Labels readable",
+                    "checked": false
+                  },
+                  {
+                    "id": "shutoff-check-2",
+                    "text": "Access path clear",
+                    "checked": false
+                  },
+                  {
+                    "id": "shutoff-check-3",
+                    "text": "Valve position documented",
+                    "checked": false
+                  },
+                  {
+                    "id": "shutoff-check-4",
+                    "text": "Staff know who can operate each shutoff",
+                    "checked": false
+                  },
+                  {
+                    "id": "shutoff-check-5",
+                    "text": "Emergency phone list posted",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "shutoff-note",
+              "type": "text",
+              "x": 36,
+              "y": 76,
+              "w": 520,
+              "h": 124,
+              "data": {
+                "text": "Do not improvise during a leak, outage, or alarm. This child view keeps locations, authority, and documentation duties together."
+              }
+            }
+          ]
+        }
+      },
+      "preventive-calendar-canvas": {
+        "id": "preventive-calendar-canvas",
+        "title": "Preventive Calendar",
+        "parentCanvasId": "maintenance-plan-canvas",
+        "parentNodeId": "calendar-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "daily-weekly-portal",
+              "type": "canvas",
+              "x": -336,
+              "y": -174,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "daily-weekly-canvas",
+                "title": "Daily and Weekly Rhythm",
+                "nodeCount": 4
+              }
+            },
+            {
+              "id": "monthly-quarterly-portal",
+              "type": "canvas",
+              "x": 20,
+              "y": -174,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "monthly-quarterly-canvas",
+                "title": "Monthly and Quarterly",
+                "nodeCount": 4
+              }
+            },
+            {
+              "id": "seasonal-annual-portal",
+              "type": "canvas",
+              "x": 376,
+              "y": -174,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "seasonal-annual-canvas",
+                "title": "Seasonal and Annual",
+                "nodeCount": 4
+              }
+            },
+            {
+              "id": "readiness-portal",
+              "type": "canvas",
+              "x": -158,
+              "y": 82,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "inspection-readiness-canvas",
+                "title": "Inspection Readiness",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "calendar-rule",
+              "type": "card",
+              "x": 198,
+              "y": 118,
+              "w": 316,
+              "h": 132,
+              "data": {
+                "title": "Cadence Rule",
+                "detail": "Recurring maintenance owns the calendar. Emergency work interrupts it, but should not erase it.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "calendar-note",
+              "type": "text",
+              "x": -204,
+              "y": 332,
+              "w": 616,
+              "h": 120,
+              "data": {
+                "text": "The calendar is organized by risk and frequency, not by department. That makes it easier to spot neglected systems before they become resident complaints."
+              }
+            }
+          ]
+        }
+      },
+      "daily-weekly-canvas": {
+        "id": "daily-weekly-canvas",
+        "title": "Daily and Weekly Rhythm",
+        "parentCanvasId": "preventive-calendar-canvas",
+        "parentNodeId": "daily-weekly-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "daily-weekly-check",
+              "type": "check",
+              "x": -348,
+              "y": -172,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Daily and Weekly Tasks",
+                "items": [
+                  {
+                    "id": "daily-weekly-check-1",
+                    "text": "Walk lobby, stairs, laundry, trash, and parking",
+                    "checked": false
+                  },
+                  {
+                    "id": "daily-weekly-check-2",
+                    "text": "Clear egress paths and blocked doors",
+                    "checked": false
+                  },
+                  {
+                    "id": "daily-weekly-check-3",
+                    "text": "Log urgent leaks, heat, lock, and safety calls",
+                    "checked": false
+                  },
+                  {
+                    "id": "daily-weekly-check-4",
+                    "text": "Check exterior lighting after dark weekly",
+                    "checked": false
+                  },
+                  {
+                    "id": "daily-weekly-check-5",
+                    "text": "Review unresolved emergency work orders",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "work-triage",
+              "type": "card",
+              "x": 20,
+              "y": -148,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Work Triage",
+                "detail": "Separate emergencies, habitability, scheduled repairs, cosmetic work, and capital issues at intake.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "housekeeping",
+              "type": "card",
+              "x": 332,
+              "y": -148,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Housekeeping Signals",
+                "detail": "Trash, odors, pests, clutter, and water marks often reveal system problems before residents report them.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "daily-note",
+              "type": "text",
+              "x": 20,
+              "y": 66,
+              "w": 584,
+              "h": 126,
+              "data": {
+                "text": "Daily walks protect the building from slow drift: storage in stairwells, failed lights, blocked drains, and small leaks."
+              }
+            }
+          ]
+        }
+      },
+      "monthly-quarterly-canvas": {
+        "id": "monthly-quarterly-canvas",
+        "title": "Monthly and Quarterly",
+        "parentCanvasId": "preventive-calendar-canvas",
+        "parentNodeId": "monthly-quarterly-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "monthly-check",
+              "type": "check",
+              "x": -348,
+              "y": -180,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Monthly Checks",
+                "items": [
+                  {
+                    "id": "monthly-check-1",
+                    "text": "Smoke and CO alarm sample checks",
+                    "checked": false
+                  },
+                  {
+                    "id": "monthly-check-2",
+                    "text": "Emergency lighting test log",
+                    "checked": false
+                  },
+                  {
+                    "id": "monthly-check-3",
+                    "text": "Common-area GFCI and lighting review",
+                    "checked": false
+                  },
+                  {
+                    "id": "monthly-check-4",
+                    "text": "Water temperature sample points",
+                    "checked": false
+                  },
+                  {
+                    "id": "monthly-check-5",
+                    "text": "Open work-order backlog review",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "quarterly-check",
+              "type": "check",
+              "x": 20,
+              "y": -180,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Quarterly Checks",
+                "items": [
+                  {
+                    "id": "quarterly-check-1",
+                    "text": "Roof and drain inspection",
+                    "checked": false
+                  },
+                  {
+                    "id": "quarterly-check-2",
+                    "text": "Mechanical room housekeeping",
+                    "checked": false
+                  },
+                  {
+                    "id": "quarterly-check-3",
+                    "text": "Pest trend review",
+                    "checked": false
+                  },
+                  {
+                    "id": "quarterly-check-4",
+                    "text": "Elevator service review",
+                    "checked": false
+                  },
+                  {
+                    "id": "quarterly-check-5",
+                    "text": "Vendor certificate file review",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "backlog-review",
+              "type": "card",
+              "x": 388,
+              "y": -156,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Backlog Review",
+                "detail": "Look for repeated unit lines, unresolved vendor tickets, missing photos, and stalled resident communication.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "monthly-note",
+              "type": "text",
+              "x": 44,
+              "y": 118,
+              "w": 572,
+              "h": 118,
+              "data": {
+                "text": "Monthly and quarterly reviews connect field observations with records. A checklist without follow-up is only a snapshot."
+              }
+            }
+          ]
+        }
+      },
+      "seasonal-annual-canvas": {
+        "id": "seasonal-annual-canvas",
+        "title": "Seasonal and Annual",
+        "parentCanvasId": "preventive-calendar-canvas",
+        "parentNodeId": "seasonal-annual-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "seasonal-check",
+              "type": "check",
+              "x": -348,
+              "y": -178,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Seasonal Readiness",
+                "items": [
+                  {
+                    "id": "seasonal-check-1",
+                    "text": "Spring: roof, gutters, exterior grading",
+                    "checked": false
+                  },
+                  {
+                    "id": "seasonal-check-2",
+                    "text": "Summer: cooling, pests, trash odors",
+                    "checked": false
+                  },
+                  {
+                    "id": "seasonal-check-3",
+                    "text": "Fall: heat startup, windows, leaf drains",
+                    "checked": false
+                  },
+                  {
+                    "id": "seasonal-check-4",
+                    "text": "Winter: freeze protection, ice control, backup heat plan",
+                    "checked": false
+                  },
+                  {
+                    "id": "seasonal-check-5",
+                    "text": "Storm season: resident notices and supplies",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "annual-check",
+              "type": "check",
+              "x": 20,
+              "y": -178,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Annual Reviews",
+                "items": [
+                  {
+                    "id": "annual-check-1",
+                    "text": "Unit inspection cycle",
+                    "checked": false
+                  },
+                  {
+                    "id": "annual-check-2",
+                    "text": "Fire protection inspections",
+                    "checked": false
+                  },
+                  {
+                    "id": "annual-check-3",
+                    "text": "Elevator inspection and certificates",
+                    "checked": false
+                  },
+                  {
+                    "id": "annual-check-4",
+                    "text": "Insurance and vendor contract review",
+                    "checked": false
+                  },
+                  {
+                    "id": "annual-check-5",
+                    "text": "Capital needs update",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "seasonal-proof",
+              "type": "card",
+              "x": 388,
+              "y": -150,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Proof Pack",
+                "detail": "Photos, dates, vendor reports, and correction notes make seasonal work visible months later.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "seasonal-note",
+              "type": "text",
+              "x": 44,
+              "y": 118,
+              "w": 572,
+              "h": 118,
+              "data": {
+                "text": "Seasonal maintenance is where operational planning and capital planning meet: the same roof leak can be a repair today and a replacement signal tomorrow."
+              }
+            }
+          ]
+        }
+      },
+      "inspection-readiness-canvas": {
+        "id": "inspection-readiness-canvas",
+        "title": "Inspection Readiness",
+        "parentCanvasId": "preventive-calendar-canvas",
+        "parentNodeId": "readiness-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "nspire-focus",
+              "type": "card",
+              "x": -348,
+              "y": -164,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Health and Safety First",
+                "detail": "Use HUD NSPIRE as a practical lens: health, safety, functional defects, and year-round maintenance.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "local-code",
+              "type": "card",
+              "x": -36,
+              "y": -164,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Local Code Check",
+                "detail": "Confirm adopted property maintenance, fire, elevator, and rental inspection rules with the local authority.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "evidence-binder",
+              "type": "card",
+              "x": 276,
+              "y": -164,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Evidence Binder",
+                "detail": "Keep inspection reports, deficiency corrections, photos, resident notices, vendor reports, and dates together.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "readiness-check",
+              "type": "check",
+              "x": -348,
+              "y": 52,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Before Any Formal Inspection",
+                "items": [
+                  {
+                    "id": "readiness-check-1",
+                    "text": "Walk units and common areas",
+                    "checked": false
+                  },
+                  {
+                    "id": "readiness-check-2",
+                    "text": "Correct life-safety items immediately",
+                    "checked": false
+                  },
+                  {
+                    "id": "readiness-check-3",
+                    "text": "Verify records and certificates are current",
+                    "checked": false
+                  },
+                  {
+                    "id": "readiness-check-4",
+                    "text": "Document inaccessible areas and follow-up",
+                    "checked": false
+                  },
+                  {
+                    "id": "readiness-check-5",
+                    "text": "Assign one owner for deficiency closure",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "readiness-note",
+              "type": "text",
+              "x": 36,
+              "y": 76,
+              "w": 520,
+              "h": 118,
+              "data": {
+                "text": "The goal is not to prepare at the last minute. The goal is to make inspection readiness the normal state of the building."
+              }
+            }
+          ]
+        }
+      },
+      "life-safety-canvas": {
+        "id": "life-safety-canvas",
+        "title": "Life Safety",
+        "parentCanvasId": "maintenance-plan-canvas",
+        "parentNodeId": "life-safety-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "fire-protection-portal",
+              "type": "canvas",
+              "x": -338,
+              "y": -170,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "fire-protection-canvas",
+                "title": "Fire Protection",
+                "nodeCount": 6
+              }
+            },
+            {
+              "id": "egress-lighting-portal",
+              "type": "canvas",
+              "x": 18,
+              "y": -170,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "egress-lighting-canvas",
+                "title": "Egress and Lighting",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "elevator-safety-portal",
+              "type": "canvas",
+              "x": 374,
+              "y": -170,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "elevator-safety-canvas",
+                "title": "Elevator Safety",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "life-safety-check",
+              "type": "check",
+              "x": -338,
+              "y": 96,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Immediate Life-Safety Sweep",
+                "items": [
+                  {
+                    "id": "life-safety-check-1",
+                    "text": "No blocked exits or stairwells",
+                    "checked": false
+                  },
+                  {
+                    "id": "life-safety-check-2",
+                    "text": "Fire doors close and latch",
+                    "checked": false
+                  },
+                  {
+                    "id": "life-safety-check-3",
+                    "text": "Exit signs visible",
+                    "checked": false
+                  },
+                  {
+                    "id": "life-safety-check-4",
+                    "text": "Emergency lights tested",
+                    "checked": false
+                  },
+                  {
+                    "id": "life-safety-check-5",
+                    "text": "Fire panel trouble conditions assigned",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "life-safety-note",
+              "type": "text",
+              "x": 34,
+              "y": 126,
+              "w": 604,
+              "h": 120,
+              "data": {
+                "text": "Life-safety work needs fast visibility across roles. This view separates fire systems, escape paths, and elevator obligations without losing the building-level picture."
+              }
+            }
+          ]
+        }
+      },
+      "fire-protection-canvas": {
+        "id": "fire-protection-canvas",
+        "title": "Fire Protection",
+        "parentCanvasId": "life-safety-canvas",
+        "parentNodeId": "fire-protection-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "fire-alarm",
+              "type": "card",
+              "x": -348,
+              "y": -174,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Fire Alarm",
+                "detail": "Panel status, monitoring account, annual inspection, trouble signals, pull stations, horns/strobes, and deficiency reports.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "sprinklers",
+              "type": "card",
+              "x": -36,
+              "y": -174,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Sprinklers and Standpipe",
+                "detail": "Riser room access, valves, gauges, drains, five-year items, impairment steps, and licensed inspections.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "extinguishers",
+              "type": "card",
+              "x": 276,
+              "y": -174,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Extinguishers",
+                "detail": "Monthly visual check, annual service tags, correct mounting, clear access, and replacement tracking.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "smoke-co",
+              "type": "card",
+              "x": -348,
+              "y": 28,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Smoke and CO Alarms",
+                "detail": "Unit and common-area device checks, battery policy, resident reporting, and replacement dates.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "fire-monthly-check",
+              "type": "check",
+              "x": -36,
+              "y": 28,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Monthly Fire Safety Walk",
+                "items": [
+                  {
+                    "id": "fire-monthly-check-1",
+                    "text": "Panel normal or issue assigned",
+                    "checked": false
+                  },
+                  {
+                    "id": "fire-monthly-check-2",
+                    "text": "Extinguishers present and tagged",
+                    "checked": false
+                  },
+                  {
+                    "id": "fire-monthly-check-3",
+                    "text": "Riser room clear",
+                    "checked": false
+                  },
+                  {
+                    "id": "fire-monthly-check-4",
+                    "text": "Fire doors close and latch",
+                    "checked": false
+                  },
+                  {
+                    "id": "fire-monthly-check-5",
+                    "text": "No storage in electrical/fire rooms",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "fire-source-note",
+              "type": "text",
+              "x": 336,
+              "y": 58,
+              "w": 292,
+              "h": 154,
+              "data": {
+                "text": "Reference lens: NFPA 25 for water-based fire protection ITM, NFPA 72 for alarm ITM, plus local fire marshal requirements."
+              }
+            }
+          ]
+        }
+      },
+      "egress-lighting-canvas": {
+        "id": "egress-lighting-canvas",
+        "title": "Egress and Lighting",
+        "parentCanvasId": "life-safety-canvas",
+        "parentNodeId": "egress-lighting-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "stairs",
+              "type": "card",
+              "x": -348,
+              "y": -158,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Stairwells",
+                "detail": "No storage, no propped doors, working closers, handrails intact, lighting adequate, tread hazards corrected.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "corridors",
+              "type": "card",
+              "x": -36,
+              "y": -158,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Corridors",
+                "detail": "Clear width, no trip hazards, functioning lights, visible unit numbers, and resident notice boards managed.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "exterior-exits",
+              "type": "card",
+              "x": 276,
+              "y": -158,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Exterior Exits",
+                "detail": "Snow/ice control, panic hardware, door sweep condition, lighting, and landing drainage.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "egress-check",
+              "type": "check",
+              "x": -348,
+              "y": 54,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Weekly Egress Walk",
+                "items": [
+                  {
+                    "id": "egress-check-1",
+                    "text": "Walk each stair top to bottom",
+                    "checked": false
+                  },
+                  {
+                    "id": "egress-check-2",
+                    "text": "Pull closed every rated door",
+                    "checked": false
+                  },
+                  {
+                    "id": "egress-check-3",
+                    "text": "Check emergency lights and exits",
+                    "checked": false
+                  },
+                  {
+                    "id": "egress-check-4",
+                    "text": "Remove stored items",
+                    "checked": false
+                  },
+                  {
+                    "id": "egress-check-5",
+                    "text": "Create work orders with photos",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "egress-note",
+              "type": "text",
+              "x": 36,
+              "y": 82,
+              "w": 520,
+              "h": 122,
+              "data": {
+                "text": "Egress is a habit, not a file. Blocked paths and failed lighting are visible defects that can become severe quickly."
+              }
+            }
+          ]
+        }
+      },
+      "elevator-safety-canvas": {
+        "id": "elevator-safety-canvas",
+        "title": "Elevator Safety",
+        "parentCanvasId": "life-safety-canvas",
+        "parentNodeId": "elevator-safety-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "elevator-contract",
+              "type": "card",
+              "x": -348,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Service Contract",
+                "detail": "Monthly service, callback terms, parts exclusions, emergency phone, and response time expectations.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "elevator-certs",
+              "type": "card",
+              "x": -36,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Certificates",
+                "detail": "Annual inspection records, deficiency corrections, jurisdiction filings, and posted permit/certificate status.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "outage-plan",
+              "type": "card",
+              "x": 276,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Outage Plan",
+                "detail": "Resident notices, mobility support, vendor escalation, manager coverage, and after-hours communication.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "elevator-monthly-check",
+              "type": "check",
+              "x": -348,
+              "y": 52,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Monthly Owner Check",
+                "items": [
+                  {
+                    "id": "elevator-monthly-check-1",
+                    "text": "Ride car and listen for issues",
+                    "checked": false
+                  },
+                  {
+                    "id": "elevator-monthly-check-2",
+                    "text": "Check cab phone/emergency button",
+                    "checked": false
+                  },
+                  {
+                    "id": "elevator-monthly-check-3",
+                    "text": "Inspect door operation",
+                    "checked": false
+                  },
+                  {
+                    "id": "elevator-monthly-check-4",
+                    "text": "Confirm machine room clear",
+                    "checked": false
+                  },
+                  {
+                    "id": "elevator-monthly-check-5",
+                    "text": "Review open vendor items",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "elevator-note",
+              "type": "text",
+              "x": 36,
+              "y": 82,
+              "w": 520,
+              "h": 120,
+              "data": {
+                "text": "Elevator rules vary by jurisdiction. This view keeps owner duties, contractor work, inspections, and resident impact in one place."
+              }
+            }
+          ]
+        }
+      },
+      "building-systems-canvas": {
+        "id": "building-systems-canvas",
+        "title": "Building Systems",
+        "parentCanvasId": "maintenance-plan-canvas",
+        "parentNodeId": "systems-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "plumbing-water-portal",
+              "type": "canvas",
+              "x": -348,
+              "y": -202,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "plumbing-water-canvas",
+                "title": "Plumbing and Water",
+                "nodeCount": 6
+              }
+            },
+            {
+              "id": "hvac-ventilation-portal",
+              "type": "canvas",
+              "x": 8,
+              "y": -202,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "hvac-ventilation-canvas",
+                "title": "HVAC and Ventilation",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "electrical-portal",
+              "type": "canvas",
+              "x": 364,
+              "y": -202,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "electrical-canvas",
+                "title": "Electrical",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "roof-envelope-portal",
+              "type": "canvas",
+              "x": -348,
+              "y": 46,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "roof-envelope-canvas",
+                "title": "Roof and Envelope",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "grounds-portal",
+              "type": "canvas",
+              "x": 8,
+              "y": 46,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "site-grounds-canvas",
+                "title": "Site and Grounds",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "systems-rule",
+              "type": "card",
+              "x": 364,
+              "y": 294,
+              "w": 316,
+              "h": 132,
+              "data": {
+                "title": "Systems Rule",
+                "detail": "A failed building system usually creates work in multiple views: resident impact, vendor call, record, and capital signal.",
+                "accent": "system"
+              }
+            }
+          ]
+        }
+      },
+      "plumbing-water-canvas": {
+        "id": "plumbing-water-canvas",
+        "title": "Plumbing and Water",
+        "parentCanvasId": "building-systems-canvas",
+        "parentNodeId": "plumbing-water-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "domestic-hot-water",
+              "type": "card",
+              "x": -348,
+              "y": -170,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Domestic Hot Water",
+                "detail": "Boilers/tanks, circulation pumps, mixing valves, sample points, temperature log, and scald controls.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "leak-response",
+              "type": "card",
+              "x": -36,
+              "y": -170,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Leak Response",
+                "detail": "Stop water, protect electrical, notify affected residents, dry materials, photograph, and track root cause.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "sewer-drains",
+              "type": "card",
+              "x": 276,
+              "y": -170,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Sewer and Drains",
+                "detail": "Main cleanouts, stack history, floor drains, roof drains, catch basins, and recurring backup locations.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "legionella",
+              "type": "card",
+              "x": -348,
+              "y": 34,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Water Quality Risk",
+                "detail": "Complex water systems need temperature control, flushing after low use, and a responsible water-management team.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "plumbing-check",
+              "type": "check",
+              "x": -36,
+              "y": 34,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Water System Tasks",
+                "items": [
+                  {
+                    "id": "plumbing-check-1",
+                    "text": "Check hot-water temperatures",
+                    "checked": false
+                  },
+                  {
+                    "id": "plumbing-check-2",
+                    "text": "Flush low-use fixtures as needed",
+                    "checked": false
+                  },
+                  {
+                    "id": "plumbing-check-3",
+                    "text": "Inspect mechanical room leaks",
+                    "checked": false
+                  },
+                  {
+                    "id": "plumbing-check-4",
+                    "text": "Exercise accessible valves",
+                    "checked": false
+                  },
+                  {
+                    "id": "plumbing-check-5",
+                    "text": "Log resident hot/cold complaints",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "plumbing-note",
+              "type": "text",
+              "x": 336,
+              "y": 62,
+              "w": 292,
+              "h": 154,
+              "data": {
+                "text": "Reference lens: EPA and CDC-oriented Legionella guidance recommends water management programs for multifamily and complex building water systems."
+              }
+            }
+          ]
+        }
+      },
+      "hvac-ventilation-canvas": {
+        "id": "hvac-ventilation-canvas",
+        "title": "HVAC and Ventilation",
+        "parentCanvasId": "building-systems-canvas",
+        "parentNodeId": "hvac-ventilation-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "hvac-inventory",
+              "type": "card",
+              "x": -348,
+              "y": -170,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Equipment Inventory",
+                "detail": "Unit heat pumps, make-up air, exhaust fans, thermostats, filters, age, model, warranty, and access notes.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "filters-belts",
+              "type": "card",
+              "x": -36,
+              "y": -170,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Filters and Belts",
+                "detail": "Replacement cadence, resident access limits, rooftop safety, contractor scope, and evidence photos.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "exhaust-ventilation",
+              "type": "card",
+              "x": 276,
+              "y": -170,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Exhaust and Ventilation",
+                "detail": "Bath fans, kitchen exhaust, corridor pressurization, odors, humidity, and airflow complaints.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "hvac-seasonal-check",
+              "type": "check",
+              "x": -348,
+              "y": 48,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Heating/Cooling Season Start",
+                "items": [
+                  {
+                    "id": "hvac-seasonal-check-1",
+                    "text": "Service common equipment",
+                    "checked": false
+                  },
+                  {
+                    "id": "hvac-seasonal-check-2",
+                    "text": "Replace filters",
+                    "checked": false
+                  },
+                  {
+                    "id": "hvac-seasonal-check-3",
+                    "text": "Test thermostats and controls",
+                    "checked": false
+                  },
+                  {
+                    "id": "hvac-seasonal-check-4",
+                    "text": "Check condensate drains",
+                    "checked": false
+                  },
+                  {
+                    "id": "hvac-seasonal-check-5",
+                    "text": "Track units with repeated calls",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "hvac-note",
+              "type": "text",
+              "x": 36,
+              "y": 76,
+              "w": 520,
+              "h": 118,
+              "data": {
+                "text": "Reference lens: ASHRAE multifamily guidance focuses on HVAC operation, maintenance, ventilation, and airflow."
+              }
+            }
+          ]
+        }
+      },
+      "electrical-canvas": {
+        "id": "electrical-canvas",
+        "title": "Electrical",
+        "parentCanvasId": "building-systems-canvas",
+        "parentNodeId": "electrical-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "main-panels",
+              "type": "card",
+              "x": -348,
+              "y": -162,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Main Panels",
+                "detail": "Clear working space, locked access, labeling, thermography notes, and licensed electrician changes.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "common-lighting",
+              "type": "card",
+              "x": -36,
+              "y": -162,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Common Lighting",
+                "detail": "Corridors, stairs, exterior, parking, laundry, trash, emergency lighting, and bulb/fixture standards.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "unit-devices",
+              "type": "card",
+              "x": 276,
+              "y": -162,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Unit Devices",
+                "detail": "GFCI/AFCI issues, loose outlets, fan/light controls, range circuits, and resident repair boundaries.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "electrical-check",
+              "type": "check",
+              "x": -348,
+              "y": 54,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Monthly Electrical Walk",
+                "items": [
+                  {
+                    "id": "electrical-check-1",
+                    "text": "Panel rooms clear",
+                    "checked": false
+                  },
+                  {
+                    "id": "electrical-check-2",
+                    "text": "No open junction boxes",
+                    "checked": false
+                  },
+                  {
+                    "id": "electrical-check-3",
+                    "text": "Common lights working",
+                    "checked": false
+                  },
+                  {
+                    "id": "electrical-check-4",
+                    "text": "GFCI sample test",
+                    "checked": false
+                  },
+                  {
+                    "id": "electrical-check-5",
+                    "text": "Emergency items assigned",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "electrical-note",
+              "type": "text",
+              "x": 36,
+              "y": 82,
+              "w": 520,
+              "h": 118,
+              "data": {
+                "text": "Electrical work needs bright boundaries: staff can observe and document, but licensed work and local code decide who repairs."
+              }
+            }
+          ]
+        }
+      },
+      "roof-envelope-canvas": {
+        "id": "roof-envelope-canvas",
+        "title": "Roof and Envelope",
+        "parentCanvasId": "building-systems-canvas",
+        "parentNodeId": "roof-envelope-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "roof-membrane",
+              "type": "card",
+              "x": -348,
+              "y": -170,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Roof Membrane",
+                "detail": "Punctures, blisters, seams, ponding, patches, walkway pads, contractor reports, and warranty limits.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "drains-gutters",
+              "type": "card",
+              "x": -36,
+              "y": -170,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Drains and Gutters",
+                "detail": "Roof drains, scuppers, downspouts, leaf loads, ice risk, and overflow evidence.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "windows-facade",
+              "type": "card",
+              "x": 276,
+              "y": -170,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Windows and Facade",
+                "detail": "Sealant, flashing, cracks, failed balances, screens, air leaks, and recurring unit water stains.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "envelope-check",
+              "type": "check",
+              "x": -348,
+              "y": 48,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "After Heavy Rain",
+                "items": [
+                  {
+                    "id": "envelope-check-1",
+                    "text": "Check roof drains",
+                    "checked": false
+                  },
+                  {
+                    "id": "envelope-check-2",
+                    "text": "Walk top-floor ceilings",
+                    "checked": false
+                  },
+                  {
+                    "id": "envelope-check-3",
+                    "text": "Inspect known leak units",
+                    "checked": false
+                  },
+                  {
+                    "id": "envelope-check-4",
+                    "text": "Photograph ponding or stains",
+                    "checked": false
+                  },
+                  {
+                    "id": "envelope-check-5",
+                    "text": "Open work orders before dry-out hides evidence",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "envelope-note",
+              "type": "text",
+              "x": 36,
+              "y": 76,
+              "w": 520,
+              "h": 120,
+              "data": {
+                "text": "The envelope is where small defects travel. A roof drain issue can become ceiling damage, mold risk, insurance work, and capital planning."
+              }
+            }
+          ]
+        }
+      },
+      "site-grounds-canvas": {
+        "id": "site-grounds-canvas",
+        "title": "Site and Grounds",
+        "parentCanvasId": "building-systems-canvas",
+        "parentNodeId": "grounds-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "parking-lot",
+              "type": "card",
+              "x": -348,
+              "y": -162,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Parking Lot",
+                "detail": "Potholes, striping, ADA spaces, drainage, snow storage, lighting, tow signs, and trip hazards.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "landscape",
+              "type": "card",
+              "x": -36,
+              "y": -162,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Landscape",
+                "detail": "Trees near roof or wires, irrigation leaks, erosion, pest harborage, and defensible space where applicable.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "trash-pest-zone",
+              "type": "card",
+              "x": 276,
+              "y": -162,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Trash and Pest Zone",
+                "detail": "Dumpster pads, doors, bulk pickup, odors, resident misuse, vendor pickup failures, and pest logs.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "grounds-check",
+              "type": "check",
+              "x": -348,
+              "y": 54,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Grounds Walk",
+                "items": [
+                  {
+                    "id": "grounds-check-1",
+                    "text": "Inspect sidewalks and stairs",
+                    "checked": false
+                  },
+                  {
+                    "id": "grounds-check-2",
+                    "text": "Check drains and ponding",
+                    "checked": false
+                  },
+                  {
+                    "id": "grounds-check-3",
+                    "text": "Confirm trash area is contained",
+                    "checked": false
+                  },
+                  {
+                    "id": "grounds-check-4",
+                    "text": "Record lighting failures",
+                    "checked": false
+                  },
+                  {
+                    "id": "grounds-check-5",
+                    "text": "Flag tree or ice hazards",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "grounds-note",
+              "type": "text",
+              "x": 36,
+              "y": 82,
+              "w": 520,
+              "h": 118,
+              "data": {
+                "text": "Exterior maintenance affects safety, resident satisfaction, pest control, storm performance, and insurance exposure."
+              }
+            }
+          ]
+        }
+      },
+      "units-turnover-canvas": {
+        "id": "units-turnover-canvas",
+        "title": "Units and Turnover",
+        "parentCanvasId": "maintenance-plan-canvas",
+        "parentNodeId": "units-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "unit-inspections-portal",
+              "type": "canvas",
+              "x": -338,
+              "y": -180,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "unit-inspections-canvas",
+                "title": "Unit Inspections",
+                "nodeCount": 4
+              }
+            },
+            {
+              "id": "turnover-portal",
+              "type": "canvas",
+              "x": 18,
+              "y": -180,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "turnover-flow-canvas",
+                "title": "Turnover Flow",
+                "nodeCount": 4
+              }
+            },
+            {
+              "id": "appliances-portal",
+              "type": "canvas",
+              "x": 374,
+              "y": -180,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "appliance-program-canvas",
+                "title": "Appliance Program",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "resident-requests-portal",
+              "type": "canvas",
+              "x": -160,
+              "y": 78,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "resident-requests-canvas",
+                "title": "Resident Requests",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "unit-patterns",
+              "type": "card",
+              "x": 198,
+              "y": 116,
+              "w": 316,
+              "h": 132,
+              "data": {
+                "title": "Pattern Watch",
+                "detail": "Repeated calls in one line, stack, floor, appliance model, or season should become system work.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "units-note",
+              "type": "text",
+              "x": -204,
+              "y": 332,
+              "w": 616,
+              "h": 118,
+              "data": {
+                "text": "Unit work is where residents experience the maintenance system. The same work order may also reveal a building-system failure or capital need."
+              }
+            }
+          ]
+        }
+      },
+      "unit-inspections-canvas": {
+        "id": "unit-inspections-canvas",
+        "title": "Unit Inspections",
+        "parentCanvasId": "units-turnover-canvas",
+        "parentNodeId": "unit-inspections-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "unit-inspection-check",
+              "type": "check",
+              "x": -348,
+              "y": -182,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Annual Unit Inspection",
+                "items": [
+                  {
+                    "id": "unit-inspection-check-1",
+                    "text": "Smoke and CO alarms present and working",
+                    "checked": false
+                  },
+                  {
+                    "id": "unit-inspection-check-2",
+                    "text": "Leaks under sinks and around fixtures",
+                    "checked": false
+                  },
+                  {
+                    "id": "unit-inspection-check-3",
+                    "text": "HVAC filters and airflow",
+                    "checked": false
+                  },
+                  {
+                    "id": "unit-inspection-check-4",
+                    "text": "Windows, locks, doors, and egress",
+                    "checked": false
+                  },
+                  {
+                    "id": "unit-inspection-check-5",
+                    "text": "Electrical covers, GFCI, and visible hazards",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "wet-areas",
+              "type": "card",
+              "x": 20,
+              "y": -152,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Wet Areas",
+                "detail": "Bathrooms, kitchens, water heater closets, washer boxes, and ceiling stains are high-value inspection targets.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "resident-access",
+              "type": "card",
+              "x": 332,
+              "y": -152,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Resident Access",
+                "detail": "Notices, appointments, pets, privacy, language needs, no-access attempts, and follow-up are part of the record.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "unit-inspection-note",
+              "type": "text",
+              "x": 20,
+              "y": 72,
+              "w": 584,
+              "h": 122,
+              "data": {
+                "text": "A unit inspection is both a resident service and a building-system diagnostic. Track trends, not only pass/fail findings."
+              }
+            }
+          ]
+        }
+      },
+      "turnover-flow-canvas": {
+        "id": "turnover-flow-canvas",
+        "title": "Turnover Flow",
+        "parentCanvasId": "units-turnover-canvas",
+        "parentNodeId": "turnover-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "turnover-check",
+              "type": "check",
+              "x": -348,
+              "y": -182,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Move-Out to Ready",
+                "items": [
+                  {
+                    "id": "turnover-check-1",
+                    "text": "Document condition with photos",
+                    "checked": false
+                  },
+                  {
+                    "id": "turnover-check-2",
+                    "text": "Change locks and access codes",
+                    "checked": false
+                  },
+                  {
+                    "id": "turnover-check-3",
+                    "text": "Test plumbing, electrical, HVAC, alarms",
+                    "checked": false
+                  },
+                  {
+                    "id": "turnover-check-4",
+                    "text": "Repair safety and habitability first",
+                    "checked": false
+                  },
+                  {
+                    "id": "turnover-check-5",
+                    "text": "Final clean, punch, and manager sign-off",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "scope-control",
+              "type": "card",
+              "x": 20,
+              "y": -152,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Scope Control",
+                "detail": "Separate resident damage, normal wear, capital defects, vendor work, and rent-ready cosmetics.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "days-vacant",
+              "type": "card",
+              "x": 332,
+              "y": -152,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Days Vacant",
+                "detail": "Track average days from move-out to ready. Delays reveal staffing, vendor, parts, or decision bottlenecks.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "turnover-note",
+              "type": "text",
+              "x": 20,
+              "y": 72,
+              "w": 584,
+              "h": 122,
+              "data": {
+                "text": "Turnover should produce records useful for deposit decisions, future repairs, and maintenance planning."
+              }
+            }
+          ]
+        }
+      },
+      "appliance-program-canvas": {
+        "id": "appliance-program-canvas",
+        "title": "Appliance Program",
+        "parentCanvasId": "units-turnover-canvas",
+        "parentNodeId": "appliances-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "appliance-inventory",
+              "type": "card",
+              "x": -348,
+              "y": -162,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Inventory",
+                "detail": "Model, serial, age, warranty, location, repeated repair history, and spare-part compatibility.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "repair-replace",
+              "type": "card",
+              "x": -36,
+              "y": -162,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Repair or Replace",
+                "detail": "Use age, failure type, parts delay, resident impact, and repeated calls to decide.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "laundry-room",
+              "type": "card",
+              "x": 276,
+              "y": -162,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Laundry Room",
+                "detail": "Vendor equipment, lint, drains, flooring, ventilation, lighting, payment system, and resident complaints.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "appliance-check",
+              "type": "check",
+              "x": -348,
+              "y": 54,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Appliance Record",
+                "items": [
+                  {
+                    "id": "appliance-check-1",
+                    "text": "Record model and serial",
+                    "checked": false
+                  },
+                  {
+                    "id": "appliance-check-2",
+                    "text": "Attach repair photos/invoice",
+                    "checked": false
+                  },
+                  {
+                    "id": "appliance-check-3",
+                    "text": "Check water lines and vents",
+                    "checked": false
+                  },
+                  {
+                    "id": "appliance-check-4",
+                    "text": "Update replacement forecast",
+                    "checked": false
+                  },
+                  {
+                    "id": "appliance-check-5",
+                    "text": "Close resident communication",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "appliance-note",
+              "type": "text",
+              "x": 36,
+              "y": 82,
+              "w": 520,
+              "h": 118,
+              "data": {
+                "text": "Appliance work looks small until patterns emerge. Records help distinguish one-off repairs from a portfolio replacement issue."
+              }
+            }
+          ]
+        }
+      },
+      "resident-requests-canvas": {
+        "id": "resident-requests-canvas",
+        "title": "Resident Requests",
+        "parentCanvasId": "units-turnover-canvas",
+        "parentNodeId": "resident-requests-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "intake",
+              "type": "card",
+              "x": -348,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Intake",
+                "detail": "Who, unit, issue, urgency, access permission, pets, photos, symptoms, and preferred communication channel.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "triage",
+              "type": "card",
+              "x": -36,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Triage",
+                "detail": "Emergency, habitability, scheduled repair, vendor needed, duplicate, resident responsibility, or capital signal.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "closeout",
+              "type": "card",
+              "x": 276,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Closeout",
+                "detail": "What changed, who did it, photos, materials, resident notice, follow-up date, and unresolved next step.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "request-check",
+              "type": "check",
+              "x": -348,
+              "y": 52,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Work Order Quality",
+                "items": [
+                  {
+                    "id": "request-check-1",
+                    "text": "Resident impact is clear",
+                    "checked": false
+                  },
+                  {
+                    "id": "request-check-2",
+                    "text": "Access notes included",
+                    "checked": false
+                  },
+                  {
+                    "id": "request-check-3",
+                    "text": "Priority assigned",
+                    "checked": false
+                  },
+                  {
+                    "id": "request-check-4",
+                    "text": "Photo or observation attached",
+                    "checked": false
+                  },
+                  {
+                    "id": "request-check-5",
+                    "text": "Closeout explains result",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "request-note",
+              "type": "text",
+              "x": 36,
+              "y": 82,
+              "w": 520,
+              "h": 118,
+              "data": {
+                "text": "A request is not only a task. It is a signal about resident trust, system health, and how well the team communicates."
+              }
+            }
+          ]
+        }
+      },
+      "health-habitability-canvas": {
+        "id": "health-habitability-canvas",
+        "title": "Health and Habitability",
+        "parentCanvasId": "maintenance-plan-canvas",
+        "parentNodeId": "health-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "moisture-mold-portal",
+              "type": "canvas",
+              "x": -338,
+              "y": -180,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "moisture-mold-canvas",
+                "title": "Moisture and Mold",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "pest-sanitation-portal",
+              "type": "canvas",
+              "x": 18,
+              "y": -180,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "pest-sanitation-canvas",
+                "title": "Pest and Sanitation",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "indoor-air-portal",
+              "type": "canvas",
+              "x": 374,
+              "y": -180,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "indoor-air-canvas",
+                "title": "Indoor Air",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "older-materials-portal",
+              "type": "canvas",
+              "x": -160,
+              "y": 78,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "older-materials-canvas",
+                "title": "Older Building Materials",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "habitability-fast-check",
+              "type": "check",
+              "x": 198,
+              "y": 96,
+              "w": 320,
+              "h": 222,
+              "data": {
+                "title": "Habitability Fast Check",
+                "items": [
+                  {
+                    "id": "habitability-fast-check-1",
+                    "text": "Heat or cooling complaint assigned",
+                    "checked": false
+                  },
+                  {
+                    "id": "habitability-fast-check-2",
+                    "text": "Active leaks escalated",
+                    "checked": false
+                  },
+                  {
+                    "id": "habitability-fast-check-3",
+                    "text": "Mold/moisture source identified",
+                    "checked": false
+                  },
+                  {
+                    "id": "habitability-fast-check-4",
+                    "text": "Pest trend reviewed",
+                    "checked": false
+                  },
+                  {
+                    "id": "habitability-fast-check-5",
+                    "text": "Trash and odors contained",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "habitability-note",
+              "type": "text",
+              "x": -204,
+              "y": 332,
+              "w": 616,
+              "h": 118,
+              "data": {
+                "text": "Health and habitability views turn scattered complaints into visible patterns: moisture paths, air movement, pests, materials, and resident impact."
+              }
+            }
+          ]
+        }
+      },
+      "moisture-mold-canvas": {
+        "id": "moisture-mold-canvas",
+        "title": "Moisture and Mold",
+        "parentCanvasId": "health-habitability-canvas",
+        "parentNodeId": "moisture-mold-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "source-control",
+              "type": "card",
+              "x": -348,
+              "y": -174,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Source Control",
+                "detail": "Find and stop water first: roof, plumbing, condensation, exterior grading, HVAC condensate, or resident fixture use.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "dry-out-clock",
+              "type": "card",
+              "x": -36,
+              "y": -174,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Dry-Out Clock",
+                "detail": "Fast drying, material decisions, humidity control, photos, and follow-up prevent repeat damage.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "resident-communication",
+              "type": "card",
+              "x": 276,
+              "y": -174,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Resident Communication",
+                "detail": "Explain access, drying equipment, containment, cleaning scope, and what will happen next.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "moisture-check",
+              "type": "check",
+              "x": -348,
+              "y": 34,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Moisture Response",
+                "items": [
+                  {
+                    "id": "moisture-check-1",
+                    "text": "Stop water source",
+                    "checked": false
+                  },
+                  {
+                    "id": "moisture-check-2",
+                    "text": "Protect residents and contents",
+                    "checked": false
+                  },
+                  {
+                    "id": "moisture-check-3",
+                    "text": "Photograph affected materials",
+                    "checked": false
+                  },
+                  {
+                    "id": "moisture-check-4",
+                    "text": "Start drying or vendor escalation",
+                    "checked": false
+                  },
+                  {
+                    "id": "moisture-check-5",
+                    "text": "Schedule follow-up inspection",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "mold-source-note",
+              "type": "text",
+              "x": 36,
+              "y": 76,
+              "w": 520,
+              "h": 118,
+              "data": {
+                "text": "Reference lens: EPA states that mold control is moisture control. Cleanup without source control is incomplete."
+              }
+            }
+          ]
+        }
+      },
+      "pest-sanitation-canvas": {
+        "id": "pest-sanitation-canvas",
+        "title": "Pest and Sanitation",
+        "parentCanvasId": "health-habitability-canvas",
+        "parentNodeId": "pest-sanitation-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "trash-control",
+              "type": "card",
+              "x": -348,
+              "y": -162,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Trash Control",
+                "detail": "Dumpster capacity, pickup misses, bulk items, chute/room cleaning, odors, resident notices, and vendor logs.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "exclusion",
+              "type": "card",
+              "x": -36,
+              "y": -162,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Exclusion",
+                "detail": "Seal penetrations, sweeps, screens, pipe chases, trash doors, and exterior gaps before repeated treatment.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "treatment-log",
+              "type": "card",
+              "x": 276,
+              "y": -162,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Treatment Log",
+                "detail": "Unit reports, pest type, prep compliance, vendor treatment, follow-up date, and trend map.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "pest-check",
+              "type": "check",
+              "x": -348,
+              "y": 54,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Monthly Pest Review",
+                "items": [
+                  {
+                    "id": "pest-check-1",
+                    "text": "Review reports by line/floor",
+                    "checked": false
+                  },
+                  {
+                    "id": "pest-check-2",
+                    "text": "Inspect trash and laundry areas",
+                    "checked": false
+                  },
+                  {
+                    "id": "pest-check-3",
+                    "text": "Check exterior openings",
+                    "checked": false
+                  },
+                  {
+                    "id": "pest-check-4",
+                    "text": "Confirm vendor follow-ups",
+                    "checked": false
+                  },
+                  {
+                    "id": "pest-check-5",
+                    "text": "Send targeted resident notices",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "pest-note",
+              "type": "text",
+              "x": 36,
+              "y": 82,
+              "w": 520,
+              "h": 118,
+              "data": {
+                "text": "Pest control is shared system work. The map should connect building conditions, housekeeping, vendors, and resident communication."
+              }
+            }
+          ]
+        }
+      },
+      "indoor-air-canvas": {
+        "id": "indoor-air-canvas",
+        "title": "Indoor Air",
+        "parentCanvasId": "health-habitability-canvas",
+        "parentNodeId": "indoor-air-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "ventilation",
+              "type": "card",
+              "x": -348,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Ventilation",
+                "detail": "Bath and kitchen exhaust, corridor airflow, make-up air, odors, pressure issues, and humidity complaints.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "combustion",
+              "type": "card",
+              "x": -36,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Combustion Safety",
+                "detail": "CO alarms, gas appliances, water heaters, boilers, flues, and vendor documentation where applicable.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "radon-smoking",
+              "type": "card",
+              "x": 276,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Radon and Smoke",
+                "detail": "Regional radon policy, smoking complaints, infiltration paths, notices, testing records, and mitigation decisions.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "iaq-check",
+              "type": "check",
+              "x": -348,
+              "y": 52,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Indoor Air Signals",
+                "items": [
+                  {
+                    "id": "iaq-check-1",
+                    "text": "Track odor complaints",
+                    "checked": false
+                  },
+                  {
+                    "id": "iaq-check-2",
+                    "text": "Check exhaust fans",
+                    "checked": false
+                  },
+                  {
+                    "id": "iaq-check-3",
+                    "text": "Review CO alarm events",
+                    "checked": false
+                  },
+                  {
+                    "id": "iaq-check-4",
+                    "text": "Inspect humidity and condensation",
+                    "checked": false
+                  },
+                  {
+                    "id": "iaq-check-5",
+                    "text": "Escalate repeated respiratory/odor concerns",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "iaq-note",
+              "type": "text",
+              "x": 36,
+              "y": 82,
+              "w": 520,
+              "h": 118,
+              "data": {
+                "text": "Indoor air issues are often cross-system: ventilation, moisture, combustion, resident behavior, and envelope leakage can all matter."
+              }
+            }
+          ]
+        }
+      },
+      "older-materials-canvas": {
+        "id": "older-materials-canvas",
+        "title": "Older Building Materials",
+        "parentCanvasId": "health-habitability-canvas",
+        "parentNodeId": "older-materials-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "lead-paint",
+              "type": "card",
+              "x": -348,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Lead-Based Paint",
+                "detail": "For pre-1978 buildings, keep certifications, hazard-control plans, notices, and disturbance boundaries visible.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "asbestos",
+              "type": "card",
+              "x": -36,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Asbestos-Containing Materials",
+                "detail": "Flooring, mastic, insulation, textured materials, pipe wrap, survey records, and contractor controls.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "disturbance-rules",
+              "type": "card",
+              "x": 276,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Disturbance Rules",
+                "detail": "Staff should know when to stop, isolate, document, and call qualified professionals before cutting or sanding.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "materials-check",
+              "type": "check",
+              "x": -348,
+              "y": 52,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Before Disturbing Materials",
+                "items": [
+                  {
+                    "id": "materials-check-1",
+                    "text": "Check building age and records",
+                    "checked": false
+                  },
+                  {
+                    "id": "materials-check-2",
+                    "text": "Confirm known material inventory",
+                    "checked": false
+                  },
+                  {
+                    "id": "materials-check-3",
+                    "text": "Use qualified vendor when required",
+                    "checked": false
+                  },
+                  {
+                    "id": "materials-check-4",
+                    "text": "Document resident notice and containment",
+                    "checked": false
+                  },
+                  {
+                    "id": "materials-check-5",
+                    "text": "Save reports in records view",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "materials-note",
+              "type": "text",
+              "x": 36,
+              "y": 82,
+              "w": 520,
+              "h": 118,
+              "data": {
+                "text": "This is not legal advice. Older building material rules are local, state, and federal; the maintenance map should make the decision path clear."
+              }
+            }
+          ]
+        }
+      },
+      "emergency-readiness-canvas": {
+        "id": "emergency-readiness-canvas",
+        "title": "Emergency Readiness",
+        "parentCanvasId": "maintenance-plan-canvas",
+        "parentNodeId": "emergency-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "incident-command-portal",
+              "type": "canvas",
+              "x": -348,
+              "y": -202,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "incident-command-canvas",
+                "title": "Incident Command",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "water-leak-portal",
+              "type": "canvas",
+              "x": 8,
+              "y": -202,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "major-water-leak-canvas",
+                "title": "Major Water Leak",
+                "nodeCount": 4
+              }
+            },
+            {
+              "id": "power-outage-portal",
+              "type": "canvas",
+              "x": 364,
+              "y": -202,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "power-outage-canvas",
+                "title": "Power Outage",
+                "nodeCount": 4
+              }
+            },
+            {
+              "id": "fire-event-portal",
+              "type": "canvas",
+              "x": -348,
+              "y": 46,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "fire-event-canvas",
+                "title": "Fire Event",
+                "nodeCount": 4
+              }
+            },
+            {
+              "id": "severe-weather-portal",
+              "type": "canvas",
+              "x": 8,
+              "y": 46,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "severe-weather-canvas",
+                "title": "Severe Weather",
+                "nodeCount": 4
+              }
+            },
+            {
+              "id": "emergency-note",
+              "type": "text",
+              "x": 364,
+              "y": 308,
+              "w": 316,
+              "h": 126,
+              "data": {
+                "text": "Reference lens: HUD multifamily disaster planning organizes response around resident protection, building protection, and business continuity."
+              }
+            }
+          ]
+        }
+      },
+      "incident-command-canvas": {
+        "id": "incident-command-canvas",
+        "title": "Incident Command",
+        "parentCanvasId": "emergency-readiness-canvas",
+        "parentNodeId": "incident-command-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "incident-lead",
+              "type": "card",
+              "x": -348,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Incident Lead",
+                "detail": "Decides priorities, assigns roles, tracks timeline, confirms resident safety, and escalates to ownership.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "resident-comms",
+              "type": "card",
+              "x": -36,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Resident Communications",
+                "detail": "Notices, text/email, door posting, language needs, mobility needs, and update cadence.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "building-protection",
+              "type": "card",
+              "x": 276,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Building Protection",
+                "detail": "Shutoffs, temporary safeguards, vendor access, photos, security, and recovery work orders.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "incident-check",
+              "type": "check",
+              "x": -348,
+              "y": 52,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "First 30 Minutes",
+                "items": [
+                  {
+                    "id": "incident-check-1",
+                    "text": "Confirm life safety",
+                    "checked": false
+                  },
+                  {
+                    "id": "incident-check-2",
+                    "text": "Call emergency services if needed",
+                    "checked": false
+                  },
+                  {
+                    "id": "incident-check-3",
+                    "text": "Assign one incident lead",
+                    "checked": false
+                  },
+                  {
+                    "id": "incident-check-4",
+                    "text": "Start timeline and photos",
+                    "checked": false
+                  },
+                  {
+                    "id": "incident-check-5",
+                    "text": "Send first resident update",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "incident-note",
+              "type": "text",
+              "x": 36,
+              "y": 82,
+              "w": 520,
+              "h": 118,
+              "data": {
+                "text": "Use simple roles during stress. The document should answer: who leads, who communicates, who protects the building, and what is next."
+              }
+            }
+          ]
+        }
+      },
+      "major-water-leak-canvas": {
+        "id": "major-water-leak-canvas",
+        "title": "Major Water Leak",
+        "parentCanvasId": "emergency-readiness-canvas",
+        "parentNodeId": "water-leak-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "leak-first-response",
+              "type": "check",
+              "x": -348,
+              "y": -182,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Leak First Response",
+                "items": [
+                  {
+                    "id": "leak-first-response-1",
+                    "text": "Locate source and shut off water if authorized",
+                    "checked": false
+                  },
+                  {
+                    "id": "leak-first-response-2",
+                    "text": "Protect electrical and call emergency services if unsafe",
+                    "checked": false
+                  },
+                  {
+                    "id": "leak-first-response-3",
+                    "text": "Move residents away from hazards",
+                    "checked": false
+                  },
+                  {
+                    "id": "leak-first-response-4",
+                    "text": "Call plumber/restoration vendor",
+                    "checked": false
+                  },
+                  {
+                    "id": "leak-first-response-5",
+                    "text": "Photograph damage and start affected-unit list",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "affected-units",
+              "type": "card",
+              "x": 20,
+              "y": -152,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Affected Units",
+                "detail": "Track stack, floor, residents, access, temporary relocation needs, contents, and follow-up repairs.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "drying-recovery",
+              "type": "card",
+              "x": 332,
+              "y": -152,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Drying and Recovery",
+                "detail": "Restoration scope, moisture readings, demolition decisions, insurance, and final clearance notes.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "leak-note",
+              "type": "text",
+              "x": 20,
+              "y": 72,
+              "w": 584,
+              "h": 122,
+              "data": {
+                "text": "The leak response view links emergency action to mold prevention, resident communication, insurance proof, and capital root-cause tracking."
+              }
+            }
+          ]
+        }
+      },
+      "power-outage-canvas": {
+        "id": "power-outage-canvas",
+        "title": "Power Outage",
+        "parentCanvasId": "emergency-readiness-canvas",
+        "parentNodeId": "power-outage-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "outage-check",
+              "type": "check",
+              "x": -348,
+              "y": -182,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Outage Response",
+                "items": [
+                  {
+                    "id": "outage-check-1",
+                    "text": "Confirm utility outage or building fault",
+                    "checked": false
+                  },
+                  {
+                    "id": "outage-check-2",
+                    "text": "Check elevator occupancy and fire panel status",
+                    "checked": false
+                  },
+                  {
+                    "id": "outage-check-3",
+                    "text": "Post resident update",
+                    "checked": false
+                  },
+                  {
+                    "id": "outage-check-4",
+                    "text": "Protect refrigerated medicines where known",
+                    "checked": false
+                  },
+                  {
+                    "id": "outage-check-5",
+                    "text": "Track heat/cooling risk by season",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "critical-loads",
+              "type": "card",
+              "x": 20,
+              "y": -152,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Critical Loads",
+                "detail": "Fire alarm, emergency lighting, elevator, entry access, sump pumps, boilers, communications, and office systems.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "resident-impact",
+              "type": "card",
+              "x": 332,
+              "y": -152,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Resident Impact",
+                "detail": "Older adults, medical devices, mobility needs, temperature risk, and communication access determine escalation.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "outage-note",
+              "type": "text",
+              "x": 20,
+              "y": 72,
+              "w": 584,
+              "h": 122,
+              "data": {
+                "text": "A power outage is both a building event and a resident-safety event. The plan must separate what staff can control from utility restoration."
+              }
+            }
+          ]
+        }
+      },
+      "fire-event-canvas": {
+        "id": "fire-event-canvas",
+        "title": "Fire Event",
+        "parentCanvasId": "emergency-readiness-canvas",
+        "parentNodeId": "fire-event-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "fire-event-check",
+              "type": "check",
+              "x": -348,
+              "y": -182,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "During and After Fire Event",
+                "items": [
+                  {
+                    "id": "fire-event-check-1",
+                    "text": "Call 911 and follow fire department command",
+                    "checked": false
+                  },
+                  {
+                    "id": "fire-event-check-2",
+                    "text": "Account for affected residents when possible",
+                    "checked": false
+                  },
+                  {
+                    "id": "fire-event-check-3",
+                    "text": "Do not silence/reset systems without authorization",
+                    "checked": false
+                  },
+                  {
+                    "id": "fire-event-check-4",
+                    "text": "Secure damaged areas after release",
+                    "checked": false
+                  },
+                  {
+                    "id": "fire-event-check-5",
+                    "text": "Start displacement and insurance records",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "fire-department",
+              "type": "card",
+              "x": 20,
+              "y": -152,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Fire Department Interface",
+                "detail": "Knox/key box, fire panel, riser room, roof access, elevator recall, and building representative.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "displacement",
+              "type": "card",
+              "x": 332,
+              "y": -152,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Resident Displacement",
+                "detail": "Temporary shelter, accessible needs, medications, pets, contact list, notices, and return conditions.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "fire-event-note",
+              "type": "text",
+              "x": 20,
+              "y": 72,
+              "w": 584,
+              "h": 122,
+              "data": {
+                "text": "The fire event view is not a substitute for emergency services. It keeps property-side responsibilities ready before and after command releases the building."
+              }
+            }
+          ]
+        }
+      },
+      "severe-weather-canvas": {
+        "id": "severe-weather-canvas",
+        "title": "Severe Weather",
+        "parentCanvasId": "emergency-readiness-canvas",
+        "parentNodeId": "severe-weather-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "weather-check",
+              "type": "check",
+              "x": -348,
+              "y": -182,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Before Severe Weather",
+                "items": [
+                  {
+                    "id": "weather-check-1",
+                    "text": "Clear roof and site drains",
+                    "checked": false
+                  },
+                  {
+                    "id": "weather-check-2",
+                    "text": "Secure loose exterior items",
+                    "checked": false
+                  },
+                  {
+                    "id": "weather-check-3",
+                    "text": "Stage ice/flood supplies",
+                    "checked": false
+                  },
+                  {
+                    "id": "weather-check-4",
+                    "text": "Send resident notice",
+                    "checked": false
+                  },
+                  {
+                    "id": "weather-check-5",
+                    "text": "Confirm vendor emergency contacts",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "storm-watch",
+              "type": "card",
+              "x": 20,
+              "y": -152,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Storm Watch",
+                "detail": "Wind, rain, flood, freeze, heat, wildfire smoke, and snow each stress different building systems.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "after-storm",
+              "type": "card",
+              "x": 332,
+              "y": -152,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "After-Storm Walk",
+                "detail": "Roof, facade, drains, trees, parking, leaks, power, elevator, resident reports, and photos.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "weather-note",
+              "type": "text",
+              "x": 20,
+              "y": 72,
+              "w": 584,
+              "h": 122,
+              "data": {
+                "text": "Weather planning should be local. Keep regional hazards, resident vulnerabilities, and building weak points in the same nested view."
+              }
+            }
+          ]
+        }
+      },
+      "capital-plan-canvas": {
+        "id": "capital-plan-canvas",
+        "title": "Capital Plan",
+        "parentCanvasId": "maintenance-plan-canvas",
+        "parentNodeId": "capital-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "asset-register-portal",
+              "type": "canvas",
+              "x": -338,
+              "y": -170,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "asset-register-canvas",
+                "title": "Asset Register",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "reserve-planning-portal",
+              "type": "canvas",
+              "x": 18,
+              "y": -170,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "reserve-planning-canvas",
+                "title": "Reserve Planning",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "five-year-plan-portal",
+              "type": "canvas",
+              "x": 374,
+              "y": -170,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "five-year-plan-canvas",
+                "title": "Five-Year Plan",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "immediate-repairs",
+              "type": "card",
+              "x": -338,
+              "y": 96,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Immediate Repairs",
+                "detail": "Life-safety concerns, deferred maintenance, and active damage should not wait for annual budgeting.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "capital-note",
+              "type": "text",
+              "x": 34,
+              "y": 126,
+              "w": 604,
+              "h": 120,
+              "data": {
+                "text": "Capital planning turns repeated work orders, inspections, useful-life estimates, and photos into a defensible replacement path."
+              }
+            }
+          ]
+        }
+      },
+      "asset-register-canvas": {
+        "id": "asset-register-canvas",
+        "title": "Asset Register",
+        "parentCanvasId": "capital-plan-canvas",
+        "parentNodeId": "asset-register-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "roof-asset",
+              "type": "card",
+              "x": -348,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Roof",
+                "detail": "Age, type, warranty, patches, leak history, contractor, drain condition, and replacement window.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "elevator-asset",
+              "type": "card",
+              "x": -36,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Elevator",
+                "detail": "Controller, cab, door equipment, service history, violations, modernization needs, and downtime.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "mechanical-assets",
+              "type": "card",
+              "x": 276,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Mechanical",
+                "detail": "Boilers, water heaters, pumps, air handlers, exhaust fans, age, condition, and service notes.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "asset-register-check",
+              "type": "check",
+              "x": -348,
+              "y": 52,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Asset Record Fields",
+                "items": [
+                  {
+                    "id": "asset-register-check-1",
+                    "text": "Location",
+                    "checked": false
+                  },
+                  {
+                    "id": "asset-register-check-2",
+                    "text": "Make/model/serial",
+                    "checked": false
+                  },
+                  {
+                    "id": "asset-register-check-3",
+                    "text": "Install year",
+                    "checked": false
+                  },
+                  {
+                    "id": "asset-register-check-4",
+                    "text": "Condition",
+                    "checked": false
+                  },
+                  {
+                    "id": "asset-register-check-5",
+                    "text": "Next major action",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "asset-register-note",
+              "type": "text",
+              "x": 36,
+              "y": 82,
+              "w": 520,
+              "h": 118,
+              "data": {
+                "text": "An asset register lets maintenance, ownership, lenders, and vendors talk about the same physical components."
+              }
+            }
+          ]
+        }
+      },
+      "reserve-planning-canvas": {
+        "id": "reserve-planning-canvas",
+        "title": "Reserve Planning",
+        "parentCanvasId": "capital-plan-canvas",
+        "parentNodeId": "reserve-planning-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "useful-life",
+              "type": "card",
+              "x": -348,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Useful Life",
+                "detail": "Remaining useful life should be updated when inspections, failures, or major repairs change the risk picture.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "replacement-reserve",
+              "type": "card",
+              "x": -36,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Replacement Reserve",
+                "detail": "Set aside funds for components that wear out: roof, HVAC, paving, elevators, appliances, and common areas.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "required-repairs",
+              "type": "card",
+              "x": 276,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Required Repairs",
+                "detail": "Deferred maintenance and life-safety concerns need clear scope, owner, cost, date, and proof of completion.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "reserve-check",
+              "type": "check",
+              "x": -348,
+              "y": 52,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Annual Reserve Review",
+                "items": [
+                  {
+                    "id": "reserve-check-1",
+                    "text": "Review asset age and condition",
+                    "checked": false
+                  },
+                  {
+                    "id": "reserve-check-2",
+                    "text": "Compare repeated work orders",
+                    "checked": false
+                  },
+                  {
+                    "id": "reserve-check-3",
+                    "text": "Update cost estimates",
+                    "checked": false
+                  },
+                  {
+                    "id": "reserve-check-4",
+                    "text": "Prioritize life-safety and water damage risk",
+                    "checked": false
+                  },
+                  {
+                    "id": "reserve-check-5",
+                    "text": "Attach photos and vendor reports",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "reserve-note",
+              "type": "text",
+              "x": 36,
+              "y": 82,
+              "w": 520,
+              "h": 118,
+              "data": {
+                "text": "Reference lens: property condition assessments connect physical condition, immediate repairs, capital items, and reserves."
+              }
+            }
+          ]
+        }
+      },
+      "five-year-plan-canvas": {
+        "id": "five-year-plan-canvas",
+        "title": "Five-Year Plan",
+        "parentCanvasId": "capital-plan-canvas",
+        "parentNodeId": "five-year-plan-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "year-one",
+              "type": "card",
+              "x": -348,
+              "y": -168,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Year 1",
+                "detail": "Correct life-safety gaps, restore roof drains, tag shutoffs, and close deferred maintenance with photos.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "year-two-three",
+              "type": "card",
+              "x": -36,
+              "y": -168,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Years 2-3",
+                "detail": "Plan water heater replacements, corridor lighting upgrades, parking repairs, and targeted unit ventilation work.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "year-four-five",
+              "type": "card",
+              "x": 276,
+              "y": -168,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Years 4-5",
+                "detail": "Prepare roof replacement, elevator modernization study, facade repairs, and reserve adjustment.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "five-year-check",
+              "type": "check",
+              "x": -348,
+              "y": 52,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Planning Inputs",
+                "items": [
+                  {
+                    "id": "five-year-check-1",
+                    "text": "Inspection findings",
+                    "checked": false
+                  },
+                  {
+                    "id": "five-year-check-2",
+                    "text": "Resident complaint patterns",
+                    "checked": false
+                  },
+                  {
+                    "id": "five-year-check-3",
+                    "text": "Vendor recommendations",
+                    "checked": false
+                  },
+                  {
+                    "id": "five-year-check-4",
+                    "text": "Useful-life estimates",
+                    "checked": false
+                  },
+                  {
+                    "id": "five-year-check-5",
+                    "text": "Reserve balance and owner goals",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "five-year-note",
+              "type": "text",
+              "x": 36,
+              "y": 82,
+              "w": 520,
+              "h": 118,
+              "data": {
+                "text": "The five-year plan should be updated by evidence. Canaster hierarchy helps connect a small recurring issue to the larger capital story."
+              }
+            }
+          ]
+        }
+      },
+      "vendors-records-canvas": {
+        "id": "vendors-records-canvas",
+        "title": "Vendors and Records",
+        "parentCanvasId": "maintenance-plan-canvas",
+        "parentNodeId": "records-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "vendor-contacts-portal",
+              "type": "canvas",
+              "x": -338,
+              "y": -180,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "vendor-contacts-canvas",
+                "title": "Vendor Contacts",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "inspection-reports-portal",
+              "type": "canvas",
+              "x": 18,
+              "y": -180,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "inspection-reports-canvas",
+                "title": "Inspection Reports",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "keys-tools-portal",
+              "type": "canvas",
+              "x": 374,
+              "y": -180,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "keys-tools-canvas",
+                "title": "Keys and Tools",
+                "nodeCount": 5
+              }
+            },
+            {
+              "id": "source-notes-portal",
+              "type": "canvas",
+              "x": -160,
+              "y": 78,
+              "w": 316,
+              "h": 206,
+              "data": {
+                "childCanvasId": "source-notes-canvas",
+                "title": "Source Notes",
+                "nodeCount": 7
+              }
+            },
+            {
+              "id": "records-fast-check",
+              "type": "check",
+              "x": 198,
+              "y": 96,
+              "w": 320,
+              "h": 222,
+              "data": {
+                "title": "Record Pack Minimums",
+                "items": [
+                  {
+                    "id": "records-fast-check-1",
+                    "text": "Date",
+                    "checked": false
+                  },
+                  {
+                    "id": "records-fast-check-2",
+                    "text": "Responsible person",
+                    "checked": false
+                  },
+                  {
+                    "id": "records-fast-check-3",
+                    "text": "Photo or report",
+                    "checked": false
+                  },
+                  {
+                    "id": "records-fast-check-4",
+                    "text": "Deficiency",
+                    "checked": false
+                  },
+                  {
+                    "id": "records-fast-check-5",
+                    "text": "Correction and closeout",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "records-note",
+              "type": "text",
+              "x": -204,
+              "y": 332,
+              "w": 616,
+              "h": 118,
+              "data": {
+                "text": "Records are operational tools, not paperwork. They let a future manager understand what happened, what changed, and what still needs attention."
+              }
+            }
+          ]
+        }
+      },
+      "vendor-contacts-canvas": {
+        "id": "vendor-contacts-canvas",
+        "title": "Vendor Contacts",
+        "parentCanvasId": "vendors-records-canvas",
+        "parentNodeId": "vendor-contacts-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "plumber",
+              "type": "card",
+              "x": -348,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Plumber",
+                "detail": "Emergency line, account number, after-hours terms, shutoff authority, and standard response notes.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "fire-vendor",
+              "type": "card",
+              "x": -36,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Fire Protection Vendor",
+                "detail": "Alarm, sprinkler, extinguisher, inspection schedule, monitoring account, and impairment contact.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "elevator-vendor",
+              "type": "card",
+              "x": 276,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Elevator Vendor",
+                "detail": "Service line, callback process, entrapment escalation, contract scope, and inspector contacts.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "vendor-check",
+              "type": "check",
+              "x": -348,
+              "y": 52,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Vendor Record Fields",
+                "items": [
+                  {
+                    "id": "vendor-check-1",
+                    "text": "Primary and backup phone",
+                    "checked": false
+                  },
+                  {
+                    "id": "vendor-check-2",
+                    "text": "Contract scope",
+                    "checked": false
+                  },
+                  {
+                    "id": "vendor-check-3",
+                    "text": "Insurance/certificate status",
+                    "checked": false
+                  },
+                  {
+                    "id": "vendor-check-4",
+                    "text": "After-hours terms",
+                    "checked": false
+                  },
+                  {
+                    "id": "vendor-check-5",
+                    "text": "Last service date",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "vendor-note",
+              "type": "text",
+              "x": 36,
+              "y": 82,
+              "w": 520,
+              "h": 118,
+              "data": {
+                "text": "Vendor records should be useful at 2 a.m. during an emergency, not only during office hours."
+              }
+            }
+          ]
+        }
+      },
+      "inspection-reports-canvas": {
+        "id": "inspection-reports-canvas",
+        "title": "Inspection Reports",
+        "parentCanvasId": "vendors-records-canvas",
+        "parentNodeId": "inspection-reports-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "report-intake",
+              "type": "card",
+              "x": -348,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Report Intake",
+                "detail": "Scan, name, tag, assign owner, extract deficiencies, due dates, and required filings.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "correction-tracking",
+              "type": "card",
+              "x": -36,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Correction Tracking",
+                "detail": "Each deficiency needs a work order, responsible person, evidence, and closeout date.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "photo-proof",
+              "type": "card",
+              "x": 276,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Photo Proof",
+                "detail": "Before, during, after, label, unit/common area, date, and link to report item.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "report-check",
+              "type": "check",
+              "x": -348,
+              "y": 52,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Inspection Report Closeout",
+                "items": [
+                  {
+                    "id": "report-check-1",
+                    "text": "Report saved",
+                    "checked": false
+                  },
+                  {
+                    "id": "report-check-2",
+                    "text": "Deficiencies extracted",
+                    "checked": false
+                  },
+                  {
+                    "id": "report-check-3",
+                    "text": "Work orders created",
+                    "checked": false
+                  },
+                  {
+                    "id": "report-check-4",
+                    "text": "Corrections photographed",
+                    "checked": false
+                  },
+                  {
+                    "id": "report-check-5",
+                    "text": "Filing or owner sign-off complete",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "report-note",
+              "type": "text",
+              "x": 36,
+              "y": 82,
+              "w": 520,
+              "h": 118,
+              "data": {
+                "text": "A report is only useful when deficiencies become tracked work and corrections become retrievable proof."
+              }
+            }
+          ]
+        }
+      },
+      "keys-tools-canvas": {
+        "id": "keys-tools-canvas",
+        "title": "Keys and Tools",
+        "parentCanvasId": "vendors-records-canvas",
+        "parentNodeId": "keys-tools-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "keys",
+              "type": "card",
+              "x": -348,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Keys and Access",
+                "detail": "Master keys, fobs, lockbox, vendor keys, sign-out log, lost key procedure, and restricted areas.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "tools",
+              "type": "card",
+              "x": -36,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Tools",
+                "detail": "Serial numbers, assigned users, storage location, calibration needs, and theft/loss reporting.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "supplies",
+              "type": "card",
+              "x": 276,
+              "y": -166,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Supplies",
+                "detail": "Filters, lamps, batteries, door hardware, plumbing parts, PPE, ice melt, and emergency stock.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "inventory-check",
+              "type": "check",
+              "x": -348,
+              "y": 52,
+              "w": 320,
+              "h": 220,
+              "data": {
+                "title": "Monthly Inventory Review",
+                "items": [
+                  {
+                    "id": "inventory-check-1",
+                    "text": "Count critical supplies",
+                    "checked": false
+                  },
+                  {
+                    "id": "inventory-check-2",
+                    "text": "Check restricted key log",
+                    "checked": false
+                  },
+                  {
+                    "id": "inventory-check-3",
+                    "text": "Inspect emergency stock",
+                    "checked": false
+                  },
+                  {
+                    "id": "inventory-check-4",
+                    "text": "Reorder common parts",
+                    "checked": false
+                  },
+                  {
+                    "id": "inventory-check-5",
+                    "text": "Secure tools and equipment",
+                    "checked": false
+                  }
+                ]
+              }
+            },
+            {
+              "id": "inventory-note",
+              "type": "text",
+              "x": 36,
+              "y": 82,
+              "w": 520,
+              "h": 118,
+              "data": {
+                "text": "HUD management review expectations include inventory systems for tools, equipment, supplies, and keys. This view makes that tangible."
+              }
+            }
+          ]
+        }
+      },
+      "source-notes-canvas": {
+        "id": "source-notes-canvas",
+        "title": "Source Notes",
+        "parentCanvasId": "vendors-records-canvas",
+        "parentNodeId": "source-notes-portal",
+        "model": {
+          "schemaVersion": 2,
+          "nodes": [
+            {
+              "id": "source-hud-nspire",
+              "type": "card",
+              "x": -348,
+              "y": -190,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "HUD NSPIRE",
+                "detail": "Health, safety, functional defects, resident focus, and year-round maintenance practices.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "source-hud-mor",
+              "type": "card",
+              "x": -36,
+              "y": -190,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "HUD Management Review",
+                "detail": "Preventive schedules, unit inspections, work orders, emergency orders, inventory, and backlog.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "source-ipmc",
+              "type": "card",
+              "x": 276,
+              "y": -190,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Property Maintenance Code",
+                "detail": "Exterior/interior conditions, sanitation, plumbing, mechanical, electrical, elevators, egress, and fire safety.",
+                "accent": "system"
+              }
+            },
+            {
+              "id": "source-epa",
+              "type": "card",
+              "x": -348,
+              "y": 18,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "EPA Mold and Legionella",
+                "detail": "Moisture control, mold prevention, water temperature, flushing, and water management programs.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "source-ashrae",
+              "type": "card",
+              "x": -36,
+              "y": 18,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "ASHRAE Multifamily",
+                "detail": "HVAC operation, maintenance, ventilation, and airflow guidance for multifamily buildings.",
+                "accent": "data"
+              }
+            },
+            {
+              "id": "source-disaster",
+              "type": "card",
+              "x": 276,
+              "y": 18,
+              "w": 272,
+              "h": 132,
+              "data": {
+                "title": "Disaster Planning",
+                "detail": "Resident protection, building protection, business continuity, staff roles, and communication.",
+                "accent": "task"
+              }
+            },
+            {
+              "id": "source-limits",
+              "type": "text",
+              "x": -234,
+              "y": 250,
+              "w": 604,
+              "h": 134,
+              "data": {
+                "text": "This starter is a practical operations document, not legal advice. A real property must confirm local code, fire marshal rules, elevator jurisdiction, lease obligations, and licensed-contractor requirements."
+              }
+            }
+          ]
+        }
+      }
+    },
+    "view": {
+      "cameras": {
+        "root": {
+          "x": 42,
+          "y": 70,
+          "scale": 0.92
+        },
+        "maintenance-plan-canvas": {
+          "x": 413,
+          "y": 255,
+          "scale": 0.764
+        },
+        "building-profile-canvas": {
+          "x": 437,
+          "y": 226,
+          "scale": 0.918
+        },
+        "site-access-canvas": {
+          "x": 441,
+          "y": 289,
+          "scale": 0.92
+        },
+        "utility-shutoffs-canvas": {
+          "x": 441,
+          "y": 296,
+          "scale": 0.92
+        },
+        "preventive-calendar-canvas": {
+          "x": 388,
+          "y": 221,
+          "scale": 0.856
+        },
+        "daily-weekly-canvas": {
+          "x": 422,
+          "y": 331,
+          "scale": 0.92
+        },
+        "monthly-quarterly-canvas": {
+          "x": 396,
+          "y": 314,
+          "scale": 0.92
+        },
+        "seasonal-annual-canvas": {
+          "x": 396,
+          "y": 313,
+          "scale": 0.92
+        },
+        "inspection-readiness-canvas": {
+          "x": 444,
+          "y": 290,
+          "scale": 0.92
+        },
+        "life-safety-canvas": {
+          "x": 380,
+          "y": 274,
+          "scale": 0.911
+        },
+        "fire-protection-canvas": {
+          "x": 411,
+          "y": 306,
+          "scale": 0.92
+        },
+        "egress-lighting-canvas": {
+          "x": 444,
+          "y": 287,
+          "scale": 0.92
+        },
+        "elevator-safety-canvas": {
+          "x": 444,
+          "y": 291,
+          "scale": 0.92
+        },
+        "building-systems-canvas": {
+          "x": 398,
+          "y": 244,
+          "scale": 0.854
+        },
+        "plumbing-water-canvas": {
+          "x": 411,
+          "y": 301,
+          "scale": 0.92
+        },
+        "hvac-ventilation-canvas": {
+          "x": 444,
+          "y": 295,
+          "scale": 0.92
+        },
+        "electrical-canvas": {
+          "x": 444,
+          "y": 288,
+          "scale": 0.92
+        },
+        "roof-envelope-canvas": {
+          "x": 444,
+          "y": 295,
+          "scale": 0.92
+        },
+        "site-grounds-canvas": {
+          "x": 444,
+          "y": 288,
+          "scale": 0.92
+        },
+        "units-turnover-canvas": {
+          "x": 390,
+          "y": 225,
+          "scale": 0.851
+        },
+        "unit-inspections-canvas": {
+          "x": 422,
+          "y": 334,
+          "scale": 0.92
+        },
+        "turnover-flow-canvas": {
+          "x": 422,
+          "y": 334,
+          "scale": 0.92
+        },
+        "appliance-program-canvas": {
+          "x": 444,
+          "y": 288,
+          "scale": 0.92
+        },
+        "resident-requests-canvas": {
+          "x": 444,
+          "y": 291,
+          "scale": 0.92
+        },
+        "health-habitability-canvas": {
+          "x": 390,
+          "y": 225,
+          "scale": 0.851
+        },
+        "moisture-mold-canvas": {
+          "x": 444,
+          "y": 303,
+          "scale": 0.92
+        },
+        "pest-sanitation-canvas": {
+          "x": 444,
+          "y": 288,
+          "scale": 0.92
+        },
+        "indoor-air-canvas": {
+          "x": 444,
+          "y": 291,
+          "scale": 0.92
+        },
+        "older-materials-canvas": {
+          "x": 444,
+          "y": 291,
+          "scale": 0.92
+        },
+        "emergency-readiness-canvas": {
+          "x": 400,
+          "y": 242,
+          "scale": 0.843
+        },
+        "incident-command-canvas": {
+          "x": 444,
+          "y": 291,
+          "scale": 0.92
+        },
+        "major-water-leak-canvas": {
+          "x": 422,
+          "y": 334,
+          "scale": 0.92
+        },
+        "power-outage-canvas": {
+          "x": 422,
+          "y": 334,
+          "scale": 0.92
+        },
+        "fire-event-canvas": {
+          "x": 422,
+          "y": 334,
+          "scale": 0.92
+        },
+        "severe-weather-canvas": {
+          "x": 422,
+          "y": 334,
+          "scale": 0.92
+        },
+        "capital-plan-canvas": {
+          "x": 380,
+          "y": 305,
+          "scale": 0.911
+        },
+        "asset-register-canvas": {
+          "x": 444,
+          "y": 291,
+          "scale": 0.92
+        },
+        "reserve-planning-canvas": {
+          "x": 444,
+          "y": 291,
+          "scale": 0.92
+        },
+        "five-year-plan-canvas": {
+          "x": 444,
+          "y": 292,
+          "scale": 0.92
+        },
+        "vendors-records-canvas": {
+          "x": 390,
+          "y": 225,
+          "scale": 0.851
+        },
+        "vendor-contacts-canvas": {
+          "x": 444,
+          "y": 291,
+          "scale": 0.92
+        },
+        "inspection-reports-canvas": {
+          "x": 444,
+          "y": 291,
+          "scale": 0.92
+        },
+        "keys-tools-canvas": {
+          "x": 444,
+          "y": 291,
+          "scale": 0.92
+        },
+        "source-notes-canvas": {
+          "x": 448,
+          "y": 251,
+          "scale": 0.92
+        }
+      },
+      "selections": {
+        "root": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "maintenance-plan-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "building-profile-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "site-access-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "utility-shutoffs-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "preventive-calendar-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "daily-weekly-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "monthly-quarterly-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "seasonal-annual-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "inspection-readiness-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "life-safety-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "fire-protection-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "egress-lighting-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "elevator-safety-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "building-systems-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "plumbing-water-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "hvac-ventilation-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "electrical-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "roof-envelope-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "site-grounds-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "units-turnover-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "unit-inspections-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "turnover-flow-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "appliance-program-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "resident-requests-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "health-habitability-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "moisture-mold-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "pest-sanitation-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "indoor-air-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "older-materials-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "emergency-readiness-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "incident-command-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "major-water-leak-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "power-outage-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "fire-event-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "severe-weather-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "capital-plan-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "asset-register-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "reserve-planning-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "five-year-plan-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "vendors-records-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "vendor-contacts-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "inspection-reports-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "keys-tools-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        },
+        "source-notes-canvas": {
+          "selectedNodeIds": [],
+          "primarySelectedNodeId": null,
+          "resizeMode": false
+        }
+      },
+      "paneLayouts": {
+        "root": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "maintenance-plan-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "building-profile-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "site-access-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "utility-shutoffs-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "preventive-calendar-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "daily-weekly-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "monthly-quarterly-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "seasonal-annual-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "inspection-readiness-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "life-safety-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "fire-protection-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "egress-lighting-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "elevator-safety-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "building-systems-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "plumbing-water-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "hvac-ventilation-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "electrical-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "roof-envelope-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "site-grounds-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "units-turnover-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "unit-inspections-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "turnover-flow-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "appliance-program-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "resident-requests-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "health-habitability-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "moisture-mold-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "pest-sanitation-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "indoor-air-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "older-materials-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "emergency-readiness-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "incident-command-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "major-water-leak-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "power-outage-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "fire-event-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "severe-weather-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "capital-plan-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "asset-register-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "reserve-planning-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "five-year-plan-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "vendors-records-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "vendor-contacts-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "inspection-reports-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "keys-tools-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        },
+        "source-notes-canvas": {
+          "left": 112,
+          "right": 112,
+          "top": 112,
+          "bottom": 112
+        }
+      },
+      "viewportMemory": {
+        "schemaVersion": 1,
+        "contextPanes": {},
+        "embeddedPortals": {}
+      },
+      "activeCanvasId": "root",
+      "focusedEngineId": "root",
+      "previewFocus": null,
+      "stackPath": [
+        {
+          "canvasId": "root",
+          "parentCanvasId": null,
+          "parentNodeId": null,
+          "depth": 0
+        }
+      ],
+      "parentContext": {
+        "sourceCanvasId": null,
+        "sourcePortalNodeId": null,
+        "shapes": []
+      },
+      "animationEnabled": true,
+      "deleteConfirmation": null
+    }
+  }
+}
