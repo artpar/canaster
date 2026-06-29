@@ -88,5 +88,6 @@ export function cloneDocumentModelChange(change: DocumentModelChange | null): Do
   if (!change) return null;
   if (change.kind === 'delete-confirmation-open') return { ...change, nodeIds: [...change.nodeIds] };
   if (change.kind === 'document-delete') return { ...change, canvasIds: [...change.canvasIds] };
+  if (change.kind === 'node-theme-change') return { ...change, nodeIds: [...change.nodeIds] };
   return { ...change };
 }

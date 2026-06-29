@@ -41,7 +41,10 @@ import {
     defaultStarterCollection,
     STARTER_WORKSPACE_STORAGE_KEY
 } from '../app/starterWorkspace/starterCatalog';
-import {portalDataForNode} from '../domain/documentModel';
+import {
+    documentThemeId,
+    portalDataForNode
+} from '../domain/documentModel';
 import {
     initialViewportStatus,
     NestedCanvasWorkspace,
@@ -231,6 +234,7 @@ export function App() {
     const [chromeState, setChromeState] = useState<NestedCanvasWorkspaceChromeState>(() => ({
         collection             : initialCollection,
         status                 : initialViewportStatus,
+        activeCanvasThemeId    : normalizeCanasterThemeId(documentThemeId(initialCollection)),
         lastModelChange        : null,
         lastCanvasModelChange  : null,
         lastCanvasModelChangeId: 0,
@@ -238,7 +242,12 @@ export function App() {
         canRedo                : false,
         storageReady           : false,
     }));
-    const theme = normalizeCanasterThemeId(chromeState.collection.appearance?.themeId);
+    const theme = normalizeCanasterThemeId(documentThemeId(chromeState.collection));
+    const activeCanvasId = chromeState.collection.activeCanvasId;
+    const activeCanvasDocument = chromeState.collection.documents[activeCanvasId] ?? null;
+    const activeViewExplicitThemeId = activeCanvasDocument?.appearance?.themeId ?? null;
+    const activeViewThemeId = chromeState.activeCanvasThemeId;
+    const selectedPanelTheme = selectedPanelThemeState(chromeState.collection, activeCanvasId, activeViewThemeId);
 
     const handleChromeStateChange = useCallback((next: NestedCanvasWorkspaceChromeState) => {
         setChromeState(next);
@@ -776,9 +785,31 @@ export function App() {
         closeAddPanelMenu();
     }, [closeAddPanelMenu]);
 
-    const handleThemeSelect = useCallback((themeId: CanasterThemeId) => {
+    const handleDocumentThemeSelect = useCallback((themeId: CanasterThemeId) => {
         workspaceRef.current?.setWorkspaceTheme(themeId);
     }, []);
+
+    const handleActiveViewThemeSelect = useCallback((themeId: CanasterThemeId | null) => {
+        workspaceRef.current?.executeDocumentCommand({
+            type    : 'set-canvas-theme',
+            canvasId: chromeState.collection.activeCanvasId,
+            themeId,
+            source  : 'nonvisual'
+        });
+    }, [chromeState.collection.activeCanvasId]);
+
+    const handleSelectedPanelThemeSelect = useCallback((themeId: CanasterThemeId | null) => {
+        const selection = chromeState.collection.view.selections[chromeState.collection.activeCanvasId];
+        const selectedNodeIds = selection?.selectedNodeIds ?? [];
+        if (!selectedNodeIds.length) return;
+        workspaceRef.current?.executeDocumentCommand({
+            type    : 'set-node-theme',
+            canvasId: chromeState.collection.activeCanvasId,
+            nodeIds : selectedNodeIds,
+            themeId,
+            source  : 'nonvisual'
+        });
+    }, [chromeState.collection]);
 
     const filteredPanelCreateOptions = useMemo(() => {
         const query = addPanelQuery.trim().toLowerCase();
@@ -897,9 +928,16 @@ export function App() {
                     onToggle : handleToggleAddPanelMenu
                 }}
                 theme={{
-                    currentThemeId: theme,
-                    themes        : canasterThemeOptions,
-                    onSelect      : handleThemeSelect
+                    activeViewInheritsTheme       : !activeViewExplicitThemeId,
+                    activeViewThemeId,
+                    documentThemeId               : theme,
+                    selectedPanelCount            : selectedPanelTheme.count,
+                    selectedPanelInheritsTheme    : selectedPanelTheme.inherited,
+                    selectedPanelThemeId          : selectedPanelTheme.themeId,
+                    themes                        : canasterThemeOptions,
+                    onActiveViewThemeSelect       : handleActiveViewThemeSelect,
+                    onDocumentThemeSelect         : handleDocumentThemeSelect,
+                    onSelectedPanelThemeSelect    : handleSelectedPanelThemeSelect
                 }}
             />
             {addPanelMenuOpen ? (<AddPanelPopover
@@ -1031,6 +1069,38 @@ function canvasIdsWithDescendants(collection: CanvasDocumentCollection, canvasId
     };
     visit(canvasId);
     return ids;
+}
+
+function selectedPanelThemeState(
+    collection: CanvasDocumentCollection,
+    canvasId: CanvasDocumentId,
+    fallbackThemeId: CanasterThemeId
+): { count: number; inherited: boolean; themeId: CanasterThemeId } {
+    const document = collection.documents[canvasId];
+    const selection = collection.view.selections[canvasId];
+    const selectedNodeIds = selection?.selectedNodeIds ?? [];
+    if (!document || !selectedNodeIds.length) return {
+        count    : 0,
+        inherited: true,
+        themeId  : fallbackThemeId
+    };
+    const selectedIds = new Set(selectedNodeIds);
+    const selectedNodes = document.model.nodes.filter((node) => selectedIds.has(node.id));
+    if (!selectedNodes.length) return {
+        count    : 0,
+        inherited: true,
+        themeId  : fallbackThemeId
+    };
+    const explicitThemeIds = selectedNodes
+        .map((node) => node.appearance?.themeId ?? null)
+        .filter((themeId): themeId is string => Boolean(themeId));
+    const inherited = explicitThemeIds.length === 0;
+    const firstThemeId = explicitThemeIds[0] ?? fallbackThemeId;
+    return {
+        count: selectedNodes.length,
+        inherited,
+        themeId: normalizeCanasterThemeId(firstThemeId),
+    };
 }
 
 function buildViewTree(collection: CanvasDocumentCollection): ViewTreeNode | null {

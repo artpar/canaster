@@ -3,15 +3,32 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import type {CanasterTheme, CanasterThemeId} from './CanasterTheme';
 
 export type ThemeSwitcherProps = {
+    allowInherit?: boolean;
     currentThemeId: CanasterThemeId;
+    disabled?: boolean;
+    inheritDescription?: string;
+    inheritLabel?: string;
+    inherited?: boolean;
+    label?: string;
     themes: CanasterTheme[];
-    onSelect: (themeId: CanasterThemeId) => void;
+    onSelect: (themeId: CanasterThemeId | null) => void;
 };
 
-export function ThemeSwitcher({currentThemeId, themes, onSelect}: ThemeSwitcherProps) {
+export function ThemeSwitcher({
+    allowInherit = false,
+    currentThemeId,
+    disabled = false,
+    inheritDescription = 'Use the theme from the containing workspace',
+    inheritLabel = 'Inherit theme',
+    inherited = false,
+    label = 'Theme',
+    themes,
+    onSelect
+}: ThemeSwitcherProps) {
     const [open, setOpen] = useState(false);
     const rootRef = useRef<HTMLDivElement | null>(null);
     const currentTheme = themes.find((theme) => theme.id === currentThemeId) ?? themes[0];
+    const stateLabel = inherited ? `${label}: inherited ${currentTheme.name}` : `${label}: ${currentTheme.name}`;
 
     const close = useCallback(() => setOpen(false), []);
 
@@ -38,17 +55,39 @@ export function ThemeSwitcher({currentThemeId, themes, onSelect}: ThemeSwitcherP
         <button
             className="icon-button theme-switcher-button"
             type="button"
-            aria-label={`Theme: ${currentTheme.name}`}
+            aria-label={stateLabel}
             aria-haspopup="menu"
             aria-expanded={open}
-            title={`Theme: ${currentTheme.name}`}
+            disabled={disabled}
+            title={stateLabel}
             onClick={() => setOpen((value) => !value)}
         >
             <Palette size={17}/>
         </button>
-        {open ? <div className="theme-menu" role="menu" aria-label="Workspace theme">
+        {open && !disabled ? <div className="theme-menu" role="menu" aria-label={label}>
+            {allowInherit ? <button
+                className="theme-menu-item"
+                type="button"
+                role="menuitemradio"
+                aria-checked={inherited}
+                onClick={() => {
+                    onSelect(null);
+                    close();
+                }}
+            >
+                <span className="theme-menu-swatch inherit" aria-hidden="true">
+                    <span style={{background: currentTheme.colors.canvas.background}}/>
+                    <span style={{background: currentTheme.colors.panel.surfaceRaised}}/>
+                    <span style={{background: currentTheme.colors.action.primary}}/>
+                </span>
+                <span className="theme-menu-copy">
+                    <strong>{inheritLabel}</strong>
+                    <small>{inheritDescription}</small>
+                </span>
+                {inherited ? <Check className="theme-menu-check" size={15}/> : null}
+            </button> : null}
             {themes.map((theme) => {
-                const selected = theme.id === currentThemeId;
+                const selected = !inherited && theme.id === currentThemeId;
                 return <button
                     key={theme.id}
                     className="theme-menu-item"

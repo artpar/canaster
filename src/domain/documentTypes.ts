@@ -23,6 +23,10 @@ export type CanvasWorkspaceAppearance = {
   themeId: string;
 };
 
+export type CanvasDocumentAppearance = {
+  themeId?: string | null;
+};
+
 export type CanvasWorkspaceSnapshot = {
   schemaVersion: 1;
   history: CanvasWorkspaceHistory;
@@ -52,6 +56,7 @@ export type CanvasDocument = {
   title: string;
   parentCanvasId: CanvasDocumentId | null;
   parentNodeId: string | null;
+  appearance?: CanvasDocumentAppearance;
   model: CanvasModel;
 };
 
@@ -148,6 +153,9 @@ export type DeleteConfirmationState = {
 
 export type DocumentCommand =
   | { type: 'select-canvas'; canvasId: CanvasDocumentId; source: CanvasEditSource }
+  | { type: 'set-document-theme'; themeId: string; source: CanvasEditSource }
+  | { type: 'set-canvas-theme'; canvasId: CanvasDocumentId; themeId: string | null; source: CanvasEditSource }
+  | { type: 'set-node-theme'; canvasId: CanvasDocumentId; nodeIds: string[]; themeId: string | null; source: CanvasEditSource }
   | { type: 'enter-child-canvas'; parentCanvasId: CanvasDocumentId; portalNodeId: string; source: CanvasEditSource }
   | { type: 'go-to-parent-canvas'; source: CanvasEditSource }
   | { type: 'activate-neighbor-portal'; parentCanvasId: CanvasDocumentId; portalNodeId: string; source: CanvasEditSource }
@@ -162,6 +170,9 @@ export type DocumentCommand =
 
 export type DocumentModelChange =
   | { kind: 'active-canvas-change'; from: CanvasDocumentId; to: CanvasDocumentId; source: CanvasEditSource }
+  | { kind: 'document-theme-change'; themeId: string; source: CanvasEditSource }
+  | { kind: 'canvas-theme-change'; canvasId: CanvasDocumentId; themeId: string | null; source: CanvasEditSource }
+  | { kind: 'node-theme-change'; canvasId: CanvasDocumentId; nodeIds: string[]; themeId: string | null; source: CanvasEditSource }
   | { kind: 'canvas-create'; canvasId: CanvasDocumentId; parentCanvasId: CanvasDocumentId; parentNodeId: string; source: CanvasEditSource }
   | { kind: 'node-data-change'; canvasId: CanvasDocumentId; nodeId: string; source: CanvasEditSource }
   | { kind: 'canvas-arrange'; canvasId: CanvasDocumentId; nodeIds: string[]; source: CanvasEditSource }

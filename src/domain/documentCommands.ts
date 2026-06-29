@@ -7,7 +7,10 @@ import {
   deleteNodesAndDescendants,
   portalDataForNode,
   selectNodeInCanvas,
+  setCanvasThemeId,
+  setNodeThemeId,
   setSelectionForCanvas,
+  setWorkspaceThemeId,
   syncDerivedView,
   syncPortalSummaries,
   updateNodeData,
@@ -32,6 +35,12 @@ export function planDocumentCommand(collection: CanvasDocumentCollection, comman
   switch (command.type) {
     case 'select-canvas':
       return selectCanvas(collection, command.canvasId, command.source);
+    case 'set-document-theme':
+      return setDocumentTheme(collection, command.themeId, command.source);
+    case 'set-canvas-theme':
+      return setCanvasTheme(collection, command.canvasId, command.themeId, command.source);
+    case 'set-node-theme':
+      return setNodeTheme(collection, command.canvasId, command.nodeIds, command.themeId, command.source);
     case 'enter-child-canvas':
       return enterChildCanvas(collection, command.parentCanvasId, command.portalNodeId, command.source);
     case 'go-to-parent-canvas':
@@ -127,6 +136,43 @@ function selectCanvas(collection: CanvasDocumentCollection, canvasId: CanvasDocu
     collection: syncDerivedView(next),
     changes: [{ kind: 'active-canvas-change', from, to: canvasId, source }],
     interaction: 'Canvas activated',
+  };
+}
+
+function setDocumentTheme(collection: CanvasDocumentCollection, themeId: string, source: CanvasEditSource): DocumentCommandPlan {
+  if (collection.appearance?.themeId === themeId) return noChange(collection, 'Document theme unchanged');
+  return {
+    collection: setWorkspaceThemeId(collection, themeId),
+    changes: [{ kind: 'document-theme-change', themeId, source }],
+    interaction: 'Document theme changed',
+  };
+}
+
+function setCanvasTheme(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId, themeId: string | null, source: CanvasEditSource): DocumentCommandPlan {
+  const document = collection.documents[canvasId];
+  if (!document) return noChange(collection, 'View unavailable');
+  if ((document.appearance?.themeId ?? null) === themeId) return noChange(collection, 'View theme unchanged');
+  return {
+    collection: setCanvasThemeId(collection, canvasId, themeId),
+    changes: [{ kind: 'canvas-theme-change', canvasId, themeId, source }],
+    interaction: themeId ? 'View theme changed' : 'View theme inherited',
+  };
+}
+
+function setNodeTheme(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId, nodeIds: string[], themeId: string | null, source: CanvasEditSource): DocumentCommandPlan {
+  const document = collection.documents[canvasId];
+  if (!document) return noChange(collection, 'Panel unavailable');
+  const existingIds = new Set(document.model.nodes.map((node) => node.id));
+  const targetNodeIds = nodeIds.filter((nodeId) => existingIds.has(nodeId));
+  if (!targetNodeIds.length) return noChange(collection, 'Panel unavailable');
+  if (targetNodeIds.every((nodeId) => {
+    const node = document.model.nodes.find((candidate) => candidate.id === nodeId);
+    return (node?.appearance?.themeId ?? null) === themeId;
+  })) return noChange(collection, 'Panel theme unchanged');
+  return {
+    collection: setNodeThemeId(collection, canvasId, targetNodeIds, themeId),
+    changes: [{ kind: 'node-theme-change', canvasId, nodeIds: targetNodeIds, themeId, source }],
+    interaction: themeId ? (targetNodeIds.length > 1 ? 'Panel themes changed' : 'Panel theme changed') : (targetNodeIds.length > 1 ? 'Panel themes inherited' : 'Panel theme inherited'),
   };
 }
 

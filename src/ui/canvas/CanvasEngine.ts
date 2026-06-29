@@ -796,8 +796,9 @@ export class CanvasEngine {
   }
 
   private drawNode(node: CanvasNode, compact: boolean) {
-    const { ctx, theme } = this;
+    const { ctx } = this;
     const renderNode = this.renderNode(node);
+    const theme = this.themeForNode(renderNode);
     const definition = nodeDefinitionFor(renderNode);
     const data = parseNodeData(renderNode);
     const state = {
@@ -808,8 +809,8 @@ export class CanvasEngine {
       portalPreview: this.portalPreviewState(renderNode),
     };
 
-    this.drawNodeShell(renderNode, { selected: state.selected, primary: state.primary, hovered: state.hovered, compact });
-    const contentRect = this.nodeContentRect(renderNode);
+    this.drawNodeShell(renderNode, { selected: state.selected, primary: state.primary, hovered: state.hovered, compact }, theme);
+    const contentRect = this.nodeContentRect(renderNode, theme);
     ctx.save();
     this.clipToNodeContent(contentRect);
     renderNodeContent({
@@ -823,13 +824,13 @@ export class CanvasEngine {
     });
     ctx.restore();
     if (state.selected) {
-      this.drawDragHandle(renderNode);
-      this.drawResizeHandle(renderNode);
+      this.drawDragHandle(renderNode, theme);
+      this.drawResizeHandle(renderNode, theme);
     }
   }
 
-  private drawNodeShell(node: CanvasNode, state: { selected: boolean; primary: boolean; hovered: boolean; compact: boolean }) {
-    const { ctx, theme } = this;
+  private drawNodeShell(node: CanvasNode, state: { selected: boolean; primary: boolean; hovered: boolean; compact: boolean }, theme: CanvasTheme) {
+    const { ctx } = this;
     const selected = this.selectedNodeIds.has(node.id);
     const primary = node.id === this.primarySelectedNodeId;
     const hovered = node.id === this.hoverNodeId;
@@ -868,17 +869,17 @@ export class CanvasEngine {
     ctx.stroke();
   }
 
-  private drawResizeHandle(node: CanvasNode) {
+  private drawResizeHandle(node: CanvasNode, theme: CanvasTheme) {
     const handle = this.resizeHandleDrawRect(node);
     const radius = this.interactionHandleLength(3);
-    this.ctx.fillStyle = this.theme.resizeFill;
+    this.ctx.fillStyle = theme.resizeFill;
     roundRectPath(this.ctx, handle.x, handle.y, handle.w, handle.h, radius);
     this.ctx.fill();
   }
 
-  private drawDragHandle(node: CanvasNode) {
+  private drawDragHandle(node: CanvasNode, theme: CanvasTheme) {
     const handle = this.dragHandleDrawRect(node);
-    const { ctx, theme } = this;
+    const { ctx } = this;
     ctx.save();
     ctx.fillStyle = theme.nodeBg;
     ctx.strokeStyle = theme.selected;
@@ -901,8 +902,8 @@ export class CanvasEngine {
     ctx.restore();
   }
 
-  private nodeContentRect(node: CanvasNode): NodeContentRect {
-    const padding = this.theme.nodePadding;
+  private nodeContentRect(node: CanvasNode, theme = this.themeForNode(node)): NodeContentRect {
+    const padding = theme.nodePadding;
     return {
       x: node.x + padding,
       y: node.y + padding,
@@ -1321,13 +1322,14 @@ export class CanvasEngine {
   private nodeInternalHit(node: CanvasNode, point: WorldPoint) {
     const definition = nodeDefinitionFor(node);
     const data = parseNodeData(node);
+    const theme = this.themeForNode(node);
     return hitTestNodeContent({
       definition,
       node,
       data,
       point,
-      contentRect: this.nodeContentRect(node),
-      theme: this.theme,
+      contentRect: this.nodeContentRect(node, theme),
+      theme,
     });
   }
 
@@ -1335,12 +1337,13 @@ export class CanvasEngine {
     if (!this.onNodeDataChange) return [];
     const definition = nodeDefinitionFor(node);
     const data = parseNodeData(node);
+    const theme = this.themeForNode(node);
     return nodeInteractionRegions({
       definition,
       node,
       data,
-      theme: this.theme,
-      contentRect: this.nodeContentRect(node),
+      theme,
+      contentRect: this.nodeContentRect(node, theme),
     }).filter((region) => region.id.trim() && region.rect.w > 0 && region.rect.h > 0);
   }
 
@@ -1358,6 +1361,7 @@ export class CanvasEngine {
     this.closeNodeInteraction();
     const definition = nodeDefinitionFor(node);
     const data = parseNodeData(node);
+    const theme = this.themeForNode(node);
     const mount = document.createElement('div');
     mount.className = 'node-inline-editor-mount';
     mount.dataset.nodeId = node.id;
@@ -1367,8 +1371,8 @@ export class CanvasEngine {
       definition,
       node,
       data,
-      theme: this.theme,
-      contentRect: this.nodeContentRect(node),
+      theme,
+      contentRect: this.nodeContentRect(node, theme),
       region,
       mount,
       requestCommit: (nextData, commitSource = source) => {
@@ -1773,7 +1777,8 @@ export class CanvasEngine {
       .map((node) => {
         const portal = portalInfoForNode(node);
         if (!portal) return null;
-        const worldRect = canvasPortalViewportRect(this.nodeContentRect(node), this.theme);
+        const theme = this.themeForNode(node);
+        const worldRect = canvasPortalViewportRect(this.nodeContentRect(node, theme), theme);
         return {
           parentCanvasId: this.canvasId,
           portalNodeId: node.id,
@@ -1784,6 +1789,10 @@ export class CanvasEngine {
         };
       })
       .filter((layout): layout is PortalLayout => Boolean(layout));
+  }
+
+  private themeForNode(node: CanvasNode): CanvasTheme {
+    return node.appearance?.themeId ? canvasThemeFor(node.appearance.themeId) : this.theme;
   }
 
   private isNodeVisible(node: CanvasNode) {
@@ -1810,7 +1819,12 @@ function cloneModel(model: CanvasModel): CanvasModel {
 }
 
 function cloneNode(node: CanvasNode): CanvasNode {
-  return { ...node, data: cloneNodeData(node.data) };
+  const themeId = typeof node.appearance?.themeId === 'string' && node.appearance.themeId ? node.appearance.themeId : null;
+  return {
+    ...node,
+    appearance: themeId ? { themeId } : undefined,
+    data: cloneNodeData(node.data),
+  };
 }
 
 function nodeGeometry(node: CanvasNode): NodeGeometry {

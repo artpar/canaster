@@ -207,5 +207,10 @@ function keepDocumentRecord<T>(record: Record<string, T>, documents: Record<Canv
 }
 
 function cloneNode(node: CanvasNode): CanvasNode {
-  return { ...node, data: cloneNodeData(node.data) };
+  const themeId = typeof node.appearance?.themeId === 'string' && node.appearance.themeId ? node.appearance.themeId : null;
+  return {
+    ...node,
+    appearance: themeId ? { themeId } : undefined,
+    data: cloneNodeData(node.data),
+  };
 }

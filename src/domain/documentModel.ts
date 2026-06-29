@@ -6,7 +6,7 @@ import {
   portalInfoForNode,
   updatePortalSummaryForNode,
 } from './nodeSemantics';
-import type { CanvasDocument, CanvasDocumentCollection, CanvasDocumentId, CanvasWorkspaceAppearance, PortalNode, SerializableNestedCanvasViewState, StackFrame } from './documentTypes';
+import type { CanvasDocument, CanvasDocumentAppearance, CanvasDocumentCollection, CanvasDocumentId, CanvasWorkspaceAppearance, PortalNode, SerializableNestedCanvasViewState, StackFrame } from './documentTypes';
 import type { NodePortalInfo } from './nodeSemantics';
 import {
   type Camera,
@@ -65,6 +65,7 @@ export function cloneDocumentCollection(collection: CanvasDocumentCollection): C
   for (const document of Object.values(collection.documents)) {
     documents[document.id] = {
       ...document,
+      appearance: cloneDocumentAppearance(document.appearance),
       model: cloneModel(document.model),
     };
   }
@@ -139,6 +140,67 @@ export function setWorkspaceThemeId(collection: CanvasDocumentCollection, themeI
   const next = cloneDocumentCollection(collection);
   next.appearance = { themeId };
   return syncDerivedView(next);
+}
+
+export function setCanvasThemeId(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId, themeId: string | null): CanvasDocumentCollection {
+  const document = canvasDocumentFor(collection, canvasId);
+  const current = document.appearance?.themeId ?? null;
+  if (current === themeId) return collection;
+  const next = cloneDocumentCollection(collection);
+  next.documents[canvasId] = {
+    ...next.documents[canvasId],
+    appearance: themeId ? { themeId } : undefined,
+  };
+  return syncDerivedView(next);
+}
+
+export function setNodeThemeId(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId, nodeIds: string[], themeId: string | null): CanvasDocumentCollection {
+  canvasDocumentFor(collection, canvasId);
+  const next = cloneDocumentCollection(collection);
+  const document = canvasDocumentFor(next, canvasId);
+  const targetIds = new Set(nodeIds);
+  if (!targetIds.size) return collection;
+  let changed = false;
+  const nodes = document.model.nodes.map((node) => {
+    if (!targetIds.has(node.id)) return node;
+    const current = node.appearance?.themeId ?? null;
+    if (current === themeId) return node;
+    changed = true;
+    return {
+      ...node,
+      appearance: themeId ? { themeId } : undefined,
+      data: cloneNodeData(node.data),
+    };
+  });
+  if (!changed) return collection;
+  next.documents[canvasId] = {
+    ...next.documents[canvasId],
+    model: { schemaVersion: 2, nodes },
+  };
+  return syncPortalSummaries(syncDerivedView(next));
+}
+
+export function documentThemeId(collection: CanvasDocumentCollection): string {
+  return cloneWorkspaceAppearance(collection.appearance).themeId;
+}
+
+export function canvasThemeId(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId): string {
+  const visited = new Set<CanvasDocumentId>();
+  let document = collection.documents[canvasId];
+  while (document) {
+    if (visited.has(document.id)) break;
+    visited.add(document.id);
+    if (document.appearance?.themeId) return document.appearance.themeId;
+    const parentNodeThemeId = parentPortalNodeThemeId(collection, document);
+    if (parentNodeThemeId) return parentNodeThemeId;
+    if (!document.parentCanvasId) break;
+    document = collection.documents[document.parentCanvasId];
+  }
+  return documentThemeId(collection);
+}
+
+export function nodeThemeId(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId, node: CanvasNode): string {
+  return node.appearance?.themeId || canvasThemeId(collection, canvasId);
 }
 
 export function createChildCanvasForNode(collection: CanvasDocumentCollection, parentCanvasId: CanvasDocumentId, nodeId: string): CanvasDocumentCollection {
@@ -290,7 +352,11 @@ export function cloneModel(model: CanvasModel): CanvasModel {
 }
 
 export function cloneNode(node: CanvasNode): CanvasNode {
-  return { ...node, data: cloneNodeData(node.data) };
+  return {
+    ...node,
+    appearance: cloneDocumentAppearance(node.appearance),
+    data: cloneNodeData(node.data),
+  };
 }
 
 export function syncDerivedView(collection: CanvasDocumentCollection): CanvasDocumentCollection {
@@ -313,6 +379,18 @@ function cloneWorkspaceAppearance(appearance: CanvasWorkspaceAppearance | undefi
   return {
     themeId: typeof appearance?.themeId === 'string' && appearance.themeId ? appearance.themeId : DEFAULT_WORKSPACE_APPEARANCE.themeId,
   };
+}
+
+function cloneDocumentAppearance(appearance: CanvasDocumentAppearance | undefined): CanvasDocumentAppearance | undefined {
+  const themeId = typeof appearance?.themeId === 'string' && appearance.themeId ? appearance.themeId : null;
+  return themeId ? { themeId } : undefined;
+}
+
+function parentPortalNodeThemeId(collection: CanvasDocumentCollection, document: CanvasDocument): string | null {
+  if (!document.parentCanvasId || !document.parentNodeId) return null;
+  const parent = collection.documents[document.parentCanvasId];
+  const source = parent?.model.nodes.find((node) => node.id === document.parentNodeId);
+  return typeof source?.appearance?.themeId === 'string' && source.appearance.themeId ? source.appearance.themeId : null;
 }
 
 export function serializeCollectionViewState(collection: CanvasDocumentCollection): SerializableNestedCanvasViewState {

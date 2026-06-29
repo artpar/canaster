@@ -7,6 +7,10 @@ export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
 
 export type NodeData = JsonObject;
 
+export type CanvasNodeAppearance = {
+  themeId?: string | null;
+};
+
 export type CanvasNode<TData extends NodeData = NodeData> = {
   id: string;
   type: NodeTypeId;
@@ -14,6 +18,7 @@ export type CanvasNode<TData extends NodeData = NodeData> = {
   y: number;
   w: number;
   h: number;
+  appearance?: CanvasNodeAppearance;
   data: TData;
 };
 

@@ -38,6 +38,7 @@ export type ArrangeCanvasMenuRequest = {
 export type NestedCanvasWorkspaceChromeState = {
   collection: CanvasDocumentCollection;
   status: ViewportStatus;
+  activeCanvasThemeId: CanasterThemeId;
   lastModelChange: DocumentModelChange | null;
   lastCanvasModelChange: CanvasModelChange | null;
   lastCanvasModelChangeId: number;
