@@ -8,6 +8,7 @@ import {
   portalDataForNode,
   selectNodeInCanvas,
   setCanvasThemeId,
+  setCanvasBackgroundImage,
   setNodeThemeId,
   setSelectionForCanvas,
   setWorkspaceThemeId,
@@ -20,6 +21,7 @@ import {
   portalInfoForNode,
   stripNodeForPaste,
 } from './nodeSemantics';
+import type { CanvasBackgroundImage } from '../core/canvasAppearance';
 import type { CanvasDocumentCollection, CanvasDocumentId, DocumentCommand, DocumentModelChange, PortalNode } from './documentTypes';
 import type { NodeActionDescriptor } from './nodeSemantics';
 import type { CanvasArrangeLayout, CanvasEditSource, CanvasNode, CanvasSelectionState } from './types';
@@ -39,6 +41,8 @@ export function planDocumentCommand(collection: CanvasDocumentCollection, comman
       return setDocumentTheme(collection, command.themeId, command.source);
     case 'set-canvas-theme':
       return setCanvasTheme(collection, command.canvasId, command.themeId, command.source);
+    case 'set-canvas-background-image':
+      return setCanvasBackground(collection, command.canvasId, command.backgroundImage, command.source);
     case 'set-node-theme':
       return setNodeTheme(collection, command.canvasId, command.nodeIds, command.themeId, command.source);
     case 'enter-child-canvas':
@@ -156,6 +160,19 @@ function setCanvasTheme(collection: CanvasDocumentCollection, canvasId: CanvasDo
     collection: setCanvasThemeId(collection, canvasId, themeId),
     changes: [{ kind: 'canvas-theme-change', canvasId, themeId, source }],
     interaction: themeId ? 'Canvas theme changed' : 'Canvas theme inherited',
+  };
+}
+
+function setCanvasBackground(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId, backgroundImage: CanvasBackgroundImage | null, source: CanvasEditSource): DocumentCommandPlan {
+  const document = collection.documents[canvasId];
+  if (!document) return noChange(collection, 'Canvas unavailable');
+  const nextCollection = setCanvasBackgroundImage(collection, canvasId, backgroundImage);
+  if (nextCollection === collection) return noChange(collection, 'Canvas background unchanged');
+  const nextAssetId = nextCollection.documents[canvasId]?.appearance?.backgroundImage?.assetId ?? null;
+  return {
+    collection: nextCollection,
+    changes: [{ kind: 'canvas-background-image-change', canvasId, assetId: nextAssetId, source }],
+    interaction: nextAssetId ? 'Canvas background changed' : 'Canvas background removed',
   };
 }
 

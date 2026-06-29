@@ -25,7 +25,13 @@ import {
     signOut,
     verifyEmailOtp,
 } from '../infra/daptin/canasterDocuments';
-import {loadAssetObject} from '../infra/daptin/assets';
+import {loadAssetObject, uploadImageAsset} from '../infra/daptin/assets';
+import {
+    isLocalAssetId,
+    loadLocalAssetFile,
+    loadLocalAssetObject,
+    saveLocalImageAsset
+} from '../infra/browser/localAssets';
 import {
     clearDaptinSession,
     DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY,
@@ -41,8 +47,13 @@ import {
 } from '../infra/daptin/daptinLive';
 import {
     defaultStarterCollection,
+    defaultStarterEntry,
+    starterCatalog,
+    starterCollectionForEntry,
+    starterEntryById,
     STARTER_WORKSPACE_STORAGE_KEY
 } from '../app/starterWorkspace/starterCatalog';
+import type {StarterCatalogEntry} from '../app/starterWorkspace/types';
 import {
     canvasThemeId,
     documentThemeId,
@@ -55,6 +66,7 @@ import {
     type CanvasThemeMenuRequest,
     type NestedCanvasWorkspaceChromeState,
     type NestedCanvasWorkspaceHandle,
+    type WorkspaceFileDropRequest,
 } from './canvas/nested/NestedCanvasWorkspace';
 import {
     describeNode,
@@ -66,8 +78,10 @@ import {
 } from './canvas/imageAssets';
 import {
     type CanvasArrangeLayout,
-    type CanvasNode
+    type CanvasNode,
+    type WorldPoint
 } from '../domain/types';
+import {BuiltInNodeTypes} from '../domain/types';
 import type {
     CanvasDocumentCollection,
     CanvasDocumentId,
@@ -590,13 +604,13 @@ export function App() {
     }, [handleDocumentLiveEvent, handleSessionExpired, signedIn]);
 
     useEffect(() => {
-        if (!signedIn || !hasUsableStoredToken()) return;
         const assetIds = imageAssetIdsInCollection(chromeState.collection).filter(
-            (assetId) => !hasCachedAssetImage(assetId));
+            (assetId) => !hasCachedAssetImage(assetId) && (isLocalAssetId(assetId) || (signedIn && hasUsableStoredToken())));
         if (!assetIds.length) return;
         let canceled = false;
         for (const assetId of assetIds) {
-            void loadAssetObject(assetId)
+            const loadObject = isLocalAssetId(assetId) ? loadLocalAssetObject(assetId) : loadAssetObject(assetId);
+            void loadObject
                 .then((asset) => cacheAssetImage(asset.id, asset.objectUrl))
                 .then(() => {
                     if (!canceled) workspaceRef.current?.refreshActiveCanvas();
@@ -680,21 +694,29 @@ export function App() {
         setSyncMessage(LOCAL_SAVE_MESSAGE);
     }, []);
 
-    const handleNewLocalDraft = useCallback(async () => {
-        const snapshot = createLocalDraftSnapshot();
+    const startLocalDraftFromCatalog = useCallback(async (entry: StarterCatalogEntry) => {
+        const snapshot = createLocalDraftSnapshot(entry);
         await saveWorkspaceSnapshot(snapshot, STARTER_WORKSPACE_STORAGE_KEY);
         window.localStorage.removeItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY);
         ignoreDirtyUntilRef.current = Date.now() + 700;
         lastSavedSnapshotSignatureRef.current = null;
         setActiveDocumentId('');
-        setDocumentTitle(DEFAULT_DOCUMENT_TITLE);
+        setDocumentTitle(entry.title || DEFAULT_DOCUMENT_TITLE);
         setSyncStatus(signedIn ? 'dirty' : 'anonymous');
         setSyncMessage(signedIn ? ONLINE_READY_MESSAGE : LOCAL_SAVE_MESSAGE);
         workspaceRef.current?.replaceWorkspaceSnapshot(snapshot, {
             storageKey : STARTER_WORKSPACE_STORAGE_KEY,
-            interaction: 'New workspace',
+            interaction: `Started ${entry.title || 'workspace'}`,
         });
     }, [signedIn]);
+
+    const handleNewLocalDraft = useCallback(async () => {
+        await startLocalDraftFromCatalog(defaultStarterEntry);
+    }, [startLocalDraftFromCatalog]);
+
+    const handleStartFromCatalog = useCallback(async (entryId: string) => {
+        await startLocalDraftFromCatalog(starterEntryById(entryId));
+    }, [startLocalDraftFromCatalog]);
 
     const handleSaveOnline = useCallback(async () => {
         if (!signedIn) {
@@ -715,7 +737,14 @@ export function App() {
         setSyncMessage('Saving workspace');
         try {
             await workspaceRef.current?.flushWorkspaceSnapshot();
-            const freshSnapshot = workspaceRef.current?.getWorkspaceSnapshot() ?? snapshot;
+            let freshSnapshot = workspaceRef.current?.getWorkspaceSnapshot() ?? snapshot;
+            const promoted = await promoteLocalImageAssetsForOnlineSave(freshSnapshot);
+            if (promoted.changed) {
+                freshSnapshot = promoted.snapshot;
+                workspaceRef.current?.replaceWorkspaceSnapshot(freshSnapshot, {
+                    interaction: 'Images ready for online save',
+                });
+            }
             if (activeDocumentId) {
                 await saveDocument(activeDocumentId, freshSnapshot, documentTitle);
                 await saveWorkspaceSnapshot(freshSnapshot, remoteWorkspaceStorageKey(activeDocumentId));
@@ -890,6 +919,45 @@ export function App() {
         });
         closeAddPanelMenu();
     }, [closeAddPanelMenu]);
+
+    const handleWorkspaceFileDrop = useCallback(async (request: WorkspaceFileDropRequest) => {
+        if (request.canvasId !== (workspaceRef.current?.collection().activeCanvasId ?? chromeState.collection.activeCanvasId)) return;
+        const imageFiles = request.files.filter((file) => file.type.startsWith('image/'));
+        if (!imageFiles.length) {
+            setSyncStatus((current) => current === 'saving' || current === 'loading' ? current : 'error');
+            setSyncMessage('Drop image files to add images.');
+            return;
+        }
+        setSyncMessage(imageFiles.length > 1 ? `Adding ${imageFiles.length} images` : 'Adding image');
+        try {
+            const storeOnline = Boolean(activeDocumentId && signedIn && hasUsableStoredToken());
+            for (const [index, file] of imageFiles.entries()) {
+                const asset = await storeDroppedImage(file, storeOnline);
+                await cacheAssetImage(asset.id, asset.objectUrl);
+                if (workspaceRef.current?.collection().activeCanvasId !== request.canvasId) {
+                    setSyncMessage('Image drop cancelled because the view changed.');
+                    return;
+                }
+                const at = offsetDropPoint(request.at, index);
+                workspaceRef.current?.executeActiveCanvasCommand({
+                    type    : 'create-node',
+                    nodeType: BuiltInNodeTypes.image,
+                    source  : 'pointer',
+                    at,
+                    data    : {
+                        assetId: asset.id,
+                        alt    : cleanImageName(asset.name),
+                        fit    : 'contain',
+                        caption: '',
+                    },
+                });
+            }
+            workspaceRef.current?.refreshActiveCanvas();
+        } catch (error) {
+            setSyncStatus('error');
+            setSyncMessage(error instanceof Error ? error.message : 'Could not add this image.');
+        }
+    }, [activeDocumentId, chromeState.collection.activeCanvasId, signedIn]);
 
     const handleCanvasThemeSelect = useCallback((themeId: CanasterThemeId | null, event: ReactMouseEvent<HTMLButtonElement>) => {
         const target = canvasThemeMenuTarget;
@@ -1085,6 +1153,7 @@ export function App() {
                         onVerifyEmailOtp : () => void handleVerifyEmailOtp()
                     }}
                     documents={documents}
+                    catalogEntries={starterCatalog}
                     saveButtonLabel={saveButtonLabel}
                     signedIn={signedIn}
                     syncMessage={syncMessage}
@@ -1098,6 +1167,7 @@ export function App() {
                         setAccountOpen(true);
                     }}
                     onOpenDocument={(documentRef) => void loadDaptinDocument(documentRef, documents)}
+                    onStartFromCatalog={(entryId) => void handleStartFromCatalog(entryId)}
                     onRefreshDocuments={() => void handleRefreshDocuments()}
                     onSaveOnline={() => void handleSaveOnline()}
                 />) : null}
@@ -1113,6 +1183,7 @@ export function App() {
                         onChromeStateChange={handleChromeStateChange}
                         onArrangeCanvasMenuRequest={handleArrangeCanvasMenuRequest}
                         onCanvasThemeMenuRequest={handleCanvasThemeMenuRequest}
+                        onFileDrop={handleWorkspaceFileDrop}
                     />
                     {chromeState.collection.view.deleteConfirmation ? (<DeleteConfirmationPrompt
                         collection={chromeState.collection}
@@ -1153,14 +1224,94 @@ function saveActionLabel(status: SyncStatus, message: string, signedIn: boolean)
     return 'Save workspace online';
 }
 
+async function storeDroppedImage(file: File, online: boolean): Promise<{ id: string; name: string; objectUrl: string }> {
+    if (online) {
+        const asset = await uploadImageAsset(file);
+        return loadAssetObject(asset.id);
+    }
+    const asset = await saveLocalImageAsset(file);
+    return loadLocalAssetObject(asset.id);
+}
+
+function offsetDropPoint(point: WorldPoint, index: number): WorldPoint {
+    const offset = index * 32;
+    return { x: point.x + offset, y: point.y + offset };
+}
+
+function cleanImageName(name: string): string {
+    return name.replace(/\.[a-z0-9]+$/i, '').trim() || 'Image';
+}
+
 function imageAssetIdsInCollection(collection: CanvasDocumentCollection): string[] {
     const ids = new Set<string>();
     for (const document of Object.values(collection.documents)) {
+        const backgroundAssetId = document.appearance?.backgroundImage?.assetId;
+        if (backgroundAssetId) ids.add(backgroundAssetId);
         for (const node of document.model.nodes) {
             for (const assetId of referencedAssetIdsForNode(node)) ids.add(assetId);
         }
     }
     return [...ids];
+}
+
+async function promoteLocalImageAssetsForOnlineSave(
+    snapshot: CanvasWorkspaceSnapshot
+): Promise<{ snapshot: CanvasWorkspaceSnapshot; changed: boolean }> {
+    const localIds = localImageAssetIdsInSnapshot(snapshot);
+    if (!localIds.length) return { snapshot, changed: false };
+    const promotedIds = new Map<string, string>();
+    for (const localId of localIds) {
+        const file = await loadLocalAssetFile(localId);
+        const asset = await uploadImageAsset(file);
+        promotedIds.set(localId, asset.id);
+    }
+    return {
+        snapshot: rewriteSnapshotAssetIds(snapshot, promotedIds),
+        changed : promotedIds.size > 0,
+    };
+}
+
+function localImageAssetIdsInSnapshot(snapshot: CanvasWorkspaceSnapshot): string[] {
+    const ids = new Set<string>();
+    for (const collection of collectionsInSnapshot(snapshot)) {
+        for (const assetId of imageAssetIdsInCollection(collection)) {
+            if (isLocalAssetId(assetId)) ids.add(assetId);
+        }
+    }
+    return [...ids];
+}
+
+function collectionsInSnapshot(snapshot: CanvasWorkspaceSnapshot): CanvasDocumentCollection[] {
+    return [
+        snapshot.history.present,
+        ...snapshot.history.undoStack,
+        ...snapshot.history.redoStack,
+    ];
+}
+
+function rewriteSnapshotAssetIds(snapshot: CanvasWorkspaceSnapshot, promotedIds: Map<string, string>): CanvasWorkspaceSnapshot {
+    const next = structuredClone(snapshot) as CanvasWorkspaceSnapshot;
+    for (const collection of collectionsInSnapshot(next)) {
+        for (const document of Object.values(collection.documents)) {
+            const backgroundAssetId = document.appearance?.backgroundImage?.assetId;
+            const promotedBackgroundId = backgroundAssetId ? promotedIds.get(backgroundAssetId) : null;
+            if (promotedBackgroundId && document.appearance?.backgroundImage) {
+                document.appearance.backgroundImage = {
+                    ...document.appearance.backgroundImage,
+                    assetId: promotedBackgroundId,
+                };
+            }
+            document.model = {
+                ...document.model,
+                nodes: document.model.nodes.map((node) => {
+                    const assetId = isRecord(node.data) ? stringField(node.data.assetId) : '';
+                    const promotedId = promotedIds.get(assetId);
+                    return promotedId ? { ...node, data: { ...node.data, assetId: promotedId } } : node;
+                }),
+            };
+        }
+    }
+    return next;
 }
 
 function canvasIdsWithDescendants(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId): CanvasDocumentId[] {
@@ -1257,8 +1408,8 @@ function remoteWorkspaceStorageKey(documentRef: string): string {
     return `daptin:${documentRef}`;
 }
 
-function createLocalDraftSnapshot(): CanvasWorkspaceSnapshot {
-    return createWorkspaceSnapshot(createWorkspaceHistory(defaultStarterCollection()), null);
+function createLocalDraftSnapshot(entry: StarterCatalogEntry = defaultStarterEntry): CanvasWorkspaceSnapshot {
+    return createWorkspaceSnapshot(createWorkspaceHistory(starterCollectionForEntry(entry)), null);
 }
 
 function titleFromSnapshot(snapshot: CanvasWorkspaceSnapshot): string {

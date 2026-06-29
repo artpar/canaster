@@ -45,7 +45,7 @@ export function normalizeNodeData(nodeType: string, raw: unknown): NodeData {
       return parseCanvasPortalData(data);
     case 'card':
       return {
-        title: asString(data.title, 'Untitled card'),
+        title: asString(data.title, 'Untitled work item'),
         detail: asString(data.detail, ''),
         accent: asEnum(data.accent, CARD_ACCENTS, 'task'),
       };
@@ -88,7 +88,7 @@ export function describeNode(node: CanvasNode): NodeDescription {
     }
     case 'card':
       return {
-        label: asString(data.title, 'Untitled card') || 'Untitled card',
+        label: asString(data.title, 'Untitled work item') || 'Untitled work item',
         roleDescription: 'Work item',
         details: [asString(data.detail, '')].filter(Boolean),
         state: [],

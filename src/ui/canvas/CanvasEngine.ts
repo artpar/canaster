@@ -1,6 +1,7 @@
 import { canvasThemeFor, type CanvasTheme } from './theme';
 import { cloneNodeData } from '../../core/nodeData';
 import { canvasPortalViewportRect } from './nodeTypes/canvasNode';
+import { cachedAssetImage } from './imageAssets';
 import { createNodeInteraction, describeNode, hitTestNodeContent, nodeDefinitionFor, nodeDefinitionForType, nodeInteractionRegions, parseNodeData, portalInfoForNode, renderNodeContent } from './nodeRegistry';
 import type { NodeContentRect, NodeInteractionController, NodeInteractionRegion } from './nodeDefinition/nodeDefinitionTypes';
 import type {
@@ -22,6 +23,7 @@ import type {
   WorldPoint,
   NodeData,
 } from '../../domain/types';
+import type { CanvasBackgroundImage } from '../../core/canvasAppearance';
 import { BuiltInNodeTypes } from '../../domain/types';
 import type {CanasterThemeId} from '../theme/CanasterTheme';
 
@@ -135,6 +137,7 @@ export class CanvasEngine {
 
   private model: CanvasModel = { schemaVersion: 2, nodes: [] };
   private theme: CanvasTheme = canvasThemeFor('graphiteDesk');
+  private backgroundImage: CanvasBackgroundImage | null = null;
   private camera: Camera = { x: 0, y: 0, scale: 1 };
   private interactionMode: EngineInteractionMode = 'active';
   private selectedNodeIds = new Set<string>();
@@ -190,6 +193,7 @@ export class CanvasEngine {
     this.nodeVisibilitySignature = options.nodeVisibilitySignature ?? '';
     this.livePortalNodeIds = new Set(options.livePortalNodeIds ?? []);
     this.highlightNodeIds = new Set(options.highlightNodeIds ?? []);
+    this.backgroundImage = cloneBackgroundImage(options.backgroundImage ?? null);
     this.resizeObserver = new ResizeObserver(() => this.resize());
 
     if (this.onNodeDataChange) {
@@ -269,6 +273,13 @@ export class CanvasEngine {
 
   setTheme(name: CanasterThemeId) {
     this.theme = canvasThemeFor(name);
+    this.markDirty();
+  }
+
+  setBackgroundImage(backgroundImage: CanvasBackgroundImage | null) {
+    const next = cloneBackgroundImage(backgroundImage);
+    if (sameBackgroundImage(this.backgroundImage, next)) return;
+    this.backgroundImage = next;
     this.markDirty();
   }
 
@@ -403,7 +414,7 @@ export class CanvasEngine {
   private planCommand(command: CanvasCommand): CommandPlan {
     switch (command.type) {
       case 'create-node':
-        return this.planCreateNode(command.nodeType, command.source, command.at);
+        return this.planCreateNode(command.nodeType, command.source, command.at, command.data);
       case 'select-node':
         return this.planSelectNode(command.nodeId, command.source, command.mode ?? 'replace');
       case 'clear-selection':
@@ -421,7 +432,7 @@ export class CanvasEngine {
     }
   }
 
-  private planCreateNode(nodeType: string, source: CanvasEditSource, at?: WorldPoint): CommandPlan {
+  private planCreateNode(nodeType: string, source: CanvasEditSource, at?: WorldPoint, data?: NodeData): CommandPlan {
     const definition = nodeDefinitionForType(nodeType);
     if (!definition) return { operations: [], interaction: 'Panel type unavailable' };
     const existingIds = new Set(this.model.nodes.map((node) => node.id));
@@ -435,8 +446,9 @@ export class CanvasEngine {
       y: snapCoordinate(center.y - h / 2),
       w,
       h,
-      data: definition.createDefaultData(),
+      data: cloneNodeData(data ?? definition.createDefaultData()),
     };
+    node.data = parseNodeData(node);
     const selection = {
       selectedNodeIds: [id],
       primarySelectedNodeId: id,
@@ -621,6 +633,7 @@ export class CanvasEngine {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = theme.bg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    this.drawCanvasBackgroundImage();
     this.drawCanvasWash();
     this.drawCanvasPattern();
 
@@ -680,6 +693,25 @@ export class CanvasEngine {
     }
     ctx.restore();
     ctx.setLineDash([]);
+  }
+
+  private drawCanvasBackgroundImage() {
+    const backgroundImage = this.backgroundImage;
+    const opacity = backgroundImage?.opacity ?? 1;
+    if (!backgroundImage || opacity <= 0) return;
+    const image = cachedAssetImage(backgroundImage.assetId);
+    if (!image || image.naturalWidth <= 0 || image.naturalHeight <= 0) return;
+    const { ctx, dpr, camera } = this;
+    const rect = backgroundImageWorldRect(backgroundImage, image);
+    const drawRect = fittedImageRect(image, rect, backgroundImage.fit ?? 'cover');
+    ctx.save();
+    ctx.globalAlpha = opacity;
+    ctx.setTransform(dpr * camera.scale, 0, 0, dpr * camera.scale, camera.x * dpr, camera.y * dpr);
+    ctx.beginPath();
+    ctx.rect(rect.x, rect.y, rect.w, rect.h);
+    ctx.clip();
+    ctx.drawImage(image, drawRect.x, drawRect.y, drawRect.w, drawRect.h);
+    ctx.restore();
   }
 
   private drawLineGrid(axes: GridPatternAxes, dash: number[]) {
@@ -1836,6 +1868,64 @@ function restoreNodeGeometry(node: CanvasNode, geometry: NodeGeometry) {
   node.y = geometry.y;
   node.w = geometry.w;
   node.h = geometry.h;
+}
+
+function cloneBackgroundImage(backgroundImage: CanvasBackgroundImage | null): CanvasBackgroundImage | null {
+  const assetId = typeof backgroundImage?.assetId === 'string' ? backgroundImage.assetId.trim() : '';
+  if (!assetId) return null;
+  return {
+    assetId,
+    fit: backgroundImage?.fit === 'contain' || backgroundImage?.fit === 'stretch' ? backgroundImage.fit : 'cover',
+    opacity: clampNumber(backgroundImage?.opacity, 0, 1, 1),
+    x: finiteNumberOrUndefined(backgroundImage?.x),
+    y: finiteNumberOrUndefined(backgroundImage?.y),
+    w: positiveNumberOrUndefined(backgroundImage?.w),
+    h: positiveNumberOrUndefined(backgroundImage?.h),
+  };
+}
+
+function sameBackgroundImage(a: CanvasBackgroundImage | null, b: CanvasBackgroundImage | null) {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  return a.assetId === b.assetId && (a.fit ?? 'cover') === (b.fit ?? 'cover') && (a.opacity ?? 1) === (b.opacity ?? 1) && a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+}
+
+function backgroundImageWorldRect(backgroundImage: CanvasBackgroundImage, image: HTMLImageElement) {
+  const w = backgroundImage.w ?? image.naturalWidth;
+  const h = backgroundImage.h ?? image.naturalHeight;
+  return {
+    x: backgroundImage.x ?? 0,
+    y: backgroundImage.y ?? 0,
+    w,
+    h,
+  };
+}
+
+function fittedImageRect(image: HTMLImageElement, rect: NodeGeometry, fit: CanvasBackgroundImage['fit'] = 'cover') {
+  if (fit === 'stretch') return rect;
+  const scale = fit === 'contain'
+    ? Math.min(rect.w / image.naturalWidth, rect.h / image.naturalHeight)
+    : Math.max(rect.w / image.naturalWidth, rect.h / image.naturalHeight);
+  const w = image.naturalWidth * scale;
+  const h = image.naturalHeight * scale;
+  return {
+    x: rect.x + (rect.w - w) / 2,
+    y: rect.y + (rect.h - h) / 2,
+    w,
+    h,
+  };
+}
+
+function clampNumber(value: unknown, min: number, max: number, fallback: number) {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
+}
+
+function finiteNumberOrUndefined(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function positiveNumberOrUndefined(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
 function centeredRect(rect: NodeGeometry, size: number): NodeGeometry {

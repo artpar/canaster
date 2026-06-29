@@ -12,6 +12,7 @@ export type {
 export { BuiltInNodeTypes } from './BuiltInNodeTypes';
 export type { BuiltInNodeType } from './BuiltInNodeTypes';
 import type { CanvasEditSource, CanvasNode, NodeData, NodeTypeId, WorldPoint } from '../core/nodePrimitives';
+import type { CanvasBackgroundImage } from '../core/canvasAppearance';
 
 export type ThemeName = 'dark' | 'light';
 
@@ -31,7 +32,7 @@ export type CanvasNodeVisibilityFilter = (node: CanvasNode) => boolean;
 export type CanvasArrangeLayout = 'grid' | 'rows' | 'columns' | 'list';
 
 export type CanvasCommand =
-  | { type: 'create-node'; nodeType: NodeTypeId; source: CanvasEditSource; at?: WorldPoint }
+  | { type: 'create-node'; nodeType: NodeTypeId; source: CanvasEditSource; at?: WorldPoint; data?: NodeData }
   | { type: 'select-node'; nodeId: string; mode?: 'replace' | 'toggle' | 'add'; source: CanvasEditSource }
   | { type: 'clear-selection'; source: CanvasEditSource }
   | { type: 'move-selection'; dx: number; dy: number; source: CanvasEditSource }
@@ -121,4 +122,5 @@ export type EngineOptions = {
   highlightNodeIds?: string[];
   transformPastedNode?: (node: CanvasNode) => CanvasNode;
   pasteInteractionForNodes?: (nodes: CanvasNode[]) => string | null;
+  backgroundImage?: CanvasBackgroundImage | null;
 };

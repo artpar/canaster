@@ -6,6 +6,7 @@ import {
   portalInfoForNode,
   updatePortalSummaryForNode,
 } from './nodeSemantics';
+import type { CanvasBackgroundImage } from '../core/canvasAppearance';
 import type { CanvasDocument, CanvasDocumentAppearance, CanvasDocumentCollection, CanvasDocumentId, CanvasWorkspaceAppearance, PortalNode, SerializableNestedCanvasViewState, StackFrame } from './documentTypes';
 import type { NodePortalInfo } from './nodeSemantics';
 import {
@@ -149,7 +150,25 @@ export function setCanvasThemeId(collection: CanvasDocumentCollection, canvasId:
   const next = cloneDocumentCollection(collection);
   next.documents[canvasId] = {
     ...next.documents[canvasId],
-    appearance: themeId ? { themeId } : undefined,
+    appearance: normalizeDocumentAppearance({
+      ...next.documents[canvasId].appearance,
+      themeId,
+    }),
+  };
+  return syncDerivedView(next);
+}
+
+export function setCanvasBackgroundImage(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId, backgroundImage: CanvasBackgroundImage | null): CanvasDocumentCollection {
+  const document = canvasDocumentFor(collection, canvasId);
+  const nextBackground = cloneCanvasBackgroundImage(backgroundImage);
+  if (sameCanvasBackgroundImage(document.appearance?.backgroundImage ?? null, nextBackground)) return collection;
+  const next = cloneDocumentCollection(collection);
+  next.documents[canvasId] = {
+    ...next.documents[canvasId],
+    appearance: normalizeDocumentAppearance({
+      ...next.documents[canvasId].appearance,
+      backgroundImage: nextBackground,
+    }),
   };
   return syncDerivedView(next);
 }
@@ -374,7 +393,52 @@ function cloneWorkspaceAppearance(appearance: CanvasWorkspaceAppearance | undefi
 
 function cloneDocumentAppearance(appearance: CanvasDocumentAppearance | undefined): CanvasDocumentAppearance | undefined {
   const themeId = typeof appearance?.themeId === 'string' && appearance.themeId ? appearance.themeId : null;
-  return themeId ? { themeId } : undefined;
+  return normalizeDocumentAppearance({
+    themeId,
+    backgroundImage: cloneCanvasBackgroundImage(appearance?.backgroundImage ?? null),
+  });
+}
+
+function normalizeDocumentAppearance(appearance: CanvasDocumentAppearance | undefined): CanvasDocumentAppearance | undefined {
+  const themeId = typeof appearance?.themeId === 'string' && appearance.themeId ? appearance.themeId : null;
+  const backgroundImage = cloneCanvasBackgroundImage(appearance?.backgroundImage ?? null);
+  if (!themeId && !backgroundImage) return undefined;
+  return {
+    ...(themeId ? { themeId } : {}),
+    ...(backgroundImage ? { backgroundImage } : {}),
+  };
+}
+
+function cloneCanvasBackgroundImage(backgroundImage: CanvasBackgroundImage | null | undefined): CanvasBackgroundImage | null {
+  const assetId = typeof backgroundImage?.assetId === 'string' ? backgroundImage.assetId.trim() : '';
+  if (!assetId) return null;
+  return {
+    assetId,
+    fit: backgroundImage?.fit === 'contain' || backgroundImage?.fit === 'stretch' ? backgroundImage.fit : 'cover',
+    opacity: clampNumber(backgroundImage?.opacity, 0, 1, 1),
+    x: finiteNumberOrUndefined(backgroundImage?.x),
+    y: finiteNumberOrUndefined(backgroundImage?.y),
+    w: positiveNumberOrUndefined(backgroundImage?.w),
+    h: positiveNumberOrUndefined(backgroundImage?.h),
+  };
+}
+
+function sameCanvasBackgroundImage(a: CanvasBackgroundImage | null, b: CanvasBackgroundImage | null): boolean {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  return a.assetId === b.assetId && (a.fit ?? 'cover') === (b.fit ?? 'cover') && (a.opacity ?? 1) === (b.opacity ?? 1) && a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+}
+
+function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
+}
+
+function finiteNumberOrUndefined(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function positiveNumberOrUndefined(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
 export function serializeCollectionViewState(collection: CanvasDocumentCollection): SerializableNestedCanvasViewState {

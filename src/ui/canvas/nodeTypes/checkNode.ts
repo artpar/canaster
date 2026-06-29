@@ -54,19 +54,18 @@ export const checkNodeDefinition: NodeDefinition<CheckNodeData> = defineNodeType
       ctx.fillStyle = item.checked ? theme.mutedText : theme.bodyText;
       ctx.font = text.body;
       const deleteSpace = state.selected || state.hovered ? metrics.deleteHitSize : 0;
-      ctx.fillText(clipText(ctx, item.text || 'Untitled item', Math.max(0, contentRect.w - layout.insetX - metrics.textOffsetX - deleteSpace)), contentRect.x + layout.insetX + metrics.textOffsetX, y);
+      const textX = contentRect.x + layout.insetX + metrics.textOffsetX;
+      const itemLabel = clipText(ctx, item.text || 'Untitled item', Math.max(0, contentRect.w - layout.insetX - metrics.textOffsetX - deleteSpace));
+      ctx.fillText(itemLabel, textX, y);
+      if (item.checked) drawCompletedRule(ctx, textX, y, itemLabel, theme);
       if (state.selected || state.hovered) {
-        ctx.fillStyle = theme.mutedText;
-        ctx.font = text.label;
-        ctx.fillText('x', contentRect.x + contentRect.w - metrics.deleteHitSize + Math.round(layout.insetX * 0.5), y);
+        drawDeleteControl(ctx, contentRect.x + contentRect.w - metrics.deleteHitSize, y + metrics.deleteOffsetY, theme);
       }
       y += layout.rowHeight;
     }
 
     if (visibleItems.length < rows) {
-      ctx.fillStyle = theme.bodyText;
-      ctx.font = text.body;
-      ctx.fillText(visibleItems.length ? 'Add item' : 'Add first item', contentRect.x + layout.insetX, y);
+      drawAddCue(ctx, contentRect.x + layout.insetX, y + metrics.checkboxOffsetY, visibleItems.length ? 'Add item' : 'Add first item', theme);
     } else if (data.items.length > visibleItems.length) {
       ctx.fillStyle = theme.mutedText;
       ctx.font = text.label;
@@ -330,9 +329,12 @@ function visibleRows(height: number, layout: ReturnType<typeof nodeLayout>) {
 
 function checklistMetrics(layout: ReturnType<typeof nodeLayout>) {
   const checkboxSize = Math.max(10, Math.round(layout.rowHeight * 0.68));
+  const deleteButtonSize = Math.max(14, Math.round(layout.rowHeight * 0.72));
   return {
     checkboxSize,
     checkboxOffsetY: Math.max(0, Math.round((layout.rowHeight - checkboxSize) / 2) - 1),
+    deleteButtonSize,
+    deleteOffsetY: Math.max(0, Math.round((layout.rowHeight - deleteButtonSize) / 2) - 1),
     deleteHitSize: Math.max(16, layout.rowHeight),
     hitLift: Math.max(1, Math.round(layout.rowHeight * 0.1)),
     textOffsetX: checkboxSize + Math.max(6, layout.insetX + 4),
@@ -361,4 +363,63 @@ function drawCheckbox(ctx: CanvasRenderingContext2D, x: number, y: number, check
   ctx.strokeStyle = theme.selected;
   ctx.lineWidth = Math.max(1.4, layout.controlRadius * 0.45);
   ctx.stroke();
+}
+
+function drawCompletedRule(ctx: CanvasRenderingContext2D, x: number, y: number, label: string, theme: CanvasTheme) {
+  const layout = nodeLayout(theme);
+  const width = ctx.measureText(label).width;
+  if (width <= 0) return;
+  ctx.save();
+  ctx.strokeStyle = theme.mutedText;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x, y + layout.bodyLineHeight * 0.52);
+  ctx.lineTo(x + width, y + layout.bodyLineHeight * 0.52);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawDeleteControl(ctx: CanvasRenderingContext2D, x: number, y: number, theme: CanvasTheme) {
+  const layout = nodeLayout(theme);
+  const { deleteButtonSize } = checklistMetrics(layout);
+  const buttonX = x + Math.max(0, (layout.rowHeight - deleteButtonSize) / 2);
+  ctx.save();
+  ctx.strokeStyle = theme.nodeBorder;
+  ctx.fillStyle = theme.nodeBg;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(buttonX, y, deleteButtonSize, deleteButtonSize, theme.nodeControlRadius);
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = theme.mutedText;
+  ctx.lineWidth = Math.max(1, layout.controlRadius * 0.32);
+  ctx.beginPath();
+  ctx.moveTo(buttonX + deleteButtonSize * 0.32, y + deleteButtonSize * 0.32);
+  ctx.lineTo(buttonX + deleteButtonSize * 0.68, y + deleteButtonSize * 0.68);
+  ctx.moveTo(buttonX + deleteButtonSize * 0.68, y + deleteButtonSize * 0.32);
+  ctx.lineTo(buttonX + deleteButtonSize * 0.32, y + deleteButtonSize * 0.68);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawAddCue(ctx: CanvasRenderingContext2D, x: number, y: number, label: string, theme: CanvasTheme) {
+  const layout = nodeLayout(theme);
+  const text = nodeText(theme);
+  const { checkboxSize, textOffsetX } = checklistMetrics(layout);
+  ctx.save();
+  ctx.strokeStyle = theme.mutedText;
+  ctx.lineWidth = Math.max(1, layout.controlRadius * 0.3);
+  ctx.strokeRect(x, y, checkboxSize, checkboxSize);
+  ctx.beginPath();
+  ctx.moveTo(x + checkboxSize * 0.28, y + checkboxSize * 0.5);
+  ctx.lineTo(x + checkboxSize * 0.72, y + checkboxSize * 0.5);
+  ctx.moveTo(x + checkboxSize * 0.5, y + checkboxSize * 0.28);
+  ctx.lineTo(x + checkboxSize * 0.5, y + checkboxSize * 0.72);
+  ctx.stroke();
+  ctx.fillStyle = theme.bodyText;
+  ctx.font = text.body;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(label, x + textOffsetX, y - Math.max(0, Math.round((layout.bodyLineHeight - checkboxSize) / 2)));
+  ctx.restore();
 }

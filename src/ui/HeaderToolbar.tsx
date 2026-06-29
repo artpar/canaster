@@ -45,9 +45,8 @@ export function HeaderToolbar(props: HeaderToolbarProps) {
             <button
                 className="icon-button view-tree-toggle-button"
                 type="button"
-                aria-label={props.sidePanel.open ? "Close views and documents panel" :
-                    "Open views and documents panel"}
-                title={props.sidePanel.open ? "Close views and documents" : "Open views and documents"}
+                aria-label={props.sidePanel.open ? "Close workspace sidebar" : "Open workspace sidebar"}
+                title={props.sidePanel.open ? "Close workspace sidebar" : "Open workspace sidebar"}
                 aria-pressed={props.sidePanel.open}
                 onClick={props.sidePanel.onToggle}>
                 {props.sidePanel.open ? <PanelLeftClose size={17}/> : <PanelLeftOpen size={17}/>}

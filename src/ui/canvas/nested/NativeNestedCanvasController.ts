@@ -24,7 +24,7 @@ import {
   stripPortalChildReferenceOnPaste,
 } from '../../../domain/documentCommands';
 import { portalInfoForNode, updatePortalSummaryForNode } from '../nodeRegistry';
-import type { Camera, CanvasCommand, CanvasModel, CanvasModelChange, CanvasNode, CanvasSelectionState, EngineOptions, PortalLayout, ScreenRect, ViewportStatus } from '../../../domain/types';
+import type { Camera, CanvasCommand, CanvasModel, CanvasModelChange, CanvasNode, CanvasSelectionState, EngineOptions, PortalLayout, ScreenRect, ViewportStatus, WorldPoint } from '../../../domain/types';
 import type {
   CanvasDocumentCollection,
   CanvasDocumentId,
@@ -59,7 +59,7 @@ import {
   type ParentContextPaneLayoutConstraints,
 } from './parentContextField';
 import { portalOverlayStyle } from './portalLayout';
-import type { ArrangeCanvasMenuRequest, CanvasThemeMenuRequest, NestedCanvasWorkspaceChromeState } from './NestedCanvasWorkspace';
+import type { ArrangeCanvasMenuRequest, CanvasThemeMenuRequest, NestedCanvasWorkspaceChromeState, WorkspaceFileDropRequest } from './NestedCanvasWorkspace';
 import type { WorkspaceUrlPaneCamera, WorkspaceUrlState } from '../../../infra/browser/workspaceUrlLocation';
 import {hasMetaOrCtrlShortcutModifier} from '../../KeyboardShortcuts';
 import type {CanasterThemeId} from '../../theme/CanasterTheme';
@@ -76,6 +76,7 @@ export type NativeNestedCanvasControllerOptions = {
   onChromeStateChange?: (state: NestedCanvasWorkspaceChromeState) => void;
   onArrangeCanvasMenuRequest?: (request: ArrangeCanvasMenuRequest) => void;
   onCanvasThemeMenuRequest?: (request: CanvasThemeMenuRequest) => void;
+  onFileDrop?: (request: WorkspaceFileDropRequest) => void;
 };
 
 type Slot = {
@@ -141,6 +142,7 @@ export class NativeNestedCanvasController {
   private readonly onChromeStateChange?: (state: NestedCanvasWorkspaceChromeState) => void;
   private readonly onArrangeCanvasMenuRequest?: (request: ArrangeCanvasMenuRequest) => void;
   private readonly onCanvasThemeMenuRequest?: (request: CanvasThemeMenuRequest) => void;
+  private readonly onFileDrop?: (request: WorkspaceFileDropRequest) => void;
   private readonly historyRef: { current: CanvasWorkspaceHistory };
   private readonly collectionRef: { current: CanvasDocumentCollection };
   private readonly lastModelChangeRef: { current: DocumentModelChange | null } = { current: null };
@@ -188,6 +190,7 @@ export class NativeNestedCanvasController {
     this.onChromeStateChange = options.onChromeStateChange;
     this.onArrangeCanvasMenuRequest = options.onArrangeCanvasMenuRequest;
     this.onCanvasThemeMenuRequest = options.onCanvasThemeMenuRequest;
+    this.onFileDrop = options.onFileDrop;
     this.historyRef = { current: createWorkspaceHistory(options.initialCollection) };
     this.collectionRef = { current: this.historyRef.current.present };
 
@@ -225,6 +228,10 @@ export class NativeNestedCanvasController {
     this.root.addEventListener('pointerleave', this.handleViewportControlPointerLeave);
     this.root.addEventListener('focusin', this.handleViewportControlFocusIn);
     this.root.addEventListener('focusout', this.handleViewportControlFocusOut);
+    this.root.addEventListener('dragenter', this.handleFileDragEnter);
+    this.root.addEventListener('dragover', this.handleFileDragOver);
+    this.root.addEventListener('dragleave', this.handleFileDragLeave);
+    this.root.addEventListener('drop', this.handleFileDrop);
 
     this.syncActiveViewportSlot();
     this.syncViewportControlVisibility();
@@ -248,6 +255,10 @@ export class NativeNestedCanvasController {
     this.root.removeEventListener('pointerleave', this.handleViewportControlPointerLeave);
     this.root.removeEventListener('focusin', this.handleViewportControlFocusIn);
     this.root.removeEventListener('focusout', this.handleViewportControlFocusOut);
+    this.root.removeEventListener('dragenter', this.handleFileDragEnter);
+    this.root.removeEventListener('dragover', this.handleFileDragOver);
+    this.root.removeEventListener('dragleave', this.handleFileDragLeave);
+    this.root.removeEventListener('drop', this.handleFileDrop);
     this.resizeObserver.disconnect();
     this.activeEngine()?.dispose();
     this.disposeParentContextSlots();
@@ -279,6 +290,10 @@ export class NativeNestedCanvasController {
     const document = collection.documents[canvasId];
     if (document?.appearance?.themeId) return document.appearance.themeId;
     return this.theme;
+  }
+
+  private canvasBackgroundImageFor(canvasId: CanvasDocumentId) {
+    return this.collectionRef.current.documents[canvasId]?.appearance?.backgroundImage ?? null;
   }
 
   setParentContextVisible(visible: boolean) {
@@ -400,8 +415,58 @@ export class NativeNestedCanvasController {
     });
   };
 
+  private handleFileDragEnter = (event: DragEvent) => {
+    if (!hasDroppedFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    this.root.classList.add('is-file-drag-over');
+  };
+
+  private handleFileDragOver = (event: DragEvent) => {
+    if (!hasDroppedFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+    this.root.classList.add('is-file-drag-over');
+  };
+
+  private handleFileDragLeave = (event: DragEvent) => {
+    if (event.relatedTarget instanceof Node && this.root.contains(event.relatedTarget)) return;
+    this.root.classList.remove('is-file-drag-over');
+  };
+
+  private handleFileDrop = (event: DragEvent) => {
+    if (!hasDroppedFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    this.root.classList.remove('is-file-drag-over');
+    const at = this.activeCanvasWorldPoint(event);
+    if (!at) {
+      this.setStatus({ ...this.status, interaction: 'Drop images on the active view' });
+      return;
+    }
+    const files = [...(event.dataTransfer?.files ?? [])];
+    if (!files.length) return;
+    this.onFileDrop?.({
+      canvasId: this.collectionRef.current.activeCanvasId,
+      at,
+      files,
+    });
+  };
+
   private setControlOwnerForTarget(target: EventTarget | null): void {
     this.setControlOwnerSlot(this.viewportSlotForTarget(target) ?? this.activeSlot);
+  }
+
+  private activeCanvasWorldPoint(event: DragEvent): WorldPoint | null {
+    const slot = this.activeSlot;
+    if (!slot) return null;
+    const rect = slot.canvas.getBoundingClientRect();
+    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) {
+      return null;
+    }
+    const camera = slot.engine.getCamera();
+    return {
+      x: (event.clientX - rect.left - camera.x) / camera.scale,
+      y: (event.clientY - rect.top - camera.y) / camera.scale,
+    };
   }
 
   private setControlOwnerSlot(slot: CanvasViewportSlot | null): void {
@@ -702,6 +767,7 @@ export class NativeNestedCanvasController {
     this.applyActiveHandleSizing(slot);
     if (active) slot.engine.setModel(active.model);
     slot.engine.setTheme(this.canvasThemeFor(collection.activeCanvasId));
+    slot.engine.setBackgroundImage(this.canvasBackgroundImageFor(collection.activeCanvasId));
     slot.engine.setCamera(cameraForCanvas(collection, collection.activeCanvasId));
     slot.engine.setSelectionState(selectionForCanvas(collection, collection.activeCanvasId));
     this.syncViewportControlVisibility();
@@ -909,6 +975,7 @@ export class NativeNestedCanvasController {
     parent.append(viewportSlot.wrapper);
     viewportSlot.engine.setModel(canvasDocument.model);
     viewportSlot.engine.setTheme(this.canvasThemeFor(canvasId));
+    viewportSlot.engine.setBackgroundImage(this.canvasBackgroundImageFor(canvasId));
     this.applyActiveHandleSizing(viewportSlot);
     const slot: Slot = { key, parentCanvasId: layout.parentCanvasId, portalNodeId: layout.portalNodeId, canvasId, viewportSlot, parentContextOwnerKey, portalLayouts: [], sizeSignature: sizeSignature(stageRect) };
     this.slots.set(key, slot);
@@ -930,6 +997,7 @@ export class NativeNestedCanvasController {
     slot.viewportSlot.canvas.setAttribute('aria-label', `${canvasDocument.title} live preview`);
     slot.viewportSlot.engine.setCanvasId(canvasDocument.id);
     slot.viewportSlot.engine.setTheme(this.canvasThemeFor(canvasDocument.id));
+    slot.viewportSlot.engine.setBackgroundImage(this.canvasBackgroundImageFor(canvasDocument.id));
     slot.viewportSlot.engine.setModel(canvasDocument.model, { preserveInteraction: true });
   }
 
@@ -1189,6 +1257,7 @@ export class NativeNestedCanvasController {
       }
       this.applyActiveHandleSizing(slot.viewportSlot);
       slot.viewportSlot.engine.setTheme(this.canvasThemeFor(parent.id));
+      slot.viewportSlot.engine.setBackgroundImage(this.canvasBackgroundImageFor(parent.id));
       slot.viewportSlot.engine.setModel(parent.model, { preserveInteraction: true });
       const visibleNodeIds = parentContextNodeIdsForRegion(parent.model.nodes, source, region);
       slot.viewportSlot.engine.setNodeVisibilityFilter(
@@ -1249,6 +1318,7 @@ export class NativeNestedCanvasController {
     viewportSlot.wrapper.style.background = 'transparent';
     viewportSlot.viewport.style.inset = '0';
     viewportSlot.engine.setTheme(this.canvasThemeFor(canvasId));
+    viewportSlot.engine.setBackgroundImage(this.canvasBackgroundImageFor(canvasId));
     this.applyActiveHandleSizing(viewportSlot);
     this.record('parent-context:pane:create', { ownerKey, canvasId, region });
     this.syncViewportControlVisibility();
@@ -1747,6 +1817,12 @@ function paddedWorldRect(rect: { x: number; y: number; w: number; h: number }, r
     w: rect.w + padX * 2,
     h: rect.h + padY * 2,
   };
+}
+
+function hasDroppedFiles(dataTransfer: DataTransfer | null): boolean {
+  if (!dataTransfer) return false;
+  if ([...dataTransfer.types].includes('Files')) return true;
+  return [...dataTransfer.items].some((item) => item.kind === 'file');
 }
 
 function cameraForWorldRect(worldRect: { x: number; y: number; w: number; h: number }, screenRect: { w: number; h: number }) {

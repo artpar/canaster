@@ -10,8 +10,16 @@ export const starterCatalog: readonly StarterCatalogEntry[] = entries;
 export const defaultStarterEntry = entries[0];
 export const STARTER_WORKSPACE_STORAGE_KEY = defaultStarterEntry.storageKey;
 
+export function starterEntryById(entryId: string): StarterCatalogEntry {
+  return entries.find((entry) => entry.id === entryId) ?? defaultStarterEntry;
+}
+
+export function starterCollectionForEntry(entry: StarterCatalogEntry): CanvasDocumentCollection {
+  return hydrateDocumentCollection(entry.collection);
+}
+
 export function defaultStarterCollection(): CanvasDocumentCollection {
-  return hydrateDocumentCollection(defaultStarterEntry.collection);
+  return starterCollectionForEntry(defaultStarterEntry);
 }
 
 export function defaultStarterRootModel(): CanvasModel {

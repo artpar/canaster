@@ -1,0 +1,92 @@
+import Dexie, { type Table } from 'dexie';
+
+export type LocalAssetSummary = {
+  id: string;
+  name: string;
+  mime: string;
+  updatedAt: string | null;
+};
+
+export type LocalAssetObject = LocalAssetSummary & {
+  objectUrl: string;
+};
+
+type StoredLocalAsset = {
+  id: string;
+  schemaVersion: 1;
+  name: string;
+  mime: string;
+  blob: Blob;
+  updatedAt: number;
+};
+
+const DATABASE_NAME = 'canway-local-assets';
+const LOCAL_ASSET_PREFIX = 'local:';
+const objectUrls = new Map<string, string>();
+
+class CanwayLocalAssetDatabase extends Dexie {
+  assets!: Table<StoredLocalAsset, string>;
+
+  constructor() {
+    super(DATABASE_NAME);
+    this.version(1).stores({
+      assets: 'id, updatedAt, mime',
+    });
+  }
+}
+
+const db = new CanwayLocalAssetDatabase();
+
+export function isLocalAssetId(assetId: string | null | undefined): assetId is string {
+  return typeof assetId === 'string' && assetId.startsWith(LOCAL_ASSET_PREFIX);
+}
+
+export async function saveLocalImageAsset(file: File): Promise<LocalAssetSummary> {
+  if (!file.type.startsWith('image/')) throw new Error('Choose an image file.');
+  const now = Date.now();
+  const record: StoredLocalAsset = {
+    id: `${LOCAL_ASSET_PREFIX}${assetToken()}`,
+    schemaVersion: 1,
+    name: file.name || 'image',
+    mime: file.type,
+    blob: file,
+    updatedAt: now,
+  };
+  await db.assets.put(record);
+  return summaryFromRecord(record);
+}
+
+export async function loadLocalAssetObject(assetId: string): Promise<LocalAssetObject> {
+  const record = await db.assets.get(assetId);
+  if (!record || record.schemaVersion !== 1) throw new Error('Local image was not found on this device.');
+  const previous = objectUrls.get(assetId);
+  if (previous) URL.revokeObjectURL(previous);
+  const objectUrl = URL.createObjectURL(record.blob);
+  objectUrls.set(assetId, objectUrl);
+  return { ...summaryFromRecord(record), objectUrl };
+}
+
+export async function loadLocalAssetFile(assetId: string): Promise<File> {
+  const record = await db.assets.get(assetId);
+  if (!record || record.schemaVersion !== 1) throw new Error('Local image was not found on this device.');
+  return new File([record.blob], record.name || 'image', { type: record.mime || record.blob.type || 'application/octet-stream' });
+}
+
+export function releaseLocalAssetObjectUrls(): void {
+  for (const url of objectUrls.values()) URL.revokeObjectURL(url);
+  objectUrls.clear();
+}
+
+function assetToken(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+function summaryFromRecord(record: StoredLocalAsset): LocalAssetSummary {
+  return {
+    id: record.id,
+    name: record.name || 'Image',
+    mime: record.mime,
+    updatedAt: new Date(record.updatedAt).toISOString(),
+  };
+}

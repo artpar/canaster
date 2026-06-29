@@ -5,7 +5,7 @@ import {
   useRef,
 } from 'react';
 import { cloneDocumentCollection } from '../../../domain/documentModel';
-import { type CanvasCommand, type CanvasModelChange, type ScreenRect, type ViewportStatus } from '../../../domain/types';
+import { type CanvasCommand, type CanvasModelChange, type ScreenRect, type ViewportStatus, type WorldPoint } from '../../../domain/types';
 import type {
   CanvasDocumentCollection,
   CanvasWorkspaceSnapshot,
@@ -28,6 +28,7 @@ export type NestedCanvasWorkspaceProps = {
   onChromeStateChange?: (state: NestedCanvasWorkspaceChromeState) => void;
   onArrangeCanvasMenuRequest?: (request: ArrangeCanvasMenuRequest) => void;
   onCanvasThemeMenuRequest?: (request: CanvasThemeMenuRequest) => void;
+  onFileDrop?: (request: WorkspaceFileDropRequest) => void;
 };
 
 export type ArrangeCanvasMenuRequest = {
@@ -40,6 +41,12 @@ export type CanvasThemeMenuRequest = {
   canvasId: string;
   anchor?: ScreenRect;
   metaOrCtrl?: boolean;
+};
+
+export type WorkspaceFileDropRequest = {
+  canvasId: string;
+  at: WorldPoint;
+  files: File[];
 };
 
 export type NestedCanvasWorkspaceChromeState = {
@@ -95,17 +102,18 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     onChromeStateChange,
     onArrangeCanvasMenuRequest,
     onCanvasThemeMenuRequest,
+    onFileDrop,
   },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const controllerRef = useRef<NativeNestedCanvasController | null>(null);
-  const callbacksRef = useRef({ onCollectionChange, onChromeStateChange, onArrangeCanvasMenuRequest, onCanvasThemeMenuRequest });
+  const callbacksRef = useRef({ onCollectionChange, onChromeStateChange, onArrangeCanvasMenuRequest, onCanvasThemeMenuRequest, onFileDrop });
   const initialCollectionRef = useRef(initialCollection);
 
   useEffect(() => {
-    callbacksRef.current = { onCollectionChange, onChromeStateChange, onArrangeCanvasMenuRequest, onCanvasThemeMenuRequest };
-  }, [onCollectionChange, onChromeStateChange, onArrangeCanvasMenuRequest, onCanvasThemeMenuRequest]);
+    callbacksRef.current = { onCollectionChange, onChromeStateChange, onArrangeCanvasMenuRequest, onCanvasThemeMenuRequest, onFileDrop };
+  }, [onCollectionChange, onChromeStateChange, onArrangeCanvasMenuRequest, onCanvasThemeMenuRequest, onFileDrop]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -121,6 +129,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
       onChromeStateChange: (state) => callbacksRef.current.onChromeStateChange?.(state),
       onArrangeCanvasMenuRequest: (request) => callbacksRef.current.onArrangeCanvasMenuRequest?.(request),
       onCanvasThemeMenuRequest: (request) => callbacksRef.current.onCanvasThemeMenuRequest?.(request),
+      onFileDrop: (request) => callbacksRef.current.onFileDrop?.(request),
     });
     controllerRef.current = controller;
     return () => {

@@ -7,6 +7,7 @@ import type {
   CanvasSelectionState,
   NodeData,
 } from './types';
+import type { CanvasBackgroundImage } from '../core/canvasAppearance';
 
 export type CanvasDocumentId = string;
 
@@ -25,6 +26,7 @@ export type CanvasWorkspaceAppearance = {
 
 export type CanvasDocumentAppearance = {
   themeId?: string | null;
+  backgroundImage?: CanvasBackgroundImage | null;
 };
 
 export type CanvasWorkspaceSnapshot = {
@@ -155,6 +157,7 @@ export type DocumentCommand =
   | { type: 'select-canvas'; canvasId: CanvasDocumentId; source: CanvasEditSource }
   | { type: 'set-document-theme'; themeId: string; source: CanvasEditSource }
   | { type: 'set-canvas-theme'; canvasId: CanvasDocumentId; themeId: string | null; source: CanvasEditSource }
+  | { type: 'set-canvas-background-image'; canvasId: CanvasDocumentId; backgroundImage: CanvasBackgroundImage | null; source: CanvasEditSource }
   | { type: 'set-node-theme'; canvasId: CanvasDocumentId; nodeIds: string[]; themeId: string | null; source: CanvasEditSource }
   | { type: 'enter-child-canvas'; parentCanvasId: CanvasDocumentId; portalNodeId: string; source: CanvasEditSource }
   | { type: 'go-to-parent-canvas'; source: CanvasEditSource }
@@ -172,6 +175,7 @@ export type DocumentModelChange =
   | { kind: 'active-canvas-change'; from: CanvasDocumentId; to: CanvasDocumentId; source: CanvasEditSource }
   | { kind: 'document-theme-change'; themeId: string; source: CanvasEditSource }
   | { kind: 'canvas-theme-change'; canvasId: CanvasDocumentId; themeId: string | null; source: CanvasEditSource }
+  | { kind: 'canvas-background-image-change'; canvasId: CanvasDocumentId; assetId: string | null; source: CanvasEditSource }
   | { kind: 'node-theme-change'; canvasId: CanvasDocumentId; nodeIds: string[]; themeId: string | null; source: CanvasEditSource }
   | { kind: 'canvas-create'; canvasId: CanvasDocumentId; parentCanvasId: CanvasDocumentId; parentNodeId: string; source: CanvasEditSource }
   | { kind: 'node-data-change'; canvasId: CanvasDocumentId; nodeId: string; source: CanvasEditSource }

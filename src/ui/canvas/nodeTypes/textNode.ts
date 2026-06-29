@@ -29,7 +29,7 @@ export const textNodeDefinition: NodeDefinition<TextNodeData> = defineNodeType({
       return;
     }
 
-    const text = data.text.trim() ? data.text : 'Empty text';
+    const text = data.text.trim() ? data.text : 'Empty note';
     const lines = wrapText(ctx, text, Math.max(0, contentRect.w - layout.insetX * 2), Math.max(1, Math.floor((contentRect.h - layout.footerHeight) / layout.bodyLineHeight)));
     drawNodeBodyLines(ctx, contentRect, lines, theme, { y: contentRect.y + layout.titleY });
     drawTypeBadge(ctx, contentRect, 'NOTE', theme);

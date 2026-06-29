@@ -8,11 +8,13 @@ Read these first:
 2. `nested-canvas-ux-plan.md` - UX plan for canvas nodes that contain child canvases, drill-in navigation, breadcrumbs, previews, keyboard/nonvisual paths, and implementation phasing.
 3. `node-plugin-contract-plan.md` - concrete technical implementation plan for pluggable node types such as card, text, image, canvas, and future plugin-defined nodes.
 4. `panel-types-ux-plan.md` - concise UX plan for current and next panel types; recommends checklist before embed.
-5. `nonvisual-touch-editing-completion-report.md` - latest closure report for nonvisual node access, advanced editing, pointer group-drag, render-only pointer preview, and real-device touch verification blocked/checklisted.
-6. `canvas-keyboard-touch-performance-completion-report.md` - closure report for keyboard editing, two-touch gestures, and 1k/2k node performance.
-7. `product-complete-remaining-dents-report.md` - product-completeness and residual-risk audit that identified the remaining dents.
-8. `canway-technical-dents-audit-report.md` - latest full technical-dents audit before the product-complete pass.
-9. `canvas-foundation-gap-closure-report.md` - earlier browser-probe automation, accessibility boundary, multi-touch policy, churn, and model-shape evidence.
+5. `canaster-node-primitives-followup.md` - follow-up product note for candidate node primitives and workspace experiences, with current-source constraints and deferral rules.
+6. `canaster-visual-catalog-followup.md` - follow-up catalog direction for highly visual starter documents such as brackets, lore maps, rankings, timelines, and atlases.
+7. `nonvisual-touch-editing-completion-report.md` - latest closure report for nonvisual node access, advanced editing, pointer group-drag, render-only pointer preview, and real-device touch verification blocked/checklisted.
+8. `canvas-keyboard-touch-performance-completion-report.md` - closure report for keyboard editing, two-touch gestures, and 1k/2k node performance.
+9. `product-complete-remaining-dents-report.md` - product-completeness and residual-risk audit that identified the remaining dents.
+10. `canway-technical-dents-audit-report.md` - latest full technical-dents audit before the product-complete pass.
+11. `canvas-foundation-gap-closure-report.md` - earlier browser-probe automation, accessibility boundary, multi-touch policy, churn, and model-shape evidence.
 
 Historical audit reports and goal prompts in this directory are useful for provenance, but they may describe issues that were later fixed or reclassified. Treat them as audit history unless a latest report explicitly references them as current evidence.
 

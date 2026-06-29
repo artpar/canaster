@@ -13,7 +13,9 @@ import {
     AccountPopover,
     type AccountPopoverProps
 } from "./AccountPopover";
+import {CatalogPanel} from "./CatalogPanel";
 import {DocumentsPanel} from "./DocumentsPanel";
+import type {StarterCatalogEntry} from "../app/starterWorkspace/types";
 import type {CSSProperties} from "react";
 
 export type ViewTreeNode = {
@@ -27,6 +29,7 @@ export function SidePanel({
                                   activeDocumentId,
                                   account,
                                   documents,
+                                  catalogEntries,
                                   saveButtonLabel,
                                   signedIn,
                                   syncMessage,
@@ -36,6 +39,7 @@ export function SidePanel({
                                   onNewDocument,
                                   onOpenAccount,
                                   onOpenDocument,
+                                  onStartFromCatalog,
                                   onRefreshDocuments,
                                   onSaveOnline,
                               }: {
@@ -47,6 +51,7 @@ export function SidePanel({
         onToggle: () => void;
     };
     documents: CanasterDocumentSummary[];
+    catalogEntries: readonly StarterCatalogEntry[];
     saveButtonLabel: string;
     signedIn: boolean;
     syncMessage: string;
@@ -56,12 +61,13 @@ export function SidePanel({
     onNewDocument: () => void;
     onOpenAccount: () => void;
     onOpenDocument: (documentRef: string) => void;
+    onStartFromCatalog: (entryId: string) => void;
     onRefreshDocuments: () => void;
     onSaveOnline: () => void;
 }) {
     const viewCount = tree ? countViewTreeNodes(tree) : 0;
     return (
-        <aside className="view-tree-panel" aria-label="Views and documents">
+        <aside className="view-tree-panel" aria-label="Workspace sidebar">
             <section className="sidepanel-section views-section" aria-label="Views">
                 <div className="sidepanel-section-row">
                     <div className="sidepanel-section-title">
@@ -80,6 +86,7 @@ export function SidePanel({
                     />) : (<div className="view-tree-empty">No views</div>)}
                 </nav>
             </section>
+            <CatalogPanel entries={catalogEntries} onStart={onStartFromCatalog}/>
             <DocumentsPanel
                 activeDocumentId={activeDocumentId}
                 documents={documents}

@@ -19,11 +19,11 @@ const CARD_ACCENTS: readonly CardAccent[] = ['task', 'data', 'system'];
 export const cardNodeDefinition: NodeDefinition<CardNodeData> = defineNodeType({
   ...nodeTypeSpecs.card,
   createDefaultData() {
-    return { title: 'Untitled card', detail: '', accent: 'task' };
+    return { title: 'Untitled work item', detail: '', accent: 'task' };
   },
   parseData(raw) {
     return {
-      title: asString(raw.title, 'Untitled card'),
+      title: asString(raw.title, 'Untitled work item'),
       detail: asString(raw.detail, ''),
       accent: asEnum(raw.accent, CARD_ACCENTS, 'task'),
     };
@@ -55,7 +55,7 @@ export const cardNodeDefinition: NodeDefinition<CardNodeData> = defineNodeType({
   },
   describe({ data }) {
     return {
-      label: data.title || 'Untitled card',
+      label: data.title || 'Untitled work item',
       roleDescription: 'Work item',
       details: [
         data.detail,

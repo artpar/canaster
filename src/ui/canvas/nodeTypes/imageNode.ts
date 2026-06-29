@@ -50,12 +50,13 @@ export const imageNodeDefinition: NodeDefinition<ImageNodeData> = defineNodeType
     } else {
       drawPlaceholderIcon(ctx, frame, data.assetId ? 'LOADING' : 'IMAGE', theme);
     }
+    drawImageFrame(ctx, frame, theme);
 
     ctx.fillStyle = theme.bodyText;
     ctx.font = text.label;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    const status = cached ? (data.caption || data.alt || 'Image reference') : data.assetId ? 'Loading image' : 'Add an image source';
+    const status = cached ? (data.caption || data.alt || 'Image reference') : data.assetId ? 'Loading image' : 'Add image';
     const lines = wrapText(ctx, status, Math.max(0, contentRect.w - layout.insetX * 2), 2);
     let y = contentRect.y + imageCaptionY(contentRect, layout);
     for (const line of lines) {
@@ -142,8 +143,8 @@ function imageRegions(contentRect: NodeContentRect, theme: CanvasTheme): NodeInt
       cursor: 'text',
       label: 'image alt text',
     },
-    { id: 'fit-contain', rect: controls.contain, cursor: 'pointer', label: 'contain image' },
-    { id: 'fit-cover', rect: controls.cover, cursor: 'pointer', label: 'cover image' },
+    { id: 'fit-contain', rect: controls.contain, cursor: 'pointer', label: 'fit image inside frame' },
+    { id: 'fit-cover', rect: controls.cover, cursor: 'pointer', label: 'fill image frame' },
   ];
 }
 
@@ -179,8 +180,8 @@ function imageFitControlWidth(layout: ReturnType<typeof nodeLayout>) {
 
 function drawImageFitControls(ctx: CanvasRenderingContext2D, contentRect: NodeContentRect, fit: 'contain' | 'cover', theme: CanvasTheme) {
   const controls = imageFitControlRects(contentRect, theme);
-  drawFitPill(ctx, controls.contain, 'Contain', fit === 'contain', theme);
-  drawFitPill(ctx, controls.cover, 'Cover', fit === 'cover', theme);
+  drawFitPill(ctx, controls.contain, 'Fit', fit === 'contain', theme);
+  drawFitPill(ctx, controls.cover, 'Fill', fit === 'cover', theme);
 }
 
 function drawFitPill(ctx: CanvasRenderingContext2D, rect: { x: number; y: number; w: number; h: number }, label: string, active: boolean, theme: CanvasTheme) {
@@ -198,6 +199,16 @@ function drawFitPill(ctx: CanvasRenderingContext2D, rect: { x: number; y: number
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(label, rect.x + rect.w / 2, rect.y + rect.h / 2 + 0.5);
+  ctx.restore();
+}
+
+function drawImageFrame(ctx: CanvasRenderingContext2D, frame: { x: number; y: number; w: number; h: number }, theme: CanvasTheme) {
+  ctx.save();
+  ctx.strokeStyle = theme.nodeBorder;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(frame.x, frame.y, frame.w, frame.h, theme.nodeControlRadius);
+  ctx.stroke();
   ctx.restore();
 }
 
