@@ -9,8 +9,6 @@ import {
     Undo2
 } from "lucide-react";
 import {IconButton} from "./IconButton";
-import type {CanasterTheme, CanasterThemeId} from "./theme/CanasterTheme";
-import {ThemeSwitcher} from "./theme/ThemeSwitcher";
 
 export type HeaderToolbarProps = {
     sidePanel: {
@@ -38,18 +36,6 @@ export type HeaderToolbarProps = {
         buttonRef: MutableRefObject<HTMLButtonElement | null>,
         open: boolean,
         onToggle: () => void
-    },
-    theme: {
-        activeViewInheritsTheme: boolean,
-        activeViewThemeId: CanasterThemeId,
-        documentThemeId: CanasterThemeId,
-        selectedPanelCount: number,
-        selectedPanelInheritsTheme: boolean,
-        selectedPanelThemeId: CanasterThemeId,
-        themes: CanasterTheme[],
-        onActiveViewThemeSelect: (themeId: CanasterThemeId | null) => void,
-        onDocumentThemeSelect: (themeId: CanasterThemeId) => void,
-        onSelectedPanelThemeSelect: (themeId: CanasterThemeId | null) => void
     }
 };
 
@@ -119,37 +105,6 @@ export function HeaderToolbar(props: HeaderToolbarProps) {
                 >
                     <PanelsTopLeft size={17}/>
                 </IconButton>
-                <ThemeSwitcher
-                    allowInherit
-                    currentThemeId={props.theme.activeViewThemeId}
-                    inherited={props.theme.activeViewInheritsTheme}
-                    inheritDescription="Use the containing theme for this view"
-                    inheritLabel="Inherit containing theme"
-                    label="View theme"
-                    themes={props.theme.themes}
-                    onSelect={props.theme.onActiveViewThemeSelect}
-                />
-            </div>
-            <div className="toolbar-group" aria-label="Appearance">
-                <ThemeSwitcher
-                    currentThemeId={props.theme.documentThemeId}
-                    label="Document theme"
-                    themes={props.theme.themes}
-                    onSelect={(themeId) => {
-                        if (themeId) props.theme.onDocumentThemeSelect(themeId);
-                    }}
-                />
-                <ThemeSwitcher
-                    allowInherit
-                    currentThemeId={props.theme.selectedPanelThemeId}
-                    disabled={props.theme.selectedPanelCount === 0}
-                    inherited={props.theme.selectedPanelInheritsTheme}
-                    inheritDescription="Use the view theme for selected panels"
-                    inheritLabel="Inherit view theme"
-                    label={props.theme.selectedPanelCount > 1 ? "Selected panels theme" : "Selected panel theme"}
-                    themes={props.theme.themes}
-                    onSelect={props.theme.onSelectedPanelThemeSelect}
-                />
             </div>
         </div>
     </div>;

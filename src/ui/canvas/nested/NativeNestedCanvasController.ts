@@ -59,7 +59,7 @@ import {
   type ParentContextPaneLayoutConstraints,
 } from './parentContextField';
 import { portalOverlayStyle } from './portalLayout';
-import type { ArrangeCanvasMenuRequest, NestedCanvasWorkspaceChromeState } from './NestedCanvasWorkspace';
+import type { ArrangeCanvasMenuRequest, CanvasThemeMenuRequest, NestedCanvasWorkspaceChromeState } from './NestedCanvasWorkspace';
 import type { WorkspaceUrlPaneCamera, WorkspaceUrlState } from '../../../infra/browser/workspaceUrlLocation';
 import type {CanasterThemeId} from '../../theme/CanasterTheme';
 import {normalizeCanasterThemeId} from '../../theme/CanasterThemeRegistry';
@@ -74,6 +74,7 @@ export type NativeNestedCanvasControllerOptions = {
   onCollectionChange?: (collection: CanvasDocumentCollection, changes: DocumentModelChange[]) => void;
   onChromeStateChange?: (state: NestedCanvasWorkspaceChromeState) => void;
   onArrangeCanvasMenuRequest?: (request: ArrangeCanvasMenuRequest) => void;
+  onCanvasThemeMenuRequest?: (request: CanvasThemeMenuRequest) => void;
 };
 
 type Slot = {
@@ -138,6 +139,7 @@ export class NativeNestedCanvasController {
   private readonly onCollectionChange?: (collection: CanvasDocumentCollection, changes: DocumentModelChange[]) => void;
   private readonly onChromeStateChange?: (state: NestedCanvasWorkspaceChromeState) => void;
   private readonly onArrangeCanvasMenuRequest?: (request: ArrangeCanvasMenuRequest) => void;
+  private readonly onCanvasThemeMenuRequest?: (request: CanvasThemeMenuRequest) => void;
   private readonly historyRef: { current: CanvasWorkspaceHistory };
   private readonly collectionRef: { current: CanvasDocumentCollection };
   private readonly lastModelChangeRef: { current: DocumentModelChange | null } = { current: null };
@@ -171,6 +173,7 @@ export class NativeNestedCanvasController {
   private overlayStableCount = 0;
   private commitCount = 0;
   private canvasModelChangeCount = 0;
+  private controlOwnerKey = 'active';
   private parentContextVisible: boolean;
   private resizeObserver: ResizeObserver;
 
@@ -183,6 +186,7 @@ export class NativeNestedCanvasController {
     this.onCollectionChange = options.onCollectionChange;
     this.onChromeStateChange = options.onChromeStateChange;
     this.onArrangeCanvasMenuRequest = options.onArrangeCanvasMenuRequest;
+    this.onCanvasThemeMenuRequest = options.onCanvasThemeMenuRequest;
     this.historyRef = { current: createWorkspaceHistory(options.initialCollection) };
     this.collectionRef = { current: this.historyRef.current.present };
 
@@ -216,8 +220,13 @@ export class NativeNestedCanvasController {
       this.scheduleOverlayRender();
     });
     this.resizeObserver.observe(this.root);
+    this.root.addEventListener('pointermove', this.handleViewportControlPointerMove);
+    this.root.addEventListener('pointerleave', this.handleViewportControlPointerLeave);
+    this.root.addEventListener('focusin', this.handleViewportControlFocusIn);
+    this.root.addEventListener('focusout', this.handleViewportControlFocusOut);
 
     this.syncActiveViewportSlot();
+    this.syncViewportControlVisibility();
     this.exposeDebugApi();
     this.emitChromeState();
     this.record('controller:create', {
@@ -234,6 +243,10 @@ export class NativeNestedCanvasController {
     if (this.overlayTimer !== null) window.clearTimeout(this.overlayTimer);
     if (this.viewportSaveTimer !== null) window.clearTimeout(this.viewportSaveTimer);
     if (this.liveStatusTimer !== null) window.clearTimeout(this.liveStatusTimer);
+    this.root.removeEventListener('pointermove', this.handleViewportControlPointerMove);
+    this.root.removeEventListener('pointerleave', this.handleViewportControlPointerLeave);
+    this.root.removeEventListener('focusin', this.handleViewportControlFocusIn);
+    this.root.removeEventListener('focusout', this.handleViewportControlFocusOut);
     this.resizeObserver.disconnect();
     this.activeEngine()?.dispose();
     this.disposeParentContextSlots();
@@ -353,6 +366,11 @@ export class NativeNestedCanvasController {
       this.setStatus({ ...this.status, interaction: 'Choose arrangement' });
       return;
     }
+    if (control === 'theme') {
+      this.onCanvasThemeMenuRequest?.({ canvasId: slot.canvasId, anchor: event.anchor, recursive: event.recursive });
+      this.setStatus({ ...this.status, interaction: 'Choose canvas theme' });
+      return;
+    }
     const targets = this.viewportControlTargets(slot, event.recursive);
     if (control === 'fit') {
       for (const target of targets) target.engine.fit(target.mode === 'active' ? undefined : 16);
@@ -363,6 +381,88 @@ export class NativeNestedCanvasController {
     const factor = control === 'zoom-in' ? 1.22 : 0.82;
     for (const target of targets) target.engine.zoomBy(factor);
     if (this.activeSlot && targets.includes(this.activeSlot)) this.persistViewportFromActiveEngine();
+  }
+
+  private handleViewportControlPointerMove = (event: PointerEvent) => {
+    this.setControlOwnerForTarget(event.target);
+  };
+
+  private handleViewportControlPointerLeave = () => {
+    this.setControlOwnerSlot(this.activeSlot);
+  };
+
+  private handleViewportControlFocusIn = (event: FocusEvent) => {
+    this.setControlOwnerForTarget(event.target);
+  };
+
+  private handleViewportControlFocusOut = () => {
+    requestAnimationFrame(() => {
+      if (this.disposed) return;
+      if (document.activeElement && this.root.contains(document.activeElement)) {
+        this.setControlOwnerForTarget(document.activeElement);
+        return;
+      }
+      this.setControlOwnerSlot(this.activeSlot);
+    });
+  };
+
+  private setControlOwnerForTarget(target: EventTarget | null): void {
+    this.setControlOwnerSlot(this.viewportSlotForTarget(target) ?? this.activeSlot);
+  }
+
+  private setControlOwnerSlot(slot: CanvasViewportSlot | null): void {
+    const nextKey = slot?.key ?? 'active';
+    if (this.controlOwnerKey === nextKey) return;
+    this.controlOwnerKey = nextKey;
+    this.syncViewportControlVisibility();
+  }
+
+  private viewportSlotForTarget(target: EventTarget | null): CanvasViewportSlot | null {
+    if (!(target instanceof Element)) return null;
+    const viewport = target.closest<HTMLElement>('.canvas-viewport');
+    if (!viewport) return null;
+    return this.viewportSlotForElement(viewport);
+  }
+
+  private viewportSlotForElement(viewport: HTMLElement): CanvasViewportSlot | null {
+    if (this.activeSlot?.viewport === viewport) return this.activeSlot;
+    for (const slot of this.slots.values()) {
+      if (slot.viewportSlot.viewport === viewport) return slot.viewportSlot;
+    }
+    for (const slot of this.parentContextSlots.values()) {
+      if (slot.viewportSlot.viewport === viewport) return slot.viewportSlot;
+    }
+    return null;
+  }
+
+  private syncViewportControlVisibility(): void {
+    const syncSlot = (slot: CanvasViewportSlot | null) => {
+      if (!slot) return;
+      slot.viewport.dataset.controlsVisible = String(slot.key === this.controlOwnerKey);
+    };
+    syncSlot(this.activeSlot);
+    for (const slot of this.slots.values()) syncSlot(slot.viewportSlot);
+    for (const slot of this.parentContextSlots.values()) syncSlot(slot.viewportSlot);
+  }
+
+  private ensureControlOwnerSlotExists(): void {
+    if (this.activeSlot?.key === this.controlOwnerKey) {
+      this.syncViewportControlVisibility();
+      return;
+    }
+    for (const slot of this.slots.values()) {
+      if (slot.viewportSlot.key === this.controlOwnerKey) {
+        this.syncViewportControlVisibility();
+        return;
+      }
+    }
+    for (const slot of this.parentContextSlots.values()) {
+      if (slot.viewportSlot.key === this.controlOwnerKey) {
+        this.syncViewportControlVisibility();
+        return;
+      }
+    }
+    this.setControlOwnerSlot(this.activeSlot);
   }
 
   private viewportControlTargets(slot: CanvasViewportSlot, recursive: boolean): CanvasViewportSlot[] {
@@ -579,7 +679,7 @@ export class NativeNestedCanvasController {
       canvasClassName: 'canvas-surface active-plane',
       wrapperClassName: 'nested-center-cell active-canvas-viewport-slot',
       viewportClassName: 'canvas-viewport active-canvas-viewport',
-      controls: ['fit', 'zoom-in', 'zoom-out', 'arrange'],
+      controls: ['fit', 'zoom-in', 'zoom-out', 'arrange', 'theme'],
       onControl: (slot, control, anchor) => this.handleViewportControl(slot, control, anchor),
       engineOptions: this.editableEngineOptions(() => this.collectionRef.current.activeCanvasId, {
         beforeCommandSelection: () => this.activeEngine()?.getSelectionState() ?? null,
@@ -610,6 +710,7 @@ export class NativeNestedCanvasController {
     slot.engine.setTheme(this.canvasThemeFor(collection.activeCanvasId));
     slot.engine.setCamera(cameraForCanvas(collection, collection.activeCanvasId));
     slot.engine.setSelectionState(selectionForCanvas(collection, collection.activeCanvasId));
+    this.syncViewportControlVisibility();
     this.layout();
     this.maybeAutoFit();
   }
@@ -624,6 +725,7 @@ export class NativeNestedCanvasController {
     this.root.dataset.activeCanvasId = collection.activeCanvasId;
     this.disposeParentContextSlots();
     this.syncActiveViewportSlot();
+    this.setControlOwnerSlot(this.activeSlot);
     this.disposeSlots();
     this.portalLayouts = [];
     this.lastOverlaySignature = '';
@@ -792,7 +894,7 @@ export class NativeNestedCanvasController {
       canvasClassName: 'canvas-surface embedded-plane',
       wrapperClassName: 'portal-overlay',
       viewportClassName: 'canvas-viewport embedded-nested-viewport native-embedded-viewport',
-      controls: ['arrange', 'fit'],
+      controls: ['arrange', 'fit', 'theme'],
       includePaneLayers: true,
       onControl: (slot, control, anchor) => this.handleViewportControl(slot, control, anchor),
       engineOptions: this.editableEngineOptions(canvasId, {
@@ -814,6 +916,7 @@ export class NativeNestedCanvasController {
     this.applyActiveHandleSizing(viewportSlot);
     const slot: Slot = { key, parentCanvasId: layout.parentCanvasId, portalNodeId: layout.portalNodeId, canvasId, viewportSlot, parentContextOwnerKey, portalLayouts: [], sizeSignature: sizeSignature(stageRect) };
     this.slots.set(key, slot);
+    this.syncViewportControlVisibility();
     this.layoutEmbeddedSlot(slot, stageRect);
     requestAnimationFrame(() => {
       if (this.disposed || !this.slots.has(key)) return;
@@ -1109,6 +1212,7 @@ export class NativeNestedCanvasController {
     }
 
     this.disposeParentContextSlotsExcept(ownerKey, seen);
+    this.syncViewportControlVisibility();
   }
 
   private createParentContextPaneSlot(key: string, ownerKey: string, region: ParentContextRegion, canvasId: CanvasDocumentId, label: string): ParentContextPaneSlot {
@@ -1121,7 +1225,7 @@ export class NativeNestedCanvasController {
       canvasClassName: 'parent-context-canvas',
       wrapperClassName: 'parent-context-canvas-clip native-parent-context-canvas-clip',
       viewportClassName: 'canvas-viewport parent-context-canvas-viewport',
-      controls: ['fit', 'arrange'],
+      controls: ['fit', 'arrange', 'theme'],
       onControl: (slot, control, anchor) => this.handleViewportControl(slot, control, anchor),
       engineOptions: this.editableEngineOptions(canvasId, {
         beforeCommandSelection: () => viewportSlot.engine.getSelectionState(),
@@ -1138,6 +1242,7 @@ export class NativeNestedCanvasController {
     viewportSlot.engine.setTheme(this.canvasThemeFor(canvasId));
     this.applyActiveHandleSizing(viewportSlot);
     this.record('parent-context:pane:create', { ownerKey, canvasId, region });
+    this.syncViewportControlVisibility();
     return { key, ownerKey, canvasId, region, viewportSlot, portalLayouts: [], cameraInitialized: false, camera: null, targetSignature: '', memoryKey: '', sizeSignature: '' };
   }
 
@@ -1338,6 +1443,7 @@ export class NativeNestedCanvasController {
     if (active) this.syncActiveViewportSlot();
     this.disposeSlots();
     this.disposeParentContextSlots();
+    this.setControlOwnerSlot(this.activeSlot);
     this.portalLayouts = [];
     this.lastOverlaySignature = '';
     this.setStatus({ ...this.status, interaction });
@@ -1401,7 +1507,6 @@ export class NativeNestedCanvasController {
     this.onChromeStateChange?.({
       collection: this.collectionRef.current,
       status: this.status,
-      activeCanvasThemeId: this.canvasThemeFor(this.collectionRef.current.activeCanvasId),
       lastModelChange: this.lastModelChangeRef.current,
       lastCanvasModelChange: this.lastCanvasModelChangeRef.current,
       lastCanvasModelChangeId: this.canvasModelChangeCount,
@@ -1419,6 +1524,7 @@ export class NativeNestedCanvasController {
       slot.viewportSlot.wrapper.remove();
     }
     this.slots.clear();
+    this.ensureControlOwnerSlotExists();
   }
 
   private disposeSlotsExcept(seen: Set<string>) {
@@ -1432,6 +1538,7 @@ export class NativeNestedCanvasController {
       disposed += 1;
     }
     if (disposed) this.record('engine:embedded:dispose-removed', { slots: disposed });
+    if (disposed) this.ensureControlOwnerSlotExists();
   }
 
   private disposeParentContextSlots() {
@@ -1441,6 +1548,7 @@ export class NativeNestedCanvasController {
       slot.viewportSlot.wrapper.remove();
     }
     this.parentContextSlots.clear();
+    this.ensureControlOwnerSlotExists();
   }
 
   private disposeParentContextSlotsForOwner(ownerKey: string) {
@@ -1453,6 +1561,7 @@ export class NativeNestedCanvasController {
       disposed += 1;
     }
     if (disposed) this.record('parent-context:canvas:dispose-owner', { ownerKey, slots: disposed });
+    if (disposed) this.ensureControlOwnerSlotExists();
   }
 
   private disposeParentContextSlotsExcept(ownerKey: string, seen: Set<string>) {
@@ -1465,6 +1574,7 @@ export class NativeNestedCanvasController {
       disposed += 1;
     }
     if (disposed) this.record('parent-context:canvas:dispose-removed', { ownerKey, slots: disposed });
+    if (disposed) this.ensureControlOwnerSlotExists();
   }
 
   private record(name: string, data: Record<string, unknown> = {}, level: 'debug' | 'warn' = 'debug') {

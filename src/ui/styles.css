@@ -1172,6 +1172,12 @@ button {
   backdrop-filter: var(--canaster-texture-panel-backdrop-filter);
 }
 
+.canvas-theme-menu {
+  position: fixed;
+  top: auto;
+  right: auto;
+}
+
 .theme-menu-item {
   display: grid;
   grid-template-columns: var(--canaster-icon-button-size) minmax(0, 1fr) 18px;
@@ -1590,7 +1596,18 @@ button {
   border: 0;
   background: transparent;
   box-shadow: none;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition:
+    opacity var(--canaster-motion-fast) var(--canaster-motion-ease-out),
+    transform var(--canaster-motion-fast) var(--canaster-motion-ease-out);
+}
+
+.canvas-viewport[data-controls-visible='true'] > .canvas-viewport-controls {
+  opacity: 1;
   pointer-events: auto;
+  transform: translateY(0);
 }
 
 .canvas-viewport-control-button {
@@ -1609,29 +1626,11 @@ button {
   stroke-width: 2.4;
 }
 
-.embedded-nested-viewport .canvas-viewport-controls {
-  right: var(--canaster-embedded-viewport-control-inset);
-  bottom: var(--canaster-embedded-viewport-control-inset);
-  gap: var(--canaster-embedded-viewport-control-gap);
-}
-
+.embedded-nested-viewport .canvas-viewport-controls,
 .parent-context-canvas-viewport .canvas-viewport-controls {
   right: var(--canaster-embedded-viewport-control-inset);
   bottom: var(--canaster-embedded-viewport-control-inset);
   gap: var(--canaster-embedded-viewport-control-gap);
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(4px);
-  transition:
-    opacity var(--canaster-motion-fast) var(--canaster-motion-ease-out),
-    transform var(--canaster-motion-fast) var(--canaster-motion-ease-out);
-}
-
-.parent-context-canvas-clip:hover .canvas-viewport-controls,
-.parent-context-canvas-clip:focus-within .canvas-viewport-controls {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateY(0);
 }
 
 .embedded-nested-viewport .canvas-viewport-control-button {
@@ -1647,7 +1646,7 @@ button {
 }
 
 @media (hover: none) {
-  .parent-context-canvas-viewport .canvas-viewport-controls {
+  .canvas-viewport-controls {
     opacity: 1;
     pointer-events: auto;
     transform: translateY(0);
@@ -2845,7 +2844,7 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .parent-context-canvas-viewport .canvas-viewport-controls {
+  .canvas-viewport-controls {
     transform: none;
     transition-property: opacity;
   }

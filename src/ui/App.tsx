@@ -1,4 +1,5 @@
 import {
+    Check,
     Columns3,
     LayoutGrid,
     LayoutList,
@@ -42,6 +43,7 @@ import {
     STARTER_WORKSPACE_STORAGE_KEY
 } from '../app/starterWorkspace/starterCatalog';
 import {
+    canvasThemeId,
     documentThemeId,
     portalDataForNode
 } from '../domain/documentModel';
@@ -49,6 +51,7 @@ import {
     initialViewportStatus,
     NestedCanvasWorkspace,
     type ArrangeCanvasMenuRequest,
+    type CanvasThemeMenuRequest,
     type NestedCanvasWorkspaceChromeState,
     type NestedCanvasWorkspaceHandle,
 } from './canvas/nested/NestedCanvasWorkspace';
@@ -101,7 +104,7 @@ import {
     canasterThemeOptions,
     normalizeCanasterThemeId
 } from "./theme/CanasterThemeRegistry";
-import type {CanasterThemeId} from "./theme/CanasterTheme";
+import type {CanasterTheme, CanasterThemeId} from "./theme/CanasterTheme";
 
 const DEFAULT_DOCUMENT_TITLE = 'Canaster Workspace';
 const LOCAL_SAVE_MESSAGE = 'Saved on this device';
@@ -118,6 +121,15 @@ function canasterMenuWidth() {
 type ArrangePanelMenuProps = {
     arrangeMenuPosition: ArrangeMenuPosition | null,
     onSelect: (layout: CanvasArrangeLayout) => void
+};
+
+type CanvasThemeMenuProps = {
+    canInherit: boolean;
+    currentThemeId: CanasterThemeId;
+    inherited: boolean;
+    position: ArrangeMenuPosition | null;
+    themes: CanasterTheme[];
+    onSelect: (themeId: CanasterThemeId | null) => void;
 };
 
 type ArrangeMenuTarget = {
@@ -171,6 +183,60 @@ const ArrangePanelMenu = forwardRef<HTMLDivElement, ArrangePanelMenuProps>(funct
     </div>;
 });
 
+const CanvasThemeMenu = forwardRef<HTMLDivElement, CanvasThemeMenuProps>(function CanvasThemeMenu(props, ref) {
+    return <div
+        ref={ref}
+        className="theme-menu canvas-theme-menu"
+        role="menu"
+        aria-label="Canvas theme"
+        style={props.position ? {
+            top : props.position.top,
+            left: props.position.left
+        } : undefined}
+    >
+        {props.canInherit ? <button
+            className="theme-menu-item"
+            type="button"
+            role="menuitemradio"
+            aria-checked={props.inherited}
+            onClick={() => props.onSelect(null)}
+        >
+            <span className="theme-menu-swatch inherit" aria-hidden="true">
+                <span style={{background: 'var(--canaster-color-canvas-background)'}}/>
+                <span style={{background: 'var(--canaster-color-panel-raised)'}}/>
+                <span style={{background: 'var(--canaster-color-action-primary)'}}/>
+            </span>
+            <span className="theme-menu-copy">
+                <strong>Inherit theme</strong>
+                <small>Use the containing canvas theme</small>
+            </span>
+            {props.inherited ? <Check className="theme-menu-check" size={15}/> : null}
+        </button> : null}
+        {props.themes.map((theme) => {
+            const selected = !props.inherited && theme.id === props.currentThemeId;
+            return <button
+                key={theme.id}
+                className="theme-menu-item"
+                type="button"
+                role="menuitemradio"
+                aria-checked={selected}
+                onClick={() => props.onSelect(theme.id)}
+            >
+                <span className="theme-menu-swatch" aria-hidden="true">
+                    <span style={{background: theme.colors.canvas.background}}/>
+                    <span style={{background: theme.colors.panel.surfaceRaised}}/>
+                    <span style={{background: theme.colors.action.primary}}/>
+                </span>
+                <span className="theme-menu-copy">
+                    <strong>{theme.name}</strong>
+                    <small>{theme.description}</small>
+                </span>
+                {selected ? <Check className="theme-menu-check" size={15}/> : null}
+            </button>;
+        })}
+    </div>;
+});
+
 function WorkspaceHistoryShortcuts({workspaceRef}: { workspaceRef: MutableRefObject<NestedCanvasWorkspaceHandle | null> }) {
     useKeyboardShortcut({
         key       : 'z',
@@ -189,6 +255,7 @@ function WorkspaceHistoryShortcuts({workspaceRef}: { workspaceRef: MutableRefObj
 export function App() {
     const workspaceRef = useRef<NestedCanvasWorkspaceHandle | null>(null);
     const arrangeMenuRef = useRef<HTMLDivElement | null>(null);
+    const canvasThemeMenuRef = useRef<HTMLDivElement | null>(null);
     const addPanelButtonRef = useRef<HTMLButtonElement | null>(null);
     const addPanelMenuRef = useRef<HTMLDivElement | null>(null);
     const addPanelSearchRef = useRef<HTMLInputElement | null>(null);
@@ -206,6 +273,10 @@ export function App() {
     const [arrangeMenuOpen, setArrangeMenuOpen] = useState(false);
     const [arrangeMenuPosition, setArrangeMenuPosition] = useState<ArrangeMenuPosition | null>(null);
     const [arrangeMenuTarget, setArrangeMenuTarget] = useState<ArrangeMenuTarget | null>(null);
+    const [canvasThemeMenuOpen, setCanvasThemeMenuOpen] = useState(false);
+    const [canvasThemeMenuPosition, setCanvasThemeMenuPosition] = useState<ArrangeMenuPosition | null>(null);
+    const [canvasThemeMenuCanvasId, setCanvasThemeMenuCanvasId] = useState<CanvasDocumentId | null>(null);
+    const [canvasThemeMenuRecursive, setCanvasThemeMenuRecursive] = useState(false);
     const [addPanelMenuOpen, setAddPanelMenuOpen] = useState(false);
     const [addPanelMenuPosition, setAddPanelMenuPosition] = useState<ArrangeMenuPosition | null>(null);
     const [addPanelQuery, setAddPanelQuery] = useState('');
@@ -234,7 +305,6 @@ export function App() {
     const [chromeState, setChromeState] = useState<NestedCanvasWorkspaceChromeState>(() => ({
         collection             : initialCollection,
         status                 : initialViewportStatus,
-        activeCanvasThemeId    : normalizeCanasterThemeId(documentThemeId(initialCollection)),
         lastModelChange        : null,
         lastCanvasModelChange  : null,
         lastCanvasModelChangeId: 0,
@@ -243,11 +313,10 @@ export function App() {
         storageReady           : false,
     }));
     const theme = normalizeCanasterThemeId(documentThemeId(chromeState.collection));
-    const activeCanvasId = chromeState.collection.activeCanvasId;
-    const activeCanvasDocument = chromeState.collection.documents[activeCanvasId] ?? null;
-    const activeViewExplicitThemeId = activeCanvasDocument?.appearance?.themeId ?? null;
-    const activeViewThemeId = chromeState.activeCanvasThemeId;
-    const selectedPanelTheme = selectedPanelThemeState(chromeState.collection, activeCanvasId, activeViewThemeId);
+    const canvasThemeMenuState = canvasThemeTargetState(
+        chromeState.collection,
+        canvasThemeMenuCanvasId ?? chromeState.collection.activeCanvasId
+    );
 
     const handleChromeStateChange = useCallback((next: NestedCanvasWorkspaceChromeState) => {
         setChromeState(next);
@@ -698,6 +767,18 @@ export function App() {
         });
     }, []);
 
+    const updateCanvasThemeMenuPositionForRect = useCallback((rect: Pick<DOMRect, 'bottom' | 'right'>) => {
+        const margin = 12;
+        const menuWidth = canasterMenuWidth();
+        const left = Math.max(margin,
+            Math.min(window.innerWidth - menuWidth - margin, rect.right - menuWidth));
+        const top = Math.max(margin, Math.min(window.innerHeight - 280, rect.bottom + 8));
+        setCanvasThemeMenuPosition({
+            left,
+            top
+        });
+    }, []);
+
     const updateAddPanelMenuPosition = useCallback(() => {
         const button = addPanelButtonRef.current;
         if (!button) return;
@@ -719,6 +800,13 @@ export function App() {
         setArrangeMenuTarget(null);
     }, []);
 
+    const closeCanvasThemeMenu = useCallback(() => {
+        setCanvasThemeMenuOpen(false);
+        setCanvasThemeMenuPosition(null);
+        setCanvasThemeMenuCanvasId(null);
+        setCanvasThemeMenuRecursive(false);
+    }, []);
+
     const handleArrangeCanvasMenuRequest = useCallback((request: ArrangeCanvasMenuRequest) => {
         setArrangeMenuTarget({
             canvasId  : request.canvasId,
@@ -732,8 +820,24 @@ export function App() {
         setAddPanelMenuOpen(false);
         setAddPanelQuery('');
         setAddPanelActiveIndex(0);
+        closeCanvasThemeMenu();
         setArrangeMenuOpen(true);
-    }, [updateArrangeMenuPositionForRect]);
+    }, [closeCanvasThemeMenu, updateArrangeMenuPositionForRect]);
+
+    const handleCanvasThemeMenuRequest = useCallback((request: CanvasThemeMenuRequest) => {
+        setCanvasThemeMenuCanvasId(request.canvasId);
+        setCanvasThemeMenuRecursive(request.recursive ?? false);
+        const anchor = request.anchor ?? {x: window.innerWidth - 18, y: window.innerHeight - 18, w: 1, h: 1};
+        updateCanvasThemeMenuPositionForRect({
+            right : anchor.x + anchor.w,
+            bottom: anchor.y + anchor.h,
+        });
+        closeArrangeMenu();
+        setAddPanelMenuOpen(false);
+        setAddPanelQuery('');
+        setAddPanelActiveIndex(0);
+        setCanvasThemeMenuOpen(true);
+    }, [closeArrangeMenu, updateCanvasThemeMenuPositionForRect]);
 
     const closeAddPanelMenu = useCallback(() => {
         setAddPanelMenuOpen(false);
@@ -745,13 +849,14 @@ export function App() {
         setAddPanelMenuOpen((open) => {
             if (!open) updateAddPanelMenuPosition();
             if (!open) closeArrangeMenu();
+            if (!open) closeCanvasThemeMenu();
             if (!open) {
                 setAddPanelQuery('');
                 setAddPanelActiveIndex(0);
             }
             return !open;
         });
-    }, [closeArrangeMenu, updateAddPanelMenuPosition]);
+    }, [closeArrangeMenu, closeCanvasThemeMenu, updateAddPanelMenuPosition]);
 
     const handleArrangeCanvas = useCallback((layout: CanvasArrangeLayout) => {
         const target = arrangeMenuTarget ?? {
@@ -785,31 +890,12 @@ export function App() {
         closeAddPanelMenu();
     }, [closeAddPanelMenu]);
 
-    const handleDocumentThemeSelect = useCallback((themeId: CanasterThemeId) => {
-        workspaceRef.current?.setWorkspaceTheme(themeId);
-    }, []);
-
-    const handleActiveViewThemeSelect = useCallback((themeId: CanasterThemeId | null) => {
-        workspaceRef.current?.executeDocumentCommand({
-            type    : 'set-canvas-theme',
-            canvasId: chromeState.collection.activeCanvasId,
-            themeId,
-            source  : 'nonvisual'
-        });
-    }, [chromeState.collection.activeCanvasId]);
-
-    const handleSelectedPanelThemeSelect = useCallback((themeId: CanasterThemeId | null) => {
-        const selection = chromeState.collection.view.selections[chromeState.collection.activeCanvasId];
-        const selectedNodeIds = selection?.selectedNodeIds ?? [];
-        if (!selectedNodeIds.length) return;
-        workspaceRef.current?.executeDocumentCommand({
-            type    : 'set-node-theme',
-            canvasId: chromeState.collection.activeCanvasId,
-            nodeIds : selectedNodeIds,
-            themeId,
-            source  : 'nonvisual'
-        });
-    }, [chromeState.collection]);
+    const handleCanvasThemeSelect = useCallback((themeId: CanasterThemeId | null) => {
+        const canvasId = canvasThemeMenuCanvasId ?? chromeState.collection.activeCanvasId;
+        const commands = canvasThemeCommands(chromeState.collection, canvasId, themeId, canvasThemeMenuRecursive);
+        closeCanvasThemeMenu();
+        for (const command of commands) workspaceRef.current?.executeDocumentCommand(command);
+    }, [canvasThemeMenuCanvasId, canvasThemeMenuRecursive, chromeState.collection, closeCanvasThemeMenu]);
 
     const filteredPanelCreateOptions = useMemo(() => {
         const query = addPanelQuery.trim().toLowerCase();
@@ -867,6 +953,25 @@ export function App() {
             document.removeEventListener('keydown', handleKeyDown);
         };
     }, [arrangeMenuOpen, closeArrangeMenu]);
+
+    useEffect(() => {
+        if (!canvasThemeMenuOpen) return;
+        const handlePointerDown = (event: PointerEvent) => {
+            const target = event.target;
+            if (!(target instanceof Node)) return;
+            if (canvasThemeMenuRef.current?.contains(target)) return;
+            closeCanvasThemeMenu();
+        };
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') closeCanvasThemeMenu();
+        };
+        document.addEventListener('pointerdown', handlePointerDown);
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('pointerdown', handlePointerDown);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [canvasThemeMenuOpen, closeCanvasThemeMenu]);
 
     useEffect(() => {
         if (!addPanelMenuOpen) return;
@@ -927,18 +1032,6 @@ export function App() {
                     open     : addPanelMenuOpen,
                     onToggle : handleToggleAddPanelMenu
                 }}
-                theme={{
-                    activeViewInheritsTheme       : !activeViewExplicitThemeId,
-                    activeViewThemeId,
-                    documentThemeId               : theme,
-                    selectedPanelCount            : selectedPanelTheme.count,
-                    selectedPanelInheritsTheme    : selectedPanelTheme.inherited,
-                    selectedPanelThemeId          : selectedPanelTheme.themeId,
-                    themes                        : canasterThemeOptions,
-                    onActiveViewThemeSelect       : handleActiveViewThemeSelect,
-                    onDocumentThemeSelect         : handleDocumentThemeSelect,
-                    onSelectedPanelThemeSelect    : handleSelectedPanelThemeSelect
-                }}
             />
             {addPanelMenuOpen ? (<AddPanelPopover
                 ref={addPanelMenuRef}
@@ -958,6 +1051,15 @@ export function App() {
             {arrangeMenuOpen ? (<ArrangePanelMenu ref={arrangeMenuRef} arrangeMenuPosition={arrangeMenuPosition}
                                                   onSelect={(layout: CanvasArrangeLayout) => handleArrangeCanvas(
                                                       layout)}/>) : null}
+            {canvasThemeMenuOpen ? (<CanvasThemeMenu
+                ref={canvasThemeMenuRef}
+                canInherit={canvasThemeMenuState.canInherit}
+                currentThemeId={canvasThemeMenuState.themeId}
+                inherited={canvasThemeMenuState.inherited}
+                position={canvasThemeMenuPosition}
+                themes={canasterThemeOptions}
+                onSelect={handleCanvasThemeSelect}
+            />) : null}
             <div className={`workspace-body ${sidePanelOpen ? 'tree-open' : 'tree-closed'}`}>
                 {sidePanelOpen ? (<SidePanel
                     tree={viewTree}
@@ -1008,6 +1110,7 @@ export function App() {
                         onCollectionChange={handleWorkspaceCollectionChange}
                         onChromeStateChange={handleChromeStateChange}
                         onArrangeCanvasMenuRequest={handleArrangeCanvasMenuRequest}
+                        onCanvasThemeMenuRequest={handleCanvasThemeMenuRequest}
                     />
                     {chromeState.collection.view.deleteConfirmation ? (<DeleteConfirmationPrompt
                         collection={chromeState.collection}
@@ -1071,36 +1174,116 @@ function canvasIdsWithDescendants(collection: CanvasDocumentCollection, canvasId
     return ids;
 }
 
-function selectedPanelThemeState(
+function canvasThemeTargetState(
+    collection: CanvasDocumentCollection,
+    canvasId: CanvasDocumentId
+): { canInherit: boolean; inherited: boolean; themeId: CanasterThemeId } {
+    const document = collection.documents[canvasId];
+    if (!document) return {
+        canInherit: false,
+        inherited : false,
+        themeId   : normalizeCanasterThemeId(documentThemeId(collection))
+    };
+    const selectedNodeIds = selectedThemeNodeIds(collection, canvasId);
+    if (selectedNodeIds.length) {
+        const selectedNodes = selectedNodeIds
+            .map((nodeId) => document.model.nodes.find((node) => node.id === nodeId))
+            .filter((node): node is CanvasNode => Boolean(node));
+        const explicitThemeId = selectedNodes
+            .map((node) => node.appearance?.themeId ?? null)
+            .find((themeId): themeId is string => Boolean(themeId));
+        return {
+            canInherit: true,
+            inherited : !explicitThemeId,
+            themeId   : normalizeCanasterThemeId(explicitThemeId || canvasThemeId(collection, canvasId))
+        };
+    }
+    const parentNode = parentNodeForCanvas(collection, document);
+    const explicitCanvasThemeId = document.appearance?.themeId ?? null;
+    return {
+        canInherit: canvasId !== collection.rootCanvasId,
+        inherited : canvasId !== collection.rootCanvasId && !explicitCanvasThemeId && !parentNode?.appearance?.themeId,
+        themeId   : normalizeCanasterThemeId(canvasThemeId(collection, canvasId))
+    };
+}
+
+function canvasThemeCommands(
     collection: CanvasDocumentCollection,
     canvasId: CanvasDocumentId,
-    fallbackThemeId: CanasterThemeId
-): { count: number; inherited: boolean; themeId: CanasterThemeId } {
+    themeId: CanasterThemeId | null,
+    recursive: boolean
+): DocumentCommand[] {
+    const canvasIds = recursive ? canvasIdsWithDescendants(collection, canvasId) : [canvasId];
+    const commands: DocumentCommand[] = [];
+    for (const targetCanvasId of canvasIds) {
+        commands.push(...directCanvasThemeCommands(collection, targetCanvasId, themeId, targetCanvasId === canvasId));
+    }
+    return dedupeThemeCommands(commands);
+}
+
+function directCanvasThemeCommands(
+    collection: CanvasDocumentCollection,
+    canvasId: CanvasDocumentId,
+    themeId: CanasterThemeId | null,
+    includeSelection: boolean
+): DocumentCommand[] {
     const document = collection.documents[canvasId];
-    const selection = collection.view.selections[canvasId];
-    const selectedNodeIds = selection?.selectedNodeIds ?? [];
-    if (!document || !selectedNodeIds.length) return {
-        count    : 0,
-        inherited: true,
-        themeId  : fallbackThemeId
-    };
-    const selectedIds = new Set(selectedNodeIds);
-    const selectedNodes = document.model.nodes.filter((node) => selectedIds.has(node.id));
-    if (!selectedNodes.length) return {
-        count    : 0,
-        inherited: true,
-        themeId  : fallbackThemeId
-    };
-    const explicitThemeIds = selectedNodes
-        .map((node) => node.appearance?.themeId ?? null)
-        .filter((themeId): themeId is string => Boolean(themeId));
-    const inherited = explicitThemeIds.length === 0;
-    const firstThemeId = explicitThemeIds[0] ?? fallbackThemeId;
-    return {
-        count: selectedNodes.length,
-        inherited,
-        themeId: normalizeCanasterThemeId(firstThemeId),
-    };
+    if (!document) return [];
+    const selectedNodeIds = includeSelection ? selectedThemeNodeIds(collection, canvasId) : [];
+    if (selectedNodeIds.length) return [{
+        type    : 'set-node-theme',
+        canvasId,
+        nodeIds : selectedNodeIds,
+        themeId,
+        source  : 'nonvisual'
+    }];
+    const commands: DocumentCommand[] = [];
+    if (canvasId === collection.rootCanvasId || !document.parentCanvasId || !document.parentNodeId) {
+        if (themeId) commands.push({
+            type  : 'set-document-theme',
+            themeId,
+            source: 'nonvisual'
+        });
+        return commands;
+    }
+    commands.push({
+        type    : 'set-canvas-theme',
+        canvasId,
+        themeId,
+        source  : 'nonvisual'
+    });
+    return commands;
+}
+
+function selectedThemeNodeIds(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId): string[] {
+    const document = collection.documents[canvasId];
+    if (!document || canvasId !== collection.activeCanvasId) return [];
+    const selectedNodeIds = collection.view.selections[canvasId]?.selectedNodeIds ?? [];
+    const existingNodeIds = new Set(document.model.nodes.map((node) => node.id));
+    return selectedNodeIds.filter((nodeId) => existingNodeIds.has(nodeId));
+}
+
+function parentNodeForCanvas(collection: CanvasDocumentCollection, document: CanvasDocumentCollection['documents'][string]): CanvasNode | null {
+    if (!document.parentCanvasId || !document.parentNodeId) return null;
+    return collection.documents[document.parentCanvasId]?.model.nodes.find((node) => node.id === document.parentNodeId) ?? null;
+}
+
+function dedupeThemeCommands(commands: DocumentCommand[]): DocumentCommand[] {
+    const seen = new Set<string>();
+    const deduped: DocumentCommand[] = [];
+    for (const command of commands) {
+        const key = command.type === 'set-node-theme' ?
+            `${command.type}:${command.canvasId}:${command.nodeIds.join(',')}:${command.themeId ?? 'inherit'}` :
+            command.type === 'set-canvas-theme' ?
+                `${command.type}:${command.canvasId}:${command.themeId ?? 'inherit'}` :
+                command.type === 'set-document-theme' ?
+                    `${command.type}:${command.themeId}` :
+                    JSON.stringify(command);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        deduped.push(command);
+    }
+    return deduped;
 }
 
 function buildViewTree(collection: CanvasDocumentCollection): ViewTreeNode | null {

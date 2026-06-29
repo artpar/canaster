@@ -150,12 +150,12 @@ function setDocumentTheme(collection: CanvasDocumentCollection, themeId: string,
 
 function setCanvasTheme(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId, themeId: string | null, source: CanvasEditSource): DocumentCommandPlan {
   const document = collection.documents[canvasId];
-  if (!document) return noChange(collection, 'View unavailable');
-  if ((document.appearance?.themeId ?? null) === themeId) return noChange(collection, 'View theme unchanged');
+  if (!document) return noChange(collection, 'Canvas unavailable');
+  if ((document.appearance?.themeId ?? null) === themeId) return noChange(collection, 'Canvas theme unchanged');
   return {
     collection: setCanvasThemeId(collection, canvasId, themeId),
     changes: [{ kind: 'canvas-theme-change', canvasId, themeId, source }],
-    interaction: themeId ? 'View theme changed' : 'View theme inherited',
+    interaction: themeId ? 'Canvas theme changed' : 'Canvas theme inherited',
   };
 }
 
