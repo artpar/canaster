@@ -129,6 +129,7 @@ export type NodeDefinition<TData extends NodeData = NodeData> = {
   addMenu: NodeAddMenuMetadata;
   defaultSize: NodeSize;
   minSize: NodeSize;
+  contentPadding?: number;
   createDefaultData(): TData;
   parseData(raw: JsonObject): TData;
   render(context: NodeRenderContext<TData>): void;

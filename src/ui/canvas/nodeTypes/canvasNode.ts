@@ -1,7 +1,7 @@
 import { asNullableString, asNumber, asString } from '../../../core/nodeData';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import type { JsonObject } from '../../../core/nodePrimitives';
-import { nodeLayout, nodeText } from '../nodeRendering';
+import { nodeLayout } from '../nodeRendering';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeContentRect, NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
 
@@ -10,6 +10,8 @@ type CanvasPortalNodeData = {
   title: string;
   nodeCount: number;
 } & JsonObject;
+
+const PORTAL_CHROME_GUTTER = 4;
 
 export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = defineNodeType({
   ...nodeTypeSpecs.canvas,
@@ -24,26 +26,13 @@ export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = define
     };
   },
   render({ ctx, data, theme, contentRect, state }) {
-    const text = nodeText(theme);
-    const layout = nodeLayout(theme);
     if (state.quality === 'compact' && !state.selected && !state.hovered) return;
 
-    ctx.strokeStyle = theme.nodeBorder;
     const preview = canvasPortalViewportRect(contentRect, theme);
     const previewX = preview.x;
     const previewY = preview.y;
     const previewW = preview.w;
     const previewH = preview.h;
-    ctx.strokeRect(previewX, previewY, previewW, previewH);
-    ctx.fillStyle = theme.mutedText;
-    ctx.font = text.label;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    if (!data.childCanvasId) {
-      ctx.fillText('No view inside', previewX + layout.insetX, previewY + layout.labelLineHeight * 0.6);
-    } else if (state.portalPreview === 'none') {
-      ctx.fillText(`${data.nodeCount} item${data.nodeCount === 1 ? '' : 's'} inside`, previewX + layout.insetX, previewY + layout.labelLineHeight * 0.6);
-    }
     if (state.portalPreview !== 'live') drawPreviewBoxes(ctx, previewX, previewY, previewW, previewH, theme);
   },
   hitTest({ data, point, contentRect, theme }) {
@@ -99,15 +88,12 @@ export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = define
 });
 
 export function canvasPortalViewportRect(contentRect: NodeContentRect, theme?: Parameters<typeof nodeLayout>[0]): NodeContentRect {
-  const layout = theme ? nodeLayout(theme) : null;
-  const inset = layout?.insetX ?? 6;
-  const top = layout ? layout.titleY : 10;
-  const bottom = layout ? layout.insetX : 12;
+  void theme;
   return {
-    x: contentRect.x + inset,
-    y: contentRect.y + top,
-    w: Math.max(0, contentRect.w - inset * 2),
-    h: Math.max(0, contentRect.h - top - bottom),
+    x: contentRect.x + PORTAL_CHROME_GUTTER,
+    y: contentRect.y + PORTAL_CHROME_GUTTER,
+    w: Math.max(0, contentRect.w - PORTAL_CHROME_GUTTER * 2),
+    h: Math.max(0, contentRect.h - PORTAL_CHROME_GUTTER * 2),
   };
 }
 

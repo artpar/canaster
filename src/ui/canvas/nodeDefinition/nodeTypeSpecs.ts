@@ -13,6 +13,7 @@ export type NodeTypeSpec = {
   };
   defaultSize: NodeSize;
   minSize: NodeSize;
+  contentPadding?: number;
 };
 
 export const nodeTypeSpecs = {
@@ -54,6 +55,7 @@ export const nodeTypeSpecs = {
     },
     defaultSize: { w: 280, h: 180 },
     minSize: { w: 140, h: 96 },
+    contentPadding: 0,
   },
   canvas: {
     type: BuiltInNodeTypes.canvas,
@@ -67,6 +69,7 @@ export const nodeTypeSpecs = {
     },
     defaultSize: { w: 300, h: 180 },
     minSize: { w: 160, h: 100 },
+    contentPadding: 0,
   },
   check: {
     type: BuiltInNodeTypes.check,

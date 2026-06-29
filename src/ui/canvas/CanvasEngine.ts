@@ -856,7 +856,7 @@ export class CanvasEngine {
     this.drawNodeShell(renderNode, chrome, theme);
     const contentRect = this.nodeContentRect(renderNode, theme);
     ctx.save();
-    this.clipToNodeContent(contentRect);
+    this.clipToNodeContent(renderNode, contentRect, theme);
     renderNodeContent({
       definition,
       ctx,
@@ -867,6 +867,7 @@ export class CanvasEngine {
       state,
     });
     ctx.restore();
+    this.drawNodeBorder(renderNode, chrome, theme);
     if (state.selected) {
       this.drawResizeHandle(renderNode, theme);
     }
@@ -928,7 +929,16 @@ export class CanvasEngine {
       ctx.restore();
     }
 
-    roundRectPath(ctx, node.x, node.y, node.w, node.h, radius);
+    this.drawNodeBorder(node, state, theme);
+  }
+
+  private drawNodeBorder(node: CanvasNode, state: NodeChromeState, theme: CanvasTheme) {
+    const { ctx } = this;
+    const selected = this.selectedNodeIds.has(node.id);
+    const primary = node.id === this.primarySelectedNodeId;
+    const hovered = node.id === this.hoverNodeId;
+
+    roundRectPath(ctx, node.x, node.y, node.w, node.h, theme.nodeRadius);
     ctx.strokeStyle = selected ? theme.selected : theme.nodeBorder;
     const restBorderWidth = state.compact ? Math.max(1.6, theme.nodeRestBorderWidth) : theme.nodeRestBorderWidth;
     ctx.lineWidth = primary ?
@@ -950,7 +960,7 @@ export class CanvasEngine {
   }
 
   private nodeContentRect(node: CanvasNode, theme = this.themeForNode(node)): NodeContentRect {
-    const padding = theme.nodePadding;
+    const padding = nodeDefinitionFor(node).contentPadding ?? theme.nodePadding;
     return {
       x: node.x + padding,
       y: node.y + padding,
@@ -1010,9 +1020,13 @@ export class CanvasEngine {
     };
   }
 
-  private clipToNodeContent(rect: NodeContentRect) {
+  private clipToNodeContent(node: CanvasNode, rect: NodeContentRect, theme: CanvasTheme) {
     this.ctx.beginPath();
-    this.ctx.rect(rect.x, rect.y, rect.w, rect.h);
+    if (nodeDefinitionFor(node).contentPadding === 0) {
+      roundRectPath(this.ctx, node.x, node.y, node.w, node.h, theme.nodeRadius);
+    } else {
+      this.ctx.rect(rect.x, rect.y, rect.w, rect.h);
+    }
     this.ctx.clip();
   }
 
