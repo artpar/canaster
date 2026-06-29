@@ -14,7 +14,7 @@ import { arrangeLayoutLabel, arrangeNodeGeometries } from './arrangeLayout';
 import { asJsonObject, assertJsonValue } from '../core/nodeData';
 import { nodeDefinitionFor, portalInfoForNode, stripNodeForPaste } from '../ui/canvas/nodeRegistry';
 import type { NodeActionDescriptor } from '../ui/canvas/nodeDefinition/nodeDefinitionTypes';
-import type { CanvasArrangeLayout, CanvasEditSource, CanvasNode } from './types';
+import type { CanvasArrangeLayout, CanvasEditSource, CanvasNode, CanvasSelectionState } from './types';
 import type { CanvasDocumentCollection, CanvasDocumentId, DocumentCommand, DocumentModelChange, PortalNode } from './documentTypes';
 import { cloneViewState } from './viewState';
 
@@ -76,15 +76,27 @@ export function stripPortalChildReferenceOnPaste(node: CanvasNode): CanvasNode {
   return stripNodeForPaste(cloneNode(node));
 }
 
-export function selectedPortalNodesWithChildren(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId): PortalNode[] {
+export function selectedPortalNodesWithChildrenForSelection(
+  collection: CanvasDocumentCollection,
+  canvasId: CanvasDocumentId,
+  selection: CanvasSelectionState,
+): PortalNode[] {
   const document = collection.documents[canvasId];
   if (!document) return [];
-  const selected = new Set(collection.view.selections[canvasId]?.selectedNodeIds ?? []);
+  const selected = new Set(selection.selectedNodeIds);
   return document.model.nodes.filter((node): node is PortalNode => {
     if (!selected.has(node.id)) return false;
     const portal = portalInfoForNode(node);
     return Boolean(portal?.childCanvasId && collection.documents[portal.childCanvasId]);
   });
+}
+
+export function selectedPortalNodesWithChildren(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId): PortalNode[] {
+  return selectedPortalNodesWithChildrenForSelection(
+    collection,
+    canvasId,
+    collection.view.selections[canvasId] ?? { selectedNodeIds: [], primarySelectedNodeId: null, resizeMode: false },
+  );
 }
 
 export function openDeleteConfirmation(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId, nodeIds: string[], source: CanvasEditSource): DocumentCommandPlan {

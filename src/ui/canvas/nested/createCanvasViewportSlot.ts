@@ -80,6 +80,7 @@ export function createCanvasViewportSlot(options: CanvasViewportSlotOptions): Ca
   }
 
   const controls = options.controls.length ? createViewportControls(options.controls) : null;
+  center.append(canvas);
   const engine = new CanvasEngine(canvas, {
     ...options.engineOptions,
     canvasId: options.canvasId,
@@ -100,7 +101,7 @@ export function createCanvasViewportSlot(options: CanvasViewportSlotOptions): Ca
     engine,
   };
 
-  center.append(canvas, childOverlayLayer);
+  center.append(childOverlayLayer);
   viewport.append(center);
   if (parentContextField) viewport.append(parentContextField);
   if (resizers) viewport.append(resizers);

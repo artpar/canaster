@@ -19,11 +19,11 @@ import {
 import {
   openDeleteConfirmation,
   planDocumentCommand,
-  selectedPortalNodesWithChildren,
+  selectedPortalNodesWithChildrenForSelection,
   stripPortalChildReferenceOnPaste,
 } from '../../../domain/documentCommands';
 import { portalInfoForNode, updatePortalSummaryForNode } from '../nodeRegistry';
-import type { Camera, CanvasCommand, CanvasModel, CanvasModelChange, CanvasNode, CanvasSelectionState, PortalLayout, ScreenRect, ThemeName, ViewportStatus } from '../../../domain/types';
+import type { Camera, CanvasCommand, CanvasModel, CanvasModelChange, CanvasNode, CanvasSelectionState, EngineOptions, PortalLayout, ScreenRect, ThemeName, ViewportStatus } from '../../../domain/types';
 import type {
   CanvasDocumentCollection,
   CanvasDocumentId,
@@ -495,6 +495,36 @@ export class NativeNestedCanvasController {
     return this.activeSlot?.engine ?? null;
   }
 
+  private editableEngineOptions(
+    canvasIdForEngine: CanvasDocumentId | (() => CanvasDocumentId),
+    options: {
+      beforeCommandSelection?: () => CanvasSelectionState | null;
+      onCanvasDoubleClick?: EngineOptions['onCanvasDoubleClick'];
+      onFrameMetrics?: EngineOptions['onFrameMetrics'];
+      onModelChange?: EngineOptions['onModelChange'];
+      onNodeAction?: EngineOptions['onNodeAction'];
+      onPortalLayout?: EngineOptions['onPortalLayout'];
+      onStatus?: EngineOptions['onStatus'];
+    },
+  ): EngineOptions {
+    const { beforeCommandSelection, ...engineOptions } = options;
+    const canvasId = () => typeof canvasIdForEngine === 'function' ? canvasIdForEngine() : canvasIdForEngine;
+    return {
+      ...engineOptions,
+      onNodeAction: engineOptions.onNodeAction ?? ((nodeId, actionId, source) => {
+        this.executeDocumentCommand({ type: 'execute-node-action', canvasId: canvasId(), nodeId, actionId, source });
+        return true;
+      }),
+      onNodeDataChange: (nodeId, from, to, source) => {
+        this.executeDocumentCommand({ type: 'set-node-data', canvasId: canvasId(), nodeId, from, to, source });
+        return true;
+      },
+      beforeCommand: (command) => this.handleBeforeCommand(canvasId(), command, beforeCommandSelection?.() ?? null),
+      transformPastedNode: stripPortalChildReferenceOnPaste,
+      pasteInteractionForNodes: (nodes) => nodes.some((node) => portalInfoForNode(node)) ? 'Pasted canvas node without child contents' : null,
+    };
+  }
+
   private createActiveViewportSlot(): CanvasViewportSlot {
     const collection = this.collectionRef.current;
     this.record('engine:active:create', {
@@ -511,7 +541,8 @@ export class NativeNestedCanvasController {
       viewportClassName: 'canvas-viewport active-canvas-viewport',
       controls: ['zoom-in', 'arrange', 'fit', 'zoom-out'],
       onControl: (slot, control, anchor) => this.handleViewportControl(slot, control, anchor),
-      engineOptions: {
+      engineOptions: this.editableEngineOptions(() => this.collectionRef.current.activeCanvasId, {
+        beforeCommandSelection: () => this.activeEngine()?.getSelectionState() ?? null,
         onStatus: (status) => this.handleActiveStatus(this.collectionRef.current.activeCanvasId, status),
         onModelChange: (model, change) => this.handleActiveModelChange(this.collectionRef.current.activeCanvasId, model, change),
         onPortalLayout: (layouts) => this.handleActivePortalLayouts(layouts),
@@ -519,15 +550,8 @@ export class NativeNestedCanvasController {
           this.executeDocumentCommand({ type: 'execute-node-action', canvasId: this.collectionRef.current.activeCanvasId, nodeId, actionId, source });
           return true;
         },
-        onNodeDataChange: (nodeId, from, to, source) => {
-          this.executeDocumentCommand({ type: 'set-node-data', canvasId: this.collectionRef.current.activeCanvasId, nodeId, from, to, source });
-          return true;
-        },
         onFrameMetrics: (metrics) => this.handleFrameMetrics(metrics.frameMs),
-        beforeCommand: (command) => this.handleBeforeCommand(command),
-        transformPastedNode: stripPortalChildReferenceOnPaste,
-        pasteInteractionForNodes: (nodes) => nodes.some((node) => portalInfoForNode(node)) ? 'Pasted canvas node without child contents' : null,
-      },
+      }),
     });
   }
 
@@ -718,7 +742,8 @@ export class NativeNestedCanvasController {
 
     const stageRect = screenRectToDomRect(layout.screenRect);
     const parentContextOwnerKey = `context:${key}`;
-    const viewportSlot = createCanvasViewportSlot({
+    let viewportSlot: CanvasViewportSlot;
+    viewportSlot = createCanvasViewportSlot({
       key,
       canvasId,
       mode: 'embedded-live',
@@ -729,7 +754,8 @@ export class NativeNestedCanvasController {
       controls: ['arrange', 'fit'],
       includePaneLayers: true,
       onControl: (slot, control, anchor) => this.handleViewportControl(slot, control, anchor),
-      engineOptions: {
+      engineOptions: this.editableEngineOptions(canvasId, {
+        beforeCommandSelection: () => viewportSlot.engine.getSelectionState(),
         onStatus: () => undefined,
         onModelChange: (model, change) => this.handleEmbeddedModelChange(canvasId, model, change),
         onCanvasDoubleClick: (targetCanvasId) => {
@@ -737,18 +763,13 @@ export class NativeNestedCanvasController {
           return true;
         },
         onPortalLayout: (layouts) => this.handleEmbeddedPortalLayouts(key, layouts),
-        onNodeAction: (nodeId, actionId, source) => {
-          this.executeDocumentCommand({ type: 'execute-node-action', canvasId, nodeId, actionId, source });
-          return true;
-        },
-      },
+      }),
     });
     applyPortalOverlayStyle(viewportSlot.wrapper, layout);
     viewportSlot.viewport.dataset.depth = String(depth);
     parent.append(viewportSlot.wrapper);
     viewportSlot.engine.setModel(canvasDocument.model);
     viewportSlot.engine.setTheme(this.theme);
-    viewportSlot.engine.setSelectionState(selectionForCanvas(this.collectionRef.current, canvasId));
     const slot: Slot = { key, parentCanvasId: layout.parentCanvasId, portalNodeId: layout.portalNodeId, canvasId, viewportSlot, parentContextOwnerKey, portalLayouts: [], sizeSignature: sizeSignature(stageRect) };
     this.slots.set(key, slot);
     this.layoutEmbeddedSlot(slot, stageRect);
@@ -1021,7 +1042,6 @@ export class NativeNestedCanvasController {
         (node) => visibleNodeIds.has(node.id),
         parentContextProjectionSignature(parent.id, source, region, visibleNodeIds),
       );
-      slot.viewportSlot.engine.setSelectionState(selectionForCanvas(collection, parent.id));
       const worldRect = parentContextWorldRect(source, shapesByRegion.get(region), region);
       const targetSignature = worldRectSignature(worldRect);
       const memoryKey = parentContextPaneViewportKey({
@@ -1049,7 +1069,8 @@ export class NativeNestedCanvasController {
   }
 
   private createParentContextPaneSlot(key: string, ownerKey: string, region: ParentContextRegion, canvasId: CanvasDocumentId, label: string): ParentContextPaneSlot {
-    const viewportSlot = createCanvasViewportSlot({
+    let viewportSlot: CanvasViewportSlot;
+    viewportSlot = createCanvasViewportSlot({
       key,
       canvasId,
       mode: 'embedded-live',
@@ -1058,7 +1079,8 @@ export class NativeNestedCanvasController {
       wrapperClassName: 'parent-context-canvas-clip native-parent-context-canvas-clip',
       viewportClassName: 'canvas-viewport parent-context-canvas-viewport',
       controls: [],
-      engineOptions: {
+      engineOptions: this.editableEngineOptions(canvasId, {
+        beforeCommandSelection: () => viewportSlot.engine.getSelectionState(),
         onStatus: () => this.handleParentContextStatus(key),
         onModelChange: (model, change) => this.handleEmbeddedModelChange(canvasId, model, change),
         onCanvasDoubleClick: (targetCanvasId) => {
@@ -1066,13 +1088,7 @@ export class NativeNestedCanvasController {
           return true;
         },
         onPortalLayout: (layouts) => this.handleParentContextPortalLayouts(key, layouts),
-        onNodeAction: (nodeId, actionId, source) => {
-          this.executeDocumentCommand({ type: 'execute-node-action', canvasId, nodeId, actionId, source });
-          return true;
-        },
-        transformPastedNode: stripPortalChildReferenceOnPaste,
-        pasteInteractionForNodes: (nodes) => nodes.some((node) => portalInfoForNode(node)) ? 'Pasted canvas node without child contents' : null,
-      },
+      }),
     });
     viewportSlot.wrapper.dataset.region = region;
     viewportSlot.engine.setTheme(this.theme);
@@ -1164,12 +1180,12 @@ export class NativeNestedCanvasController {
     this.scheduleOverlayRender();
   }
 
-  private handleBeforeCommand(command: CanvasCommand) {
+  private handleBeforeCommand(canvasId: CanvasDocumentId, command: CanvasCommand, selection: CanvasSelectionState | null) {
     if (command.type === 'delete-selection') {
-      const base = this.saveActiveViewport(this.collectionRef.current);
-      const selected = selectedPortalNodesWithChildren(base, base.activeCanvasId);
+      const activeSaved = this.saveActiveViewport(this.collectionRef.current);
+      const selected = selection ? selectedPortalNodesWithChildrenForSelection(activeSaved, canvasId, selection) : [];
       if (selected.length) {
-        const plan = openDeleteConfirmation(base, base.activeCanvasId, selected.map((node) => node.id), command.source);
+        const plan = openDeleteConfirmation(activeSaved, canvasId, selected.map((node) => node.id), command.source);
         this.commitCollection(plan.collection, plan.changes);
         this.setStatus({ ...this.status, interaction: plan.interaction });
         return false;
