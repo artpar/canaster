@@ -57,7 +57,7 @@ export const imageNodeDefinition: NodeDefinition<ImageNodeData> = defineNodeType
     ctx.textBaseline = 'top';
     const status = cached ? (data.caption || data.alt || 'Image reference') : data.assetId ? 'Loading image' : 'Add an image source';
     const lines = wrapText(ctx, status, Math.max(0, contentRect.w - layout.insetX * 2), 2);
-    let y = contentRect.y + Math.max(0, contentRect.h - layout.footerHeight * 2 - 6);
+    let y = contentRect.y + imageCaptionY(contentRect, layout);
     for (const line of lines) {
       ctx.fillText(line, contentRect.x + layout.insetX, y);
       y += layout.labelLineHeight;
@@ -127,17 +127,18 @@ function imageRegions(contentRect: NodeContentRect, theme: CanvasTheme): NodeInt
   const layout = nodeLayout(theme);
   const frame = imageFrame(contentRect, theme);
   const controls = imageFitControlRects(contentRect, theme);
+  const captionY = imageCaptionY(contentRect, layout);
   return [
     { id: 'image-frame', rect: frame, cursor: 'pointer', label: 'image' },
     {
       id: 'caption',
-      rect: { x: contentRect.x + layout.insetX, y: contentRect.y + Math.max(0, contentRect.h - layout.footerHeight * 2 - 6), w: Math.max(0, contentRect.w - layout.insetX * 2), h: layout.labelLineHeight + 1 },
+      rect: { x: contentRect.x + layout.insetX, y: contentRect.y + captionY, w: Math.max(0, contentRect.w - layout.insetX * 2), h: layout.labelLineHeight + Math.max(1, Math.round(layout.labelLineHeight * 0.1)) },
       cursor: 'text',
       label: 'image caption',
     },
     {
       id: 'alt',
-      rect: { x: contentRect.x + layout.insetX, y: contentRect.y + Math.max(0, contentRect.h - layout.footerHeight - 6), w: Math.max(0, contentRect.w - 110), h: layout.footerHeight + 1 },
+      rect: { x: contentRect.x + layout.insetX, y: contentRect.y + Math.max(0, contentRect.h - layout.footerHeight - Math.round(layout.labelLineHeight * 0.4)), w: Math.max(0, contentRect.w - layout.insetX * 2 - imageFitControlWidth(layout) * 2), h: layout.footerHeight + Math.max(1, Math.round(layout.labelLineHeight * 0.1)) },
       cursor: 'text',
       label: 'image alt text',
     },
@@ -152,17 +153,28 @@ function imageFrame(contentRect: NodeContentRect, theme: CanvasTheme) {
     x: contentRect.x + layout.insetX,
     y: contentRect.y + layout.titleY,
     w: Math.max(0, contentRect.w - layout.insetX * 2),
-    h: Math.max(0, contentRect.h - layout.footerHeight * 2 - layout.titleY - 10),
+    h: Math.max(0, contentRect.h - layout.footerHeight * 2 - layout.titleY - Math.round(layout.bodyLineHeight * 0.55)),
   };
 }
 
 function imageFitControlRects(contentRect: NodeContentRect, theme: CanvasTheme) {
   const layout = nodeLayout(theme);
-  const y = contentRect.y + Math.max(layout.titleY, contentRect.h - layout.footerHeight - 2);
+  const controlWidth = imageFitControlWidth(layout);
+  const controlHeight = Math.max(14, layout.labelLineHeight + Math.round(layout.labelLineHeight * 0.15));
+  const controlGap = Math.max(4, Math.round(layout.insetX * 0.8));
+  const y = contentRect.y + Math.max(layout.titleY, contentRect.h - layout.footerHeight + Math.round((layout.footerHeight - controlHeight) / 2));
   return {
-    contain: { x: contentRect.x + Math.max(0, contentRect.w - 102), y, w: 48, h: 16 },
-    cover: { x: contentRect.x + Math.max(0, contentRect.w - 50), y, w: 46, h: 16 },
+    contain: { x: contentRect.x + Math.max(0, contentRect.w - controlWidth * 2 - controlGap), y, w: controlWidth, h: controlHeight },
+    cover: { x: contentRect.x + Math.max(0, contentRect.w - controlWidth), y, w: controlWidth, h: controlHeight },
   };
+}
+
+function imageCaptionY(contentRect: NodeContentRect, layout: ReturnType<typeof nodeLayout>) {
+  return Math.max(0, contentRect.h - layout.footerHeight * 2 - Math.round(layout.labelLineHeight * 0.4));
+}
+
+function imageFitControlWidth(layout: ReturnType<typeof nodeLayout>) {
+  return Math.max(42, layout.rowHeight * 2 + layout.insetX);
 }
 
 function drawImageFitControls(ctx: CanvasRenderingContext2D, contentRect: NodeContentRect, fit: 'contain' | 'cover', theme: CanvasTheme) {
@@ -178,7 +190,7 @@ function drawFitPill(ctx: CanvasRenderingContext2D, rect: { x: number; y: number
   ctx.strokeStyle = active ? theme.selected : theme.mutedText;
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.roundRect(rect.x, rect.y, rect.w, rect.h, 4);
+  ctx.roundRect(rect.x, rect.y, rect.w, rect.h, theme.nodeControlRadius);
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = active ? theme.nodeBg : theme.bodyText;

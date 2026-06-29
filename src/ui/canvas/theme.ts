@@ -46,6 +46,7 @@ export type CanvasTheme = {
   mutedText: string;
   selected: string;
   resizeFill: string;
+  nodePadding: number;
   nodeContentInsetX: number;
   nodeTitleY: number;
   nodeMetaY: number;
@@ -108,6 +109,7 @@ export function canvasThemeFor(themeId: string): CanvasTheme {
     mutedText: theme.colors.text.muted,
     selected: theme.colors.node.selected,
     resizeFill: theme.colors.node.resizeFill,
+    nodePadding: parsePixelValue(theme.components.node.padding, 12),
     nodeContentInsetX: theme.components.node.contentInsetX,
     nodeTitleY: theme.components.node.titleY,
     nodeMetaY: theme.components.node.metaY,
@@ -124,4 +126,9 @@ export function canvasThemeFor(themeId: string): CanvasTheme {
       system: theme.colors.node.system,
     },
   };
+}
+
+function parsePixelValue(value: string, fallback: number) {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }

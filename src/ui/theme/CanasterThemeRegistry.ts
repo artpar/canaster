@@ -73,11 +73,26 @@ type ComponentRecipe = {
     iconGlyphSize: number;
     panelPadding: string;
     panelGap: string;
+    sidePanelRowHeight: string;
+    sidePanelRowPadding: string;
+    sidePanelListPadding: string;
+    sidePanelRowIndent: string;
+    sidePanelIconButtonSize: string;
+    popoverPadding: string;
+    popoverGap: string;
     nodePadding: string;
     drawerWidth: string;
     inputHeight: string;
     inputPaddingInline: string;
     menuWidth: string;
+    menuPadding: string;
+    menuItemMinHeight: string;
+    menuItemPadding: string;
+    menuItemGap: string;
+    viewportControlInset: string;
+    viewportControlGap: string;
+    embeddedViewportControlInset: string;
+    embeddedViewportControlGap: string;
     nodeLayout: {
         contentInsetX: number;
         titleY: number;
@@ -134,6 +149,17 @@ function components(recipe: ComponentRecipe): CanasterTheme['components'] {
             padding: recipe.panelPadding,
             gap: recipe.panelGap,
         },
+        sidePanel: {
+            rowHeight: recipe.sidePanelRowHeight,
+            rowPadding: recipe.sidePanelRowPadding,
+            listPadding: recipe.sidePanelListPadding,
+            rowIndent: recipe.sidePanelRowIndent,
+            iconButtonSize: recipe.sidePanelIconButtonSize,
+        },
+        popover: {
+            padding: recipe.popoverPadding,
+            gap: recipe.popoverGap,
+        },
         node: {
             padding: recipe.nodePadding,
             titleSize: recipe.nodeLayout.rowHeight >= 19 ? '15px' : '14px',
@@ -159,6 +185,16 @@ function components(recipe: ComponentRecipe): CanasterTheme['components'] {
         },
         menu: {
             width: recipe.menuWidth,
+            padding: recipe.menuPadding,
+            itemMinHeight: recipe.menuItemMinHeight,
+            itemPadding: recipe.menuItemPadding,
+            itemGap: recipe.menuItemGap,
+        },
+        viewportControls: {
+            inset: recipe.viewportControlInset,
+            gap: recipe.viewportControlGap,
+            embeddedInset: recipe.embeddedViewportControlInset,
+            embeddedGap: recipe.embeddedViewportControlGap,
         },
     };
 }
@@ -195,11 +231,26 @@ const standardComponents = components({
     iconGlyphSize: 17,
     panelPadding: '8px',
     panelGap: '8px',
+    sidePanelRowHeight: '34px',
+    sidePanelRowPadding: '6px 7px 5px 10px',
+    sidePanelListPadding: '4px 6px 8px',
+    sidePanelRowIndent: '14px',
+    sidePanelIconButtonSize: '28px',
+    popoverPadding: '10px',
+    popoverGap: '10px',
     nodePadding: '12px',
     drawerWidth: '320px',
     inputHeight: '30px',
     inputPaddingInline: '8px',
     menuWidth: '224px',
+    menuPadding: '6px',
+    menuItemMinHeight: '46px',
+    menuItemPadding: '6px 8px',
+    menuItemGap: '8px',
+    viewportControlInset: '18px',
+    viewportControlGap: '6px',
+    embeddedViewportControlInset: '6px',
+    embeddedViewportControlGap: '4px',
     nodeLayout: {
         contentInsetX: 5,
         titleY: 3,
@@ -403,7 +454,41 @@ export const CANASTER_THEMES: Record<CanasterThemeId, CanasterTheme> = {
             gridStep: 36,
         },
         motion,
-        components: standardComponents,
+        components: components({
+            ...standardComponentRecipe(),
+            toolbarHeight: '40px',
+            toolbarPadding: '6px 8px',
+            toolbarGap: '8px',
+            iconSize: '32px',
+            mobileIconSize: '28px',
+            panelPadding: '8px',
+            panelGap: '8px',
+            sidePanelRowHeight: '32px',
+            sidePanelRowPadding: '5px 7px 5px 9px',
+            sidePanelListPadding: '4px 6px 8px',
+            sidePanelIconButtonSize: '27px',
+            popoverPadding: '10px',
+            popoverGap: '9px',
+            menuPadding: '6px',
+            menuItemMinHeight: '44px',
+            menuItemPadding: '6px 8px',
+            menuItemGap: '8px',
+            inputHeight: '30px',
+            viewportControlInset: '16px',
+            viewportControlGap: '6px',
+            nodeLayout: {
+                contentInsetX: 5,
+                titleY: 3,
+                metaY: 24,
+                contentY: 46,
+                bodyLineHeight: 18,
+                labelLineHeight: 15,
+                rowHeight: 18,
+                accentWidth: 28,
+                accentHeight: 6,
+                controlRadius: 4,
+            },
+        }),
     },
     nightLedger: {
         id: 'nightLedger',
@@ -505,15 +590,32 @@ export const CANASTER_THEMES: Record<CanasterThemeId, CanasterTheme> = {
         motion,
         components: components({
             ...standardComponentRecipe(),
+            toolbarHeight: '38px',
+            toolbarPadding: '5px 7px',
+            toolbarGap: '7px',
+            iconSize: '30px',
+            mobileIconSize: '28px',
+            menuPadding: '5px',
+            menuItemMinHeight: '42px',
+            menuItemPadding: '5px 7px',
+            sidePanelRowHeight: '30px',
+            sidePanelRowPadding: '4px 6px 4px 8px',
+            sidePanelListPadding: '3px 5px 7px',
+            sidePanelIconButtonSize: '26px',
+            popoverPadding: '9px',
+            popoverGap: '8px',
             panelPadding: '7px',
             panelGap: '7px',
             nodePadding: '10px',
+            drawerWidth: '304px',
             inputHeight: '28px',
+            viewportControlInset: '14px',
+            viewportControlGap: '5px',
             nodeLayout: {
-                contentInsetX: 5,
-                titleY: 3,
-                metaY: 23,
-                contentY: 44,
+                contentInsetX: 4,
+                titleY: 2,
+                metaY: 22,
+                contentY: 42,
                 bodyLineHeight: 17,
                 labelLineHeight: 14,
                 rowHeight: 17,
@@ -608,8 +710,31 @@ export const CANASTER_THEMES: Record<CanasterThemeId, CanasterTheme> = {
         motion,
         components: components({
             ...standardComponentRecipe(),
-            panelPadding: '9px',
-            panelGap: '9px',
+            toolbarHeight: '44px',
+            toolbarPadding: '7px 10px',
+            toolbarGap: '10px',
+            iconSize: '34px',
+            mobileIconSize: '30px',
+            panelPadding: '10px',
+            panelGap: '10px',
+            sidePanelRowHeight: '38px',
+            sidePanelRowPadding: '7px 9px 7px 12px',
+            sidePanelListPadding: '6px 8px 10px',
+            sidePanelRowIndent: '16px',
+            sidePanelIconButtonSize: '30px',
+            popoverPadding: '12px',
+            popoverGap: '12px',
+            menuWidth: '244px',
+            menuPadding: '8px',
+            menuItemMinHeight: '54px',
+            menuItemPadding: '8px 10px',
+            menuItemGap: '10px',
+            drawerWidth: '340px',
+            inputHeight: '32px',
+            viewportControlInset: '22px',
+            viewportControlGap: '8px',
+            embeddedViewportControlInset: '8px',
+            embeddedViewportControlGap: '5px',
             nodePadding: '13px',
             nodeLayout: {
                 contentInsetX: 6,
@@ -718,10 +843,30 @@ export const CANASTER_THEMES: Record<CanasterThemeId, CanasterTheme> = {
         motion,
         components: components({
             ...standardComponentRecipe(),
+            toolbarHeight: '42px',
+            toolbarPadding: '7px 9px',
+            toolbarGap: '9px',
+            iconSize: '34px',
+            mobileIconSize: '30px',
             panelPadding: '10px',
             panelGap: '10px',
+            sidePanelRowHeight: '36px',
+            sidePanelRowPadding: '6px 8px 6px 11px',
+            sidePanelListPadding: '5px 8px 10px',
+            sidePanelRowIndent: '15px',
+            sidePanelIconButtonSize: '30px',
+            popoverPadding: '12px',
+            popoverGap: '11px',
             nodePadding: '14px',
+            menuWidth: '248px',
+            menuPadding: '8px',
+            menuItemMinHeight: '52px',
+            menuItemPadding: '8px 10px',
+            menuItemGap: '10px',
+            drawerWidth: '336px',
             inputHeight: '32px',
+            viewportControlInset: '20px',
+            viewportControlGap: '8px',
             nodeLayout: {
                 contentInsetX: 6,
                 titleY: 4,
@@ -827,11 +972,26 @@ function standardComponentRecipe(): ComponentRecipe {
         iconGlyphSize: 17,
         panelPadding: '8px',
         panelGap: '8px',
+        sidePanelRowHeight: '34px',
+        sidePanelRowPadding: '6px 7px 5px 10px',
+        sidePanelListPadding: '4px 6px 8px',
+        sidePanelRowIndent: '14px',
+        sidePanelIconButtonSize: '28px',
+        popoverPadding: '10px',
+        popoverGap: '10px',
         nodePadding: '12px',
         drawerWidth: '320px',
         inputHeight: '30px',
         inputPaddingInline: '8px',
         menuWidth: '224px',
+        menuPadding: '6px',
+        menuItemMinHeight: '46px',
+        menuItemPadding: '6px 8px',
+        menuItemGap: '8px',
+        viewportControlInset: '18px',
+        viewportControlGap: '6px',
+        embeddedViewportControlInset: '6px',
+        embeddedViewportControlGap: '4px',
         nodeLayout: {
             contentInsetX: 5,
             titleY: 3,

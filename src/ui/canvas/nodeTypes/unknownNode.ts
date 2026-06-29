@@ -1,7 +1,7 @@
 import { asJsonObject } from '../../../core/nodeData';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import type { NodeData } from '../../../core/nodePrimitives';
-import { clipText, drawTypeBadge, wrapText } from '../nodeRendering';
+import { clipText, drawTypeBadge, nodeLayout, nodeText, wrapText } from '../nodeRendering';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
 
@@ -14,20 +14,22 @@ export const unknownNodeDefinition: NodeDefinition<NodeData> = defineNodeType({
     return asJsonObject(raw);
   },
   render({ ctx, node, theme, contentRect }) {
+    const layout = nodeLayout(theme);
+    const text = nodeText(theme);
     ctx.fillStyle = theme.headerText;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    ctx.font = '600 14px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText('Unknown item type', contentRect.x + 4, contentRect.y + 4);
+    ctx.font = text.title;
+    ctx.fillText('Unknown item type', contentRect.x + layout.insetX, contentRect.y + layout.titleY);
     ctx.fillStyle = theme.bodyText;
-    ctx.font = '12px ui-sans-serif, system-ui, sans-serif';
-    const lines = wrapText(ctx, node.type, Math.max(0, contentRect.w - 8), 2);
-    let y = contentRect.y + 28;
+    ctx.font = text.body;
+    const lines = wrapText(ctx, node.type, Math.max(0, contentRect.w - layout.insetX * 2), 2);
+    let y = contentRect.y + layout.contentY;
     for (const line of lines) {
-      ctx.fillText(line, contentRect.x + 4, y);
-      y += 15;
+      ctx.fillText(line, contentRect.x + layout.insetX, y);
+      y += layout.bodyLineHeight;
     }
-    drawTypeBadge(ctx, contentRect, clipText(ctx, 'UNKNOWN', Math.max(0, contentRect.w - 4)), theme);
+    drawTypeBadge(ctx, contentRect, clipText(ctx, 'UNKNOWN', Math.max(0, contentRect.w - layout.insetX * 2)), theme);
   },
   describe({ node }) {
     return {

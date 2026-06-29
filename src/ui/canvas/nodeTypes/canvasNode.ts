@@ -46,9 +46,9 @@ export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = define
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
       if (!data.childCanvasId) {
-        ctx.fillText('No view inside', previewX + 10, previewY + 10);
+        ctx.fillText('No view inside', previewX + layout.insetX, previewY + layout.labelLineHeight * 0.6);
       } else if (state.portalPreview === 'none') {
-        ctx.fillText(`${data.nodeCount} item${data.nodeCount === 1 ? '' : 's'} inside`, previewX + 10, previewY + 10);
+        ctx.fillText(`${data.nodeCount} item${data.nodeCount === 1 ? '' : 's'} inside`, previewX + layout.insetX, previewY + layout.labelLineHeight * 0.6);
       }
       if (state.portalPreview !== 'live') drawPreviewBoxes(ctx, previewX, previewY, previewW, previewH, theme);
     } else {
@@ -57,8 +57,8 @@ export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = define
 
     drawTypeBadge(ctx, contentRect, 'VIEW', theme);
   },
-  hitTest({ data, point, contentRect }) {
-    const preview = canvasPortalViewportRect(contentRect);
+  hitTest({ data, point, contentRect, theme }) {
+    const preview = canvasPortalViewportRect(contentRect, theme);
     if (point.x >= preview.x && point.x <= preview.x + preview.w && point.y >= preview.y && point.y <= preview.y + preview.h) {
       return { type: 'activate', action: data.childCanvasId ? 'enter-child-canvas' : 'create-child-canvas' };
     }
@@ -112,7 +112,7 @@ export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = define
 export function canvasPortalViewportRect(contentRect: NodeContentRect, theme?: Parameters<typeof nodeLayout>[0]): NodeContentRect {
   const layout = theme ? nodeLayout(theme) : null;
   const inset = layout?.insetX ?? 6;
-  const top = layout ? layout.contentY - 10 : 36;
+  const top = layout ? layout.contentY - Math.round(layout.bodyLineHeight * 0.55) : 36;
   const bottom = layout ? layout.footerHeight + layout.insetX : 72;
   return {
     x: contentRect.x + inset,
@@ -122,10 +122,18 @@ export function canvasPortalViewportRect(contentRect: NodeContentRect, theme?: P
   };
 }
 
-function drawPreviewBoxes(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, theme: { nodeBorder: string }) {
-  if (w < 64 || h < 48) return;
+function drawPreviewBoxes(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, theme: Parameters<typeof nodeLayout>[0] & { nodeBorder: string }) {
+  const layout = nodeLayout(theme);
+  const boxW = Math.max(layout.rowHeight, layout.bodyLineHeight + layout.labelLineHeight);
+  const boxH = layout.rowHeight;
+  if (w < boxW * 2.7 || h < boxH * 2.7) return;
   ctx.strokeStyle = theme.nodeBorder;
   for (let i = 0; i < 3; i++) {
-    ctx.strokeRect(x + 14 + i * 34, y + h - 34 - i * 5, 24, 16);
+    ctx.strokeRect(
+      x + layout.insetX * 2 + i * (boxW + layout.insetX * 2),
+      y + h - boxH * 2 - i * Math.max(1, layout.insetX),
+      boxW,
+      boxH,
+    );
   }
 }

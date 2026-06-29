@@ -198,6 +198,17 @@ export type CanasterThemeComponents = {
         padding: string;
         gap: string;
     };
+    sidePanel: {
+        rowHeight: string;
+        rowPadding: string;
+        listPadding: string;
+        rowIndent: string;
+        iconButtonSize: string;
+    };
+    popover: {
+        padding: string;
+        gap: string;
+    };
     node: {
         padding: string;
         titleSize: string;
@@ -223,5 +234,15 @@ export type CanasterThemeComponents = {
     };
     menu: {
         width: string;
+        padding: string;
+        itemMinHeight: string;
+        itemPadding: string;
+        itemGap: string;
+    };
+    viewportControls: {
+        inset: string;
+        gap: string;
+        embeddedInset: string;
+        embeddedGap: string;
     };
 };

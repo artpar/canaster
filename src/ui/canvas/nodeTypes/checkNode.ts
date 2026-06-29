@@ -8,7 +8,6 @@ import type { NodeContentRect, NodeDefinition, NodeInteractionRegion } from '../
 import type { CanvasTheme } from '../theme';
 
 const MAX_ITEMS = 100;
-const CHECKBOX_SIZE = 12;
 
 type CheckNodeItem = {
   id: string;
@@ -48,17 +47,18 @@ export const checkNodeDefinition: NodeDefinition<CheckNodeData> = defineNodeType
 
     const rows = visibleRows(contentRect.h, layout);
     const visibleItems = data.items.slice(0, rows);
+    const metrics = checklistMetrics(layout);
     let y = contentRect.y + layout.contentY;
     for (const item of visibleItems) {
-      drawCheckbox(ctx, contentRect.x + layout.insetX, y + 1, item.checked, theme);
+      drawCheckbox(ctx, contentRect.x + layout.insetX, y + metrics.checkboxOffsetY, item.checked, theme);
       ctx.fillStyle = item.checked ? theme.mutedText : theme.bodyText;
       ctx.font = text.body;
-      const deleteSpace = state.selected || state.hovered ? 18 : 0;
-      ctx.fillText(clipText(ctx, item.text || 'Untitled item', Math.max(0, contentRect.w - layout.insetX - 24 - deleteSpace)), contentRect.x + layout.insetX + 20, y);
+      const deleteSpace = state.selected || state.hovered ? metrics.deleteHitSize : 0;
+      ctx.fillText(clipText(ctx, item.text || 'Untitled item', Math.max(0, contentRect.w - layout.insetX - metrics.textOffsetX - deleteSpace)), contentRect.x + layout.insetX + metrics.textOffsetX, y);
       if (state.selected || state.hovered) {
         ctx.fillStyle = theme.mutedText;
         ctx.font = text.label;
-        ctx.fillText('x', contentRect.x + contentRect.w - 13, y);
+        ctx.fillText('x', contentRect.x + contentRect.w - metrics.deleteHitSize + Math.round(layout.insetX * 0.5), y);
       }
       y += layout.rowHeight;
     }
@@ -143,9 +143,10 @@ export const checkNodeDefinition: NodeDefinition<CheckNodeData> = defineNodeType
 
 function checklistRegions(contentRect: NodeContentRect, data: CheckNodeData, theme: CanvasTheme): NodeInteractionRegion[] {
   const layout = nodeLayout(theme);
+  const metrics = checklistMetrics(layout);
   const regions: NodeInteractionRegion[] = [{
     id: 'title',
-    rect: { x: contentRect.x + layout.insetX, y: contentRect.y + layout.titleY, w: Math.max(0, contentRect.w - layout.insetX * 2), h: layout.titleHeight + 2 },
+    rect: { x: contentRect.x + layout.insetX, y: contentRect.y + layout.titleY, w: Math.max(0, contentRect.w - layout.insetX * 2), h: layout.titleHeight + Math.round(layout.labelLineHeight * 0.15) },
     cursor: 'text',
     label: 'checklist title',
   }];
@@ -155,19 +156,19 @@ function checklistRegions(contentRect: NodeContentRect, data: CheckNodeData, the
   for (const item of visibleItems) {
     regions.push({
       id: `item:${item.id}:checked`,
-      rect: { x: contentRect.x + 2, y: y - 1, w: 18, h: 18 },
+      rect: { x: contentRect.x + layout.insetX, y: y - metrics.hitLift, w: metrics.deleteHitSize, h: layout.rowHeight + metrics.hitLift },
       cursor: 'pointer',
       label: 'checklist item',
     });
     regions.push({
       id: `item:${item.id}:text`,
-      rect: { x: contentRect.x + layout.insetX + 20, y: y - 2, w: Math.max(0, contentRect.w - layout.insetX - 42), h: layout.rowHeight + 1 },
+      rect: { x: contentRect.x + layout.insetX + metrics.textOffsetX, y: y - metrics.hitLift, w: Math.max(0, contentRect.w - layout.insetX - metrics.textOffsetX - metrics.deleteHitSize), h: layout.rowHeight + metrics.hitLift },
       cursor: 'text',
       label: 'checklist item',
     });
     regions.push({
       id: `item:${item.id}:delete`,
-      rect: { x: contentRect.x + contentRect.w - 18, y: y - 2, w: 18, h: layout.rowHeight + 1 },
+      rect: { x: contentRect.x + contentRect.w - metrics.deleteHitSize, y: y - metrics.hitLift, w: metrics.deleteHitSize, h: layout.rowHeight + metrics.hitLift },
       cursor: 'pointer',
       label: 'delete checklist item',
     });
@@ -176,14 +177,14 @@ function checklistRegions(contentRect: NodeContentRect, data: CheckNodeData, the
   if (visibleItems.length < rows) {
     regions.push({
       id: 'add-item',
-      rect: { x: contentRect.x + layout.insetX, y: y - 2, w: Math.max(0, contentRect.w - layout.insetX * 2), h: layout.rowHeight + 1 },
+      rect: { x: contentRect.x + layout.insetX, y: y - metrics.hitLift, w: Math.max(0, contentRect.w - layout.insetX * 2), h: layout.rowHeight + metrics.hitLift },
       cursor: 'text',
       label: 'new checklist item',
     });
   } else if (data.items.length > visibleItems.length) {
     regions.push({
       id: 'open-list',
-      rect: { x: contentRect.x + layout.insetX, y: contentRect.y + Math.max(0, contentRect.h - layout.footerHeight - 4), w: Math.max(0, contentRect.w - layout.insetX * 2), h: layout.footerHeight + 4 },
+      rect: { x: contentRect.x + layout.insetX, y: contentRect.y + Math.max(0, contentRect.h - layout.footerHeight - metrics.hitLift), w: Math.max(0, contentRect.w - layout.insetX * 2), h: layout.footerHeight + metrics.hitLift },
       cursor: 'pointer',
       label: 'checklist items',
     });
@@ -327,6 +328,17 @@ function visibleRows(height: number, layout: ReturnType<typeof nodeLayout>) {
   return Math.max(0, Math.min(5, Math.floor(available / layout.rowHeight)));
 }
 
+function checklistMetrics(layout: ReturnType<typeof nodeLayout>) {
+  const checkboxSize = Math.max(10, Math.round(layout.rowHeight * 0.68));
+  return {
+    checkboxSize,
+    checkboxOffsetY: Math.max(0, Math.round((layout.rowHeight - checkboxSize) / 2) - 1),
+    deleteHitSize: Math.max(16, layout.rowHeight),
+    hitLift: Math.max(1, Math.round(layout.rowHeight * 0.1)),
+    textOffsetX: checkboxSize + Math.max(6, layout.insetX + 4),
+  };
+}
+
 function nextChecklistItemId(items: CheckNodeItem[]) {
   const ids = new Set(items.map((item) => item.id));
   let counter = items.length + 1;
@@ -335,16 +347,18 @@ function nextChecklistItemId(items: CheckNodeItem[]) {
   return id;
 }
 
-function drawCheckbox(ctx: CanvasRenderingContext2D, x: number, y: number, checked: boolean, theme: { bodyText: string; mutedText: string; selected: string }) {
+function drawCheckbox(ctx: CanvasRenderingContext2D, x: number, y: number, checked: boolean, theme: CanvasTheme) {
+  const layout = nodeLayout(theme);
+  const { checkboxSize } = checklistMetrics(layout);
   ctx.strokeStyle = checked ? theme.selected : theme.mutedText;
-  ctx.lineWidth = 1.4;
-  ctx.strokeRect(x, y, CHECKBOX_SIZE, CHECKBOX_SIZE);
+  ctx.lineWidth = Math.max(1, layout.controlRadius * 0.35);
+  ctx.strokeRect(x, y, checkboxSize, checkboxSize);
   if (!checked) return;
   ctx.beginPath();
-  ctx.moveTo(x + 2.5, y + 6.5);
-  ctx.lineTo(x + 5.2, y + 9);
-  ctx.lineTo(x + 10, y + 3.2);
+  ctx.moveTo(x + checkboxSize * 0.21, y + checkboxSize * 0.54);
+  ctx.lineTo(x + checkboxSize * 0.43, y + checkboxSize * 0.75);
+  ctx.lineTo(x + checkboxSize * 0.83, y + checkboxSize * 0.27);
   ctx.strokeStyle = theme.selected;
-  ctx.lineWidth = 1.8;
+  ctx.lineWidth = Math.max(1.4, layout.controlRadius * 0.45);
   ctx.stroke();
 }

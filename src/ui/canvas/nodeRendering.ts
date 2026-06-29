@@ -104,11 +104,16 @@ export function drawPlaceholderIcon(ctx: CanvasRenderingContext2D, rect: NodeCon
 
 export function drawTypeBadge(ctx: CanvasRenderingContext2D, rect: NodeContentRect, label: string, theme: CanvasTheme) {
   const text = nodeText(theme);
+  const layout = nodeLayout(theme);
   ctx.fillStyle = theme.mutedText;
   ctx.font = text.micro;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  ctx.fillText(clipText(ctx, label, Math.max(0, rect.w - 4)), rect.x, rect.y + Math.max(0, rect.h - 18));
+  ctx.fillText(
+    clipText(ctx, label, Math.max(0, rect.w - layout.insetX * 2)),
+    rect.x + layout.insetX,
+    rect.y + Math.max(0, rect.h - layout.labelLineHeight),
+  );
 }
 
 export function drawAccentMark(ctx: CanvasRenderingContext2D, rect: NodeContentRect, color: string, theme: CanvasTheme) {
@@ -168,10 +173,14 @@ export function drawCompactNode(ctx: CanvasRenderingContext2D, rect: NodeContent
   ctx.font = text.micro;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  ctx.fillText(clipText(ctx, badge, Math.max(0, rect.w - 4)), rect.x, rect.y);
+  ctx.fillText(clipText(ctx, badge, Math.max(0, rect.w - layout.insetX * 2)), rect.x + layout.insetX, rect.y);
   ctx.fillStyle = theme.headerText;
   ctx.font = text.label;
-  ctx.fillText(clipText(ctx, label, Math.max(0, rect.w - 4)), rect.x, rect.y + layout.bodyLineHeight);
+  ctx.fillText(
+    clipText(ctx, label, Math.max(0, rect.w - layout.insetX * 2)),
+    rect.x + layout.insetX,
+    rect.y + layout.bodyLineHeight,
+  );
 }
 
 export function contentLineCapacity(rect: NodeContentRect, lineHeight: number) {

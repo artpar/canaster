@@ -902,11 +902,12 @@ export class CanvasEngine {
   }
 
   private nodeContentRect(node: CanvasNode): NodeContentRect {
+    const padding = this.theme.nodePadding;
     return {
-      x: node.x + 12,
-      y: node.y + 12,
-      w: Math.max(0, node.w - 24),
-      h: Math.max(0, node.h - 24),
+      x: node.x + padding,
+      y: node.y + padding,
+      w: Math.max(0, node.w - padding * 2),
+      h: Math.max(0, node.h - padding * 2),
     };
   }
 
@@ -1326,6 +1327,7 @@ export class CanvasEngine {
       data,
       point,
       contentRect: this.nodeContentRect(node),
+      theme: this.theme,
     });
   }
 
@@ -1771,7 +1773,7 @@ export class CanvasEngine {
       .map((node) => {
         const portal = portalInfoForNode(node);
         if (!portal) return null;
-        const worldRect = canvasPortalViewportRect(this.nodeContentRect(node));
+        const worldRect = canvasPortalViewportRect(this.nodeContentRect(node), this.theme);
         return {
           parentCanvasId: this.canvasId,
           portalNodeId: node.id,

@@ -41,6 +41,7 @@ export type NodeHitTestContext<TData extends NodeData = NodeData> = {
   data: TData;
   point: WorldPoint;
   contentRect: NodeContentRect;
+  theme: CanvasTheme;
 };
 
 export type NodeInteractionRegion = {

@@ -34,20 +34,21 @@ export const cardNodeDefinition: NodeDefinition<CardNodeData> = defineNodeType({
     drawAccentMark(ctx, contentRect, accent, theme);
 
     if (state.quality === 'compact' && !state.selected && !state.hovered) {
-      const accentOffset = layout.accentHeight + 8;
+      const accentOffset = layout.accentHeight + Math.round(layout.labelLineHeight * 0.5);
       drawCompactNode(ctx, { ...contentRect, y: contentRect.y + accentOffset, h: Math.max(0, contentRect.h - accentOffset) }, data.accent.toUpperCase(), data.title || 'Untitled work item', theme);
       return;
     }
 
-    drawNodeTitle(ctx, contentRect, data.title || 'Untitled work item', theme, layout.titleY + layout.accentHeight + 8);
+    const titleOffset = layout.titleY + layout.accentHeight + Math.round(layout.labelLineHeight * 0.5);
+    drawNodeTitle(ctx, contentRect, data.title || 'Untitled work item', theme, titleOffset);
 
     const detailRect = {
       x: contentRect.x + layout.insetX,
-      y: contentRect.y + layout.contentY - 4,
+      y: contentRect.y + layout.contentY - Math.round(layout.bodyLineHeight * 0.22),
       w: contentRect.w - layout.insetX * 2,
       h: Math.max(0, contentRect.h - layout.contentY - layout.footerHeight),
     };
-    const lines = wrapText(ctx, data.detail, Math.max(0, detailRect.w), cardDetailLineCapacity(detailRect));
+    const lines = wrapText(ctx, data.detail, Math.max(0, detailRect.w), cardDetailLineCapacity(detailRect, layout.bodyLineHeight));
     drawNodeBodyLines(ctx, detailRect, lines, theme, { x: detailRect.x, y: detailRect.y });
 
     drawTypeBadge(ctx, contentRect, data.accent.toUpperCase(), theme);
@@ -95,25 +96,24 @@ export const cardNodeDefinition: NodeDefinition<CardNodeData> = defineNodeType({
 
 function cardRegions(contentRect: NodeContentRect, theme: CanvasTheme): NodeInteractionRegion[] {
   const layout = nodeLayout(theme);
+  const accentGap = Math.round(layout.labelLineHeight * 0.4);
+  const detailLift = Math.round(layout.bodyLineHeight * 0.33);
   return [
     {
       id: 'title',
-      rect: { x: contentRect.x + layout.insetX, y: contentRect.y + layout.titleY + layout.accentHeight + 6, w: Math.max(0, contentRect.w - layout.insetX * 2), h: layout.titleHeight + 4 },
+      rect: { x: contentRect.x + layout.insetX, y: contentRect.y + layout.titleY + layout.accentHeight + accentGap, w: Math.max(0, contentRect.w - layout.insetX * 2), h: layout.titleHeight + Math.round(layout.labelLineHeight * 0.25) },
       cursor: 'text',
       label: 'work item title',
     },
     {
       id: 'detail',
-      rect: { x: contentRect.x + layout.insetX, y: contentRect.y + layout.contentY - 6, w: Math.max(0, contentRect.w - layout.insetX * 2), h: Math.max(22, contentRect.h - layout.contentY - layout.footerHeight + 6) },
+      rect: { x: contentRect.x + layout.insetX, y: contentRect.y + layout.contentY - detailLift, w: Math.max(0, contentRect.w - layout.insetX * 2), h: Math.max(layout.rowHeight, contentRect.h - layout.contentY - layout.footerHeight + detailLift) },
       cursor: 'text',
       label: 'work item detail',
     },
   ];
 }
 
-function cardDetailLineCapacity(rect: NodeContentRect) {
-  const lineHeight = 18;
-  const textHeight = 13;
-  const available = rect.h - textHeight;
-  return Math.max(0, Math.min(2, Math.floor(available / lineHeight) + 1));
+function cardDetailLineCapacity(rect: NodeContentRect, lineHeight: number) {
+  return Math.max(0, Math.min(2, Math.floor(rect.h / lineHeight)));
 }

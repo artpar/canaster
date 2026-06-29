@@ -104,8 +104,12 @@ const DEFAULT_DOCUMENT_TITLE = 'Canaster Workspace';
 const LOCAL_SAVE_MESSAGE = 'Saved on this device';
 const ONLINE_READY_MESSAGE = 'Ready to save online';
 const SAVED_MESSAGE = 'Saved online';
-const ARRANGE_MENU_WIDTH = 208;
-const ADD_PANEL_MENU_WIDTH = 224;
+
+function canasterMenuWidth() {
+    const rawValue = window.getComputedStyle(document.documentElement).getPropertyValue('--canaster-menu-width');
+    const parsed = Number.parseFloat(rawValue);
+    return Number.isFinite(parsed) ? parsed : 224;
+}
 
 
 type ArrangePanelMenuProps = {
@@ -675,8 +679,9 @@ export function App() {
 
     const updateArrangeMenuPositionForRect = useCallback((rect: Pick<DOMRect, 'bottom' | 'right'>) => {
         const margin = 12;
+        const menuWidth = canasterMenuWidth();
         const left = Math.max(margin,
-            Math.min(window.innerWidth - ARRANGE_MENU_WIDTH - margin, rect.right - ARRANGE_MENU_WIDTH));
+            Math.min(window.innerWidth - menuWidth - margin, rect.right - menuWidth));
         const top = Math.max(margin, Math.min(window.innerHeight - 220, rect.bottom + 8));
         setArrangeMenuPosition({
             left,
@@ -689,8 +694,9 @@ export function App() {
         if (!button) return;
         const rect = button.getBoundingClientRect();
         const margin = 12;
+        const menuWidth = canasterMenuWidth();
         const left = Math.max(margin,
-            Math.min(window.innerWidth - ADD_PANEL_MENU_WIDTH - margin, rect.right - ADD_PANEL_MENU_WIDTH));
+            Math.min(window.innerWidth - menuWidth - margin, rect.right - menuWidth));
         const top = Math.max(margin, Math.min(window.innerHeight - 280, rect.bottom + 8));
         setAddPanelMenuPosition({
             left,

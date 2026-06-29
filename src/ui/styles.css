@@ -1,7 +1,5 @@
 :root {
   color-scheme: light;
-  font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --canaster-color-canvas-bg: #f3f6f7;
   --canaster-color-canvas-grid: rgba(45, 64, 76, 0.14);
   --canaster-color-canvas-grid-major: rgba(28, 47, 59, 0.27);
@@ -90,6 +88,13 @@
   --canaster-icon-button-mobile-size: 28px;
   --canaster-panel-padding: 8px;
   --canaster-panel-gap: 8px;
+  --canaster-sidepanel-row-height: 34px;
+  --canaster-sidepanel-row-padding: 6px 7px 5px 10px;
+  --canaster-sidepanel-list-padding: 4px 6px 8px;
+  --canaster-sidepanel-row-indent: 14px;
+  --canaster-sidepanel-icon-button-size: 28px;
+  --canaster-popover-padding: 10px;
+  --canaster-popover-gap: 10px;
   --canaster-node-padding: 12px;
   --canaster-node-title-size: 15px;
   --canaster-node-body-size: 13px;
@@ -98,8 +103,19 @@
   --canaster-input-height: 30px;
   --canaster-input-padding-inline: 8px;
   --canaster-menu-width: 224px;
+  --canaster-menu-padding: 6px;
+  --canaster-menu-item-min-height: 46px;
+  --canaster-menu-item-padding: 6px 8px;
+  --canaster-menu-item-gap: 8px;
+  --canaster-viewport-control-inset: 18px;
+  --canaster-viewport-control-gap: 6px;
+  --canaster-embedded-viewport-control-inset: 6px;
+  --canaster-embedded-viewport-control-gap: 4px;
   background: var(--canaster-color-canvas-bg);
   color: var(--canaster-color-text-high);
+  font-family: var(--canaster-font-family);
+  font-size: var(--canaster-font-body-size);
+  line-height: var(--canaster-line-body);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -125,6 +141,14 @@ body,
   overflow: hidden;
 }
 
+body,
+input,
+textarea,
+select,
+button {
+  font-family: var(--canaster-font-family);
+}
+
 button {
   font: inherit;
 }
@@ -145,6 +169,9 @@ button {
   height: 100%;
   background: var(--canaster-color-canvas-bg);
   color: var(--canaster-color-text-body);
+  font-family: var(--canaster-font-family);
+  font-size: var(--canaster-font-body-size);
+  line-height: var(--canaster-line-body);
 }
 
 :root[data-theme-mode='light'] .app-shell {
@@ -163,7 +190,7 @@ button {
 .workspace-body {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+  grid-template-columns: minmax(280px, var(--canaster-drawer-width)) minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -329,7 +356,7 @@ button {
 
 .image-picker-panel {
   display: grid;
-  gap: 7px;
+  gap: var(--canaster-panel-gap);
   padding: var(--canaster-panel-padding);
   border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
   border-radius: var(--canaster-radius-panel);
@@ -341,7 +368,7 @@ button {
 .image-picker-actions {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 7px;
+  gap: var(--canaster-panel-gap);
   align-items: center;
 }
 
@@ -352,7 +379,7 @@ button {
   height: var(--canaster-input-height);
   border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
   border-radius: var(--canaster-radius-control);
-  padding: 0 10px;
+  padding: 0 var(--canaster-input-padding-inline);
   color: var(--canaster-color-text-high);
   background: var(--canaster-color-panel-muted);
   font-size: var(--canaster-font-label-size);
@@ -387,7 +414,7 @@ button {
 
 .checklist-list-panel {
   display: grid;
-  gap: 8px;
+  gap: var(--canaster-panel-gap);
   max-height: min(360px, calc(100vh - 160px));
   padding: var(--canaster-panel-padding);
   border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
@@ -399,7 +426,7 @@ button {
 
 .checklist-list-items {
   display: grid;
-  gap: 6px;
+  gap: var(--canaster-space-xs);
   min-height: 0;
   overflow: auto;
 }
@@ -408,7 +435,7 @@ button {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 6px;
+  gap: var(--canaster-space-xs);
   color: var(--canaster-color-text-body);
 }
 
@@ -423,11 +450,11 @@ button {
   height: var(--canaster-input-height);
   border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
   border-radius: var(--canaster-radius-control);
-  padding: 0 8px;
+  padding: 0 var(--canaster-input-padding-inline);
   color: var(--canaster-color-text-body);
   background: var(--canaster-color-panel-muted);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--canaster-font-micro-size);
   font-weight: 650;
   cursor: pointer;
 }
@@ -441,7 +468,7 @@ button {
 .checklist-list-add-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 6px;
+  gap: var(--canaster-space-xs);
 }
 
 :root[data-theme-mode='light'] .node-inline-editor {
@@ -768,8 +795,8 @@ button {
 
 .node-action-button {
   grid-column: 1 / -1;
-  min-height: 28px;
-  font-size: 12px;
+  min-height: var(--canaster-input-height);
+  font-size: var(--canaster-font-label-size);
 }
 
 .node-action-button:disabled {
@@ -784,14 +811,14 @@ button {
   display: grid;
   align-items: end;
   justify-items: center;
-  padding: 0 16px 72px;
+  padding: 0 var(--canaster-popover-padding) calc(var(--canaster-toolbar-height) + var(--canaster-popover-padding));
   background: transparent;
   pointer-events: auto;
 }
 
 .delete-confirmation-panel {
-  width: min(360px, calc(100% - 32px));
-  padding: 12px;
+  width: min(360px, calc(100% - var(--canaster-popover-padding) * 2));
+  padding: var(--canaster-popover-padding);
   border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
   border-radius: var(--canaster-radius-panel);
   color: var(--canaster-color-text-high);
@@ -801,27 +828,27 @@ button {
 }
 
 .delete-confirmation-panel h2 {
-  margin: 0 0 4px;
-  font-size: 13px;
-  line-height: 1.25;
+  margin: 0 0 var(--canaster-space-xxs);
+  font-size: var(--canaster-font-title-size);
+  line-height: var(--canaster-line-title);
 }
 
 .delete-confirmation-panel p {
-  margin: 0 0 10px;
+  margin: 0 0 var(--canaster-popover-gap);
   color: var(--canaster-color-text-muted);
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: var(--canaster-font-label-size);
+  line-height: var(--canaster-line-body);
 }
 
 .delete-confirmation-panel div {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--canaster-panel-gap);
 }
 
 .delete-confirmation button {
-  height: 32px;
-  padding: 0 12px;
+  height: var(--canaster-input-height);
+  padding: 0 var(--canaster-input-padding-inline);
 }
 
 .delete-confirmation button.danger {
@@ -841,7 +868,7 @@ button {
   display: flex;
   align-items: center;
   gap: var(--canaster-toolbar-gap);
-  min-height: 56px;
+  min-height: calc(var(--canaster-toolbar-height) + var(--canaster-space-md));
   padding: var(--canaster-toolbar-padding);
   border-bottom: var(--canaster-border-width) solid var(--canaster-color-panel-border);
   background: var(--canaster-color-panel-raised);
@@ -860,7 +887,7 @@ button {
 .topbar-zone {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--canaster-toolbar-gap);
   min-width: 0;
 }
 
@@ -874,14 +901,14 @@ button {
   margin-left: auto;
 }
 
-.view-tree-toggle-button {
+  .view-tree-toggle-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: var(--canaster-toolbar-height);
+  height: var(--canaster-toolbar-height);
   padding: 0;
-  border-radius: 6px;
+  border-radius: var(--canaster-radius-control);
   color: var(--canaster-color-text-body);
   pointer-events: auto;
 }
@@ -921,7 +948,7 @@ button {
   height: var(--canaster-icon-button-size);
   border: 0;
   border-radius: var(--canaster-radius-control);
-  padding: 0 9px;
+  padding: 0 var(--canaster-input-padding-inline);
   color: var(--canaster-color-text-high);
   background: var(--canaster-color-panel-muted);
   font: inherit;
@@ -940,7 +967,7 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: var(--canaster-space-xs);
   min-width: 0;
   border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
   border-radius: var(--canaster-radius-control);
@@ -1133,9 +1160,9 @@ button {
   right: 0;
   z-index: 36;
   display: grid;
-  gap: 2px;
-  width: min(248px, calc(100vw - 24px));
-  padding: var(--canaster-space-xs);
+  gap: var(--canaster-space-xxs);
+  width: min(var(--canaster-menu-width), calc(100vw - var(--canaster-space-xl)));
+  padding: var(--canaster-menu-padding);
   border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
   border-radius: var(--canaster-radius-panel);
   background: var(--canaster-color-panel-raised);
@@ -1145,13 +1172,13 @@ button {
 
 .theme-menu-item {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 18px;
+  grid-template-columns: var(--canaster-icon-button-size) minmax(0, 1fr) 18px;
   align-items: center;
-  gap: var(--canaster-space-sm);
-  min-height: 48px;
+  gap: var(--canaster-menu-item-gap);
+  min-height: var(--canaster-menu-item-min-height);
   border: 0;
   border-radius: var(--canaster-radius-control);
-  padding: var(--canaster-space-xs) var(--canaster-space-sm);
+  padding: var(--canaster-menu-item-padding);
   color: var(--canaster-color-text-body);
   background: transparent;
   text-align: left;
@@ -1173,8 +1200,8 @@ button {
   display: grid;
   grid-template-columns: 1fr 1fr;
   grid-template-rows: 1fr 1fr;
-  width: 30px;
-  height: 30px;
+  width: calc(var(--canaster-icon-button-size) - var(--canaster-space-xxs));
+  height: calc(var(--canaster-icon-button-size) - var(--canaster-space-xxs));
   overflow: hidden;
   border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
   border-radius: var(--canaster-radius-sm);
@@ -1210,8 +1237,8 @@ button {
 .arrange-menu {
   position: fixed;
   z-index: 32;
-  width: 208px;
-  padding: var(--canaster-space-xxs);
+  width: var(--canaster-menu-width);
+  padding: var(--canaster-menu-padding);
   border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
   border-radius: var(--canaster-radius-panel);
   background: var(--canaster-color-panel-raised);
@@ -1224,7 +1251,7 @@ button {
   position: fixed;
   z-index: 32;
   width: var(--canaster-menu-width);
-  padding: var(--canaster-space-xs);
+  padding: var(--canaster-menu-padding);
   border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
   border-radius: var(--canaster-radius-panel);
   background: var(--canaster-color-panel-raised);
@@ -1236,8 +1263,8 @@ button {
 .add-panel-search {
   width: 100%;
   height: var(--canaster-input-height);
-  margin: 0 0 4px;
-  padding: 0 30px 0 10px;
+  margin: 0 0 var(--canaster-space-xxs);
+  padding: 0 calc(var(--canaster-icon-button-size) + var(--canaster-space-xxs)) 0 var(--canaster-input-padding-inline);
   border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
   border-radius: var(--canaster-radius-control);
   color: var(--canaster-color-text-high);
@@ -1262,12 +1289,12 @@ button {
 
 .add-panel-close {
   position: absolute;
-  top: 11px;
-  right: 10px;
+  top: calc(var(--canaster-menu-padding) + var(--canaster-space-xxs));
+  right: calc(var(--canaster-menu-padding) + var(--canaster-space-xxs));
   display: inline-grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: calc(var(--canaster-icon-button-size) - var(--canaster-space-sm));
+  height: calc(var(--canaster-icon-button-size) - var(--canaster-space-sm));
   border: 0;
   border-radius: var(--canaster-radius-control);
   color: var(--canaster-color-text-muted);
@@ -1281,19 +1308,19 @@ button {
 }
 
 .add-panel-empty {
-  padding: 14px 8px 10px;
+  padding: var(--canaster-popover-padding);
   color: var(--canaster-color-text-muted);
-  font-size: 12px;
+  font-size: var(--canaster-font-label-size);
   text-align: center;
 }
 
 .arrange-menu-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--canaster-menu-item-gap);
   width: 100%;
-  min-height: 48px;
-  padding: 7px 8px;
+  min-height: var(--canaster-menu-item-min-height);
+  padding: var(--canaster-menu-item-padding);
   border: 0;
   border-radius: var(--canaster-radius-control);
   color: var(--canaster-color-text-high);
@@ -1320,20 +1347,20 @@ button {
 
 .arrange-menu-item span {
   display: grid;
-  gap: 3px;
+  gap: var(--canaster-space-xxs);
   min-width: 0;
 }
 
 .arrange-menu-item strong {
   color: inherit;
-  font-size: 12px;
+  font-size: var(--canaster-font-label-size);
   font-weight: 700;
   line-height: 1.15;
 }
 
 .arrange-menu-item small {
   color: var(--canaster-color-text-muted);
-  font-size: 11px;
+  font-size: var(--canaster-font-micro-size);
   line-height: 1.2;
 }
 
@@ -1355,13 +1382,13 @@ button {
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 22px;
+  width: calc(var(--canaster-icon-button-size) + var(--canaster-space-md));
+  height: calc(var(--canaster-input-height) - var(--canaster-space-sm));
   border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
   border-radius: var(--canaster-radius-sm);
   color: var(--canaster-color-text-body);
   background: var(--canaster-color-panel-muted);
-  font-size: 9px;
+  font-size: var(--canaster-node-badge-size);
   font-weight: 700;
   line-height: 1;
 }
@@ -1469,14 +1496,14 @@ button {
 .workspace-toast {
   position: absolute;
   left: 50%;
-  bottom: 18px;
+  bottom: var(--canaster-viewport-control-inset);
   z-index: 34;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--canaster-panel-gap);
   max-width: min(420px, calc(100% - 32px));
-  min-height: 38px;
-  padding: 6px 8px 6px 12px;
+  min-height: var(--canaster-sidepanel-row-height);
+  padding: var(--canaster-menu-item-padding);
   border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
   border-radius: var(--canaster-radius-panel);
   color: var(--canaster-color-text-high);
@@ -1490,20 +1517,20 @@ button {
 .workspace-toast span {
   min-width: 0;
   overflow: hidden;
-  font-size: 12px;
-  line-height: 1.2;
+  font-size: var(--canaster-font-label-size);
+  line-height: var(--canaster-line-label);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .workspace-toast button {
-  height: 26px;
+  height: calc(var(--canaster-input-height) - var(--canaster-space-xxs));
   border: 0;
   border-radius: var(--canaster-radius-control);
   color: var(--canaster-color-text-high);
   background: transparent;
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--canaster-font-label-size);
   font-weight: 700;
 }
 
@@ -1514,7 +1541,7 @@ button {
 .workspace-toast-close {
   display: inline-grid;
   place-items: center;
-  width: 26px;
+  width: calc(var(--canaster-input-height) - var(--canaster-space-xxs));
   padding: 0;
   color: var(--canaster-color-text-muted);
 }
@@ -1538,7 +1565,7 @@ button {
   min-width: 48px;
   text-align: center;
   color: var(--canaster-color-text-body);
-  font-size: 13px;
+  font-size: var(--canaster-font-label-size);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1548,13 +1575,13 @@ button {
 
 .canvas-viewport-controls {
   position: absolute;
-  bottom: 18px;
-  right: 18px;
+  bottom: var(--canaster-viewport-control-inset);
+  right: var(--canaster-viewport-control-inset);
   left: auto;
   z-index: 18;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--canaster-viewport-control-gap);
   width: auto;
   height: auto;
   padding: 0;
@@ -1575,21 +1602,21 @@ button {
 }
 
 .canvas-viewport-control-button svg {
-  width: 17px;
-  height: 17px;
+  width: calc(var(--canaster-icon-button-size) * 0.54);
+  height: calc(var(--canaster-icon-button-size) * 0.54);
   stroke-width: 2.4;
 }
 
 .embedded-nested-viewport .canvas-viewport-controls {
-  right: 6px;
-  bottom: 6px;
-  gap: 4px;
+  right: var(--canaster-embedded-viewport-control-inset);
+  bottom: var(--canaster-embedded-viewport-control-inset);
+  gap: var(--canaster-embedded-viewport-control-gap);
 }
 
 .embedded-nested-viewport .canvas-viewport-control-button {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: var(--canaster-icon-button-mobile-size);
+  height: var(--canaster-icon-button-mobile-size);
+  border-radius: var(--canaster-radius-panel);
 }
 
 :root[data-theme-mode='light'] .canvas-viewport-control-button {
@@ -1630,42 +1657,42 @@ button {
   flex: 0 0 auto;
   min-height: 0;
   border-top: var(--canaster-border-width) solid var(--canaster-color-panel-border);
-  padding: 8px;
+  padding: var(--canaster-panel-padding);
 }
 
 .sidepanel-section-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  min-height: 34px;
-  padding: 6px 7px 5px 10px;
+  gap: var(--canaster-panel-gap);
+  min-height: var(--canaster-sidepanel-row-height);
+  padding: var(--canaster-sidepanel-row-padding);
 }
 
 .sidepanel-section-title {
   display: grid;
   grid-template-columns: auto auto;
   align-items: baseline;
-  gap: 6px;
+  gap: var(--canaster-space-xs);
   min-width: 0;
 }
 
 .sidepanel-section-title span:first-child {
   color: var(--canaster-color-text-high);
-  font-size: 12px;
+  font-size: var(--canaster-font-label-size);
   font-weight: 650;
 }
 
 .sidepanel-section-title span:last-child {
   color: var(--canaster-color-text-muted);
-  font-size: 11px;
+  font-size: var(--canaster-font-micro-size);
 }
 
 .view-tree-list {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  padding: 3px 6px 8px;
+  padding: var(--canaster-sidepanel-list-padding);
 }
 
 .view-tree-branch {
@@ -1677,17 +1704,17 @@ button {
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr);
   align-items: center;
-  gap: 4px;
+  gap: var(--canaster-space-xxs);
   width: 100%;
   min-width: 0;
-  height: 30px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  padding: 0 8px 0 calc(7px + var(--depth) * 14px);
+  height: var(--canaster-sidepanel-row-height);
+  border: var(--canaster-border-width) solid transparent;
+  border-radius: var(--canaster-radius-control);
+  padding: 0 var(--canaster-space-sm) 0 calc(var(--canaster-space-xs) + var(--depth) * var(--canaster-sidepanel-row-indent));
   color: var(--canaster-color-text-body);
   background: transparent;
-  font-size: 12px;
-  line-height: 1;
+  font-size: var(--canaster-font-label-size);
+  line-height: var(--canaster-line-label);
   text-align: left;
   cursor: pointer;
 }
@@ -1711,10 +1738,10 @@ button {
 .view-tree-disclosure {
   display: grid;
   place-items: center;
-  width: 16px;
-  height: 16px;
+  width: calc(var(--canaster-sidepanel-row-height) * 0.52);
+  height: calc(var(--canaster-sidepanel-row-height) * 0.52);
   color: var(--canaster-color-text-muted);
-  font-size: 10px;
+  font-size: var(--canaster-font-micro-size);
 }
 
 .view-tree-disclosure.empty {
@@ -1729,9 +1756,9 @@ button {
 }
 
 .view-tree-empty {
-  padding: 12px 8px;
+  padding: var(--canaster-panel-padding);
   color: var(--canaster-color-text-muted);
-  font-size: 12px;
+  font-size: var(--canaster-font-label-size);
 }
 
 :root[data-theme-mode='light'] .view-tree-panel {
@@ -1778,8 +1805,8 @@ button {
   top: 94px;
   right: 14px;
   z-index: 19;
-  width: min(360px, calc(100% - 28px));
-  padding: 13px;
+  width: min(360px, calc(100% - var(--canaster-space-xl)));
+  padding: var(--canaster-popover-padding);
   border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
   border-radius: var(--canaster-radius-panel);
   color: var(--canaster-color-text-body);
@@ -1803,10 +1830,10 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: var(--canaster-sidepanel-icon-button-size);
+  height: var(--canaster-sidepanel-icon-button-size);
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--canaster-radius-control);
   color: var(--canaster-color-text-muted);
   background: transparent;
   cursor: pointer;
@@ -1823,16 +1850,16 @@ button {
 }
 
 .guide-label {
-  margin: 0 32px 6px 0;
+  margin: 0 calc(var(--canaster-sidepanel-icon-button-size) + var(--canaster-space-xxs)) var(--canaster-space-xs) 0;
   color: var(--canaster-color-text-muted);
-  font-size: 12px;
+  font-size: var(--canaster-font-label-size);
 }
 
 .first-run-guide h2 {
-  margin: 0 32px 8px 0;
+  margin: 0 calc(var(--canaster-sidepanel-icon-button-size) + var(--canaster-space-xxs)) var(--canaster-space-sm) 0;
   color: var(--canaster-color-text-high);
-  font-size: 16px;
-  line-height: 1.25;
+  font-size: var(--canaster-font-title-size);
+  line-height: var(--canaster-line-title);
   text-wrap: balance;
 }
 
@@ -1843,7 +1870,7 @@ button {
 .first-run-guide p {
   margin: 0;
   color: var(--canaster-color-text-body);
-  font-size: 13px;
+  font-size: var(--canaster-font-body-size);
   line-height: 1.45;
   text-wrap: pretty;
 }
@@ -1855,17 +1882,17 @@ button {
 
 .first-run-guide ul {
   display: grid;
-  gap: 7px;
-  margin: 10px 0 0;
+  gap: var(--canaster-space-xs);
+  margin: var(--canaster-panel-gap) 0 0;
   padding: 0;
   list-style: none;
 }
 
 .first-run-guide li {
   position: relative;
-  padding-left: 14px;
+  padding-left: var(--canaster-space-lg);
   color: var(--canaster-color-text-body);
-  font-size: 12px;
+  font-size: var(--canaster-font-label-size);
   line-height: 1.35;
 }
 
@@ -1887,23 +1914,23 @@ button {
 .guide-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
+  gap: var(--canaster-panel-gap);
+  margin-top: var(--canaster-panel-gap);
 }
 
 .guide-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  height: 32px;
+  gap: var(--canaster-space-xs);
+  height: var(--canaster-input-height);
   min-width: 0;
   border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
   border-radius: var(--canaster-radius-control);
-  padding: 0 10px;
+  padding: 0 var(--canaster-input-padding-inline);
   color: var(--canaster-color-text-body);
   background: var(--canaster-color-panel-muted);
-  font-size: 12px;
+  font-size: var(--canaster-font-label-size);
   white-space: nowrap;
   cursor: pointer;
 }
@@ -1959,11 +1986,11 @@ button {
   z-index: 24;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  width: min(330px, calc(100% - 28px));
+  gap: var(--canaster-popover-gap);
+  width: min(var(--canaster-drawer-width), calc(100% - var(--canaster-space-xl)));
   border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
   border-radius: var(--canaster-radius-panel);
-  padding: 10px;
+  padding: var(--canaster-popover-padding);
   color: var(--canaster-color-text-body);
   background: var(--canaster-color-panel-surface);
   box-shadow: var(--canaster-shadow-menu);
@@ -1984,11 +2011,11 @@ button {
 }
 
 .account-popover-docked .account-popover-header {
-  min-height: 28px;
+  min-height: var(--canaster-sidepanel-icon-button-size);
 }
 
 .account-popover-docked .account-form {
-  gap: 8px;
+  gap: var(--canaster-panel-gap);
 }
 
 .account-popover-docked .account-auth-copy {
@@ -2011,7 +2038,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--canaster-popover-gap);
 }
 
 .document-panel-header {
@@ -2021,7 +2048,7 @@ button {
 .document-panel-actions {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--canaster-space-xxs);
 }
 
 .sidepanel-icon-button {
@@ -2029,10 +2056,10 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: var(--canaster-sidepanel-icon-button-size);
+  height: var(--canaster-sidepanel-icon-button-size);
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--canaster-radius-control);
   padding: 0;
   color: var(--canaster-color-text-muted);
   background: transparent;
@@ -2056,14 +2083,14 @@ button {
 
 .account-footer-button {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
+  grid-template-columns: var(--canaster-input-height) minmax(0, 1fr);
   align-items: center;
-  gap: 9px;
+  gap: var(--canaster-panel-gap);
   width: 100%;
-  min-height: 42px;
+  min-height: calc(var(--canaster-sidepanel-row-height) + var(--canaster-space-sm));
   border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
   border-radius: var(--canaster-radius-control);
-  padding: 5px 8px;
+  padding: var(--canaster-menu-item-padding);
   color: var(--canaster-color-text-body);
   background: var(--canaster-color-panel-muted);
   text-align: left;
@@ -2084,8 +2111,8 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: var(--canaster-input-height);
+  height: var(--canaster-input-height);
   border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
   border-radius: var(--canaster-radius-control);
   color: var(--canaster-color-text-high);
@@ -2094,20 +2121,20 @@ button {
 
 .account-footer-copy {
   display: grid;
-  gap: 2px;
+  gap: var(--canaster-space-xxs);
   min-width: 0;
 }
 
 .account-footer-copy span:first-child {
   color: var(--canaster-color-text-high);
-  font-size: 12px;
+  font-size: var(--canaster-font-label-size);
   font-weight: 650;
 }
 
 .account-footer-copy span:last-child {
   min-width: 0;
   color: var(--canaster-color-text-muted);
-  font-size: 11px;
+  font-size: var(--canaster-font-micro-size);
   line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2116,19 +2143,19 @@ button {
 
 .account-popover-header > div {
   display: grid;
-  gap: 2px;
+  gap: var(--canaster-space-xxs);
   min-width: 0;
 }
 
 .account-popover-header span:first-child {
   color: var(--canaster-color-text-high);
-  font-size: 13px;
+  font-size: var(--canaster-font-body-size);
   font-weight: 700;
 }
 
 .account-popover-header span:last-child {
   color: var(--canaster-color-text-muted);
-  font-size: 11px;
+  font-size: var(--canaster-font-micro-size);
 }
 
 :root[data-theme-mode='light'] .sidepanel-icon-button:hover {
@@ -2173,10 +2200,10 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: var(--canaster-sidepanel-icon-button-size);
+  height: var(--canaster-sidepanel-icon-button-size);
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--canaster-radius-control);
   color: var(--canaster-color-text-muted);
   background: transparent;
   cursor: pointer;
@@ -2198,10 +2225,10 @@ button {
 }
 
 .document-panel-status {
-  min-height: 15px;
-  padding: 0 10px 5px;
+  min-height: var(--canaster-font-body-size);
+  padding: 0 var(--canaster-panel-padding) var(--canaster-space-xs);
   color: var(--canaster-color-text-muted);
-  font-size: 11px;
+  font-size: var(--canaster-font-micro-size);
   line-height: 1.35;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2214,14 +2241,14 @@ button {
 
 .document-signin-note {
   align-self: stretch;
-  margin: 3px 8px 8px;
-  min-height: 30px;
+  margin: var(--canaster-space-xxs) var(--canaster-panel-padding) var(--canaster-panel-padding);
+  min-height: var(--canaster-sidepanel-row-height);
   border: 0;
-  border-radius: 6px;
-  padding: 0 9px;
+  border-radius: var(--canaster-radius-control);
+  padding: 0 var(--canaster-input-padding-inline);
   color: var(--canaster-color-text-muted);
   background: transparent;
-  font-size: 11px;
+  font-size: var(--canaster-font-micro-size);
   line-height: 1.3;
   text-align: left;
   cursor: pointer;
@@ -2247,8 +2274,8 @@ button {
 }
 
 .drawer-action {
-  min-height: 30px;
-  padding: 0 10px;
+  min-height: var(--canaster-input-height);
+  padding: 0 var(--canaster-input-padding-inline);
 }
 
 .drawer-action:not(.primary) {
@@ -2277,10 +2304,10 @@ button {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--canaster-panel-gap);
   min-height: 0;
   margin: 0;
-  padding: 8px;
+  padding: var(--canaster-panel-padding);
   overflow: auto;
   list-style: none;
 }
@@ -2289,15 +2316,15 @@ button {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
+  gap: var(--canaster-panel-gap);
   width: 100%;
-  min-height: 38px;
+  min-height: calc(var(--canaster-sidepanel-row-height) + var(--canaster-space-xxs));
   border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
   border-radius: var(--canaster-radius-control);
-  padding: 0 9px;
+  padding: 0 var(--canaster-input-padding-inline);
   color: var(--canaster-color-text-body);
   background: var(--canaster-color-panel-muted);
-  font-size: 12px;
+  font-size: var(--canaster-font-label-size);
   text-align: left;
   cursor: pointer;
 }
@@ -2321,7 +2348,7 @@ button {
 .document-row-title {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--canaster-space-xs);
   min-width: 0;
 }
 
@@ -2335,7 +2362,7 @@ button {
 
 .document-row-button > span:last-child {
   color: var(--canaster-color-text-muted);
-  font-size: 11px;
+  font-size: var(--canaster-font-micro-size);
 }
 
 .document-row-dot {
@@ -2349,23 +2376,23 @@ button {
 .drawer-empty,
 .account-signed-in {
   display: grid;
-  gap: 10px;
-  padding: 12px;
+  gap: var(--canaster-popover-gap);
+  padding: var(--canaster-popover-padding);
 }
 
 .drawer-empty p,
 .account-signed-in p {
   margin: 0;
   color: var(--canaster-color-text-body);
-  font-size: 12px;
+  font-size: var(--canaster-font-label-size);
   line-height: 1.45;
 }
 
 .account-identity {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
+  grid-template-columns: var(--canaster-input-height) minmax(0, 1fr);
   align-items: center;
-  gap: 9px;
+  gap: var(--canaster-panel-gap);
   min-width: 0;
 }
 
@@ -2373,8 +2400,8 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: var(--canaster-input-height);
+  height: var(--canaster-input-height);
   border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
   border-radius: var(--canaster-radius-control);
   color: var(--canaster-color-text-high);
@@ -2383,64 +2410,64 @@ button {
 
 .account-identity > div {
   display: grid;
-  gap: 2px;
+  gap: var(--canaster-space-xxs);
   min-width: 0;
 }
 
 .account-identity > div > span:first-child {
   color: var(--canaster-color-text-high);
-  font-size: 12px;
+  font-size: var(--canaster-font-label-size);
   font-weight: 650;
 }
 
 .account-identity > div > span:last-child {
   min-width: 0;
   color: var(--canaster-color-text-muted);
-  font-size: 11px;
+  font-size: var(--canaster-font-micro-size);
   line-height: 1.3;
   overflow-wrap: anywhere;
 }
 
 .account-form {
   display: grid;
-  gap: 9px;
+  gap: var(--canaster-panel-gap);
 }
 
 .account-auth-copy {
   display: grid;
-  gap: 4px;
-  padding: 2px 1px 3px;
+  gap: var(--canaster-space-xxs);
+  padding: var(--canaster-space-xxs) var(--canaster-border-width) var(--canaster-space-xxs);
 }
 
 .account-auth-copy span {
   color: var(--canaster-color-text-high);
-  font-size: 12px;
+  font-size: var(--canaster-font-label-size);
   font-weight: 650;
 }
 
 .account-auth-copy p {
   margin: 0;
   color: var(--canaster-color-text-muted);
-  font-size: 11px;
+  font-size: var(--canaster-font-micro-size);
   line-height: 1.45;
 }
 
 .account-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  padding: 3px;
-  border-radius: 7px;
+  gap: var(--canaster-space-xxs);
+  padding: var(--canaster-space-xxs);
+  border-radius: var(--canaster-radius-control);
   background: var(--canaster-color-panel-muted);
 }
 
 .account-tabs button {
-  height: 28px;
+  height: calc(var(--canaster-input-height) - var(--canaster-space-xxs));
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--canaster-radius-sm);
   color: var(--canaster-color-text-muted);
   background: transparent;
-  font-size: 12px;
+  font-size: var(--canaster-font-label-size);
   cursor: pointer;
 }
 
@@ -2456,21 +2483,21 @@ button {
 
 .account-field {
   display: grid;
-  gap: 5px;
+  gap: var(--canaster-space-xxs);
   color: var(--canaster-color-text-muted);
-  font-size: 11px;
+  font-size: var(--canaster-font-micro-size);
 }
 
 .account-field input {
   width: 100%;
-  height: 32px;
+  height: var(--canaster-input-height);
   border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
   border-radius: var(--canaster-radius-control);
-  padding: 0 9px;
+  padding: 0 var(--canaster-input-padding-inline);
   color: var(--canaster-color-text-high);
   background: var(--canaster-color-panel-muted);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--canaster-font-label-size);
   outline: none;
 }
 
@@ -2481,18 +2508,18 @@ button {
 }
 
 .account-submit {
-  min-height: 32px;
+  min-height: var(--canaster-input-height);
 }
 
 .account-text-action {
   justify-self: center;
-  min-height: 28px;
+  min-height: calc(var(--canaster-input-height) - var(--canaster-space-xxs));
   border: 0;
-  border-radius: 6px;
-  padding: 0 8px;
+  border-radius: var(--canaster-radius-control);
+  padding: 0 var(--canaster-input-padding-inline);
   color: var(--canaster-color-text-body);
   background: transparent;
-  font-size: 11px;
+  font-size: var(--canaster-font-micro-size);
   font-weight: 650;
   cursor: pointer;
 }
@@ -2510,13 +2537,13 @@ button {
 .account-status {
   display: flex;
   align-items: flex-start;
-  gap: 7px;
-  min-height: 28px;
-  border-radius: 6px;
-  padding: 7px 8px;
+  gap: var(--canaster-space-xs);
+  min-height: calc(var(--canaster-input-height) - var(--canaster-space-xxs));
+  border-radius: var(--canaster-radius-control);
+  padding: var(--canaster-menu-item-padding);
   color: var(--canaster-color-text-muted);
   background: var(--canaster-color-panel-muted);
-  font-size: 11px;
+  font-size: var(--canaster-font-micro-size);
   line-height: 1.35;
 }
 
@@ -2635,9 +2662,9 @@ button {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
-    gap: 6px;
+    gap: var(--canaster-toolbar-gap);
     min-height: 0;
-    padding: 6px 8px;
+    padding: var(--canaster-toolbar-padding);
   }
 
   .topbar-zone {
@@ -2647,7 +2674,7 @@ button {
   .topbar-identity {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
-    gap: 6px;
+    gap: var(--canaster-toolbar-gap);
   }
 
   .topbar-controls {
@@ -2667,12 +2694,12 @@ button {
   }
 
   .view-tree-toggle-button {
-    width: 40px;
-    height: 40px;
+    width: var(--canaster-toolbar-height);
+    height: var(--canaster-toolbar-height);
   }
 
   .toolbar-group {
-    height: 40px;
+    height: var(--canaster-toolbar-height);
   }
 
   .document-command-group {
@@ -2682,35 +2709,35 @@ button {
   }
 
   .document-title-input {
-    height: 32px;
+    height: var(--canaster-icon-button-mobile-size);
     min-width: 112px;
   }
 
   .save-online-button {
-    width: 32px;
-    height: 32px;
+    width: var(--canaster-icon-button-mobile-size);
+    height: var(--canaster-icon-button-mobile-size);
   }
 
   .icon-button {
-    width: 32px;
-    height: 32px;
+    width: var(--canaster-icon-button-mobile-size);
+    height: var(--canaster-icon-button-mobile-size);
   }
 
   .zoom-readout {
     min-width: 42px;
-    font-size: 12px;
+    font-size: var(--canaster-font-label-size);
   }
 
   .canvas-viewport-controls {
-    bottom: 12px;
-    right: 12px;
+    bottom: var(--canaster-panel-padding);
+    right: var(--canaster-panel-padding);
     left: auto;
   }
 
   .canvas-viewport-control-button {
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
+    width: var(--canaster-icon-button-mobile-size);
+    height: var(--canaster-icon-button-mobile-size);
+    border-radius: var(--canaster-radius-panel);
   }
 
   .workspace-body {
@@ -2723,7 +2750,7 @@ button {
     bottom: 0;
     left: 0;
     z-index: 23;
-    width: min(300px, calc(100% - 56px));
+    width: min(var(--canaster-drawer-width), calc(100% - var(--canaster-toolbar-height)));
     border-right-color: var(--canaster-color-panel-border);
     box-shadow: var(--canaster-shadow-menu);
   }
@@ -2735,8 +2762,8 @@ button {
 
   .account-popover {
     top: 202px;
-    right: 14px;
-    left: 14px;
+    right: var(--canaster-space-lg);
+    left: var(--canaster-space-lg);
     width: auto;
   }
 
@@ -2749,9 +2776,9 @@ button {
 
   .first-run-guide {
     top: auto;
-    right: 14px;
+    right: var(--canaster-space-lg);
     bottom: 250px;
-    left: 14px;
+    left: var(--canaster-space-lg);
     width: auto;
     max-height: 170px;
     overflow: auto;
