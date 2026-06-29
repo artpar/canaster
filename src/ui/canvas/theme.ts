@@ -20,6 +20,16 @@ export type CanvasTheme = {
   patternHatchLength: number;
   wash: string;
   washOpacity: number;
+  canvasFontFamily: string;
+  canvasTitleSize: string;
+  canvasBodySize: string;
+  canvasLabelSize: string;
+  canvasMicroSize: string;
+  canvasTitleWeight: number;
+  canvasBodyWeight: number;
+  canvasTitleLineHeight: number;
+  canvasBodyLineHeight: number;
+  canvasLabelLineHeight: number;
   nodeRadius: number;
   nodeRestBorderWidth: number;
   nodeHoverBorderWidth: number;
@@ -36,6 +46,16 @@ export type CanvasTheme = {
   mutedText: string;
   selected: string;
   resizeFill: string;
+  nodeContentInsetX: number;
+  nodeTitleY: number;
+  nodeMetaY: number;
+  nodeContentY: number;
+  nodeBodyLineHeight: number;
+  nodeLabelLineHeight: number;
+  nodeRowHeight: number;
+  nodeAccentWidth: number;
+  nodeAccentHeight: number;
+  nodeControlRadius: number;
   kind: Record<NodeKindAccent, string>;
 };
 
@@ -62,6 +82,16 @@ export function canvasThemeFor(themeId: string): CanvasTheme {
     patternHatchLength: theme.texture.canvasPattern.hatchLength,
     wash: theme.texture.canvasWash,
     washOpacity: theme.texture.canvasWashOpacity,
+    canvasFontFamily: theme.typography.canvasFamily,
+    canvasTitleSize: theme.typography.canvasTitleSize,
+    canvasBodySize: theme.typography.canvasBodySize,
+    canvasLabelSize: theme.typography.canvasLabelSize,
+    canvasMicroSize: theme.typography.canvasMicroSize,
+    canvasTitleWeight: theme.typography.canvasTitleWeight,
+    canvasBodyWeight: theme.typography.canvasBodyWeight,
+    canvasTitleLineHeight: theme.typography.canvasTitleLineHeight,
+    canvasBodyLineHeight: theme.typography.canvasBodyLineHeight,
+    canvasLabelLineHeight: theme.typography.canvasLabelLineHeight,
     nodeRadius: theme.texture.nodeRadius,
     nodeRestBorderWidth: theme.texture.nodeRestBorderWidth,
     nodeHoverBorderWidth: theme.texture.nodeHoverBorderWidth,
@@ -78,6 +108,16 @@ export function canvasThemeFor(themeId: string): CanvasTheme {
     mutedText: theme.colors.text.muted,
     selected: theme.colors.node.selected,
     resizeFill: theme.colors.node.resizeFill,
+    nodeContentInsetX: theme.components.node.contentInsetX,
+    nodeTitleY: theme.components.node.titleY,
+    nodeMetaY: theme.components.node.metaY,
+    nodeContentY: theme.components.node.contentY,
+    nodeBodyLineHeight: theme.components.node.bodyLineHeight,
+    nodeLabelLineHeight: theme.components.node.labelLineHeight,
+    nodeRowHeight: theme.components.node.rowHeight,
+    nodeAccentWidth: theme.components.node.accentWidth,
+    nodeAccentHeight: theme.components.node.accentHeight,
+    nodeControlRadius: theme.components.node.controlRadius,
     kind: {
       task: theme.colors.node.task,
       data: theme.colors.node.data,

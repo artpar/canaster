@@ -1,7 +1,7 @@
 import { asNullableString, asNumber, asString } from '../../../core/nodeData';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import type { JsonObject } from '../../../core/nodePrimitives';
-import { drawCompactNode, drawNodeMeta, drawNodeTitle, drawTypeBadge, nodeText } from '../nodeRendering';
+import { drawCompactNode, drawNodeMeta, drawNodeTitle, drawTypeBadge, nodeLayout, nodeText } from '../nodeRendering';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeContentRect, NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
 
@@ -24,23 +24,25 @@ export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = define
     };
   },
   render({ ctx, data, theme, contentRect, state }) {
+    const text = nodeText(theme);
+    const layout = nodeLayout(theme);
     if (state.quality === 'compact' && !state.selected && !state.hovered) {
       drawCompactNode(ctx, contentRect, 'VIEW', data.title || 'View', theme);
       return;
     }
 
-    drawNodeTitle(ctx, contentRect, data.title || 'View', theme, 4);
+    drawNodeTitle(ctx, contentRect, data.title || 'View', theme, layout.titleY);
 
     if (state.quality !== 'compact') {
       ctx.strokeStyle = theme.nodeBorder;
-      const preview = canvasPortalViewportRect(contentRect);
+      const preview = canvasPortalViewportRect(contentRect, theme);
       const previewX = preview.x;
       const previewY = preview.y;
       const previewW = preview.w;
       const previewH = preview.h;
       ctx.strokeRect(previewX, previewY, previewW, previewH);
       ctx.fillStyle = theme.mutedText;
-      ctx.font = nodeText.label;
+      ctx.font = text.label;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
       if (!data.childCanvasId) {
@@ -107,12 +109,16 @@ export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = define
   },
 });
 
-export function canvasPortalViewportRect(contentRect: NodeContentRect): NodeContentRect {
+export function canvasPortalViewportRect(contentRect: NodeContentRect, theme?: Parameters<typeof nodeLayout>[0]): NodeContentRect {
+  const layout = theme ? nodeLayout(theme) : null;
+  const inset = layout?.insetX ?? 6;
+  const top = layout ? layout.contentY - 10 : 36;
+  const bottom = layout ? layout.footerHeight + layout.insetX : 72;
   return {
-    x: contentRect.x + 6,
-    y: contentRect.y + 36,
-    w: Math.max(0, contentRect.w - 12),
-    h: Math.max(0, contentRect.h - 72),
+    x: contentRect.x + inset,
+    y: contentRect.y + top,
+    w: Math.max(0, contentRect.w - inset * 2),
+    h: Math.max(0, contentRect.h - top - bottom),
   };
 }
 

@@ -1,30 +1,55 @@
 import type { CanvasTheme } from './theme';
 import type { NodeContentRect } from './nodeDefinition/nodeDefinitionTypes';
 
-const FONT_STACK = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-
-export const nodeText = {
-  title: `600 15px ${FONT_STACK}`,
-  titleSmall: `600 14px ${FONT_STACK}`,
-  body: `13px ${FONT_STACK}`,
-  label: `12px ${FONT_STACK}`,
-  micro: `600 10px ${FONT_STACK}`,
+export type CanvasNodeText = {
+  title: string;
+  titleSmall: string;
+  body: string;
+  label: string;
+  micro: string;
 };
 
-export const nodeLayout = {
-  insetX: 4,
-  titleY: 2,
-  titleHeight: 18,
-  bodyLineHeight: 18,
-  labelLineHeight: 15,
-  metaY: 25,
-  contentY: 48,
-  footerHeight: 18,
-  accentWidth: 28,
-  accentHeight: 6,
-  rowHeight: 19,
-  controlRadius: 4,
+export type CanvasNodeLayout = {
+  insetX: number;
+  titleY: number;
+  titleHeight: number;
+  bodyLineHeight: number;
+  labelLineHeight: number;
+  metaY: number;
+  contentY: number;
+  footerHeight: number;
+  accentWidth: number;
+  accentHeight: number;
+  rowHeight: number;
+  controlRadius: number;
 };
+
+export function nodeText(theme: CanvasTheme): CanvasNodeText {
+  return {
+    title: `${theme.canvasTitleWeight} ${theme.canvasTitleSize} ${theme.canvasFontFamily}`,
+    titleSmall: `${theme.canvasTitleWeight} ${theme.canvasLabelSize} ${theme.canvasFontFamily}`,
+    body: `${theme.canvasBodyWeight} ${theme.canvasBodySize} ${theme.canvasFontFamily}`,
+    label: `${theme.canvasBodyWeight} ${theme.canvasLabelSize} ${theme.canvasFontFamily}`,
+    micro: `${theme.canvasTitleWeight} ${theme.canvasMicroSize} ${theme.canvasFontFamily}`,
+  };
+}
+
+export function nodeLayout(theme: CanvasTheme): CanvasNodeLayout {
+  return {
+    insetX: theme.nodeContentInsetX,
+    titleY: theme.nodeTitleY,
+    titleHeight: theme.canvasTitleLineHeight,
+    bodyLineHeight: theme.nodeBodyLineHeight,
+    labelLineHeight: theme.nodeLabelLineHeight,
+    metaY: theme.nodeMetaY,
+    contentY: theme.nodeContentY,
+    footerHeight: theme.nodeBodyLineHeight,
+    accentWidth: theme.nodeAccentWidth,
+    accentHeight: theme.nodeAccentHeight,
+    rowHeight: theme.nodeRowHeight,
+    controlRadius: theme.nodeControlRadius,
+  };
+}
 
 export function clipText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
   if (maxWidth <= 0) return '';
@@ -58,7 +83,8 @@ export function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: 
   return lines;
 }
 
-export function drawPlaceholderIcon(ctx: CanvasRenderingContext2D, rect: NodeContentRect, label: string) {
+export function drawPlaceholderIcon(ctx: CanvasRenderingContext2D, rect: NodeContentRect, label: string, theme: CanvasTheme) {
+  const text = nodeText(theme);
   const x = rect.x + Math.max(0, rect.w - 84) / 2;
   const y = rect.y + Math.max(0, rect.h - 64) / 2;
   const w = Math.min(84, rect.w);
@@ -70,41 +96,47 @@ export function drawPlaceholderIcon(ctx: CanvasRenderingContext2D, rect: NodeCon
   ctx.lineTo(x + w * 0.62, y + h - 12);
   ctx.lineTo(x + w - 10, y + h * 0.38);
   ctx.stroke();
-  ctx.font = nodeText.micro;
+  ctx.font = text.micro;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(clipText(ctx, label, Math.max(0, w - 16)), x + w / 2, y + h / 2);
 }
 
 export function drawTypeBadge(ctx: CanvasRenderingContext2D, rect: NodeContentRect, label: string, theme: CanvasTheme) {
+  const text = nodeText(theme);
   ctx.fillStyle = theme.mutedText;
-  ctx.font = nodeText.micro;
+  ctx.font = text.micro;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
   ctx.fillText(clipText(ctx, label, Math.max(0, rect.w - 4)), rect.x, rect.y + Math.max(0, rect.h - 18));
 }
 
-export function drawAccentMark(ctx: CanvasRenderingContext2D, rect: NodeContentRect, color: string) {
+export function drawAccentMark(ctx: CanvasRenderingContext2D, rect: NodeContentRect, color: string, theme: CanvasTheme) {
+  const layout = nodeLayout(theme);
   ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.roundRect(rect.x, rect.y, nodeLayout.accentWidth, nodeLayout.accentHeight, 3);
+  ctx.roundRect(rect.x, rect.y, layout.accentWidth, layout.accentHeight, Math.max(2, layout.accentHeight / 2));
   ctx.fill();
 }
 
-export function drawNodeTitle(ctx: CanvasRenderingContext2D, rect: NodeContentRect, title: string, theme: CanvasTheme, y = nodeLayout.titleY) {
+export function drawNodeTitle(ctx: CanvasRenderingContext2D, rect: NodeContentRect, title: string, theme: CanvasTheme, y = nodeLayout(theme).titleY) {
+  const text = nodeText(theme);
+  const layout = nodeLayout(theme);
   ctx.fillStyle = theme.headerText;
-  ctx.font = nodeText.title;
+  ctx.font = text.title;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  ctx.fillText(clipText(ctx, title, Math.max(0, rect.w - nodeLayout.insetX * 2)), rect.x + nodeLayout.insetX, rect.y + y);
+  ctx.fillText(clipText(ctx, title, Math.max(0, rect.w - layout.insetX * 2)), rect.x + layout.insetX, rect.y + y);
 }
 
-export function drawNodeMeta(ctx: CanvasRenderingContext2D, rect: NodeContentRect, meta: string, theme: CanvasTheme, y = nodeLayout.metaY) {
+export function drawNodeMeta(ctx: CanvasRenderingContext2D, rect: NodeContentRect, meta: string, theme: CanvasTheme, y = nodeLayout(theme).metaY) {
+  const text = nodeText(theme);
+  const layout = nodeLayout(theme);
   ctx.fillStyle = theme.mutedText;
-  ctx.font = nodeText.label;
+  ctx.font = text.label;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  ctx.fillText(clipText(ctx, meta, Math.max(0, rect.w - nodeLayout.insetX * 2)), rect.x + nodeLayout.insetX, rect.y + y);
+  ctx.fillText(clipText(ctx, meta, Math.max(0, rect.w - layout.insetX * 2)), rect.x + layout.insetX, rect.y + y);
 }
 
 export function drawNodeBodyLines(
@@ -114,13 +146,15 @@ export function drawNodeBodyLines(
   theme: CanvasTheme,
   options: { x?: number; y?: number; color?: string; lineHeight?: number; font?: string } = {},
 ) {
+  const text = nodeText(theme);
+  const layout = nodeLayout(theme);
   ctx.fillStyle = options.color ?? theme.bodyText;
-  ctx.font = options.font ?? nodeText.body;
+  ctx.font = options.font ?? text.body;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  const x = options.x ?? rect.x + nodeLayout.insetX;
-  let y = options.y ?? rect.y + nodeLayout.contentY;
-  const lineHeight = options.lineHeight ?? nodeLayout.bodyLineHeight;
+  const x = options.x ?? rect.x + layout.insetX;
+  let y = options.y ?? rect.y + layout.contentY;
+  const lineHeight = options.lineHeight ?? layout.bodyLineHeight;
   for (const line of lines) {
     ctx.fillText(line, x, y);
     y += lineHeight;
@@ -128,14 +162,16 @@ export function drawNodeBodyLines(
 }
 
 export function drawCompactNode(ctx: CanvasRenderingContext2D, rect: NodeContentRect, badge: string, label: string, theme: CanvasTheme) {
+  const text = nodeText(theme);
+  const layout = nodeLayout(theme);
   ctx.fillStyle = theme.mutedText;
-  ctx.font = nodeText.micro;
+  ctx.font = text.micro;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
   ctx.fillText(clipText(ctx, badge, Math.max(0, rect.w - 4)), rect.x, rect.y);
   ctx.fillStyle = theme.headerText;
-  ctx.font = nodeText.label;
-  ctx.fillText(clipText(ctx, label, Math.max(0, rect.w - 4)), rect.x, rect.y + 18);
+  ctx.font = text.label;
+  ctx.fillText(clipText(ctx, label, Math.max(0, rect.w - 4)), rect.x, rect.y + layout.bodyLineHeight);
 }
 
 export function contentLineCapacity(rect: NodeContentRect, lineHeight: number) {

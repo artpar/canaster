@@ -92,6 +92,7 @@ import {
 import {DeleteConfirmationPrompt} from "./DeleteConfirmationPrompt";
 import {HeaderToolbar} from "./HeaderToolbar";
 import {KeyboardShortcutsProvider, useKeyboardShortcut} from "./KeyboardShortcuts";
+import "./theme/CanasterFonts";
 import {CanasterThemeProvider} from "./theme/CanasterThemeProvider";
 import {
     canasterThemeOptions,

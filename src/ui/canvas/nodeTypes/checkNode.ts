@@ -5,6 +5,7 @@ import type { JsonObject } from '../../../core/nodePrimitives';
 import { clipText, drawCompactNode, drawNodeMeta, drawNodeTitle, drawTypeBadge, nodeLayout, nodeText } from '../nodeRendering';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeContentRect, NodeDefinition, NodeInteractionRegion } from '../nodeDefinition/nodeDefinitionTypes';
+import type { CanvasTheme } from '../theme';
 
 const MAX_ITEMS = 100;
 const CHECKBOX_SIZE = 12;
@@ -32,6 +33,8 @@ export const checkNodeDefinition: NodeDefinition<CheckNodeData> = defineNodeType
     };
   },
   render({ ctx, data, theme, contentRect, state }) {
+    const text = nodeText(theme);
+    const layout = nodeLayout(theme);
     const done = data.items.filter((item) => item.checked).length;
     const total = data.items.length;
 
@@ -43,31 +46,31 @@ export const checkNodeDefinition: NodeDefinition<CheckNodeData> = defineNodeType
     drawNodeTitle(ctx, contentRect, data.title || 'Checklist', theme);
     drawNodeMeta(ctx, contentRect, total ? `${done}/${total} done` : 'No checklist items', theme);
 
-    const rows = visibleRows(contentRect.h);
+    const rows = visibleRows(contentRect.h, layout);
     const visibleItems = data.items.slice(0, rows);
-    let y = contentRect.y + 48;
+    let y = contentRect.y + layout.contentY;
     for (const item of visibleItems) {
-      drawCheckbox(ctx, contentRect.x + 4, y + 1, item.checked, theme);
+      drawCheckbox(ctx, contentRect.x + layout.insetX, y + 1, item.checked, theme);
       ctx.fillStyle = item.checked ? theme.mutedText : theme.bodyText;
-      ctx.font = nodeText.body;
+      ctx.font = text.body;
       const deleteSpace = state.selected || state.hovered ? 18 : 0;
-      ctx.fillText(clipText(ctx, item.text || 'Untitled item', Math.max(0, contentRect.w - 28 - deleteSpace)), contentRect.x + 24, y);
+      ctx.fillText(clipText(ctx, item.text || 'Untitled item', Math.max(0, contentRect.w - layout.insetX - 24 - deleteSpace)), contentRect.x + layout.insetX + 20, y);
       if (state.selected || state.hovered) {
         ctx.fillStyle = theme.mutedText;
-        ctx.font = nodeText.label;
+        ctx.font = text.label;
         ctx.fillText('x', contentRect.x + contentRect.w - 13, y);
       }
-      y += 19;
+      y += layout.rowHeight;
     }
 
     if (visibleItems.length < rows) {
       ctx.fillStyle = theme.bodyText;
-      ctx.font = nodeText.body;
-      ctx.fillText(visibleItems.length ? 'Add item' : 'Add first item', contentRect.x + 4, y);
+      ctx.font = text.body;
+      ctx.fillText(visibleItems.length ? 'Add item' : 'Add first item', contentRect.x + layout.insetX, y);
     } else if (data.items.length > visibleItems.length) {
       ctx.fillStyle = theme.mutedText;
-      ctx.font = nodeText.label;
-      ctx.fillText(`+${data.items.length - visibleItems.length} more`, contentRect.x + 4, contentRect.y + Math.max(0, contentRect.h - 18));
+      ctx.font = text.label;
+      ctx.fillText(`+${data.items.length - visibleItems.length} more`, contentRect.x + layout.insetX, contentRect.y + Math.max(0, contentRect.h - layout.footerHeight));
     }
 
     drawTypeBadge(ctx, contentRect, 'LIST', theme);
@@ -83,8 +86,8 @@ export const checkNodeDefinition: NodeDefinition<CheckNodeData> = defineNodeType
       actions: [],
     };
   },
-  getInteractionRegions({ contentRect, data }) {
-    return checklistRegions(contentRect, data);
+  getInteractionRegions({ contentRect, data, theme }) {
+    return checklistRegions(contentRect, data, theme);
   },
   createInteraction(ctx) {
     const { data, region } = ctx;
@@ -138,16 +141,17 @@ export const checkNodeDefinition: NodeDefinition<CheckNodeData> = defineNodeType
   },
 });
 
-function checklistRegions(contentRect: NodeContentRect, data: CheckNodeData): NodeInteractionRegion[] {
+function checklistRegions(contentRect: NodeContentRect, data: CheckNodeData, theme: CanvasTheme): NodeInteractionRegion[] {
+  const layout = nodeLayout(theme);
   const regions: NodeInteractionRegion[] = [{
     id: 'title',
-    rect: { x: contentRect.x + nodeLayout.insetX, y: contentRect.y + nodeLayout.titleY, w: Math.max(0, contentRect.w - nodeLayout.insetX * 2), h: 19 },
+    rect: { x: contentRect.x + layout.insetX, y: contentRect.y + layout.titleY, w: Math.max(0, contentRect.w - layout.insetX * 2), h: layout.titleHeight + 2 },
     cursor: 'text',
     label: 'checklist title',
   }];
-  const rows = visibleRows(contentRect.h);
+  const rows = visibleRows(contentRect.h, layout);
   const visibleItems = data.items.slice(0, rows);
-  let y = contentRect.y + 48;
+  let y = contentRect.y + layout.contentY;
   for (const item of visibleItems) {
     regions.push({
       id: `item:${item.id}:checked`,
@@ -157,29 +161,29 @@ function checklistRegions(contentRect: NodeContentRect, data: CheckNodeData): No
     });
     regions.push({
       id: `item:${item.id}:text`,
-      rect: { x: contentRect.x + 24, y: y - 2, w: Math.max(0, contentRect.w - 46), h: 20 },
+      rect: { x: contentRect.x + layout.insetX + 20, y: y - 2, w: Math.max(0, contentRect.w - layout.insetX - 42), h: layout.rowHeight + 1 },
       cursor: 'text',
       label: 'checklist item',
     });
     regions.push({
       id: `item:${item.id}:delete`,
-      rect: { x: contentRect.x + contentRect.w - 18, y: y - 2, w: 18, h: 20 },
+      rect: { x: contentRect.x + contentRect.w - 18, y: y - 2, w: 18, h: layout.rowHeight + 1 },
       cursor: 'pointer',
       label: 'delete checklist item',
     });
-    y += 19;
+    y += layout.rowHeight;
   }
   if (visibleItems.length < rows) {
     regions.push({
       id: 'add-item',
-      rect: { x: contentRect.x + 4, y: y - 2, w: Math.max(0, contentRect.w - 8), h: 20 },
+      rect: { x: contentRect.x + layout.insetX, y: y - 2, w: Math.max(0, contentRect.w - layout.insetX * 2), h: layout.rowHeight + 1 },
       cursor: 'text',
       label: 'new checklist item',
     });
   } else if (data.items.length > visibleItems.length) {
     regions.push({
       id: 'open-list',
-      rect: { x: contentRect.x + 4, y: contentRect.y + Math.max(0, contentRect.h - 22), w: Math.max(0, contentRect.w - 8), h: 22 },
+      rect: { x: contentRect.x + layout.insetX, y: contentRect.y + Math.max(0, contentRect.h - layout.footerHeight - 4), w: Math.max(0, contentRect.w - layout.insetX * 2), h: layout.footerHeight + 4 },
       cursor: 'pointer',
       label: 'checklist items',
     });
@@ -318,9 +322,9 @@ function parseItem(value: unknown, index: number): CheckNodeItem | null {
   };
 }
 
-function visibleRows(height: number) {
-  const available = height - 72;
-  return Math.max(0, Math.min(5, Math.floor(available / 19)));
+function visibleRows(height: number, layout: ReturnType<typeof nodeLayout>) {
+  const available = height - layout.contentY - layout.footerHeight;
+  return Math.max(0, Math.min(5, Math.floor(available / layout.rowHeight)));
 }
 
 function nextChecklistItemId(items: CheckNodeItem[]) {

@@ -5,6 +5,7 @@ import type { JsonObject } from '../../../core/nodePrimitives';
 import { drawAccentMark, drawCompactNode, drawNodeBodyLines, drawNodeTitle, drawTypeBadge, nodeLayout, wrapText } from '../nodeRendering';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeDefinition, NodeContentRect, NodeInteractionRegion } from '../nodeDefinition/nodeDefinitionTypes';
+import type { CanvasTheme } from '../theme';
 
 type CardAccent = 'task' | 'data' | 'system';
 type CardNodeData = {
@@ -28,17 +29,24 @@ export const cardNodeDefinition: NodeDefinition<CardNodeData> = defineNodeType({
     };
   },
   render({ ctx, data, theme, contentRect, state }) {
+    const layout = nodeLayout(theme);
     const accent = theme.kind[data.accent];
-    drawAccentMark(ctx, contentRect, accent);
+    drawAccentMark(ctx, contentRect, accent, theme);
 
     if (state.quality === 'compact' && !state.selected && !state.hovered) {
-      drawCompactNode(ctx, { ...contentRect, y: contentRect.y + 14, h: Math.max(0, contentRect.h - 14) }, data.accent.toUpperCase(), data.title || 'Untitled work item', theme);
+      const accentOffset = layout.accentHeight + 8;
+      drawCompactNode(ctx, { ...contentRect, y: contentRect.y + accentOffset, h: Math.max(0, contentRect.h - accentOffset) }, data.accent.toUpperCase(), data.title || 'Untitled work item', theme);
       return;
     }
 
-    drawNodeTitle(ctx, contentRect, data.title || 'Untitled work item', theme, 16);
+    drawNodeTitle(ctx, contentRect, data.title || 'Untitled work item', theme, layout.titleY + layout.accentHeight + 8);
 
-    const detailRect = { x: contentRect.x + 4, y: contentRect.y + 44, w: contentRect.w - 8, h: Math.max(0, contentRect.h - 70) };
+    const detailRect = {
+      x: contentRect.x + layout.insetX,
+      y: contentRect.y + layout.contentY - 4,
+      w: contentRect.w - layout.insetX * 2,
+      h: Math.max(0, contentRect.h - layout.contentY - layout.footerHeight),
+    };
     const lines = wrapText(ctx, data.detail, Math.max(0, detailRect.w), cardDetailLineCapacity(detailRect));
     drawNodeBodyLines(ctx, detailRect, lines, theme, { x: detailRect.x, y: detailRect.y });
 
@@ -55,8 +63,8 @@ export const cardNodeDefinition: NodeDefinition<CardNodeData> = defineNodeType({
       actions: [],
     };
   },
-  getInteractionRegions({ contentRect }) {
-    return cardRegions(contentRect);
+  getInteractionRegions({ contentRect, theme }) {
+    return cardRegions(contentRect, theme);
   },
   createInteraction(ctx) {
     if (ctx.region.id === 'title') {
@@ -85,17 +93,18 @@ export const cardNodeDefinition: NodeDefinition<CardNodeData> = defineNodeType({
   },
 });
 
-function cardRegions(contentRect: NodeContentRect): NodeInteractionRegion[] {
+function cardRegions(contentRect: NodeContentRect, theme: CanvasTheme): NodeInteractionRegion[] {
+  const layout = nodeLayout(theme);
   return [
     {
       id: 'title',
-      rect: { x: contentRect.x + nodeLayout.insetX, y: contentRect.y + 14, w: Math.max(0, contentRect.w - nodeLayout.insetX * 2), h: 22 },
+      rect: { x: contentRect.x + layout.insetX, y: contentRect.y + layout.titleY + layout.accentHeight + 6, w: Math.max(0, contentRect.w - layout.insetX * 2), h: layout.titleHeight + 4 },
       cursor: 'text',
       label: 'work item title',
     },
     {
       id: 'detail',
-      rect: { x: contentRect.x + nodeLayout.insetX, y: contentRect.y + 42, w: Math.max(0, contentRect.w - nodeLayout.insetX * 2), h: Math.max(22, contentRect.h - 62) },
+      rect: { x: contentRect.x + layout.insetX, y: contentRect.y + layout.contentY - 6, w: Math.max(0, contentRect.w - layout.insetX * 2), h: Math.max(22, contentRect.h - layout.contentY - layout.footerHeight + 6) },
       cursor: 'text',
       label: 'work item detail',
     },

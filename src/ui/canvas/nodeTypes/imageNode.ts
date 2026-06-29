@@ -5,9 +5,10 @@ import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import { cachedAssetImage, cacheAssetImage } from '../imageAssets';
 import { createInlineTextInput, prepareInlineEditorMount, stopEvent } from '../inlineEditorDom';
 import type { JsonObject } from '../../../core/nodePrimitives';
-import { clipText, drawCompactNode, drawPlaceholderIcon, drawTypeBadge, nodeText, wrapText } from '../nodeRendering';
+import { clipText, drawCompactNode, drawPlaceholderIcon, drawTypeBadge, nodeLayout, nodeText, wrapText } from '../nodeRendering';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeContentRect, NodeDefinition, NodeInteractionRegion } from '../nodeDefinition/nodeDefinitionTypes';
+import type { CanvasTheme } from '../theme';
 
 const IMAGE_FITS = ['contain', 'cover'] as const;
 type ImageFit = (typeof IMAGE_FITS)[number];
@@ -32,6 +33,8 @@ export const imageNodeDefinition: NodeDefinition<ImageNodeData> = defineNodeType
     };
   },
   render({ ctx, data, theme, contentRect, state }) {
+    const text = nodeText(theme);
+    const layout = nodeLayout(theme);
     ctx.strokeStyle = theme.nodeBorder;
     ctx.fillStyle = theme.mutedText;
 
@@ -40,28 +43,28 @@ export const imageNodeDefinition: NodeDefinition<ImageNodeData> = defineNodeType
       return;
     }
 
-    const frame = { x: contentRect.x + 4, y: contentRect.y + 4, w: Math.max(0, contentRect.w - 8), h: Math.max(0, contentRect.h - 48) };
+    const frame = imageFrame(contentRect, theme);
     const cached = cachedAssetImage(data.assetId);
     if (cached) {
       drawImage(ctx, cached, frame, data.fit);
     } else {
-      drawPlaceholderIcon(ctx, frame, data.assetId ? 'LOADING' : 'IMAGE');
+      drawPlaceholderIcon(ctx, frame, data.assetId ? 'LOADING' : 'IMAGE', theme);
     }
 
     ctx.fillStyle = theme.bodyText;
-    ctx.font = nodeText.label;
+    ctx.font = text.label;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     const status = cached ? (data.caption || data.alt || 'Image reference') : data.assetId ? 'Loading image' : 'Add an image source';
-    const lines = wrapText(ctx, status, Math.max(0, contentRect.w - 8), 2);
-    let y = contentRect.y + Math.max(0, contentRect.h - 42);
+    const lines = wrapText(ctx, status, Math.max(0, contentRect.w - layout.insetX * 2), 2);
+    let y = contentRect.y + Math.max(0, contentRect.h - layout.footerHeight * 2 - 6);
     for (const line of lines) {
-      ctx.fillText(line, contentRect.x + 4, y);
-      y += 15;
+      ctx.fillText(line, contentRect.x + layout.insetX, y);
+      y += layout.labelLineHeight;
     }
     if (data.assetId) {
       ctx.fillStyle = theme.mutedText;
-      ctx.fillText(clipText(ctx, data.alt || 'Image reference', Math.max(0, contentRect.w - 8)), contentRect.x + 4, y);
+      ctx.fillText(clipText(ctx, data.alt || 'Image reference', Math.max(0, contentRect.w - layout.insetX * 2)), contentRect.x + layout.insetX, y);
     }
     if (state.selected || state.hovered) {
       drawImageFitControls(ctx, contentRect, data.fit, theme);
@@ -80,8 +83,8 @@ export const imageNodeDefinition: NodeDefinition<ImageNodeData> = defineNodeType
       actions: [],
     };
   },
-  getInteractionRegions({ contentRect }) {
-    return imageRegions(contentRect);
+  getInteractionRegions({ contentRect, theme }) {
+    return imageRegions(contentRect, theme);
   },
   createInteraction(ctx) {
     if (ctx.region.id === 'caption') {
@@ -120,20 +123,21 @@ export const imageNodeDefinition: NodeDefinition<ImageNodeData> = defineNodeType
   },
 });
 
-function imageRegions(contentRect: NodeContentRect): NodeInteractionRegion[] {
-  const frame = imageFrame(contentRect);
-  const controls = imageFitControlRects(contentRect);
+function imageRegions(contentRect: NodeContentRect, theme: CanvasTheme): NodeInteractionRegion[] {
+  const layout = nodeLayout(theme);
+  const frame = imageFrame(contentRect, theme);
+  const controls = imageFitControlRects(contentRect, theme);
   return [
     { id: 'image-frame', rect: frame, cursor: 'pointer', label: 'image' },
     {
       id: 'caption',
-      rect: { x: contentRect.x + 4, y: contentRect.y + Math.max(0, contentRect.h - 42), w: Math.max(0, contentRect.w - 8), h: 16 },
+      rect: { x: contentRect.x + layout.insetX, y: contentRect.y + Math.max(0, contentRect.h - layout.footerHeight * 2 - 6), w: Math.max(0, contentRect.w - layout.insetX * 2), h: layout.labelLineHeight + 1 },
       cursor: 'text',
       label: 'image caption',
     },
     {
       id: 'alt',
-      rect: { x: contentRect.x + 4, y: contentRect.y + Math.max(0, contentRect.h - 24), w: Math.max(0, contentRect.w - 110), h: 18 },
+      rect: { x: contentRect.x + layout.insetX, y: contentRect.y + Math.max(0, contentRect.h - layout.footerHeight - 6), w: Math.max(0, contentRect.w - 110), h: layout.footerHeight + 1 },
       cursor: 'text',
       label: 'image alt text',
     },
@@ -142,25 +146,33 @@ function imageRegions(contentRect: NodeContentRect): NodeInteractionRegion[] {
   ];
 }
 
-function imageFrame(contentRect: NodeContentRect) {
-  return { x: contentRect.x + 4, y: contentRect.y + 4, w: Math.max(0, contentRect.w - 8), h: Math.max(0, contentRect.h - 48) };
+function imageFrame(contentRect: NodeContentRect, theme: CanvasTheme) {
+  const layout = nodeLayout(theme);
+  return {
+    x: contentRect.x + layout.insetX,
+    y: contentRect.y + layout.titleY,
+    w: Math.max(0, contentRect.w - layout.insetX * 2),
+    h: Math.max(0, contentRect.h - layout.footerHeight * 2 - layout.titleY - 10),
+  };
 }
 
-function imageFitControlRects(contentRect: NodeContentRect) {
-  const y = contentRect.y + Math.max(4, contentRect.h - 20);
+function imageFitControlRects(contentRect: NodeContentRect, theme: CanvasTheme) {
+  const layout = nodeLayout(theme);
+  const y = contentRect.y + Math.max(layout.titleY, contentRect.h - layout.footerHeight - 2);
   return {
     contain: { x: contentRect.x + Math.max(0, contentRect.w - 102), y, w: 48, h: 16 },
     cover: { x: contentRect.x + Math.max(0, contentRect.w - 50), y, w: 46, h: 16 },
   };
 }
 
-function drawImageFitControls(ctx: CanvasRenderingContext2D, contentRect: NodeContentRect, fit: 'contain' | 'cover', theme: { bodyText: string; mutedText: string; selected: string; nodeBg: string }) {
-  const controls = imageFitControlRects(contentRect);
+function drawImageFitControls(ctx: CanvasRenderingContext2D, contentRect: NodeContentRect, fit: 'contain' | 'cover', theme: CanvasTheme) {
+  const controls = imageFitControlRects(contentRect, theme);
   drawFitPill(ctx, controls.contain, 'Contain', fit === 'contain', theme);
   drawFitPill(ctx, controls.cover, 'Cover', fit === 'cover', theme);
 }
 
-function drawFitPill(ctx: CanvasRenderingContext2D, rect: { x: number; y: number; w: number; h: number }, label: string, active: boolean, theme: { bodyText: string; mutedText: string; selected: string; nodeBg: string }) {
+function drawFitPill(ctx: CanvasRenderingContext2D, rect: { x: number; y: number; w: number; h: number }, label: string, active: boolean, theme: CanvasTheme) {
+  const text = nodeText(theme);
   ctx.save();
   ctx.fillStyle = active ? theme.selected : theme.nodeBg;
   ctx.strokeStyle = active ? theme.selected : theme.mutedText;
@@ -170,7 +182,7 @@ function drawFitPill(ctx: CanvasRenderingContext2D, rect: { x: number; y: number
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = active ? theme.nodeBg : theme.bodyText;
-  ctx.font = nodeText.micro;
+  ctx.font = text.micro;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(label, rect.x + rect.w / 2, rect.y + rect.h / 2 + 0.5);

@@ -86,16 +86,26 @@ export type CanasterThemeColors = {
 
 export type CanasterThemeTypography = {
     family: string;
+    canvasFamily: string;
     titleSize: string;
     bodySize: string;
     labelSize: string;
     microSize: string;
+    canvasTitleSize: string;
+    canvasBodySize: string;
+    canvasLabelSize: string;
+    canvasMicroSize: string;
     titleWeight: number;
     strongWeight: number;
     bodyWeight: number;
+    canvasTitleWeight: number;
+    canvasBodyWeight: number;
     titleLineHeight: string;
     bodyLineHeight: string;
     labelLineHeight: string;
+    canvasTitleLineHeight: number;
+    canvasBodyLineHeight: number;
+    canvasLabelLineHeight: number;
 };
 
 export type CanasterThemeSpacing = {
@@ -193,6 +203,16 @@ export type CanasterThemeComponents = {
         titleSize: string;
         bodySize: string;
         badgeSize: string;
+        contentInsetX: number;
+        titleY: number;
+        metaY: number;
+        contentY: number;
+        bodyLineHeight: number;
+        labelLineHeight: number;
+        rowHeight: number;
+        accentWidth: number;
+        accentHeight: number;
+        controlRadius: number;
     };
     drawer: {
         width: string;

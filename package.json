@@ -17,6 +17,10 @@
     "daptin:check:cloud": "curl -fsS 'https://api.canaster.in/api/world?page%5Bsize%5D=1' >/dev/null"
   },
   "dependencies": {
+    "@fontsource-variable/ibm-plex-sans": "^5.2.8",
+    "@fontsource-variable/inter": "^5.2.8",
+    "@fontsource-variable/roboto-flex": "^5.2.8",
+    "@fontsource-variable/source-sans-3": "^5.2.9",
     "daptin-client": "^0.7.12",
     "dexie": "^4.4.3",
     "lucide-react": "^0.468.0",
