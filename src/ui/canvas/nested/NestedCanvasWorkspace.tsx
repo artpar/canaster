@@ -33,13 +33,13 @@ export type NestedCanvasWorkspaceProps = {
 export type ArrangeCanvasMenuRequest = {
   canvasId: string;
   anchor?: ScreenRect;
-  recursive?: boolean;
+  metaOrCtrl?: boolean;
 };
 
 export type CanvasThemeMenuRequest = {
   canvasId: string;
   anchor?: ScreenRect;
-  recursive?: boolean;
+  metaOrCtrl?: boolean;
 };
 
 export type NestedCanvasWorkspaceChromeState = {

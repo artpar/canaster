@@ -61,6 +61,7 @@ import {
 import { portalOverlayStyle } from './portalLayout';
 import type { ArrangeCanvasMenuRequest, CanvasThemeMenuRequest, NestedCanvasWorkspaceChromeState } from './NestedCanvasWorkspace';
 import type { WorkspaceUrlPaneCamera, WorkspaceUrlState } from '../../../infra/browser/workspaceUrlLocation';
+import {hasMetaOrCtrlShortcutModifier} from '../../KeyboardShortcuts';
 import type {CanasterThemeId} from '../../theme/CanasterTheme';
 import {normalizeCanasterThemeId} from '../../theme/CanasterThemeRegistry';
 
@@ -275,25 +276,9 @@ export class NativeNestedCanvasController {
 
   private canvasThemeIdForRuntime(canvasId: CanvasDocumentId): string {
     const collection = this.collectionRef.current;
-    const visited = new Set<CanvasDocumentId>();
-    let document = collection.documents[canvasId];
-    while (document) {
-      if (visited.has(document.id)) break;
-      visited.add(document.id);
-      if (document.appearance?.themeId) return document.appearance.themeId;
-      const parentNodeThemeId = this.parentPortalNodeThemeIdForRuntime(document.parentCanvasId, document.parentNodeId);
-      if (parentNodeThemeId) return parentNodeThemeId;
-      if (!document.parentCanvasId) break;
-      document = collection.documents[document.parentCanvasId];
-    }
+    const document = collection.documents[canvasId];
+    if (document?.appearance?.themeId) return document.appearance.themeId;
     return this.theme;
-  }
-
-  private parentPortalNodeThemeIdForRuntime(parentCanvasId: CanvasDocumentId | null, parentNodeId: string | null): string | null {
-    if (!parentCanvasId || !parentNodeId) return null;
-    const parent = this.collectionRef.current.documents[parentCanvasId];
-    const source = parent?.model.nodes.find((node) => node.id === parentNodeId);
-    return typeof source?.appearance?.themeId === 'string' && source.appearance.themeId ? source.appearance.themeId : null;
   }
 
   setParentContextVisible(visible: boolean) {
@@ -362,20 +347,29 @@ export class NativeNestedCanvasController {
 
   private handleViewportControl(slot: CanvasViewportSlot, control: CanvasViewportControl, event: CanvasViewportControlEvent): void {
     if (control === 'arrange') {
-      this.onArrangeCanvasMenuRequest?.({ canvasId: slot.canvasId, anchor: event.anchor, recursive: event.recursive });
+      this.onArrangeCanvasMenuRequest?.({
+        canvasId: slot.canvasId,
+        anchor: event.anchor,
+        metaOrCtrl: hasMetaOrCtrlShortcutModifier(event.sourceEvent),
+      });
       this.setStatus({ ...this.status, interaction: 'Choose arrangement' });
       return;
     }
     if (control === 'theme') {
-      this.onCanvasThemeMenuRequest?.({ canvasId: slot.canvasId, anchor: event.anchor, recursive: event.recursive });
+      this.onCanvasThemeMenuRequest?.({
+        canvasId: slot.canvasId,
+        anchor: event.anchor,
+        metaOrCtrl: hasMetaOrCtrlShortcutModifier(event.sourceEvent),
+      });
       this.setStatus({ ...this.status, interaction: 'Choose canvas theme' });
       return;
     }
-    const targets = this.viewportControlTargets(slot, event.recursive);
+    const recursive = hasMetaOrCtrlShortcutModifier(event.sourceEvent);
+    const targets = this.viewportControlTargets(slot, recursive);
     if (control === 'fit') {
       for (const target of targets) target.engine.fit(target.mode === 'active' ? undefined : 16);
       if (this.activeSlot && targets.includes(this.activeSlot)) this.persistViewportFromActiveEngine();
-      this.setStatus({ ...this.status, interaction: event.recursive && targets.length > 1 ? `Centered ${targets.length} views` : 'Centered view' });
+      this.setStatus({ ...this.status, interaction: recursive && targets.length > 1 ? `Centered ${targets.length} views` : 'Centered view' });
       return;
     }
     const factor = control === 'zoom-in' ? 1.22 : 0.82;
@@ -871,6 +865,7 @@ export class NativeNestedCanvasController {
     const existing = this.slots.get(key);
     if (existing) {
       if (existing.viewportSlot.wrapper.parentElement !== parent) parent.append(existing.viewportSlot.wrapper);
+      this.syncOverlayViewport(existing, canvasDocument);
       this.updateOverlayViewport(existing, layout);
       return existing;
     }
@@ -924,6 +919,16 @@ export class NativeNestedCanvasController {
     });
 
     return this.slots.get(key) ?? null;
+  }
+
+  private syncOverlayViewport(slot: Slot, canvasDocument: CanvasDocumentCollection['documents'][string]) {
+    slot.viewportSlot.canvasId = canvasDocument.id;
+    slot.viewportSlot.wrapper.dataset.canvasId = canvasDocument.id;
+    slot.viewportSlot.viewport.dataset.canvasId = canvasDocument.id;
+    slot.viewportSlot.canvas.setAttribute('aria-label', `${canvasDocument.title} live preview`);
+    slot.viewportSlot.engine.setCanvasId(canvasDocument.id);
+    slot.viewportSlot.engine.setTheme(this.canvasThemeFor(canvasDocument.id));
+    slot.viewportSlot.engine.setModel(canvasDocument.model, { preserveInteraction: true });
   }
 
   private renderEmbeddedChildOverlaysBreadthFirst(queue: OverlayAllocation[], remaining: number, seen: Set<string>): number {

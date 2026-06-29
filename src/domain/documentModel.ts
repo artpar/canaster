@@ -185,17 +185,8 @@ export function documentThemeId(collection: CanvasDocumentCollection): string {
 }
 
 export function canvasThemeId(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId): string {
-  const visited = new Set<CanvasDocumentId>();
-  let document = collection.documents[canvasId];
-  while (document) {
-    if (visited.has(document.id)) break;
-    visited.add(document.id);
-    if (document.appearance?.themeId) return document.appearance.themeId;
-    const parentNodeThemeId = parentPortalNodeThemeId(collection, document);
-    if (parentNodeThemeId) return parentNodeThemeId;
-    if (!document.parentCanvasId) break;
-    document = collection.documents[document.parentCanvasId];
-  }
+  const document = collection.documents[canvasId];
+  if (document?.appearance?.themeId) return document.appearance.themeId;
   return documentThemeId(collection);
 }
 
@@ -384,13 +375,6 @@ function cloneWorkspaceAppearance(appearance: CanvasWorkspaceAppearance | undefi
 function cloneDocumentAppearance(appearance: CanvasDocumentAppearance | undefined): CanvasDocumentAppearance | undefined {
   const themeId = typeof appearance?.themeId === 'string' && appearance.themeId ? appearance.themeId : null;
   return themeId ? { themeId } : undefined;
-}
-
-function parentPortalNodeThemeId(collection: CanvasDocumentCollection, document: CanvasDocument): string | null {
-  if (!document.parentCanvasId || !document.parentNodeId) return null;
-  const parent = collection.documents[document.parentCanvasId];
-  const source = parent?.model.nodes.find((node) => node.id === document.parentNodeId);
-  return typeof source?.appearance?.themeId === 'string' && source.appearance.themeId ? source.appearance.themeId : null;
 }
 
 export function serializeCollectionViewState(collection: CanvasDocumentCollection): SerializableNestedCanvasViewState {

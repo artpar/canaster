@@ -20,6 +20,11 @@ type KeyboardShortcutsContextValue = {
     registerShortcut: (shortcut: () => KeyboardShortcut) => () => void;
 };
 
+type ShortcutModifierEvent = {
+    ctrlKey: boolean;
+    metaKey: boolean;
+};
+
 const KeyboardShortcutsContext = createContext<KeyboardShortcutsContextValue | null>(null);
 
 export function KeyboardShortcutsProvider({children}: { children: ReactNode }) {
@@ -68,9 +73,13 @@ export function useKeyboardShortcut(shortcut: KeyboardShortcut) {
     }, [context]);
 }
 
+export function hasMetaOrCtrlShortcutModifier(event: ShortcutModifierEvent): boolean {
+    return event.metaKey || event.ctrlKey;
+}
+
 function matchesShortcut(event: KeyboardEvent, shortcut: KeyboardShortcut) {
     if (event.key.toLowerCase() !== shortcut.key.toLowerCase()) return false;
-    if (Boolean(event.metaKey || event.ctrlKey) !== Boolean(shortcut.metaOrCtrl)) return false;
+    if (hasMetaOrCtrlShortcutModifier(event) !== Boolean(shortcut.metaOrCtrl)) return false;
     if (Boolean(event.shiftKey) !== Boolean(shortcut.shift)) return false;
     if (Boolean(event.altKey) !== Boolean(shortcut.alt)) return false;
     return true;

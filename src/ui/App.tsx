@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import {
     forwardRef,
+    type MouseEvent as ReactMouseEvent,
     type MutableRefObject,
     useCallback,
     useEffect,
@@ -97,7 +98,7 @@ import {
 } from "./WorkspaceToastView";
 import {DeleteConfirmationPrompt} from "./DeleteConfirmationPrompt";
 import {HeaderToolbar} from "./HeaderToolbar";
-import {KeyboardShortcutsProvider, useKeyboardShortcut} from "./KeyboardShortcuts";
+import {hasMetaOrCtrlShortcutModifier, KeyboardShortcutsProvider, useKeyboardShortcut} from "./KeyboardShortcuts";
 import "./theme/CanasterFonts";
 import {CanasterThemeProvider} from "./theme/CanasterThemeProvider";
 import {
@@ -120,7 +121,7 @@ function canasterMenuWidth() {
 
 type ArrangePanelMenuProps = {
     arrangeMenuPosition: ArrangeMenuPosition | null,
-    onSelect: (layout: CanvasArrangeLayout) => void
+    onSelect: (layout: CanvasArrangeLayout, event: ReactMouseEvent<HTMLButtonElement>) => void
 };
 
 type CanvasThemeMenuProps = {
@@ -129,12 +130,12 @@ type CanvasThemeMenuProps = {
     inherited: boolean;
     position: ArrangeMenuPosition | null;
     themes: CanasterTheme[];
-    onSelect: (themeId: CanasterThemeId | null) => void;
+    onSelect: (themeId: CanasterThemeId | null, event: ReactMouseEvent<HTMLButtonElement>) => void;
 };
 
 type ToolbarMenuTarget = {
     canvasId: CanvasDocumentId;
-    recursive: boolean;
+    metaOrCtrl: boolean;
 };
 
 const ArrangePanelMenu = forwardRef<HTMLDivElement, ArrangePanelMenuProps>(function ArrangePanelMenu(props, ref) {
@@ -149,7 +150,7 @@ const ArrangePanelMenu = forwardRef<HTMLDivElement, ArrangePanelMenuProps>(funct
         } : undefined}
     >
         <button className="arrange-menu-item" type="button" role="menuitem"
-                onClick={() => props.onSelect('grid')}>
+                onClick={(event) => props.onSelect('grid', event)}>
             <LayoutGrid size={16}/>
             <span>
                 <strong>Compact</strong>
@@ -157,7 +158,7 @@ const ArrangePanelMenu = forwardRef<HTMLDivElement, ArrangePanelMenuProps>(funct
               </span>
         </button>
         <button className="arrange-menu-item" type="button" role="menuitem"
-                onClick={() => props.onSelect('rows')}>
+                onClick={(event) => props.onSelect('rows', event)}>
             <Rows3 size={16}/>
             <span>
                 <strong>Rows</strong>
@@ -165,7 +166,7 @@ const ArrangePanelMenu = forwardRef<HTMLDivElement, ArrangePanelMenuProps>(funct
               </span>
         </button>
         <button className="arrange-menu-item" type="button" role="menuitem"
-                onClick={() => props.onSelect('columns')}>
+                onClick={(event) => props.onSelect('columns', event)}>
             <Columns3 size={16}/>
             <span>
                 <strong>Columns</strong>
@@ -173,7 +174,7 @@ const ArrangePanelMenu = forwardRef<HTMLDivElement, ArrangePanelMenuProps>(funct
               </span>
         </button>
         <button className="arrange-menu-item" type="button" role="menuitem"
-                onClick={() => props.onSelect('list')}>
+                onClick={(event) => props.onSelect('list', event)}>
             <LayoutList size={16}/>
             <span>
                 <strong>List</strong>
@@ -199,7 +200,7 @@ const CanvasThemeMenu = forwardRef<HTMLDivElement, CanvasThemeMenuProps>(functio
             type="button"
             role="menuitemradio"
             aria-checked={props.inherited}
-            onClick={() => props.onSelect(null)}
+            onClick={(event) => props.onSelect(null, event)}
         >
             <span className="theme-menu-swatch inherit" aria-hidden="true">
                 <span style={{background: 'var(--canaster-color-canvas-background)'}}/>
@@ -208,7 +209,7 @@ const CanvasThemeMenu = forwardRef<HTMLDivElement, CanvasThemeMenuProps>(functio
             </span>
             <span className="theme-menu-copy">
                 <strong>Inherit theme</strong>
-                <small>Use the containing canvas theme</small>
+                <small>Use the workspace theme</small>
             </span>
             {props.inherited ? <Check className="theme-menu-check" size={15}/> : null}
         </button> : null}
@@ -220,7 +221,7 @@ const CanvasThemeMenu = forwardRef<HTMLDivElement, CanvasThemeMenuProps>(functio
                 type="button"
                 role="menuitemradio"
                 aria-checked={selected}
-                onClick={() => props.onSelect(theme.id)}
+                onClick={(event) => props.onSelect(theme.id, event)}
             >
                 <span className="theme-menu-swatch" aria-hidden="true">
                     <span style={{background: theme.colors.canvas.background}}/>
@@ -812,7 +813,7 @@ export function App() {
     const handleArrangeCanvasMenuRequest = useCallback((request: ArrangeCanvasMenuRequest) => {
         setArrangeMenuTarget({
             canvasId  : request.canvasId,
-            recursive: request.recursive ?? false
+            metaOrCtrl: request.metaOrCtrl ?? false
         });
         const anchor = request.anchor ?? {x: window.innerWidth - 18, y: window.innerHeight - 18, w: 1, h: 1};
         updateArrangeMenuPositionForRect({
@@ -829,7 +830,7 @@ export function App() {
     const handleCanvasThemeMenuRequest = useCallback((request: CanvasThemeMenuRequest) => {
         setCanvasThemeMenuTarget({
             canvasId  : request.canvasId,
-            recursive: request.recursive ?? false
+            metaOrCtrl: request.metaOrCtrl ?? false
         });
         const anchor = request.anchor ?? {x: window.innerWidth - 18, y: window.innerHeight - 18, w: 1, h: 1};
         updateCanvasThemeMenuPositionForRect({
@@ -862,11 +863,12 @@ export function App() {
         });
     }, [closeArrangeMenu, closeCanvasThemeMenu, updateAddPanelMenuPosition]);
 
-    const handleArrangeCanvas = useCallback((layout: CanvasArrangeLayout) => {
+    const handleArrangeCanvas = useCallback((layout: CanvasArrangeLayout, event: ReactMouseEvent<HTMLButtonElement>) => {
         const target = arrangeMenuTarget;
+        const recursive = Boolean(target?.metaOrCtrl) || hasMetaOrCtrlShortcutModifier(event);
         closeArrangeMenu();
         if (!target) return;
-        const targetCanvasIds = canvasToolbarTargetCanvasIds(chromeState.collection, target.canvasId, target.recursive);
+        const targetCanvasIds = canvasToolbarTargetCanvasIds(chromeState.collection, target.canvasId, recursive);
         const activeTarget = targetCanvasIds.includes(chromeState.collection.activeCanvasId);
         let changed = false;
         for (const canvasId of targetCanvasIds) {
@@ -889,11 +891,12 @@ export function App() {
         closeAddPanelMenu();
     }, [closeAddPanelMenu]);
 
-    const handleCanvasThemeSelect = useCallback((themeId: CanasterThemeId | null) => {
+    const handleCanvasThemeSelect = useCallback((themeId: CanasterThemeId | null, event: ReactMouseEvent<HTMLButtonElement>) => {
         const target = canvasThemeMenuTarget;
+        const recursive = Boolean(target?.metaOrCtrl) || hasMetaOrCtrlShortcutModifier(event);
         closeCanvasThemeMenu();
         if (!target) return;
-        const commands = canvasToolbarThemeCommands(chromeState.collection, target.canvasId, themeId, target.recursive);
+        const commands = canvasToolbarThemeCommands(chromeState.collection, target.canvasId, themeId, recursive);
         for (const command of commands) workspaceRef.current?.executeDocumentCommand(command);
     }, [canvasThemeMenuTarget, chromeState.collection, closeCanvasThemeMenu]);
 
@@ -1049,8 +1052,7 @@ export function App() {
                 onClose={closeAddPanelMenu}
             />) : null}
             {arrangeMenuOpen ? (<ArrangePanelMenu ref={arrangeMenuRef} arrangeMenuPosition={arrangeMenuPosition}
-                                                  onSelect={(layout: CanvasArrangeLayout) => handleArrangeCanvas(
-                                                      layout)}/>) : null}
+                                                  onSelect={handleArrangeCanvas}/>) : null}
             {canvasThemeMenuOpen ? (<CanvasThemeMenu
                 ref={canvasThemeMenuRef}
                 canInherit={canvasThemeMenuState.canInherit}
@@ -1193,11 +1195,10 @@ function canvasToolbarThemeState(
         inherited : false,
         themeId   : normalizeCanasterThemeId(documentThemeId(collection))
     };
-    const parentNode = parentNodeForCanvas(collection, document);
     const explicitCanvasThemeId = document.appearance?.themeId ?? null;
     return {
         canInherit: canvasId !== collection.rootCanvasId,
-        inherited : canvasId !== collection.rootCanvasId && !explicitCanvasThemeId && !parentNode?.appearance?.themeId,
+        inherited : canvasId !== collection.rootCanvasId && !explicitCanvasThemeId,
         themeId   : normalizeCanasterThemeId(canvasThemeId(collection, canvasId))
     };
 }
@@ -1215,11 +1216,6 @@ function canvasToolbarThemeCommands(
         themeId,
         source  : 'nonvisual'
     }));
-}
-
-function parentNodeForCanvas(collection: CanvasDocumentCollection, document: CanvasDocumentCollection['documents'][string]): CanvasNode | null {
-    if (!document.parentCanvasId || !document.parentNodeId) return null;
-    return collection.documents[document.parentCanvasId]?.model.nodes.find((node) => node.id === document.parentNodeId) ?? null;
 }
 
 function buildViewTree(collection: CanvasDocumentCollection): ViewTreeNode | null {
