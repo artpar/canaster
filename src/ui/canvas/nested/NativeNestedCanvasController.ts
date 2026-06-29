@@ -543,7 +543,7 @@ export class NativeNestedCanvasController {
       canvasClassName: 'canvas-surface active-plane',
       wrapperClassName: 'nested-center-cell active-canvas-viewport-slot',
       viewportClassName: 'canvas-viewport active-canvas-viewport',
-      controls: ['zoom-in', 'arrange', 'fit', 'zoom-out'],
+      controls: ['fit', 'zoom-in', 'zoom-out', 'arrange'],
       onControl: (slot, control, anchor) => this.handleViewportControl(slot, control, anchor),
       engineOptions: this.editableEngineOptions(() => this.collectionRef.current.activeCanvasId, {
         beforeCommandSelection: () => this.activeEngine()?.getSelectionState() ?? null,
