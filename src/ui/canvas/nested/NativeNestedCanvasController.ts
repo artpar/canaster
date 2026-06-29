@@ -1106,7 +1106,8 @@ export class NativeNestedCanvasController {
       canvasClassName: 'parent-context-canvas',
       wrapperClassName: 'parent-context-canvas-clip native-parent-context-canvas-clip',
       viewportClassName: 'canvas-viewport parent-context-canvas-viewport',
-      controls: [],
+      controls: ['fit', 'arrange'],
+      onControl: (slot, control, anchor) => this.handleViewportControl(slot, control, anchor),
       engineOptions: this.editableEngineOptions(canvasId, {
         beforeCommandSelection: () => viewportSlot.engine.getSelectionState(),
         onStatus: () => this.handleParentContextStatus(key),

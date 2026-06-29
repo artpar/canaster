@@ -81,6 +81,8 @@
   --canaster-motion-base: 180ms;
   --canaster-motion-slow: 240ms;
   --canaster-motion-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --canaster-workspace-topbar-height: 53px;
+  --canaster-workspace-sidepanel-width: 320px;
   --canaster-toolbar-height: 40px;
   --canaster-toolbar-padding: 6px 8px;
   --canaster-toolbar-gap: 8px;
@@ -190,7 +192,7 @@ button {
 .workspace-body {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(280px, var(--canaster-drawer-width)) minmax(0, 1fr);
+  grid-template-columns: var(--canaster-workspace-sidepanel-width) minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -593,16 +595,14 @@ button {
   border: var(--canaster-border-width) solid var(--nested-pane-border);
   border-radius: var(--canaster-radius-panel);
   background: var(--nested-pane-fill);
-  box-shadow:
-    inset 0 0 0 1px var(--nested-pane-border-inner),
-    0 8px 18px rgba(16, 28, 38, 0.08);
+  box-shadow: 0 8px 18px rgba(16, 28, 38, 0.08);
   backdrop-filter: var(--canaster-texture-panel-backdrop-filter);
   pointer-events: auto;
 }
 
 .parent-context-canvas-viewport {
   inset: var(--nested-pane-gutter);
-  border: var(--canaster-border-width) solid var(--nested-pane-border-inner);
+  border: var(--canaster-border-width) solid var(--nested-pane-border);
   border-radius: calc(var(--canaster-radius-panel) - 2px);
 }
 
@@ -868,8 +868,10 @@ button {
   display: flex;
   align-items: center;
   gap: var(--canaster-toolbar-gap);
-  min-height: calc(var(--canaster-toolbar-height) + var(--canaster-space-md));
-  padding: var(--canaster-toolbar-padding);
+  height: var(--canaster-workspace-topbar-height);
+  min-height: var(--canaster-workspace-topbar-height);
+  padding-block: max(0px, calc((var(--canaster-workspace-topbar-height) - var(--canaster-toolbar-height) - var(--canaster-border-width)) / 2));
+  padding-inline: var(--canaster-space-sm);
   border-bottom: var(--canaster-border-width) solid var(--canaster-color-panel-border);
   background: var(--canaster-color-panel-raised);
   pointer-events: auto;
@@ -901,7 +903,7 @@ button {
   margin-left: auto;
 }
 
-  .view-tree-toggle-button {
+.view-tree-toggle-button {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1613,10 +1615,43 @@ button {
   gap: var(--canaster-embedded-viewport-control-gap);
 }
 
+.parent-context-canvas-viewport .canvas-viewport-controls {
+  right: var(--canaster-embedded-viewport-control-inset);
+  bottom: var(--canaster-embedded-viewport-control-inset);
+  gap: var(--canaster-embedded-viewport-control-gap);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition:
+    opacity var(--canaster-motion-fast) var(--canaster-motion-ease-out),
+    transform var(--canaster-motion-fast) var(--canaster-motion-ease-out);
+}
+
+.parent-context-canvas-clip:hover .canvas-viewport-controls,
+.parent-context-canvas-clip:focus-within .canvas-viewport-controls {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
 .embedded-nested-viewport .canvas-viewport-control-button {
   width: var(--canaster-icon-button-mobile-size);
   height: var(--canaster-icon-button-mobile-size);
   border-radius: var(--canaster-radius-panel);
+}
+
+.parent-context-canvas-viewport .canvas-viewport-control-button {
+  width: var(--canaster-icon-button-mobile-size);
+  height: var(--canaster-icon-button-mobile-size);
+  border-radius: var(--canaster-radius-panel);
+}
+
+@media (hover: none) {
+  .parent-context-canvas-viewport .canvas-viewport-controls {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
 }
 
 :root[data-theme-mode='light'] .canvas-viewport-control-button {
@@ -2663,8 +2698,10 @@ button {
     grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
     gap: var(--canaster-toolbar-gap);
-    min-height: 0;
-    padding: var(--canaster-toolbar-padding);
+    height: auto;
+    min-height: var(--canaster-workspace-topbar-height);
+    padding-block: max(0px, calc((var(--canaster-workspace-topbar-height) - var(--canaster-toolbar-height) - var(--canaster-border-width)) / 2));
+    padding-inline: var(--canaster-space-sm);
   }
 
   .topbar-zone {
@@ -2750,7 +2787,7 @@ button {
     bottom: 0;
     left: 0;
     z-index: 23;
-    width: min(var(--canaster-drawer-width), calc(100% - var(--canaster-toolbar-height)));
+    width: min(var(--canaster-workspace-sidepanel-width), calc(100% - var(--canaster-workspace-topbar-height)));
     border-right-color: var(--canaster-color-panel-border);
     box-shadow: var(--canaster-shadow-menu);
   }
@@ -2808,6 +2845,11 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .parent-context-canvas-viewport .canvas-viewport-controls {
+    transform: none;
+    transition-property: opacity;
+  }
+
   .save-online-button.loading .save-status-badge svg,
   .save-online-button.saving .save-status-badge svg,
   .account-status.loading svg,
