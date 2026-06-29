@@ -312,7 +312,11 @@ export function App() {
         canRedo                : false,
         storageReady           : false,
     }));
-    const theme = normalizeCanasterThemeId(documentThemeId(chromeState.collection));
+    const activeCanvasTheme = normalizeCanasterThemeId(canvasThemeId(
+        chromeState.collection,
+        chromeState.collection.activeCanvasId
+    ));
+    const documentFallbackTheme = normalizeCanasterThemeId(documentThemeId(chromeState.collection));
     const canvasThemeMenuState = canvasThemeTargetState(
         chromeState.collection,
         canvasThemeMenuCanvasId ?? chromeState.collection.activeCanvasId
@@ -1000,7 +1004,7 @@ export function App() {
     const viewTree = useMemo(() => buildViewTree(chromeState.collection), [chromeState.collection]);
     const saveButtonLabel = saveActionLabel(syncStatus, syncMessage, signedIn);
 
-    return (<CanasterThemeProvider themeId={theme}>
+    return (<CanasterThemeProvider themeId={activeCanvasTheme}>
     <KeyboardShortcutsProvider>
         <WorkspaceHistoryShortcuts workspaceRef={workspaceRef}/>
         <main className="app-shell">
@@ -1103,7 +1107,7 @@ export function App() {
                     <NestedCanvasWorkspace
                         ref={workspaceRef}
                         initialCollection={initialCollection}
-                        theme={theme}
+                        theme={documentFallbackTheme}
                         parentContextVisible={parentContextVisible}
                         fitOnFirstLoad={fitWorkspaceOnFirstLoad}
                         storageKey={workspaceStorageKey}
@@ -1237,22 +1241,12 @@ function directCanvasThemeCommands(
         themeId,
         source  : 'nonvisual'
     }];
-    const commands: DocumentCommand[] = [];
-    if (canvasId === collection.rootCanvasId || !document.parentCanvasId || !document.parentNodeId) {
-        if (themeId) commands.push({
-            type  : 'set-document-theme',
-            themeId,
-            source: 'nonvisual'
-        });
-        return commands;
-    }
-    commands.push({
+    return [{
         type    : 'set-canvas-theme',
         canvasId,
         themeId,
         source  : 'nonvisual'
-    });
-    return commands;
+    }];
 }
 
 function selectedThemeNodeIds(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId): string[] {
