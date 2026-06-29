@@ -5,7 +5,6 @@ import {
     PanelLeftOpen,
     PanelsTopLeft,
     Redo2,
-    RotateCcw,
     Undo2
 } from "lucide-react";
 import {IconButton} from "./IconButton";
@@ -29,7 +28,6 @@ export type HeaderToolbarProps = {
     },
     view: {
         parentContextVisible: boolean,
-        onResetZoom: () => void,
         onToggleParentContext: () => void
     },
     addPanel: {
@@ -94,9 +92,6 @@ export function HeaderToolbar(props: HeaderToolbarProps) {
                 >
                     <FilePlus2 size={17}/>
                 </button>
-                <IconButton label="Reset map zoom" onClick={props.view.onResetZoom}>
-                    <RotateCcw size={17}/>
-                </IconButton>
                 <IconButton
                     label={props.view.parentContextVisible ? "Hide parent context panes" : "Show parent context panes"}
                     pressed={props.view.parentContextVisible}

@@ -2,7 +2,7 @@ import { CanvasEngine } from '../CanvasEngine';
 import type { CanvasDocumentId } from '../../../domain/documentTypes';
 import type { EngineInteractionMode, EngineOptions, ScreenRect } from '../../../domain/types';
 
-export type CanvasViewportControl = 'arrange' | 'fit' | 'theme' | 'zoom-in' | 'zoom-out';
+export type CanvasViewportControl = 'arrange' | 'fit' | 'reset-zoom' | 'theme' | 'zoom-in' | 'zoom-out';
 
 export type CanvasViewportSlot = {
   key: string;
@@ -41,6 +41,7 @@ export type CanvasViewportSlotOptions = {
 const controlLabels: Record<CanvasViewportControl, string> = {
   arrange: 'Arrange canvas panels',
   fit: 'Center map',
+  'reset-zoom': 'Reset map zoom',
   theme: 'Change canvas theme',
   'zoom-in': 'Zoom in',
   'zoom-out': 'Zoom out',
@@ -161,6 +162,7 @@ function createViewportControlIcon(control: CanvasViewportControl): SVGSVGElemen
 function iconPathsFor(control: CanvasViewportControl): string[] {
   if (control === 'arrange') return ['M3 3h7v7H3z', 'M14 3h7v7h-7z', 'M14 14h7v7h-7z', 'M3 14h7v7H3z'];
   if (control === 'fit') return ['M15 3h6v6', 'M9 21H3v-6', 'M21 3l-7 7', 'M3 21l7-7'];
+  if (control === 'reset-zoom') return ['M3 3v5h5', 'M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'];
   if (control === 'theme') return ['M12 22a10 10 0 1 1 10-10c0 1.7-1.3 3-3 3h-1.4c-.9 0-1.6.7-1.6 1.6 0 .5.2.9.5 1.2.3.3.5.7.5 1.2 0 1.7-2.2 3-5 3z', 'M7.5 10.5h.01', 'M10.5 7.5h.01', 'M14.5 7.5h.01', 'M16.5 10.5h.01'];
   if (control === 'zoom-in') return ['M5 12h14', 'M12 5v14'];
   return ['M5 12h14'];
@@ -188,7 +190,7 @@ function wireViewportControls(
 }
 
 function parseViewportControl(value: string | undefined): CanvasViewportControl | null {
-  if (value === 'arrange' || value === 'fit' || value === 'theme' || value === 'zoom-in' || value === 'zoom-out') return value;
+  if (value === 'arrange' || value === 'fit' || value === 'reset-zoom' || value === 'theme' || value === 'zoom-in' || value === 'zoom-out') return value;
   return null;
 }
 

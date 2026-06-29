@@ -387,6 +387,12 @@ export class NativeNestedCanvasController {
       this.setStatus({ ...this.status, interaction: recursive && targets.length > 1 ? `Centered ${targets.length} views` : 'Centered view' });
       return;
     }
+    if (control === 'reset-zoom') {
+      for (const target of targets) target.engine.resetZoom();
+      if (this.activeSlot && targets.includes(this.activeSlot)) this.persistViewportFromActiveEngine();
+      this.setStatus({ ...this.status, interaction: recursive && targets.length > 1 ? `Reset zoom for ${targets.length} views` : 'Reset view zoom' });
+      return;
+    }
     const factor = control === 'zoom-in' ? 1.22 : 0.82;
     for (const target of targets) target.engine.zoomBy(factor);
     if (this.activeSlot && targets.includes(this.activeSlot)) this.persistViewportFromActiveEngine();
@@ -738,7 +744,7 @@ export class NativeNestedCanvasController {
       canvasClassName: 'canvas-surface active-plane',
       wrapperClassName: 'nested-center-cell active-canvas-viewport-slot',
       viewportClassName: 'canvas-viewport active-canvas-viewport',
-      controls: ['fit', 'zoom-in', 'zoom-out', 'arrange', 'theme'],
+      controls: ['fit', 'reset-zoom', 'zoom-in', 'zoom-out', 'arrange', 'theme'],
       onControl: (slot, control, anchor) => this.handleViewportControl(slot, control, anchor),
       engineOptions: this.editableEngineOptions(() => this.collectionRef.current.activeCanvasId, {
         beforeCommandSelection: () => this.activeEngine()?.getSelectionState() ?? null,

@@ -1095,7 +1095,6 @@ export function App() {
                 }}
                 view={{
                     parentContextVisible,
-                    onResetZoom          : () => workspaceRef.current?.resetActiveZoom(),
                     onToggleParentContext: () => setParentContextVisible((visible) => !visible)
                 }}
                 addPanel={{
