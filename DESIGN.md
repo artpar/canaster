@@ -144,6 +144,12 @@ The palette is a restrained dual-theme canvas system: near-black and cool off-wh
 
 **The Canvas Leads Rule.** The canvas background and grid establish the product atmosphere; panels must support the work surface, not compete with it.
 
+**The Theme Contract Rule.** Production themes must be complete `CanasterTheme` entries, not ad hoc CSS overrides. Every theme must define canvas, panel, node, text, action, state, spacing, radius, border, shadow, texture, motion, and component tokens so panels, nodes, controls, and canvas drawing change together.
+
+**The Working Mode Rule.** Themes represent different working conditions, not decorative colorways. The supported set is Graphite Desk, Paper Workbench, Night Ledger, Operations Room, and Survey Map. Each theme must change surface texture, grid cadence, panel material, node treatment, and contrast behavior in a way that helps a real workspace scenario.
+
+**The Workspace Appearance Rule.** Theme choice belongs to the workspace appearance state and is saved with the document. It is not part of undo/redo history, and it must not change business data or canvas model semantics.
+
 ## 3. Typography
 
 **Display Font:** Inter with system UI fallbacks

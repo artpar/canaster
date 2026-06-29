@@ -9,8 +9,8 @@ export type {
   NodeTypeId,
   WorldPoint,
 } from '../core/nodePrimitives';
-export { BuiltInNodeTypes } from '../ui/canvas/nodeDefinition/nodeTypeSpecs';
-export type { BuiltInNodeType } from '../ui/canvas/nodeDefinition/nodeTypeSpecs';
+export { BuiltInNodeTypes } from './BuiltInNodeTypes';
+export type { BuiltInNodeType } from './BuiltInNodeTypes';
 import type { CanvasEditSource, CanvasNode, NodeData, NodeTypeId, WorldPoint } from '../core/nodePrimitives';
 
 export type ThemeName = 'dark' | 'light';

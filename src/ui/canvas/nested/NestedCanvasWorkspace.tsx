@@ -5,7 +5,7 @@ import {
   useRef,
 } from 'react';
 import { cloneDocumentCollection } from '../../../domain/documentModel';
-import { type CanvasCommand, type CanvasModelChange, type ScreenRect, type ThemeName, type ViewportStatus } from '../../../domain/types';
+import { type CanvasCommand, type CanvasModelChange, type ScreenRect, type ViewportStatus } from '../../../domain/types';
 import type {
   CanvasDocumentCollection,
   CanvasWorkspaceSnapshot,
@@ -14,11 +14,12 @@ import type {
 } from '../../../domain/documentTypes';
 import { createWorkspaceHistory, createWorkspaceSnapshot } from '../../../domain/workspaceHistory';
 import type { WorkspaceUrlState } from '../../../infra/browser/workspaceUrlLocation';
+import type {CanasterThemeId} from '../../theme/CanasterTheme';
 import { NativeNestedCanvasController } from './NativeNestedCanvasController';
 
 export type NestedCanvasWorkspaceProps = {
   initialCollection: CanvasDocumentCollection;
-  theme: ThemeName;
+  theme: CanasterThemeId;
   parentContextVisible?: boolean;
   animationEnabled?: boolean;
   fitOnFirstLoad?: boolean;
@@ -54,6 +55,7 @@ export type NestedCanvasWorkspaceHandle = {
   redoWorkspace(): boolean;
   executeActiveCanvasCommand(command: CanvasCommand): boolean;
   executeDocumentCommand(command: DocumentCommand): boolean;
+  setWorkspaceTheme(themeId: CanasterThemeId): boolean;
   collection(): CanvasDocumentCollection;
   openWorkspaceUrlState(state: WorkspaceUrlState): boolean;
   currentWorkspaceUrlState(documentId: string | null): WorkspaceUrlState | null;
@@ -139,6 +141,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     redoWorkspace: () => controllerRef.current?.redoWorkspace() ?? false,
     executeActiveCanvasCommand: (command: CanvasCommand) => controllerRef.current?.executeActiveCanvasCommand(command) ?? false,
     executeDocumentCommand: (command: DocumentCommand) => controllerRef.current?.executeDocumentCommand(command) ?? false,
+    setWorkspaceTheme: (themeId: CanasterThemeId) => controllerRef.current?.setWorkspaceTheme(themeId) ?? false,
     collection: () => controllerRef.current?.collection() ?? cloneDocumentCollection(initialCollection),
     openWorkspaceUrlState: (state: WorkspaceUrlState) => controllerRef.current?.openWorkspaceUrlState(state) ?? false,
     currentWorkspaceUrlState: (documentId: string | null) => controllerRef.current?.currentWorkspaceUrlState(documentId) ?? null,

@@ -1,16 +1,16 @@
 import type {MutableRefObject} from "react";
 import {
     FilePlus2,
-    Moon,
     PanelLeftClose,
     PanelLeftOpen,
     PanelsTopLeft,
     Redo2,
     RotateCcw,
-    Sun,
     Undo2
 } from "lucide-react";
 import {IconButton} from "./IconButton";
+import type {CanasterTheme, CanasterThemeId} from "./theme/CanasterTheme";
+import {ThemeSwitcher} from "./theme/ThemeSwitcher";
 
 export type HeaderToolbarProps = {
     sidePanel: {
@@ -40,8 +40,9 @@ export type HeaderToolbarProps = {
         onToggle: () => void
     },
     theme: {
-        name: "dark" | "light",
-        onToggle: () => void
+        currentThemeId: CanasterThemeId,
+        themes: CanasterTheme[],
+        onSelect: (themeId: CanasterThemeId) => void
     }
 };
 
@@ -113,12 +114,11 @@ export function HeaderToolbar(props: HeaderToolbarProps) {
                 </IconButton>
             </div>
             <div className="toolbar-group" aria-label="Panels">
-                <IconButton
-                    label={props.theme.name === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-                    onClick={props.theme.onToggle}
-                >
-                    {props.theme.name === "dark" ? <Sun size={17}/> : <Moon size={17}/>}
-                </IconButton>
+                <ThemeSwitcher
+                    currentThemeId={props.theme.currentThemeId}
+                    themes={props.theme.themes}
+                    onSelect={props.theme.onSelect}
+                />
             </div>
         </div>
     </div>;

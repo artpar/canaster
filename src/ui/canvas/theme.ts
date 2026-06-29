@@ -1,12 +1,33 @@
-import type { ThemeName } from '../../domain/types';
+import type { CanasterThemeCanvasPatternKind, CanasterThemeId } from '../theme/CanasterTheme';
+import { CANASTER_THEMES, canasterThemeById } from '../theme/CanasterThemeRegistry';
 
 type NodeKindAccent = 'task' | 'data' | 'system';
 
 export type CanvasTheme = {
-  name: ThemeName;
+  name: CanasterThemeId;
   bg: string;
   grid: string;
   gridMajor: string;
+  gridStep: number;
+  gridMajorEvery: number;
+  gridLineWidth: number;
+  gridDash: number[];
+  patternKind: CanasterThemeCanvasPatternKind;
+  patternOpacity: number;
+  patternEmbeddedOpacity: number;
+  patternDotRadius: number;
+  patternHatchAngle: number;
+  patternHatchLength: number;
+  wash: string;
+  washOpacity: number;
+  nodeRadius: number;
+  nodeRestBorderWidth: number;
+  nodeHoverBorderWidth: number;
+  nodeSelectedBorderWidth: number;
+  nodePrimaryBorderWidth: number;
+  nodeShadowBlur: number;
+  nodeSelectedShadowBlur: number;
+  nodeShadowOffsetY: number;
   nodeBg: string;
   nodeBorder: string;
   nodeShadow: string;
@@ -18,43 +39,49 @@ export type CanvasTheme = {
   kind: Record<NodeKindAccent, string>;
 };
 
-export const THEMES: Record<ThemeName, CanvasTheme> = {
-  dark: {
-    name: 'dark',
-    bg: '#121212',
-    grid: '#202020',
-    gridMajor: '#2b2b2b',
-    nodeBg: '#252525',
-    nodeBorder: '#383838',
-    nodeShadow: 'rgba(0, 0, 0, 0.38)',
-    headerText: '#f1f1f1',
-    bodyText: '#cdcdcd',
-    mutedText: '#959595',
-    selected: '#f1f1f1',
-    resizeFill: '#cdcdcd',
+export const THEMES: Record<CanasterThemeId, CanvasTheme> = Object.fromEntries(
+  Object.keys(CANASTER_THEMES).map((themeId) => [themeId, canvasThemeFor(themeId)]),
+) as Record<CanasterThemeId, CanvasTheme>;
+
+export function canvasThemeFor(themeId: string): CanvasTheme {
+  const theme = canasterThemeById(themeId);
+  return {
+    name: theme.id,
+    bg: theme.colors.canvas.background,
+    grid: theme.colors.canvas.grid,
+    gridMajor: theme.colors.canvas.gridMajor,
+    gridStep: theme.texture.gridStep,
+    gridMajorEvery: theme.texture.gridMajorEvery,
+    gridLineWidth: theme.texture.gridLineWidth,
+    gridDash: [...theme.texture.gridDash],
+    patternKind: theme.texture.canvasPattern.kind,
+    patternOpacity: theme.texture.canvasPattern.opacity,
+    patternEmbeddedOpacity: theme.texture.canvasPattern.embeddedOpacity,
+    patternDotRadius: theme.texture.canvasPattern.dotRadius,
+    patternHatchAngle: theme.texture.canvasPattern.hatchAngle,
+    patternHatchLength: theme.texture.canvasPattern.hatchLength,
+    wash: theme.texture.canvasWash,
+    washOpacity: theme.texture.canvasWashOpacity,
+    nodeRadius: theme.texture.nodeRadius,
+    nodeRestBorderWidth: theme.texture.nodeRestBorderWidth,
+    nodeHoverBorderWidth: theme.texture.nodeHoverBorderWidth,
+    nodeSelectedBorderWidth: theme.texture.nodeSelectedBorderWidth,
+    nodePrimaryBorderWidth: theme.texture.nodePrimaryBorderWidth,
+    nodeShadowBlur: theme.texture.nodeShadowBlur,
+    nodeSelectedShadowBlur: theme.texture.nodeSelectedShadowBlur,
+    nodeShadowOffsetY: theme.texture.nodeShadowOffsetY,
+    nodeBg: theme.colors.node.surface,
+    nodeBorder: theme.colors.node.border,
+    nodeShadow: theme.colors.node.shadow,
+    headerText: theme.colors.text.high,
+    bodyText: theme.colors.text.body,
+    mutedText: theme.colors.text.muted,
+    selected: theme.colors.node.selected,
+    resizeFill: theme.colors.node.resizeFill,
     kind: {
-      task: '#cdcdcd',
-      data: '#959595',
-      system: '#f1f1f1',
+      task: theme.colors.node.task,
+      data: theme.colors.node.data,
+      system: theme.colors.node.system,
     },
-  },
-  light: {
-    name: 'light',
-    bg: '#f6f6f6',
-    grid: '#e4e4e4',
-    gridMajor: '#d2d2d2',
-    nodeBg: '#ffffff',
-    nodeBorder: '#d6d6d6',
-    nodeShadow: 'rgba(49, 49, 49, 0.16)',
-    headerText: '#202020',
-    bodyText: '#454545',
-    mutedText: '#848484',
-    selected: '#202020',
-    resizeFill: '#454545',
-    kind: {
-      task: '#454545',
-      data: '#848484',
-      system: '#202020',
-    },
-  },
-};
+  };
+}

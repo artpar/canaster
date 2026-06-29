@@ -5,8 +5,9 @@ import {
   isPortalNode,
   portalInfoForNode,
   updatePortalSummaryForNode,
-} from '../ui/canvas/nodeRegistry';
-import type { NodePortalInfo } from '../ui/canvas/nodeDefinition/nodeDefinitionTypes';
+} from './nodeSemantics';
+import type { CanvasDocument, CanvasDocumentCollection, CanvasDocumentId, CanvasWorkspaceAppearance, PortalNode, SerializableNestedCanvasViewState, StackFrame } from './documentTypes';
+import type { NodePortalInfo } from './nodeSemantics';
 import {
   type Camera,
   type CanvasModel,
@@ -14,7 +15,6 @@ import {
   type CanvasSelectionState,
   type NodeData,
 } from './types';
-import type { CanvasDocument, CanvasDocumentCollection, CanvasDocumentId, PortalNode, SerializableNestedCanvasViewState, StackFrame } from './documentTypes';
 import {
   applySerializableViewState,
   cloneViewState,
@@ -25,6 +25,7 @@ import {
 
 const DEFAULT_CAMERA: Camera = { x: 0, y: 0, scale: 1 };
 const EMPTY_SELECTION: CanvasSelectionState = { selectedNodeIds: [], primarySelectedNodeId: null, resizeMode: false };
+const DEFAULT_WORKSPACE_APPEARANCE: CanvasWorkspaceAppearance = { themeId: 'paperWorkbench' };
 
 export function createInitialDocumentCollection(rootModel: CanvasModel, rootTitle: string): CanvasDocumentCollection {
   const rootCanvasId = 'root';
@@ -32,6 +33,7 @@ export function createInitialDocumentCollection(rootModel: CanvasModel, rootTitl
     schemaVersion: 1,
     rootCanvasId,
     activeCanvasId: rootCanvasId,
+    appearance: cloneWorkspaceAppearance(DEFAULT_WORKSPACE_APPEARANCE),
     documents: {
       [rootCanvasId]: {
         id: rootCanvasId,
@@ -68,6 +70,7 @@ export function cloneDocumentCollection(collection: CanvasDocumentCollection): C
   }
   return {
     ...collection,
+    appearance: cloneWorkspaceAppearance(collection.appearance),
     documents,
     view: cloneViewState(collection.view),
   };
@@ -129,6 +132,13 @@ export function updateNodeData(collection: CanvasDocumentCollection, canvasId: C
   };
   if (!found) throw new Error(`Node not found: ${nodeId}`);
   return syncPortalSummaries(syncDerivedView(next));
+}
+
+export function setWorkspaceThemeId(collection: CanvasDocumentCollection, themeId: string): CanvasDocumentCollection {
+  if (collection.appearance?.themeId === themeId) return collection;
+  const next = cloneDocumentCollection(collection);
+  next.appearance = { themeId };
+  return syncDerivedView(next);
 }
 
 export function createChildCanvasForNode(collection: CanvasDocumentCollection, parentCanvasId: CanvasDocumentId, nodeId: string): CanvasDocumentCollection {
@@ -289,12 +299,19 @@ export function syncDerivedView(collection: CanvasDocumentCollection): CanvasDoc
   return {
     ...collection,
     activeCanvasId,
+    appearance: cloneWorkspaceAppearance(collection.appearance),
     view: {
       ...prunedView,
       activeCanvasId,
       focusedEngineId: activeCanvasId,
       stackPath: stackPathFor(collection, activeCanvasId),
     },
+  };
+}
+
+function cloneWorkspaceAppearance(appearance: CanvasWorkspaceAppearance | undefined): CanvasWorkspaceAppearance {
+  return {
+    themeId: typeof appearance?.themeId === 'string' && appearance.themeId ? appearance.themeId : DEFAULT_WORKSPACE_APPEARANCE.themeId,
   };
 }
 

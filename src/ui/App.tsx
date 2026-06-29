@@ -59,8 +59,7 @@ import {
 } from './canvas/imageAssets';
 import {
     type CanvasArrangeLayout,
-    type CanvasNode,
-    type ThemeName
+    type CanvasNode
 } from '../domain/types';
 import type {
     CanvasDocumentCollection,
@@ -93,6 +92,12 @@ import {
 import {DeleteConfirmationPrompt} from "./DeleteConfirmationPrompt";
 import {HeaderToolbar} from "./HeaderToolbar";
 import {KeyboardShortcutsProvider, useKeyboardShortcut} from "./KeyboardShortcuts";
+import {CanasterThemeProvider} from "./theme/CanasterThemeProvider";
+import {
+    canasterThemeOptions,
+    normalizeCanasterThemeId
+} from "./theme/CanasterThemeRegistry";
+import type {CanasterThemeId} from "./theme/CanasterTheme";
 
 const DEFAULT_DOCUMENT_TITLE = 'Canaster Workspace';
 const LOCAL_SAVE_MESSAGE = 'Saved on this device';
@@ -189,7 +194,6 @@ export function App() {
     if (initialUrlStateRef.current === null) initialUrlStateRef.current = readWorkspaceUrlState();
     const pendingUrlStateRef = useRef<WorkspaceUrlState | null>(initialUrlStateRef.current,);
     const urlStateReadyRef = useRef(!pendingUrlStateRef.current);
-    const [theme, setTheme] = useState<ThemeName>('dark');
     const [accountOpen, setAccountOpen] = useState(false);
     const [arrangeMenuOpen, setArrangeMenuOpen] = useState(false);
     const [arrangeMenuPosition, setArrangeMenuPosition] = useState<ArrangeMenuPosition | null>(null);
@@ -229,6 +233,7 @@ export function App() {
         canRedo                : false,
         storageReady           : false,
     }));
+    const theme = normalizeCanasterThemeId(chromeState.collection.appearance?.themeId);
 
     const handleChromeStateChange = useCallback((next: NestedCanvasWorkspaceChromeState) => {
         setChromeState(next);
@@ -280,10 +285,6 @@ export function App() {
         urlStateReadyRef.current = true;
         return workspaceRef.current?.openWorkspaceUrlState(pending) ?? false;
     }, []);
-
-    useEffect(() => {
-        document.documentElement.dataset.theme = theme;
-    }, [theme]);
 
     useEffect(() => {
         if (!activeDocumentId && preserveCameraOnNextLocalMountRef.current) {
@@ -768,6 +769,10 @@ export function App() {
         closeAddPanelMenu();
     }, [closeAddPanelMenu]);
 
+    const handleThemeSelect = useCallback((themeId: CanasterThemeId) => {
+        workspaceRef.current?.setWorkspaceTheme(themeId);
+    }, []);
+
     const filteredPanelCreateOptions = useMemo(() => {
         const query = addPanelQuery.trim().toLowerCase();
         if (!query) return [...PANEL_CREATE_OPTIONS];
@@ -852,7 +857,8 @@ export function App() {
     const viewTree = useMemo(() => buildViewTree(chromeState.collection), [chromeState.collection]);
     const saveButtonLabel = saveActionLabel(syncStatus, syncMessage, signedIn);
 
-    return (<KeyboardShortcutsProvider>
+    return (<CanasterThemeProvider themeId={theme}>
+    <KeyboardShortcutsProvider>
         <WorkspaceHistoryShortcuts workspaceRef={workspaceRef}/>
         <main className="app-shell">
         <section className="workspace" aria-label="Workspace map">
@@ -884,8 +890,9 @@ export function App() {
                     onToggle : handleToggleAddPanelMenu
                 }}
                 theme={{
-                    name    : theme,
-                    onToggle: () => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))
+                    currentThemeId: theme,
+                    themes        : canasterThemeOptions,
+                    onSelect      : handleThemeSelect
                 }}
             />
             {addPanelMenuOpen ? (<AddPanelPopover
@@ -977,7 +984,8 @@ export function App() {
             </div>
         </section>
     </main>
-    </KeyboardShortcutsProvider>);
+    </KeyboardShortcutsProvider>
+    </CanasterThemeProvider>);
 }
 
 

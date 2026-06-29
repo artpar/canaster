@@ -1,3 +1,5 @@
+import { assertJsonValue } from '../core/nodeData';
+import { arrangeLayoutLabel, arrangeNodeGeometries } from './arrangeLayout';
 import {
   cloneDocumentCollection,
   cloneNode,
@@ -10,12 +12,14 @@ import {
   syncPortalSummaries,
   updateNodeData,
 } from './documentModel';
-import { arrangeLayoutLabel, arrangeNodeGeometries } from './arrangeLayout';
-import { asJsonObject, assertJsonValue } from '../core/nodeData';
-import { nodeDefinitionFor, portalInfoForNode, stripNodeForPaste } from '../ui/canvas/nodeRegistry';
-import type { NodeActionDescriptor } from '../ui/canvas/nodeDefinition/nodeDefinitionTypes';
-import type { CanvasArrangeLayout, CanvasEditSource, CanvasNode, CanvasSelectionState } from './types';
+import {
+  normalizeNodeData,
+  portalInfoForNode,
+  stripNodeForPaste,
+} from './nodeSemantics';
 import type { CanvasDocumentCollection, CanvasDocumentId, DocumentCommand, DocumentModelChange, PortalNode } from './documentTypes';
+import type { NodeActionDescriptor } from './nodeSemantics';
+import type { CanvasArrangeLayout, CanvasEditSource, CanvasNode, CanvasSelectionState } from './types';
 import { cloneViewState } from './viewState';
 
 export type DocumentCommandPlan = {
@@ -232,8 +236,7 @@ function setNodeData(collection: CanvasDocumentCollection, canvasId: CanvasDocum
   const node = document?.model.nodes.find((candidate) => candidate.id === nodeId);
   if (!document || !node) return noChange(collection, 'Node unavailable');
   assertJsonValue(data);
-  const definition = nodeDefinitionFor(node);
-  const parsed = definition.parseData(asJsonObject(data));
+  const parsed = normalizeNodeData(node.type, data);
   return {
     collection: updateNodeData(collection, canvasId, nodeId, parsed),
     changes: [{ kind: 'node-data-change', canvasId, nodeId, source }],

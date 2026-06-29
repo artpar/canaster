@@ -1,4 +1,4 @@
-import { cloneDocumentCollection, hydrateDocumentCollection } from './documentModel';
+import { cloneDocumentCollection, hydrateDocumentCollection, setWorkspaceThemeId } from './documentModel';
 import type { CanvasDocumentCollection, CanvasWorkspaceHistory, CanvasWorkspaceSnapshot, DocumentModelChange } from './documentTypes';
 
 export const WORKSPACE_HISTORY_LIMIT = 80;
@@ -23,6 +23,14 @@ export function replaceWorkspacePresent(history: CanvasWorkspaceHistory, present
   return {
     ...history,
     present: hydrateDocumentCollection(present),
+  };
+}
+
+export function setWorkspaceHistoryThemeId(history: CanvasWorkspaceHistory, themeId: string): CanvasWorkspaceHistory {
+  return {
+    present: setWorkspaceThemeId(history.present, themeId),
+    undoStack: history.undoStack.map((collection) => setWorkspaceThemeId(collection, themeId)),
+    redoStack: history.redoStack.map((collection) => setWorkspaceThemeId(collection, themeId)),
   };
 }
 

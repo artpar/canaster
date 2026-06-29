@@ -1,4 +1,4 @@
-import { THEMES, type CanvasTheme } from './theme';
+import { canvasThemeFor, type CanvasTheme } from './theme';
 import { cloneNodeData } from '../../core/nodeData';
 import { canvasPortalViewportRect } from './nodeTypes/canvasNode';
 import { createNodeInteraction, describeNode, hitTestNodeContent, nodeDefinitionFor, nodeDefinitionForType, nodeInteractionRegions, parseNodeData, portalInfoForNode, renderNodeContent } from './nodeRegistry';
@@ -18,18 +18,17 @@ import type {
   EngineOptions,
   PortalLayout,
   ScreenRect,
-  ThemeName,
   ViewportStatus,
   WorldPoint,
   NodeData,
 } from '../../domain/types';
 import { BuiltInNodeTypes } from '../../domain/types';
+import type {CanasterThemeId} from '../theme/CanasterTheme';
 
 const MIN_SCALE = 0.08;
 const MAX_SCALE = 4;
 const MAX_DPR = 2;
 const GRID_STEP = 32;
-const NODE_RADIUS = 8;
 const DRAG_HANDLE = 12;
 const RESIZE_HANDLE = 12;
 const FIXED_HANDLE_DRAW_SIZE = 16;
@@ -71,6 +70,17 @@ type VisibleWorldBounds = {
   y0: number;
   x1: number;
   y1: number;
+};
+
+type GridPatternAxisPoint = {
+  screen: number;
+  major: boolean;
+};
+
+type GridPatternAxes = {
+  step: number;
+  x: GridPatternAxisPoint[];
+  y: GridPatternAxisPoint[];
 };
 
 type ScreenPoint = {
@@ -124,7 +134,7 @@ export class CanvasEngine {
   private readonly resizeObserver: ResizeObserver;
 
   private model: CanvasModel = { schemaVersion: 2, nodes: [] };
-  private theme: CanvasTheme = THEMES.dark;
+  private theme: CanvasTheme = canvasThemeFor('graphiteDesk');
   private camera: Camera = { x: 0, y: 0, scale: 1 };
   private interactionMode: EngineInteractionMode = 'active';
   private selectedNodeIds = new Set<string>();
@@ -257,8 +267,8 @@ export class CanvasEngine {
     this.markDirty();
   }
 
-  setTheme(name: ThemeName) {
-    this.theme = THEMES[name];
+  setTheme(name: CanasterThemeId) {
+    this.theme = canvasThemeFor(name);
     this.markDirty();
   }
 
@@ -611,7 +621,8 @@ export class CanvasEngine {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = theme.bg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    this.drawGrid();
+    this.drawCanvasWash();
+    this.drawCanvasPattern();
 
     ctx.setTransform(dpr * camera.scale, 0, 0, dpr * camera.scale, camera.x * dpr, camera.y * dpr);
     const cullBounds = this.visibleWorldBounds();
@@ -644,32 +655,144 @@ export class CanvasEngine {
     this.emitStatus();
   }
 
-  private drawGrid() {
-    const { ctx, canvas, camera, dpr, theme } = this;
-    const step = GRID_STEP * camera.scale * dpr;
-    if (step < 7) return;
+  private drawCanvasPattern() {
+    const { ctx, theme } = this;
+    const axes = this.gridPatternAxes();
+    if (!axes) return;
+    const opacity = this.canvasPatternOpacity();
+    if (opacity <= 0) return;
 
-    const ox = positiveModulo(camera.x * dpr, step);
-    const oy = positiveModulo(camera.y * dpr, step);
-    const majorEvery = 4;
-    ctx.lineWidth = 1;
+    ctx.save();
+    ctx.globalAlpha = opacity;
+    switch (theme.patternKind) {
+      case 'dot-grid':
+        this.drawDotGrid(axes);
+        break;
+      case 'hatch-grid':
+        this.drawHatchGrid(axes);
+        break;
+      case 'dashed-grid':
+        this.drawLineGrid(axes, theme.gridDash);
+        break;
+      case 'line-grid':
+        this.drawLineGrid(axes, []);
+        break;
+    }
+    ctx.restore();
+    ctx.setLineDash([]);
+  }
+
+  private drawLineGrid(axes: GridPatternAxes, dash: number[]) {
+    const { ctx, canvas, theme } = this;
+    ctx.lineWidth = theme.gridLineWidth;
+    ctx.setLineDash(dash);
 
     for (let pass = 0; pass < 2; pass++) {
       ctx.beginPath();
       const major = pass === 1;
       ctx.strokeStyle = major ? theme.gridMajor : theme.grid;
-      for (let x = ox, i = 0; x < canvas.width; x += step, i++) {
-        if ((i % majorEvery === 0) !== major) continue;
-        ctx.moveTo(Math.round(x) + 0.5, 0);
-        ctx.lineTo(Math.round(x) + 0.5, canvas.height);
+      for (const x of axes.x) {
+        if (x.major !== major) continue;
+        ctx.moveTo(Math.round(x.screen) + 0.5, 0);
+        ctx.lineTo(Math.round(x.screen) + 0.5, canvas.height);
       }
-      for (let y = oy, i = 0; y < canvas.height; y += step, i++) {
-        if ((i % majorEvery === 0) !== major) continue;
-        ctx.moveTo(0, Math.round(y) + 0.5);
-        ctx.lineTo(canvas.width, Math.round(y) + 0.5);
+      for (const y of axes.y) {
+        if (y.major !== major) continue;
+        ctx.moveTo(0, Math.round(y.screen) + 0.5);
+        ctx.lineTo(canvas.width, Math.round(y.screen) + 0.5);
       }
       ctx.stroke();
     }
+  }
+
+  private drawDotGrid(axes: GridPatternAxes) {
+    const { ctx, theme, dpr } = this;
+    if (axes.step < 10) return;
+    for (let pass = 0; pass < 2; pass++) {
+      const major = pass === 1;
+      const radius = Math.max(0.7, theme.patternDotRadius * (major ? 1.55 : 1) * dpr);
+      ctx.beginPath();
+      ctx.fillStyle = major ? theme.gridMajor : theme.grid;
+      for (const x of axes.x) {
+        for (const y of axes.y) {
+          if ((x.major || y.major) !== major) continue;
+          ctx.moveTo(x.screen + radius, y.screen);
+          ctx.arc(x.screen, y.screen, radius, 0, Math.PI * 2);
+        }
+      }
+      ctx.fill();
+    }
+  }
+
+  private drawHatchGrid(axes: GridPatternAxes) {
+    const { ctx, theme, dpr } = this;
+    if (axes.step < 12) return;
+    const angle = theme.patternHatchAngle * Math.PI / 180;
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+    ctx.lineWidth = theme.gridLineWidth;
+    for (let pass = 0; pass < 2; pass++) {
+      const major = pass === 1;
+      const length = theme.patternHatchLength * (major ? 1.45 : 1) * dpr;
+      const half = length / 2;
+      ctx.beginPath();
+      ctx.strokeStyle = major ? theme.gridMajor : theme.grid;
+      for (const x of axes.x) {
+        for (const y of axes.y) {
+          if ((x.major || y.major) !== major) continue;
+          ctx.moveTo(x.screen - dx * half, y.screen - dy * half);
+          ctx.lineTo(x.screen + dx * half, y.screen + dy * half);
+        }
+      }
+      ctx.stroke();
+    }
+  }
+
+  private gridPatternAxes(): GridPatternAxes | null {
+    const { canvas, camera, dpr, theme } = this;
+    const worldStep = theme.gridStep;
+    const step = worldStep * camera.scale * dpr;
+    if (step < 7) return null;
+
+    const x: GridPatternAxisPoint[] = [];
+    const y: GridPatternAxisPoint[] = [];
+    const majorEvery = theme.gridMajorEvery;
+    const leftWorld = -camera.x / camera.scale;
+    const rightWorld = (canvas.width / dpr - camera.x) / camera.scale;
+    const topWorld = -camera.y / camera.scale;
+    const bottomWorld = (canvas.height / dpr - camera.y) / camera.scale;
+
+    for (let index = Math.floor(leftWorld / worldStep) - 1; index <= Math.ceil(rightWorld / worldStep) + 1; index++) {
+      x.push({
+        screen: (index * worldStep * camera.scale + camera.x) * dpr,
+        major: positiveModulo(index, majorEvery) === 0,
+      });
+    }
+    for (let index = Math.floor(topWorld / worldStep) - 1; index <= Math.ceil(bottomWorld / worldStep) + 1; index++) {
+      y.push({
+        screen: (index * worldStep * camera.scale + camera.y) * dpr,
+        major: positiveModulo(index, majorEvery) === 0,
+      });
+    }
+    return { step, x, y };
+  }
+
+  private canvasPatternOpacity() {
+    if (this.interactionMode === 'active') return this.theme.patternOpacity;
+    return this.theme.patternEmbeddedOpacity;
+  }
+
+  private drawCanvasWash() {
+    const { ctx, canvas, theme } = this;
+    if (!theme.washOpacity || theme.wash === 'transparent') return;
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    gradient.addColorStop(0, theme.wash);
+    gradient.addColorStop(0.55, 'rgba(0, 0, 0, 0)');
+    ctx.save();
+    ctx.globalAlpha = theme.washOpacity;
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
   }
 
   private drawNode(node: CanvasNode, compact: boolean) {
@@ -710,26 +833,38 @@ export class CanvasEngine {
     const selected = this.selectedNodeIds.has(node.id);
     const primary = node.id === this.primarySelectedNodeId;
     const hovered = node.id === this.hoverNodeId;
-    const radius = NODE_RADIUS;
+    const radius = theme.nodeRadius;
 
     if (!state.compact || selected || hovered) {
       ctx.save();
       ctx.shadowColor = theme.nodeShadow;
-      ctx.shadowBlur = selected ? 18 : 12;
-      ctx.shadowOffsetY = 6;
+      ctx.shadowBlur = selected ? theme.nodeSelectedShadowBlur : theme.nodeShadowBlur;
+      ctx.shadowOffsetY = theme.nodeShadowOffsetY;
       roundRectPath(ctx, node.x, node.y, node.w, node.h, radius);
       ctx.fillStyle = theme.nodeBg;
       ctx.fill();
       ctx.restore();
     } else {
+      ctx.save();
+      ctx.shadowColor = theme.nodeShadow;
+      ctx.shadowBlur = Math.max(4, theme.nodeShadowBlur * 0.45);
+      ctx.shadowOffsetY = Math.max(2, theme.nodeShadowOffsetY * 0.55);
       roundRectPath(ctx, node.x, node.y, node.w, node.h, radius);
       ctx.fillStyle = theme.nodeBg;
       ctx.fill();
+      ctx.restore();
     }
 
     roundRectPath(ctx, node.x, node.y, node.w, node.h, radius);
     ctx.strokeStyle = selected ? theme.selected : theme.nodeBorder;
-    ctx.lineWidth = primary ? 3 : selected ? 2.2 : hovered ? 1.8 : 1.2;
+    const restBorderWidth = state.compact ? Math.max(1.6, theme.nodeRestBorderWidth) : theme.nodeRestBorderWidth;
+    ctx.lineWidth = primary ?
+      theme.nodePrimaryBorderWidth :
+      selected ?
+        theme.nodeSelectedBorderWidth :
+        hovered ?
+          theme.nodeHoverBorderWidth :
+          restBorderWidth;
     ctx.stroke();
   }
 

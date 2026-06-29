@@ -14,8 +14,13 @@ export type CanvasDocumentCollection = {
   schemaVersion: 1;
   rootCanvasId: CanvasDocumentId;
   activeCanvasId: CanvasDocumentId;
+  appearance: CanvasWorkspaceAppearance;
   documents: Record<CanvasDocumentId, CanvasDocument>;
   view: NestedCanvasViewState;
+};
+
+export type CanvasWorkspaceAppearance = {
+  themeId: string;
 };
 
 export type CanvasWorkspaceSnapshot = {

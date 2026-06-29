@@ -23,7 +23,7 @@ import {
   stripPortalChildReferenceOnPaste,
 } from '../../../domain/documentCommands';
 import { portalInfoForNode, updatePortalSummaryForNode } from '../nodeRegistry';
-import type { Camera, CanvasCommand, CanvasModel, CanvasModelChange, CanvasNode, CanvasSelectionState, EngineOptions, PortalLayout, ScreenRect, ThemeName, ViewportStatus } from '../../../domain/types';
+import type { Camera, CanvasCommand, CanvasModel, CanvasModelChange, CanvasNode, CanvasSelectionState, EngineOptions, PortalLayout, ScreenRect, ViewportStatus } from '../../../domain/types';
 import type {
   CanvasDocumentCollection,
   CanvasDocumentId,
@@ -43,6 +43,7 @@ import {
   pushWorkspaceHistory,
   redoWorkspaceHistory,
   replaceWorkspacePresent,
+  setWorkspaceHistoryThemeId,
   undoWorkspaceHistory,
 } from '../../../domain/workspaceHistory';
 import { DEFAULT_WORKSPACE_STORAGE_ID, loadWorkspaceSnapshot, loadWorkspaceSnapshotMirror, saveWorkspaceSnapshot, saveWorkspaceSnapshotMirror } from '../../../infra/browser/workspaceStorage';
@@ -60,11 +61,13 @@ import {
 import { portalOverlayStyle } from './portalLayout';
 import type { ArrangeCanvasMenuRequest, NestedCanvasWorkspaceChromeState } from './NestedCanvasWorkspace';
 import type { WorkspaceUrlPaneCamera, WorkspaceUrlState } from '../../../infra/browser/workspaceUrlLocation';
+import type {CanasterThemeId} from '../../theme/CanasterTheme';
+import {normalizeCanasterThemeId} from '../../theme/CanasterThemeRegistry';
 
 export type NativeNestedCanvasControllerOptions = {
   root: HTMLElement;
   initialCollection: CanvasDocumentCollection;
-  theme: ThemeName;
+  theme: CanasterThemeId;
   parentContextVisible?: boolean;
   fitOnFirstLoad?: boolean;
   storageKey?: string;
@@ -143,7 +146,7 @@ export class NativeNestedCanvasController {
   private readonly parentContextSlots = new Map<string, ParentContextPaneSlot>();
   private readonly activeFrameOverBudgetCount = { current: 0 };
 
-  private theme: ThemeName;
+  private theme: CanasterThemeId;
   private status: ViewportStatus = initialStatus;
   private previewCapacity = MAX_LIVE_PORTAL_PREVIEWS;
   private activeSlot: CanvasViewportSlot | null = null;
@@ -173,7 +176,7 @@ export class NativeNestedCanvasController {
 
   constructor(options: NativeNestedCanvasControllerOptions) {
     this.root = options.root;
-    this.theme = options.theme;
+    this.theme = normalizeCanasterThemeId(options.theme);
     this.parentContextVisible = options.parentContextVisible ?? true;
     this.fitOnFirstLoad = options.fitOnFirstLoad ?? true;
     this.storageKey = options.storageKey ?? DEFAULT_WORKSPACE_STORAGE_ID;
@@ -241,12 +244,28 @@ export class NativeNestedCanvasController {
     this.root.replaceChildren();
   }
 
-  setTheme(theme: ThemeName) {
-    if (this.theme === theme) return;
-    this.theme = theme;
-    this.activeEngine()?.setTheme(theme);
-    for (const slot of this.slots.values()) slot.viewportSlot.engine.setTheme(theme);
-    for (const slot of this.parentContextSlots.values()) slot.viewportSlot.engine.setTheme(theme);
+  setTheme(theme: CanasterThemeId) {
+    const nextTheme = normalizeCanasterThemeId(theme);
+    if (this.theme === nextTheme) return;
+    this.theme = nextTheme;
+    this.activeEngine()?.setTheme(nextTheme);
+    for (const slot of this.slots.values()) slot.viewportSlot.engine.setTheme(nextTheme);
+    for (const slot of this.parentContextSlots.values()) slot.viewportSlot.engine.setTheme(nextTheme);
+  }
+
+  setWorkspaceTheme(theme: CanasterThemeId): boolean {
+    const nextTheme = normalizeCanasterThemeId(theme);
+    const base = this.saveActiveViewport(this.collectionRef.current);
+    if (base.appearance?.themeId === nextTheme) return false;
+    this.theme = nextTheme;
+    const nextHistory = setWorkspaceHistoryThemeId(replaceWorkspacePresent(this.historyRef.current, base), nextTheme);
+    this.historyRef.current = nextHistory;
+    this.collectionRef.current = nextHistory.present;
+    if (this.storageReady) this.mirrorWorkspaceSnapshot(createWorkspaceSnapshot(nextHistory, this.lastModelChangeRef.current));
+    this.onCollectionChange?.(nextHistory.present, []);
+    this.renderCollection();
+    this.setStatus({ ...this.status, interaction: 'Theme changed' });
+    return true;
   }
 
   setParentContextVisible(visible: boolean) {
@@ -435,6 +454,7 @@ export class NativeNestedCanvasController {
     const hydrated = hydrateWorkspaceSnapshot(snapshot);
     this.historyRef.current = hydrated.history;
     this.collectionRef.current = hydrated.history.present;
+    this.theme = normalizeCanasterThemeId(this.collectionRef.current.appearance?.themeId);
     this.lastModelChangeRef.current = hydrated.lastModelChange;
     this.setStatus({ ...this.status, interaction });
     if (persist) {
@@ -479,6 +499,7 @@ export class NativeNestedCanvasController {
       if (!snapshot || this.userMutationBeforeStorageReady) return;
       this.historyRef.current = snapshot.history;
       this.collectionRef.current = snapshot.history.present;
+      this.theme = normalizeCanasterThemeId(this.collectionRef.current.appearance?.themeId);
       this.lastModelChangeRef.current = snapshot.lastModelChange;
       this.setStatus({ ...this.status, interaction: 'Workspace restored' });
       this.renderCollection();
