@@ -178,7 +178,7 @@ function wireViewportControls(
     const button = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-control]');
     const control = parseViewportControl(button?.dataset.control);
     if (!button || !control) return;
-    const recursive = recursiveByButton.get(button) ?? false;
+    const recursive = (recursiveByButton.get(button) ?? false) || event.metaKey || event.ctrlKey;
     recursiveByButton.delete(button);
     onControl?.(slot, control, {
       anchor: rectToScreenRect(button.getBoundingClientRect()),

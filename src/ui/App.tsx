@@ -132,7 +132,7 @@ type CanvasThemeMenuProps = {
     onSelect: (themeId: CanasterThemeId | null) => void;
 };
 
-type ArrangeMenuTarget = {
+type ToolbarMenuTarget = {
     canvasId: CanvasDocumentId;
     recursive: boolean;
 };
@@ -272,11 +272,10 @@ export function App() {
     const [accountOpen, setAccountOpen] = useState(false);
     const [arrangeMenuOpen, setArrangeMenuOpen] = useState(false);
     const [arrangeMenuPosition, setArrangeMenuPosition] = useState<ArrangeMenuPosition | null>(null);
-    const [arrangeMenuTarget, setArrangeMenuTarget] = useState<ArrangeMenuTarget | null>(null);
+    const [arrangeMenuTarget, setArrangeMenuTarget] = useState<ToolbarMenuTarget | null>(null);
     const [canvasThemeMenuOpen, setCanvasThemeMenuOpen] = useState(false);
     const [canvasThemeMenuPosition, setCanvasThemeMenuPosition] = useState<ArrangeMenuPosition | null>(null);
-    const [canvasThemeMenuCanvasId, setCanvasThemeMenuCanvasId] = useState<CanvasDocumentId | null>(null);
-    const [canvasThemeMenuRecursive, setCanvasThemeMenuRecursive] = useState(false);
+    const [canvasThemeMenuTarget, setCanvasThemeMenuTarget] = useState<ToolbarMenuTarget | null>(null);
     const [addPanelMenuOpen, setAddPanelMenuOpen] = useState(false);
     const [addPanelMenuPosition, setAddPanelMenuPosition] = useState<ArrangeMenuPosition | null>(null);
     const [addPanelQuery, setAddPanelQuery] = useState('');
@@ -317,9 +316,9 @@ export function App() {
         chromeState.collection.activeCanvasId
     ));
     const documentFallbackTheme = normalizeCanasterThemeId(documentThemeId(chromeState.collection));
-    const canvasThemeMenuState = canvasThemeTargetState(
+    const canvasThemeMenuState = canvasToolbarThemeState(
         chromeState.collection,
-        canvasThemeMenuCanvasId ?? chromeState.collection.activeCanvasId
+        canvasThemeMenuTarget?.canvasId ?? chromeState.collection.activeCanvasId
     );
 
     const handleChromeStateChange = useCallback((next: NestedCanvasWorkspaceChromeState) => {
@@ -807,8 +806,7 @@ export function App() {
     const closeCanvasThemeMenu = useCallback(() => {
         setCanvasThemeMenuOpen(false);
         setCanvasThemeMenuPosition(null);
-        setCanvasThemeMenuCanvasId(null);
-        setCanvasThemeMenuRecursive(false);
+        setCanvasThemeMenuTarget(null);
     }, []);
 
     const handleArrangeCanvasMenuRequest = useCallback((request: ArrangeCanvasMenuRequest) => {
@@ -829,8 +827,10 @@ export function App() {
     }, [closeCanvasThemeMenu, updateArrangeMenuPositionForRect]);
 
     const handleCanvasThemeMenuRequest = useCallback((request: CanvasThemeMenuRequest) => {
-        setCanvasThemeMenuCanvasId(request.canvasId);
-        setCanvasThemeMenuRecursive(request.recursive ?? false);
+        setCanvasThemeMenuTarget({
+            canvasId  : request.canvasId,
+            recursive: request.recursive ?? false
+        });
         const anchor = request.anchor ?? {x: window.innerWidth - 18, y: window.innerHeight - 18, w: 1, h: 1};
         updateCanvasThemeMenuPositionForRect({
             right : anchor.x + anchor.w,
@@ -863,15 +863,10 @@ export function App() {
     }, [closeArrangeMenu, closeCanvasThemeMenu, updateAddPanelMenuPosition]);
 
     const handleArrangeCanvas = useCallback((layout: CanvasArrangeLayout) => {
-        const target = arrangeMenuTarget ?? {
-            canvasId  : chromeState.collection.activeCanvasId,
-            recursive: false
-        };
+        const target = arrangeMenuTarget;
         closeArrangeMenu();
-        const targetCanvasId = target.canvasId;
-        const targetCanvasIds = target.recursive ?
-            canvasIdsWithDescendants(chromeState.collection, targetCanvasId) :
-            [targetCanvasId];
+        if (!target) return;
+        const targetCanvasIds = canvasToolbarTargetCanvasIds(chromeState.collection, target.canvasId, target.recursive);
         const activeTarget = targetCanvasIds.includes(chromeState.collection.activeCanvasId);
         let changed = false;
         for (const canvasId of targetCanvasIds) {
@@ -895,11 +890,12 @@ export function App() {
     }, [closeAddPanelMenu]);
 
     const handleCanvasThemeSelect = useCallback((themeId: CanasterThemeId | null) => {
-        const canvasId = canvasThemeMenuCanvasId ?? chromeState.collection.activeCanvasId;
-        const commands = canvasThemeCommands(chromeState.collection, canvasId, themeId, canvasThemeMenuRecursive);
+        const target = canvasThemeMenuTarget;
         closeCanvasThemeMenu();
+        if (!target) return;
+        const commands = canvasToolbarThemeCommands(chromeState.collection, target.canvasId, themeId, target.recursive);
         for (const command of commands) workspaceRef.current?.executeDocumentCommand(command);
-    }, [canvasThemeMenuCanvasId, canvasThemeMenuRecursive, chromeState.collection, closeCanvasThemeMenu]);
+    }, [canvasThemeMenuTarget, chromeState.collection, closeCanvasThemeMenu]);
 
     const filteredPanelCreateOptions = useMemo(() => {
         const query = addPanelQuery.trim().toLowerCase();
@@ -1178,7 +1174,16 @@ function canvasIdsWithDescendants(collection: CanvasDocumentCollection, canvasId
     return ids;
 }
 
-function canvasThemeTargetState(
+function canvasToolbarTargetCanvasIds(
+    collection: CanvasDocumentCollection,
+    canvasId: CanvasDocumentId,
+    recursive: boolean
+): CanvasDocumentId[] {
+    if (recursive) return canvasIdsWithDescendants(collection, canvasId);
+    return collection.documents[canvasId] ? [canvasId] : [];
+}
+
+function canvasToolbarThemeState(
     collection: CanvasDocumentCollection,
     canvasId: CanvasDocumentId
 ): { canInherit: boolean; inherited: boolean; themeId: CanasterThemeId } {
@@ -1188,20 +1193,6 @@ function canvasThemeTargetState(
         inherited : false,
         themeId   : normalizeCanasterThemeId(documentThemeId(collection))
     };
-    const selectedNodeIds = selectedThemeNodeIds(collection, canvasId);
-    if (selectedNodeIds.length) {
-        const selectedNodes = selectedNodeIds
-            .map((nodeId) => document.model.nodes.find((node) => node.id === nodeId))
-            .filter((node): node is CanvasNode => Boolean(node));
-        const explicitThemeId = selectedNodes
-            .map((node) => node.appearance?.themeId ?? null)
-            .find((themeId): themeId is string => Boolean(themeId));
-        return {
-            canInherit: true,
-            inherited : !explicitThemeId,
-            themeId   : normalizeCanasterThemeId(explicitThemeId || canvasThemeId(collection, canvasId))
-        };
-    }
     const parentNode = parentNodeForCanvas(collection, document);
     const explicitCanvasThemeId = document.appearance?.themeId ?? null;
     return {
@@ -1211,73 +1202,24 @@ function canvasThemeTargetState(
     };
 }
 
-function canvasThemeCommands(
+function canvasToolbarThemeCommands(
     collection: CanvasDocumentCollection,
     canvasId: CanvasDocumentId,
     themeId: CanasterThemeId | null,
     recursive: boolean
 ): DocumentCommand[] {
-    const canvasIds = recursive ? canvasIdsWithDescendants(collection, canvasId) : [canvasId];
-    const commands: DocumentCommand[] = [];
-    for (const targetCanvasId of canvasIds) {
-        commands.push(...directCanvasThemeCommands(collection, targetCanvasId, themeId, targetCanvasId === canvasId));
-    }
-    return dedupeThemeCommands(commands);
-}
-
-function directCanvasThemeCommands(
-    collection: CanvasDocumentCollection,
-    canvasId: CanvasDocumentId,
-    themeId: CanasterThemeId | null,
-    includeSelection: boolean
-): DocumentCommand[] {
-    const document = collection.documents[canvasId];
-    if (!document) return [];
-    const selectedNodeIds = includeSelection ? selectedThemeNodeIds(collection, canvasId) : [];
-    if (selectedNodeIds.length) return [{
-        type    : 'set-node-theme',
-        canvasId,
-        nodeIds : selectedNodeIds,
-        themeId,
-        source  : 'nonvisual'
-    }];
-    return [{
+    // Bottom-right canvas toolbar actions target canvases only; selected panels do not affect this path.
+    return canvasToolbarTargetCanvasIds(collection, canvasId, recursive).map((targetCanvasId) => ({
         type    : 'set-canvas-theme',
-        canvasId,
+        canvasId: targetCanvasId,
         themeId,
         source  : 'nonvisual'
-    }];
-}
-
-function selectedThemeNodeIds(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId): string[] {
-    const document = collection.documents[canvasId];
-    if (!document || canvasId !== collection.activeCanvasId) return [];
-    const selectedNodeIds = collection.view.selections[canvasId]?.selectedNodeIds ?? [];
-    const existingNodeIds = new Set(document.model.nodes.map((node) => node.id));
-    return selectedNodeIds.filter((nodeId) => existingNodeIds.has(nodeId));
+    }));
 }
 
 function parentNodeForCanvas(collection: CanvasDocumentCollection, document: CanvasDocumentCollection['documents'][string]): CanvasNode | null {
     if (!document.parentCanvasId || !document.parentNodeId) return null;
     return collection.documents[document.parentCanvasId]?.model.nodes.find((node) => node.id === document.parentNodeId) ?? null;
-}
-
-function dedupeThemeCommands(commands: DocumentCommand[]): DocumentCommand[] {
-    const seen = new Set<string>();
-    const deduped: DocumentCommand[] = [];
-    for (const command of commands) {
-        const key = command.type === 'set-node-theme' ?
-            `${command.type}:${command.canvasId}:${command.nodeIds.join(',')}:${command.themeId ?? 'inherit'}` :
-            command.type === 'set-canvas-theme' ?
-                `${command.type}:${command.canvasId}:${command.themeId ?? 'inherit'}` :
-                command.type === 'set-document-theme' ?
-                    `${command.type}:${command.themeId}` :
-                    JSON.stringify(command);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        deduped.push(command);
-    }
-    return deduped;
 }
 
 function buildViewTree(collection: CanvasDocumentCollection): ViewTreeNode | null {
