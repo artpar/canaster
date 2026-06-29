@@ -1,35 +1,26 @@
-import { asString } from '../../../core/nodeData';
+import {
+  addChecklistItem,
+  MAX_CHECKLIST_ITEMS,
+  normalizeChecklistNodeData,
+  removeChecklistItem,
+  setChecklistItemChecked,
+  setChecklistItemText,
+  type ChecklistNodeData,
+} from '../../../domain/checklistNodeData';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import { createInlineTextInput, prepareInlineEditorMount, stopEvent } from '../inlineEditorDom';
-import type { JsonObject } from '../../../core/nodePrimitives';
 import { clipText, drawNodeMeta, nodeLayout, nodeText } from '../nodeRendering';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeContentRect, NodeDefinition, NodeInteractionRegion } from '../nodeDefinition/nodeDefinitionTypes';
 import type { CanvasTheme } from '../theme';
 
-const MAX_ITEMS = 100;
-
-type CheckNodeItem = {
-  id: string;
-  text: string;
-  checked: boolean;
-} & JsonObject;
-
-type CheckNodeData = {
-  title: string;
-  items: CheckNodeItem[];
-} & JsonObject;
-
-export const checkNodeDefinition: NodeDefinition<CheckNodeData> = defineNodeType({
+export const checkNodeDefinition: NodeDefinition<ChecklistNodeData> = defineNodeType({
   ...nodeTypeSpecs.check,
   createDefaultData() {
     return { title: 'Checklist', items: [] };
   },
   parseData(raw) {
-    return {
-      title: asString(raw.title, 'Checklist'),
-      items: parseItems(raw.items),
-    };
+    return normalizeChecklistNodeData(raw);
   },
   render({ ctx, data, theme, contentRect, state }) {
     const text = nodeText(theme);
@@ -40,8 +31,9 @@ export const checkNodeDefinition: NodeDefinition<CheckNodeData> = defineNodeType
     if (state.quality === 'compact' && !state.selected && !state.hovered) return;
 
     const metaY = layout.titleY;
-    const itemsY = layout.titleY + layout.labelLineHeight + Math.round(layout.labelLineHeight * 0.6);
-    drawNodeMeta(ctx, contentRect, total ? `${done}/${total} done` : 'No checklist items', theme, metaY);
+    const itemsY = checklistItemsY(layout, total);
+    drawNodeMeta(ctx, contentRect, total ? `${done}/${total} done` : 'No items yet', theme, metaY);
+    if (total) drawProgressTrack(ctx, contentRect, done, total, theme, contentRect.y + checklistProgressY(layout));
 
     const rows = visibleRows(Math.max(0, contentRect.h - itemsY), layout);
     const visibleItems = data.items.slice(0, rows);
@@ -51,14 +43,10 @@ export const checkNodeDefinition: NodeDefinition<CheckNodeData> = defineNodeType
       drawCheckbox(ctx, contentRect.x + layout.insetX, y + metrics.checkboxOffsetY, item.checked, theme);
       ctx.fillStyle = item.checked ? theme.mutedText : theme.bodyText;
       ctx.font = text.body;
-      const deleteSpace = state.selected || state.hovered ? metrics.deleteHitSize : 0;
       const textX = contentRect.x + layout.insetX + metrics.textOffsetX;
-      const itemLabel = clipText(ctx, item.text || 'Untitled item', Math.max(0, contentRect.w - layout.insetX - metrics.textOffsetX - deleteSpace));
+      const itemLabel = clipText(ctx, item.text || 'Untitled item', Math.max(0, contentRect.w - layout.insetX * 2 - metrics.textOffsetX));
       ctx.fillText(itemLabel, textX, y);
       if (item.checked) drawCompletedRule(ctx, textX, y, itemLabel, theme);
-      if (state.selected || state.hovered) {
-        drawDeleteControl(ctx, contentRect.x + contentRect.w - metrics.deleteHitSize, y + metrics.deleteOffsetY, theme);
-      }
       y += layout.rowHeight;
     }
 
@@ -67,7 +55,8 @@ export const checkNodeDefinition: NodeDefinition<CheckNodeData> = defineNodeType
     } else if (data.items.length > visibleItems.length) {
       ctx.fillStyle = theme.mutedText;
       ctx.font = text.label;
-      ctx.fillText(`+${data.items.length - visibleItems.length} more`, contentRect.x + layout.insetX, contentRect.y + Math.max(0, contentRect.h - layout.labelLineHeight));
+      const overflowLabel = `Open checklist (+${data.items.length - visibleItems.length})`;
+      ctx.fillText(clipText(ctx, overflowLabel, Math.max(0, contentRect.w - layout.insetX * 2)), contentRect.x + layout.insetX, contentRect.y + Math.max(0, contentRect.h - layout.labelLineHeight));
     }
   },
   describe({ data }) {
@@ -91,119 +80,135 @@ export const checkNodeDefinition: NodeDefinition<CheckNodeData> = defineNodeType
         ctx.requestCommit({ ...data, title: value }, 'pointer');
       }, ctx.requestClose);
     }
-    if (region.id === 'add-item') {
-      return createChecklistInput(ctx.mount, '', 'Add checklist item', (value) => {
-        const text = value.trim();
-        if (!text) return;
-        ctx.requestCommit({
-          ...data,
-          items: [...data.items, { id: nextChecklistItemId(data.items), text, checked: false }],
-        }, 'pointer');
-      }, ctx.requestClose);
-    }
-    if (region.id === 'open-list') {
+    if (region.id === 'items') {
       return createChecklistListEditor(ctx.mount, data, (nextData) => {
         ctx.requestCommit(nextData, 'pointer');
       }, ctx.requestClose);
     }
-    const itemMatch = /^item:(.+):(checked|text|delete)$/.exec(region.id);
-    if (!itemMatch) return null;
-    const [, itemId, field] = itemMatch;
-    const item = data.items.find((candidate) => candidate.id === itemId);
-    if (!item) return null;
-    if (field === 'checked') {
-      ctx.requestCommit({
-        ...data,
-        items: data.items.map((candidate) => candidate.id === itemId ? { ...candidate, checked: !candidate.checked } : candidate),
-      }, 'pointer');
-      requestAnimationFrame(ctx.requestClose);
+    const checkedItemId = checkedItemRegionId(region.id);
+    if (checkedItemId) {
+      const item = data.items.find((candidate) => candidate.id === checkedItemId);
+      if (!item) return null;
+      const checked = !item.checked;
+      ctx.requestCommit(setChecklistItemChecked(data, item.id, checked), 'pointer');
+      playChecklistToggleBurst(ctx.mount, checked, ctx.requestClose);
       return { dispose() {} };
     }
-    if (field === 'delete') {
-      ctx.requestCommit({
-        ...data,
-        items: data.items.filter((candidate) => candidate.id !== itemId),
-      }, 'pointer');
-      requestAnimationFrame(ctx.requestClose);
-      return { dispose() {} };
-    }
-    return createChecklistInput(ctx.mount, item.text, 'Edit checklist item', (value) => {
-      ctx.requestCommit({
-        ...data,
-        items: data.items.map((candidate) => candidate.id === itemId ? { ...candidate, text: value } : candidate),
-      }, 'pointer');
-    }, ctx.requestClose);
+    return null;
   },
 });
 
-function checklistRegions(contentRect: NodeContentRect, data: CheckNodeData, theme: CanvasTheme): NodeInteractionRegion[] {
+function checklistRegions(contentRect: NodeContentRect, data: ChecklistNodeData, theme: CanvasTheme): NodeInteractionRegion[] {
   const layout = nodeLayout(theme);
   const metrics = checklistMetrics(layout);
-  const itemsY = layout.titleY + layout.labelLineHeight + Math.round(layout.labelLineHeight * 0.6);
-  const regions: NodeInteractionRegion[] = [{
-    id: 'title',
-    rect: { x: contentRect.x + layout.insetX, y: contentRect.y, w: Math.max(0, contentRect.w - layout.insetX * 2), h: layout.titleHeight + Math.round(layout.labelLineHeight * 0.15) },
-    cursor: 'text',
-    label: 'checklist title',
-  }];
+  const itemsY = checklistItemsY(layout, data.items.length);
+  const regions: NodeInteractionRegion[] = [
+    {
+      id: 'title',
+      rect: { x: contentRect.x + layout.insetX, y: contentRect.y, w: Math.max(0, contentRect.w - layout.insetX * 2), h: layout.titleHeight + Math.round(layout.labelLineHeight * 0.15) },
+      cursor: 'text',
+      label: 'checklist title',
+    },
+    {
+      id: 'items',
+      rect: { x: contentRect.x + layout.insetX, y: contentRect.y + itemsY, w: Math.max(0, contentRect.w - layout.insetX * 2), h: Math.max(layout.rowHeight, contentRect.h - itemsY) },
+      cursor: 'pointer',
+      label: data.items.length ? 'edit checklist items' : 'add checklist item',
+    },
+  ];
   const rows = visibleRows(Math.max(0, contentRect.h - itemsY), layout);
-  const visibleItems = data.items.slice(0, rows);
   let y = contentRect.y + itemsY;
-  for (const item of visibleItems) {
+  for (const item of data.items.slice(0, rows)) {
     regions.push({
       id: `item:${item.id}:checked`,
-      rect: { x: contentRect.x + layout.insetX, y: y - metrics.hitLift, w: metrics.deleteHitSize, h: layout.rowHeight + metrics.hitLift },
+      rect: {
+        x: contentRect.x + layout.insetX - metrics.checkboxHitOutset,
+        y: y + metrics.checkboxOffsetY - metrics.checkboxHitOutset,
+        w: metrics.checkboxSize + metrics.checkboxHitOutset * 2,
+        h: metrics.checkboxSize + metrics.checkboxHitOutset * 2,
+      },
       cursor: 'pointer',
-      label: 'checklist item',
-    });
-    regions.push({
-      id: `item:${item.id}:text`,
-      rect: { x: contentRect.x + layout.insetX + metrics.textOffsetX, y: y - metrics.hitLift, w: Math.max(0, contentRect.w - layout.insetX - metrics.textOffsetX - metrics.deleteHitSize), h: layout.rowHeight + metrics.hitLift },
-      cursor: 'text',
-      label: 'checklist item',
-    });
-    regions.push({
-      id: `item:${item.id}:delete`,
-      rect: { x: contentRect.x + contentRect.w - metrics.deleteHitSize, y: y - metrics.hitLift, w: metrics.deleteHitSize, h: layout.rowHeight + metrics.hitLift },
-      cursor: 'pointer',
-      label: 'delete checklist item',
+      label: item.checked ? `mark ${item.text || 'item'} not done` : `mark ${item.text || 'item'} done`,
+      activation: 'single',
     });
     y += layout.rowHeight;
-  }
-  if (visibleItems.length < rows) {
-    regions.push({
-      id: 'add-item',
-      rect: { x: contentRect.x + layout.insetX, y: y - metrics.hitLift, w: Math.max(0, contentRect.w - layout.insetX * 2), h: layout.rowHeight + metrics.hitLift },
-      cursor: 'text',
-      label: 'new checklist item',
-    });
-  } else if (data.items.length > visibleItems.length) {
-    regions.push({
-      id: 'open-list',
-      rect: { x: contentRect.x + layout.insetX, y: contentRect.y + Math.max(0, contentRect.h - layout.footerHeight - metrics.hitLift), w: Math.max(0, contentRect.w - layout.insetX * 2), h: layout.footerHeight + metrics.hitLift },
-      cursor: 'pointer',
-      label: 'checklist items',
-    });
   }
   return regions;
 }
 
-function createChecklistListEditor(mount: HTMLElement, data: CheckNodeData, commit: (nextData: CheckNodeData) => void, close: () => void) {
+function checkedItemRegionId(regionId: string) {
+  const match = /^item:(.+):checked$/.exec(regionId);
+  return match?.[1] ?? null;
+}
+
+function createChecklistListEditor(mount: HTMLElement, data: ChecklistNodeData, commit: (nextData: ChecklistNodeData) => void, close: () => void) {
   prepareInlineEditorMount(mount, 'node-inline-checklist-list-editor');
   const panel = document.createElement('div');
   panel.className = 'checklist-list-panel';
   panel.addEventListener('pointerdown', stopEvent);
   mount.append(panel);
 
-  let draft = data.items.map((item) => ({ ...item }));
+  let draft: ChecklistNodeData = { ...data, items: data.items.map((item) => ({ ...item })) };
   let addValue = '';
-  const commitDraft = () => commit({ ...data, items: draft });
+  let closed = false;
+  let saveOnDispose = true;
+  let closeStarted = false;
+
+  const closeWithMotion = () => {
+    if (closeStarted) return;
+    closeStarted = true;
+    playChecklistEditorExit(panel, close);
+  };
+
+  const cancel = () => {
+    if (closed) return;
+    saveOnDispose = false;
+    closed = true;
+    closeWithMotion();
+  };
+
+  const commitAndClose = () => {
+    if (closed) return;
+    saveOnDispose = false;
+    closed = true;
+    commit(draft);
+    closeWithMotion();
+  };
+
+  panel.addEventListener('keydown', (event) => {
+    event.stopPropagation();
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      cancel();
+      return;
+    }
+    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+      event.preventDefault();
+      commitAndClose();
+    }
+  });
+
+  panel.addEventListener('focusout', (event) => {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && panel.contains(nextTarget)) return;
+    requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (active instanceof Node && panel.contains(active)) return;
+      commitAndClose();
+    });
+  });
 
   const render = () => {
     panel.replaceChildren();
     const list = document.createElement('div');
     list.className = 'checklist-list-items';
-    for (const item of draft) {
+    if (!draft.items.length) {
+      const empty = document.createElement('p');
+      empty.className = 'checklist-list-empty';
+      empty.textContent = 'No items yet';
+      list.append(empty);
+    }
+    for (const item of draft.items) {
       const row = document.createElement('div');
       row.className = 'checklist-list-row';
 
@@ -212,28 +217,30 @@ function createChecklistListEditor(mount: HTMLElement, data: CheckNodeData, comm
       checkbox.checked = item.checked;
       checkbox.setAttribute('aria-label', `Mark ${item.text || 'item'} ${item.checked ? 'not done' : 'done'}`);
       checkbox.addEventListener('change', () => {
-        draft = draft.map((candidate) => candidate.id === item.id ? { ...candidate, checked: checkbox.checked } : candidate);
-        commitDraft();
+        draft = setChecklistItemChecked(draft, item.id, checkbox.checked);
+        checkbox.setAttribute('aria-label', `Mark ${item.text || 'item'} ${checkbox.checked ? 'not done' : 'done'}`);
+        render();
+        panel.querySelector<HTMLInputElement>(`input[type="checkbox"][data-checklist-item-id="${CSS.escape(item.id)}"]`)?.focus({ preventScroll: true });
       });
+      checkbox.dataset.checklistItemId = item.id;
 
       const input = document.createElement('input');
       input.type = 'text';
       input.value = item.text;
       input.setAttribute('aria-label', 'Checklist item text');
-      input.addEventListener('change', () => {
-        draft = draft.map((candidate) => candidate.id === item.id ? { ...candidate, text: input.value } : candidate);
-        commitDraft();
+      input.addEventListener('input', () => {
+        draft = setChecklistItemText(draft, item.id, input.value);
       });
-      input.addEventListener('keydown', stopEvent);
 
       const remove = document.createElement('button');
       remove.type = 'button';
-      remove.textContent = 'Delete';
+      remove.textContent = 'Remove';
+      remove.className = 'checklist-list-remove';
       remove.setAttribute('aria-label', `Delete ${item.text || 'checklist item'}`);
       remove.addEventListener('click', () => {
-        draft = draft.filter((candidate) => candidate.id !== item.id);
-        commitDraft();
+        draft = removeChecklistItem(draft, item.id);
         render();
+        focusFirstEditorControl(panel);
       });
 
       row.append(checkbox, input, remove);
@@ -247,11 +254,12 @@ function createChecklistListEditor(mount: HTMLElement, data: CheckNodeData, comm
     addInput.placeholder = 'Add item';
     addInput.value = addValue;
     addInput.setAttribute('aria-label', 'New checklist item');
+    addInput.disabled = draft.items.length >= MAX_CHECKLIST_ITEMS;
     addInput.addEventListener('input', () => {
       addValue = addInput.value;
+      syncAddButton();
     });
     addInput.addEventListener('keydown', (event) => {
-      event.stopPropagation();
       if (event.key !== 'Enter') return;
       event.preventDefault();
       addItem();
@@ -261,27 +269,151 @@ function createChecklistListEditor(mount: HTMLElement, data: CheckNodeData, comm
     addButton.textContent = 'Add';
     addButton.addEventListener('click', addItem);
     addRow.append(addInput, addButton);
+    syncAddButton();
 
-    panel.append(list, addRow);
+    panel.append(createChecklistEditorHeader(draft), list, addRow);
+    if (draft.items.length >= MAX_CHECKLIST_ITEMS) {
+      const limit = document.createElement('p');
+      limit.className = 'checklist-list-message';
+      limit.textContent = 'Checklist limit reached.';
+      panel.append(limit);
+    }
+    const actions = document.createElement('div');
+    actions.className = 'checklist-list-actions';
+    const cancelButton = document.createElement('button');
+    cancelButton.type = 'button';
+    cancelButton.textContent = 'Cancel';
+    cancelButton.addEventListener('click', cancel);
+    const doneButton = document.createElement('button');
+    doneButton.type = 'button';
+    doneButton.textContent = 'Done';
+    doneButton.className = 'primary';
+    doneButton.addEventListener('click', commitAndClose);
+    actions.append(cancelButton, doneButton);
+    panel.append(actions);
     addInput.value = addValue;
 
+    function syncAddButton() {
+      addButton.disabled = !addValue.trim() || draft.items.length >= MAX_CHECKLIST_ITEMS;
+    }
+
     function addItem() {
-      const text = addValue.trim();
-      if (!text) return;
-      draft = [...draft, { id: nextChecklistItemId(draft), text, checked: false }];
+      const next = addChecklistItem(draft, addValue);
+      if (next === draft) return;
+      draft = next;
       addValue = '';
-      commitDraft();
       render();
+      panel.querySelector<HTMLInputElement>('.checklist-list-add-row input')?.focus({ preventScroll: true });
     }
   };
 
   render();
+  playChecklistEditorEnter(panel);
   return {
     focus() {
-      panel.querySelector<HTMLInputElement>('input[type="text"]')?.focus({ preventScroll: true });
+      focusFirstEditorControl(panel);
     },
-    dispose() {},
+    dispose() {
+      if (!closed && saveOnDispose) commit(draft);
+      closed = true;
+    },
   };
+}
+
+function playChecklistToggleBurst(mount: HTMLElement, checked: boolean, close: () => void) {
+  mount.classList.add('node-inline-checklist-toggle-feedback');
+  const burst = document.createElement('div');
+  burst.className = checked ? 'checklist-toggle-burst is-checked' : 'checklist-toggle-burst';
+  mount.append(burst);
+  if (prefersReducedMotion() || typeof burst.animate !== 'function') {
+    requestAnimationFrame(close);
+    return;
+  }
+  const animation = burst.animate([
+    { opacity: 0.72, transform: 'translate(-50%, -50%) scale(0.68)' },
+    { opacity: 0.9, transform: 'translate(-50%, -50%) scale(1)' },
+    { opacity: 0, transform: 'translate(-50%, -50%) scale(1.85)' },
+  ], {
+    duration: 220,
+    easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
+  });
+  animation.finished.catch(() => undefined).finally(close);
+}
+
+function playChecklistEditorEnter(panel: HTMLElement) {
+  if (prefersReducedMotion() || typeof panel.animate !== 'function') return;
+  panel.animate([
+    {
+      opacity: 0,
+      transform: 'translateY(-8px) scale(0.965)',
+      clipPath: 'inset(0 0 calc(100% - 30px) 0 round 8px)',
+      filter: 'blur(1px)',
+    },
+    {
+      opacity: 1,
+      transform: 'translateY(0) scale(1)',
+      clipPath: 'inset(0 0 0 0 round 8px)',
+      filter: 'blur(0)',
+    },
+  ], {
+    duration: 190,
+    easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
+  });
+}
+
+function playChecklistEditorExit(panel: HTMLElement, close: () => void) {
+  if (prefersReducedMotion() || typeof panel.animate !== 'function') {
+    close();
+    return;
+  }
+  const animation = panel.animate([
+    {
+      opacity: 1,
+      transform: 'translateY(0) scale(1)',
+      clipPath: 'inset(0 0 0 0 round 8px)',
+    },
+    {
+      opacity: 0,
+      transform: 'translateY(-5px) scale(0.975)',
+      clipPath: 'inset(0 0 calc(100% - 28px) 0 round 8px)',
+    },
+  ], {
+    duration: 130,
+    easing: 'cubic-bezier(0.5, 0, 0.75, 0)',
+  });
+  animation.finished.catch(() => undefined).finally(close);
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function createChecklistEditorHeader(data: ChecklistNodeData) {
+  const done = data.items.filter((item) => item.checked).length;
+  const total = data.items.length;
+  const header = document.createElement('div');
+  header.className = 'checklist-list-header';
+  const title = document.createElement('span');
+  title.className = 'checklist-list-title';
+  title.textContent = data.title || 'Checklist';
+  const meta = document.createElement('span');
+  meta.className = 'checklist-list-count';
+  meta.textContent = total ? `${done}/${total}` : 'Empty';
+  header.append(title, meta);
+  if (total) {
+    const progress = document.createElement('div');
+    progress.className = 'checklist-list-progress';
+    progress.setAttribute('aria-hidden', 'true');
+    const fill = document.createElement('span');
+    fill.style.width = `${Math.round((done / total) * 100)}%`;
+    progress.append(fill);
+    header.append(progress);
+  }
+  return header;
+}
+
+function focusFirstEditorControl(panel: HTMLElement) {
+  panel.querySelector<HTMLElement>('input[type="text"], input[type="checkbox"], button')?.focus({ preventScroll: true });
 }
 
 function createChecklistInput(mount: HTMLElement, value: string, label: string, commit: (value: string) => void, close: () => void) {
@@ -296,70 +428,54 @@ function createChecklistInput(mount: HTMLElement, value: string, label: string, 
   });
 }
 
-function parseItems(value: unknown): CheckNodeItem[] {
-  if (!Array.isArray(value)) return [];
-  const parsed: CheckNodeItem[] = [];
-  for (let index = 0; index < value.length && parsed.length < MAX_ITEMS; index += 1) {
-    const item = parseItem(value[index], index);
-    if (item) parsed.push(item);
-  }
-  return parsed;
-}
-
-function parseItem(value: unknown, index: number): CheckNodeItem | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const raw = value as JsonObject;
-  const text = typeof raw.text === 'string' ? raw.text : null;
-  if (text === null) return null;
-  const rawId = typeof raw.id === 'string' && raw.id.trim() ? raw.id.trim() : `item-${index + 1}`;
-  return {
-    id: rawId,
-    text,
-    checked: typeof raw.checked === 'boolean' ? raw.checked : false,
-  };
-}
-
 function visibleRows(height: number, layout: ReturnType<typeof nodeLayout>) {
   const available = height - layout.contentY - layout.footerHeight;
   return Math.max(0, Math.min(5, Math.floor(available / layout.rowHeight)));
 }
 
+function checklistItemsY(layout: ReturnType<typeof nodeLayout>, total: number) {
+  return layout.titleY + layout.labelLineHeight + Math.round(layout.labelLineHeight * (total ? 1 : 0.6));
+}
+
+function checklistProgressY(layout: ReturnType<typeof nodeLayout>) {
+  return layout.titleY + layout.labelLineHeight + 3;
+}
+
 function checklistMetrics(layout: ReturnType<typeof nodeLayout>) {
   const checkboxSize = Math.max(10, Math.round(layout.rowHeight * 0.68));
-  const deleteButtonSize = Math.max(14, Math.round(layout.rowHeight * 0.72));
+  const checkboxHitOutset = Math.max(2, Math.round((layout.rowHeight - checkboxSize) / 2));
   return {
     checkboxSize,
     checkboxOffsetY: Math.max(0, Math.round((layout.rowHeight - checkboxSize) / 2) - 1),
-    deleteButtonSize,
-    deleteOffsetY: Math.max(0, Math.round((layout.rowHeight - deleteButtonSize) / 2) - 1),
-    deleteHitSize: Math.max(16, layout.rowHeight),
-    hitLift: Math.max(1, Math.round(layout.rowHeight * 0.1)),
+    checkboxHitOutset,
     textOffsetX: checkboxSize + Math.max(6, layout.insetX + 4),
   };
-}
-
-function nextChecklistItemId(items: CheckNodeItem[]) {
-  const ids = new Set(items.map((item) => item.id));
-  let counter = items.length + 1;
-  let id = `item-${counter}`;
-  while (ids.has(id)) id = `item-${++counter}`;
-  return id;
 }
 
 function drawCheckbox(ctx: CanvasRenderingContext2D, x: number, y: number, checked: boolean, theme: CanvasTheme) {
   const layout = nodeLayout(theme);
   const { checkboxSize } = checklistMetrics(layout);
+  const radius = Math.min(3, Math.max(1.5, layout.controlRadius * 0.5));
+  ctx.save();
   ctx.strokeStyle = checked ? theme.selected : theme.mutedText;
-  ctx.lineWidth = Math.max(1, layout.controlRadius * 0.35);
-  ctx.strokeRect(x, y, checkboxSize, checkboxSize);
-  if (!checked) return;
+  ctx.fillStyle = checked ? theme.selected : 'transparent';
+  ctx.lineWidth = Math.max(1, layout.controlRadius * 0.3);
+  ctx.beginPath();
+  ctx.roundRect(x, y, checkboxSize, checkboxSize, radius);
+  if (checked) ctx.fill();
+  ctx.stroke();
+  if (!checked) {
+    ctx.restore();
+    return;
+  }
   ctx.beginPath();
   ctx.moveTo(x + checkboxSize * 0.21, y + checkboxSize * 0.54);
   ctx.lineTo(x + checkboxSize * 0.43, y + checkboxSize * 0.75);
   ctx.lineTo(x + checkboxSize * 0.83, y + checkboxSize * 0.27);
-  ctx.strokeStyle = theme.selected;
+  ctx.strokeStyle = theme.nodeBg;
   ctx.lineWidth = Math.max(1.4, layout.controlRadius * 0.45);
   ctx.stroke();
+  ctx.restore();
 }
 
 function drawCompletedRule(ctx: CanvasRenderingContext2D, x: number, y: number, label: string, theme: CanvasTheme) {
@@ -376,37 +492,17 @@ function drawCompletedRule(ctx: CanvasRenderingContext2D, x: number, y: number, 
   ctx.restore();
 }
 
-function drawDeleteControl(ctx: CanvasRenderingContext2D, x: number, y: number, theme: CanvasTheme) {
-  const layout = nodeLayout(theme);
-  const { deleteButtonSize } = checklistMetrics(layout);
-  const buttonX = x + Math.max(0, (layout.rowHeight - deleteButtonSize) / 2);
-  ctx.save();
-  ctx.strokeStyle = theme.nodeBorder;
-  ctx.fillStyle = theme.nodeBg;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.roundRect(buttonX, y, deleteButtonSize, deleteButtonSize, theme.nodeControlRadius);
-  ctx.fill();
-  ctx.stroke();
-  ctx.strokeStyle = theme.mutedText;
-  ctx.lineWidth = Math.max(1, layout.controlRadius * 0.32);
-  ctx.beginPath();
-  ctx.moveTo(buttonX + deleteButtonSize * 0.32, y + deleteButtonSize * 0.32);
-  ctx.lineTo(buttonX + deleteButtonSize * 0.68, y + deleteButtonSize * 0.68);
-  ctx.moveTo(buttonX + deleteButtonSize * 0.68, y + deleteButtonSize * 0.32);
-  ctx.lineTo(buttonX + deleteButtonSize * 0.32, y + deleteButtonSize * 0.68);
-  ctx.stroke();
-  ctx.restore();
-}
-
 function drawAddCue(ctx: CanvasRenderingContext2D, x: number, y: number, label: string, theme: CanvasTheme) {
   const layout = nodeLayout(theme);
   const text = nodeText(theme);
   const { checkboxSize, textOffsetX } = checklistMetrics(layout);
+  const radius = Math.min(3, Math.max(1.5, layout.controlRadius * 0.5));
   ctx.save();
   ctx.strokeStyle = theme.mutedText;
   ctx.lineWidth = Math.max(1, layout.controlRadius * 0.3);
-  ctx.strokeRect(x, y, checkboxSize, checkboxSize);
+  ctx.beginPath();
+  ctx.roundRect(x, y, checkboxSize, checkboxSize, radius);
+  ctx.stroke();
   ctx.beginPath();
   ctx.moveTo(x + checkboxSize * 0.28, y + checkboxSize * 0.5);
   ctx.lineTo(x + checkboxSize * 0.72, y + checkboxSize * 0.5);
@@ -418,5 +514,26 @@ function drawAddCue(ctx: CanvasRenderingContext2D, x: number, y: number, label: 
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
   ctx.fillText(label, x + textOffsetX, y - Math.max(0, Math.round((layout.bodyLineHeight - checkboxSize) / 2)));
+  ctx.restore();
+}
+
+function drawProgressTrack(ctx: CanvasRenderingContext2D, rect: NodeContentRect, done: number, total: number, theme: CanvasTheme, y: number) {
+  const layout = nodeLayout(theme);
+  const x = rect.x + layout.insetX;
+  const w = Math.max(0, rect.w - layout.insetX * 2);
+  if (w <= 0) return;
+  const h = 3;
+  const fillW = Math.max(0, Math.min(w, w * (done / total)));
+  ctx.save();
+  ctx.globalAlpha = 0.34;
+  ctx.fillStyle = theme.mutedText;
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, h / 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = theme.selected;
+  ctx.beginPath();
+  ctx.roundRect(x, y, fillW, h, h / 2);
+  ctx.fill();
   ctx.restore();
 }

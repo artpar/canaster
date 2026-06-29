@@ -6,6 +6,7 @@ import {
   asString,
   cloneNodeData,
 } from '../core/nodeData';
+import { normalizeChecklistNodeData, parseChecklistItems } from './checklistNodeData';
 import type {CanvasNode, JsonObject, NodeData} from './types';
 
 export type NodeActionDescriptor = {
@@ -36,8 +37,6 @@ export type NodePortalSummary = {
 
 const CARD_ACCENTS = ['task', 'data', 'system'] as const;
 const IMAGE_FITS = ['contain', 'cover'] as const;
-const MAX_CHECK_ITEMS = 100;
-
 export function normalizeNodeData(nodeType: string, raw: unknown): NodeData {
   const data = asJsonObject(raw);
   switch (nodeType) {
@@ -50,10 +49,7 @@ export function normalizeNodeData(nodeType: string, raw: unknown): NodeData {
         accent: asEnum(data.accent, CARD_ACCENTS, 'task'),
       };
     case 'check':
-      return {
-        title: asString(data.title, 'Checklist'),
-        items: parseCheckItems(data.items),
-      };
+      return normalizeChecklistNodeData(data);
     case 'image':
       return {
         assetId: asNullableString(data.assetId),
@@ -95,7 +91,7 @@ export function describeNode(node: CanvasNode): NodeDescription {
         actions: [],
       };
     case 'check': {
-      const items = parseCheckItems(data.items);
+      const items = parseChecklistItems(data.items);
       const done = items.filter((item) => item.checked).length;
       return {
         label: asString(data.title, 'Checklist') || 'Checklist',
@@ -187,29 +183,6 @@ function parseCanvasPortalData(raw: unknown): NodePortalInfo & JsonObject {
     childCanvasId: asNullableString(data.childCanvasId),
     title: asString(data.title, 'View'),
     nodeCount: Math.max(0, Math.floor(asNumber(data.nodeCount, 0))),
-  };
-}
-
-function parseCheckItems(value: unknown): Array<{id: string; text: string; checked: boolean} & JsonObject> {
-  if (!Array.isArray(value)) return [];
-  const parsed: Array<{id: string; text: string; checked: boolean} & JsonObject> = [];
-  for (let index = 0; index < value.length && parsed.length < MAX_CHECK_ITEMS; index += 1) {
-    const item = parseCheckItem(value[index], index);
-    if (item) parsed.push(item);
-  }
-  return parsed;
-}
-
-function parseCheckItem(value: unknown, index: number): {id: string; text: string; checked: boolean} & JsonObject | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const raw = value as JsonObject;
-  const text = typeof raw.text === 'string' ? raw.text : null;
-  if (text === null) return null;
-  const rawId = typeof raw.id === 'string' && raw.id.trim() ? raw.id.trim() : `item-${index + 1}`;
-  return {
-    id: rawId,
-    text,
-    checked: typeof raw.checked === 'boolean' ? raw.checked : false,
   };
 }
 

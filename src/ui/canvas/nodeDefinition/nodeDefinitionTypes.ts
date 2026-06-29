@@ -49,6 +49,7 @@ export type NodeInteractionRegion = {
   rect: NodeContentRect;
   cursor?: string;
   label?: string;
+  activation?: 'double' | 'single';
 };
 
 export type NodeInteractionRegionContext<TData extends NodeData = NodeData> = {

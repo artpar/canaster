@@ -1095,6 +1095,17 @@ export class CanvasEngine {
     const node = this.nodeAt(world);
 
     if (node) {
+      const immediateRegion = event.shiftKey || event.metaKey || event.ctrlKey ? null : this.interactionRegionAt(node, world);
+      if (immediateRegion?.activation === 'single') {
+        if (!this.selectedNodeIds.has(node.id) || node.id !== this.primarySelectedNodeId) {
+          this.executeCommand({ type: 'select-node', nodeId: node.id, mode: 'replace', source: 'pointer' });
+        }
+        if (this.startNodeInteraction(node, immediateRegion, 'pointer')) {
+          this.markDirty();
+          this.emitStatus();
+          return;
+        }
+      }
       const mode = event.shiftKey || event.metaKey || event.ctrlKey ? 'toggle' : this.selectedNodeIds.has(node.id) ? 'add' : 'replace';
       this.executeCommand({ type: 'select-node', nodeId: node.id, mode, source: 'pointer' });
       if (!this.selectedNodeIds.has(node.id)) {
