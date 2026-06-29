@@ -495,6 +495,10 @@ export class NativeNestedCanvasController {
     return this.activeSlot?.engine ?? null;
   }
 
+  private applyActiveHandleSizing(slot: CanvasViewportSlot) {
+    slot.engine.setInteractionHandleSizing(slot === this.activeSlot ? 'screen-fixed' : 'world');
+  }
+
   private editableEngineOptions(
     canvasIdForEngine: CanvasDocumentId | (() => CanvasDocumentId),
     options: {
@@ -565,6 +569,7 @@ export class NativeNestedCanvasController {
     slot.viewport.dataset.canvasId = collection.activeCanvasId;
     slot.canvas.setAttribute('aria-label', `${active?.title ?? 'Active canvas'} active canvas`);
     slot.engine.setCanvasId(collection.activeCanvasId);
+    this.applyActiveHandleSizing(slot);
     if (active) slot.engine.setModel(active.model);
     slot.engine.setTheme(this.theme);
     slot.engine.setCamera(cameraForCanvas(collection, collection.activeCanvasId));
@@ -770,6 +775,7 @@ export class NativeNestedCanvasController {
     parent.append(viewportSlot.wrapper);
     viewportSlot.engine.setModel(canvasDocument.model);
     viewportSlot.engine.setTheme(this.theme);
+    this.applyActiveHandleSizing(viewportSlot);
     const slot: Slot = { key, parentCanvasId: layout.parentCanvasId, portalNodeId: layout.portalNodeId, canvasId, viewportSlot, parentContextOwnerKey, portalLayouts: [], sizeSignature: sizeSignature(stageRect) };
     this.slots.set(key, slot);
     this.layoutEmbeddedSlot(slot, stageRect);
@@ -1035,6 +1041,7 @@ export class NativeNestedCanvasController {
         slot.viewportSlot.canvasId = parent.id;
         slot.viewportSlot.engine.setCanvasId(parent.id);
       }
+      this.applyActiveHandleSizing(slot.viewportSlot);
       slot.viewportSlot.engine.setTheme(this.theme);
       slot.viewportSlot.engine.setModel(parent.model, { preserveInteraction: true });
       const visibleNodeIds = parentContextNodeIdsForRegion(parent.model.nodes, source, region);
@@ -1092,6 +1099,7 @@ export class NativeNestedCanvasController {
     });
     viewportSlot.wrapper.dataset.region = region;
     viewportSlot.engine.setTheme(this.theme);
+    this.applyActiveHandleSizing(viewportSlot);
     this.record('parent-context:pane:create', { ownerKey, canvasId, region });
     return { key, ownerKey, canvasId, region, viewportSlot, portalLayouts: [], cameraInitialized: false, camera: null, targetSignature: '', memoryKey: '', sizeSignature: '' };
   }

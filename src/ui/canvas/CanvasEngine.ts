@@ -32,6 +32,8 @@ const GRID_STEP = 32;
 const NODE_RADIUS = 8;
 const DRAG_HANDLE = 12;
 const RESIZE_HANDLE = 12;
+const FIXED_HANDLE_DRAW_SIZE = 16;
+const FIXED_HANDLE_HIT_SIZE = 28;
 const CULL_MARGIN_SCREEN = 96;
 const SNAP_STEP = GRID_STEP;
 const KEYBOARD_STEP = SNAP_STEP;
@@ -61,6 +63,8 @@ type DragState =
 type SetModelOptions = {
   preserveInteraction?: boolean;
 };
+
+type InteractionHandleSizing = 'world' | 'screen-fixed';
 
 type VisibleWorldBounds = {
   x0: number;
@@ -142,6 +146,7 @@ export class CanvasEngine {
   private lastRenderedNodes = 0;
   private lastRenderTime = 0;
   private interaction = 'Idle';
+  private interactionHandleSizing: InteractionHandleSizing = 'world';
   private resizeMode = false;
   private clipboard: CanvasNode[] = [];
   private pasteCounter = 1;
@@ -244,6 +249,12 @@ export class CanvasEngine {
     this.canvasId = canvasId;
     this.markDirty();
     this.emitStatus();
+  }
+
+  setInteractionHandleSizing(mode: InteractionHandleSizing) {
+    if (this.interactionHandleSizing === mode) return;
+    this.interactionHandleSizing = mode;
+    this.markDirty();
   }
 
   setTheme(name: ThemeName) {
@@ -723,24 +734,25 @@ export class CanvasEngine {
   }
 
   private drawResizeHandle(node: CanvasNode) {
-    const handle = this.resizeHandleRect(node);
+    const handle = this.resizeHandleDrawRect(node);
+    const radius = this.interactionHandleLength(3);
     this.ctx.fillStyle = this.theme.resizeFill;
-    roundRectPath(this.ctx, handle.x, handle.y, handle.w, handle.h, 3);
+    roundRectPath(this.ctx, handle.x, handle.y, handle.w, handle.h, radius);
     this.ctx.fill();
   }
 
   private drawDragHandle(node: CanvasNode) {
-    const handle = this.dragHandleRect(node);
+    const handle = this.dragHandleDrawRect(node);
     const { ctx, theme } = this;
     ctx.save();
     ctx.fillStyle = theme.nodeBg;
     ctx.strokeStyle = theme.selected;
-    ctx.lineWidth = 1.4;
-    roundRectPath(ctx, handle.x, handle.y, handle.w, handle.h, 3);
+    ctx.lineWidth = this.interactionHandleLength(1.4);
+    roundRectPath(ctx, handle.x, handle.y, handle.w, handle.h, this.interactionHandleLength(3));
     ctx.fill();
     ctx.stroke();
     ctx.beginPath();
-    const dotRadius = Math.max(0.8, handle.w / 12);
+    const dotRadius = Math.max(this.interactionHandleLength(0.8), handle.w / 12);
     const x1 = handle.x + handle.w * 0.35;
     const x2 = handle.x + handle.w * 0.65;
     const y1 = handle.y + handle.h * 0.35;
@@ -1352,21 +1364,51 @@ export class CanvasEngine {
   }
 
   private resizeHandleRect(node: CanvasNode) {
+    const size = this.interactionHandleSize(RESIZE_HANDLE, FIXED_HANDLE_HIT_SIZE);
     return {
-      x: node.x + node.w - RESIZE_HANDLE - 6,
-      y: node.y + node.h - RESIZE_HANDLE - 6,
-      w: RESIZE_HANDLE,
-      h: RESIZE_HANDLE,
+      x: node.x + node.w - size / 2,
+      y: node.y + node.h - size / 2,
+      w: size,
+      h: size,
+    };
+  }
+
+  private resizeHandleDrawRect(node: CanvasNode) {
+    if (this.interactionHandleSizing === 'world') return this.resizeHandleRect(node);
+    const size = this.interactionHandleLength(FIXED_HANDLE_DRAW_SIZE);
+    return {
+      x: node.x + node.w - size / 2,
+      y: node.y + node.h - size / 2,
+      w: size,
+      h: size,
     };
   }
 
   private dragHandleRect(node: CanvasNode) {
+    const size = this.interactionHandleSize(DRAG_HANDLE, FIXED_HANDLE_HIT_SIZE);
     return {
-      x: node.x - DRAG_HANDLE / 2,
-      y: node.y - DRAG_HANDLE / 2,
-      w: DRAG_HANDLE,
-      h: DRAG_HANDLE,
+      x: node.x - size / 2,
+      y: node.y - size / 2,
+      w: size,
+      h: size,
     };
+  }
+
+  private dragHandleDrawRect(node: CanvasNode) {
+    if (this.interactionHandleSizing === 'world') return this.dragHandleRect(node);
+    const hit = this.dragHandleRect(node);
+    const size = this.interactionHandleLength(FIXED_HANDLE_DRAW_SIZE);
+    return centeredRect(hit, size);
+  }
+
+  private interactionHandleSize(worldUnits: number, fixedScreenPx: number) {
+    if (this.interactionHandleSizing === 'screen-fixed') return this.interactionHandleLength(fixedScreenPx);
+    return worldUnits;
+  }
+
+  private interactionHandleLength(screenPx: number) {
+    if (this.interactionHandleSizing === 'screen-fixed') return screenPx / Math.max(this.camera.scale, MIN_SCALE);
+    return screenPx;
   }
 
   private isInsideResizeHandle(point: WorldPoint, node: CanvasNode) {
@@ -1643,6 +1685,15 @@ function restoreNodeGeometry(node: CanvasNode, geometry: NodeGeometry) {
   node.y = geometry.y;
   node.w = geometry.w;
   node.h = geometry.h;
+}
+
+function centeredRect(rect: NodeGeometry, size: number): NodeGeometry {
+  return {
+    x: rect.x + (rect.w - size) / 2,
+    y: rect.y + (rect.h - size) / 2,
+    w: size,
+    h: size,
+  };
 }
 
 function previewGeometriesFrom(operations: CanvasOperation[]) {
