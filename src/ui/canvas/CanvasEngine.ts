@@ -142,6 +142,7 @@ export class CanvasEngine {
   private readonly onFrameMetrics?: (metrics: CanvasFrameMetrics) => void;
   private readonly transformPastedNode?: (node: CanvasNode) => CanvasNode;
   private readonly pasteInteractionForNodes?: (nodes: CanvasNode[]) => string | null;
+  private readonly shouldUseSystemClipboardPaste?: (data: DataTransfer | null) => boolean;
   private readonly inlineLayer: HTMLDivElement | null;
   private readonly resizeObserver: ResizeObserver;
 
@@ -199,6 +200,7 @@ export class CanvasEngine {
     this.onFrameMetrics = options.onFrameMetrics;
     this.transformPastedNode = options.transformPastedNode;
     this.pasteInteractionForNodes = options.pasteInteractionForNodes;
+    this.shouldUseSystemClipboardPaste = options.shouldUseSystemClipboardPaste;
     this.nodeVisibilityFilter = options.nodeVisibilityFilter ?? null;
     this.nodeVisibilitySignature = options.nodeVisibilitySignature ?? '';
     this.livePortalNodeIds = new Set(options.livePortalNodeIds ?? []);
@@ -1290,11 +1292,7 @@ export class CanvasEngine {
       return;
     }
 
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v') {
-      event.preventDefault();
-      this.executeCommand({ type: 'paste-clipboard', source: 'keyboard' });
-      return;
-    }
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v') return;
 
     if (event.key.toLowerCase() === 'r') {
       event.preventDefault();
@@ -1307,6 +1305,18 @@ export class CanvasEngine {
       this.markDirty();
       this.emitStatus();
     }
+  };
+
+  private onPaste = (event: ClipboardEvent) => {
+    if (!this.acceptsInput()) return;
+    if (this.clipboard.length) {
+      event.preventDefault();
+      this.executeCommand({ type: 'paste-clipboard', source: 'keyboard' });
+      return;
+    }
+    if (this.shouldUseSystemClipboardPaste?.(event.clipboardData ?? null)) return;
+    event.preventDefault();
+    this.executeCommand({ type: 'paste-clipboard', source: 'keyboard' });
   };
 
   private onWheel = (event: WheelEvent) => {
@@ -1842,6 +1852,7 @@ export class CanvasEngine {
       this.canvas.addEventListener('pointercancel', this.onPointerCancel);
       this.canvas.addEventListener('lostpointercapture', this.onLostPointerCapture);
       this.canvas.addEventListener('keydown', this.onKeyDown);
+      this.canvas.addEventListener('paste', this.onPaste);
       this.canvas.addEventListener('focus', this.onFocus);
       this.canvas.addEventListener('blur', this.onBlur);
       window.addEventListener('pointermove', this.onPointerMove);
@@ -1861,6 +1872,7 @@ export class CanvasEngine {
     this.canvas.removeEventListener('pointercancel', this.onPointerCancel);
     this.canvas.removeEventListener('lostpointercapture', this.onLostPointerCapture);
     this.canvas.removeEventListener('keydown', this.onKeyDown);
+    this.canvas.removeEventListener('paste', this.onPaste);
     this.canvas.removeEventListener('focus', this.onFocus);
     this.canvas.removeEventListener('blur', this.onBlur);
     window.removeEventListener('pointermove', this.onPointerMove);

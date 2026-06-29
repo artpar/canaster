@@ -46,6 +46,7 @@ import {
   replaceWorkspacePresent,
   undoWorkspaceHistory,
 } from '../../../domain/workspaceHistory';
+import { normalizeEmbedUrl } from '../../../core/embedUrl';
 import { DEFAULT_WORKSPACE_STORAGE_ID, loadWorkspaceSnapshot, loadWorkspaceSnapshotMirror, saveWorkspaceSnapshot, saveWorkspaceSnapshotMirror } from '../../../infra/browser/workspaceStorage';
 import { ACTIVE_ENGINE_FRAME_BUDGET_MS, livePortalSlotsFor, MAX_LIVE_PORTAL_PREVIEWS, MAX_TOTAL_ENGINES } from './engineSlots';
 import { createCanvasViewportSlot, type CanvasViewportControl, type CanvasViewportControlEvent, type CanvasViewportSlot } from './createCanvasViewportSlot';
@@ -59,7 +60,7 @@ import {
   type ParentContextPaneLayoutConstraints,
 } from './parentContextField';
 import { portalOverlayStyle } from './portalLayout';
-import type { ArrangeCanvasMenuRequest, CanvasThemeMenuRequest, NestedCanvasWorkspaceChromeState, WorkspaceFileDropRequest } from './NestedCanvasWorkspace';
+import type { ArrangeCanvasMenuRequest, CanvasThemeMenuRequest, NestedCanvasWorkspaceChromeState, WorkspaceFileDropRequest, WorkspaceTextPasteRequest } from './NestedCanvasWorkspace';
 import type { WorkspaceUrlPaneCamera, WorkspaceUrlState } from '../../../infra/browser/workspaceUrlLocation';
 import {hasMetaOrCtrlShortcutModifier} from '../../KeyboardShortcuts';
 import type {CanasterThemeId} from '../../theme/CanasterTheme';
@@ -77,6 +78,7 @@ export type NativeNestedCanvasControllerOptions = {
   onArrangeCanvasMenuRequest?: (request: ArrangeCanvasMenuRequest) => void;
   onCanvasThemeMenuRequest?: (request: CanvasThemeMenuRequest) => void;
   onFileDrop?: (request: WorkspaceFileDropRequest) => void;
+  onTextPaste?: (request: WorkspaceTextPasteRequest) => boolean;
 };
 
 type Slot = {
@@ -143,6 +145,7 @@ export class NativeNestedCanvasController {
   private readonly onArrangeCanvasMenuRequest?: (request: ArrangeCanvasMenuRequest) => void;
   private readonly onCanvasThemeMenuRequest?: (request: CanvasThemeMenuRequest) => void;
   private readonly onFileDrop?: (request: WorkspaceFileDropRequest) => void;
+  private readonly onTextPaste?: (request: WorkspaceTextPasteRequest) => boolean;
   private readonly historyRef: { current: CanvasWorkspaceHistory };
   private readonly collectionRef: { current: CanvasDocumentCollection };
   private readonly lastModelChangeRef: { current: DocumentModelChange | null } = { current: null };
@@ -191,6 +194,7 @@ export class NativeNestedCanvasController {
     this.onArrangeCanvasMenuRequest = options.onArrangeCanvasMenuRequest;
     this.onCanvasThemeMenuRequest = options.onCanvasThemeMenuRequest;
     this.onFileDrop = options.onFileDrop;
+    this.onTextPaste = options.onTextPaste;
     this.historyRef = { current: createWorkspaceHistory(options.initialCollection) };
     this.collectionRef = { current: this.historyRef.current.present };
 
@@ -232,6 +236,7 @@ export class NativeNestedCanvasController {
     this.root.addEventListener('dragover', this.handleFileDragOver);
     this.root.addEventListener('dragleave', this.handleFileDragLeave);
     this.root.addEventListener('drop', this.handleFileDrop);
+    this.root.addEventListener('paste', this.handleClipboardPaste);
 
     this.syncActiveViewportSlot();
     this.syncViewportControlVisibility();
@@ -259,6 +264,7 @@ export class NativeNestedCanvasController {
     this.root.removeEventListener('dragover', this.handleFileDragOver);
     this.root.removeEventListener('dragleave', this.handleFileDragLeave);
     this.root.removeEventListener('drop', this.handleFileDrop);
+    this.root.removeEventListener('paste', this.handleClipboardPaste);
     this.resizeObserver.disconnect();
     this.activeEngine()?.dispose();
     this.disposeParentContextSlots();
@@ -445,7 +451,7 @@ export class NativeNestedCanvasController {
     this.root.classList.remove('is-file-drag-over');
     const at = this.activeCanvasWorldPoint(event);
     if (!at) {
-      this.setStatus({ ...this.status, interaction: 'Drop images on the active view' });
+      this.setStatus({ ...this.status, interaction: 'Drop files on the active view' });
       return;
     }
     const files = [...(event.dataTransfer?.files ?? [])];
@@ -454,7 +460,35 @@ export class NativeNestedCanvasController {
       canvasId: this.collectionRef.current.activeCanvasId,
       at,
       files,
+      source: 'drop',
     });
+  };
+
+  private handleClipboardPaste = (event: ClipboardEvent) => {
+    if (event.defaultPrevented) return;
+    if (isEditablePasteTarget(event.target)) return;
+    const at = this.activeCanvasPasteWorldPoint();
+    if (!at) return;
+    const files = [...(event.clipboardData?.files ?? [])];
+    if (files.length) {
+      event.preventDefault();
+      this.onFileDrop?.({
+        canvasId: this.collectionRef.current.activeCanvasId,
+        at,
+        files,
+        source: 'paste',
+      });
+      return;
+    }
+
+    const text = event.clipboardData?.getData('text/plain')?.trim() ?? '';
+    if (!text) return;
+    const consumed = this.onTextPaste?.({
+      canvasId: this.collectionRef.current.activeCanvasId,
+      at,
+      text,
+    }) ?? false;
+    if (consumed) event.preventDefault();
   };
 
   private setControlOwnerForTarget(target: EventTarget | null): void {
@@ -472,6 +506,19 @@ export class NativeNestedCanvasController {
     return {
       x: (event.clientX - rect.left - camera.x) / camera.scale,
       y: (event.clientY - rect.top - camera.y) / camera.scale,
+    };
+  }
+
+  private activeCanvasPasteWorldPoint(): WorldPoint | null {
+    const slot = this.activeSlot;
+    if (!slot) return null;
+    const cursor = this.status.cursorWorld;
+    if (cursor) return cursor;
+    const rect = slot.canvas.getBoundingClientRect();
+    const camera = slot.engine.getCamera();
+    return {
+      x: (rect.width / 2 - camera.x) / camera.scale,
+      y: (rect.height / 2 - camera.y) / camera.scale,
     };
   }
 
@@ -727,6 +774,7 @@ export class NativeNestedCanvasController {
       beforeCommand: (command) => this.handleBeforeCommand(canvasId(), command, beforeCommandSelection?.() ?? null),
       transformPastedNode: stripPortalChildReferenceOnPaste,
       pasteInteractionForNodes: (nodes) => nodes.some((node) => portalInfoForNode(node)) ? 'Pasted canvas node without child contents' : null,
+      shouldUseSystemClipboardPaste: (data) => hasWorkspaceSystemPaste(data),
     };
   }
 
@@ -1829,6 +1877,22 @@ function hasDroppedFiles(dataTransfer: DataTransfer | null): boolean {
   if (!dataTransfer) return false;
   if ([...dataTransfer.types].includes('Files')) return true;
   return [...dataTransfer.items].some((item) => item.kind === 'file');
+}
+
+function hasWorkspaceSystemPaste(dataTransfer: DataTransfer | null): boolean {
+  if (!dataTransfer) return false;
+  if (hasDroppedFiles(dataTransfer)) return true;
+  const text = dataTransfer.getData('text/plain')?.trim() ?? '';
+  return Boolean(normalizeEmbedUrl(text, { allowLocalHttp: allowLocalHttpForCurrentHost() }));
+}
+
+function isEditablePasteTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return Boolean(target.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]'));
+}
+
+function allowLocalHttpForCurrentHost(): boolean {
+  return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 }
 
 function cameraForWorldRect(worldRect: { x: number; y: number; w: number; h: number }, screenRect: { w: number; h: number }) {

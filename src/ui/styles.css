@@ -413,6 +413,111 @@ button {
   line-height: var(--canaster-line-body);
 }
 
+.node-inline-pdf-preview,
+.node-inline-markdown-preview,
+.node-inline-embed-editor {
+  height: auto;
+  min-width: min(420px, calc(100vw - 28px));
+}
+
+.file-preview-panel,
+.embed-editor-panel {
+  display: grid;
+  gap: var(--canaster-panel-gap);
+  width: min(620px, calc(100vw - 28px));
+  max-height: min(520px, calc(100vh - 120px));
+  padding: var(--canaster-panel-padding);
+  border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
+  border-radius: var(--canaster-radius-panel);
+  background: var(--canaster-color-panel-surface);
+  box-shadow: var(--canaster-shadow-chrome);
+  backdrop-filter: var(--canaster-texture-panel-backdrop-filter);
+}
+
+.file-preview-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--canaster-panel-gap);
+}
+
+.file-preview-header strong {
+  overflow: hidden;
+  color: var(--canaster-color-text-high);
+  font-size: var(--canaster-font-label-size);
+  font-weight: var(--canaster-font-title-weight);
+  line-height: var(--canaster-line-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-preview-header button,
+.embed-editor-form button {
+  height: var(--canaster-input-height);
+  border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
+  border-radius: var(--canaster-radius-control);
+  padding: 0 var(--canaster-input-padding-inline);
+  color: var(--canaster-color-text-high);
+  background: var(--canaster-color-panel-muted);
+  font-size: var(--canaster-font-label-size);
+  cursor: pointer;
+}
+
+.file-preview-body,
+.embed-editor-preview {
+  min-height: 180px;
+  overflow: auto;
+}
+
+.file-preview-frame,
+.embed-editor-frame {
+  display: block;
+  width: 100%;
+  height: min(420px, calc(100vh - 220px));
+  border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
+  border-radius: var(--canaster-radius-control);
+  background: var(--canaster-color-canvas-bg);
+}
+
+.file-preview-open {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: var(--canaster-space-xs);
+  color: var(--canaster-color-action-primary);
+  font-size: var(--canaster-font-label-size);
+  line-height: var(--canaster-line-label);
+}
+
+.file-preview-message,
+.embed-editor-message {
+  margin: 0;
+  color: var(--canaster-color-text-muted);
+  font-size: var(--canaster-font-micro-size);
+  line-height: var(--canaster-line-body);
+}
+
+.markdown-preview-text {
+  margin: 0;
+  max-height: min(420px, calc(100vh - 220px));
+  overflow: auto;
+  white-space: pre-wrap;
+  color: var(--canaster-color-text-body);
+  font-family: var(--canaster-font-family);
+  font-size: var(--canaster-font-body-size);
+  line-height: var(--canaster-line-body);
+}
+
+.embed-editor-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--canaster-panel-gap);
+}
+
+.embed-editor-form input {
+  height: var(--canaster-input-height);
+  box-shadow: none;
+}
+
 .node-inline-checklist-list-editor {
   height: auto;
   min-width: min(360px, calc(100vw - 28px));

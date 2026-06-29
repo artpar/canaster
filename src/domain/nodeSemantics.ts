@@ -37,6 +37,8 @@ export type NodePortalSummary = {
 
 const CARD_ACCENTS = ['task', 'data', 'system'] as const;
 const IMAGE_FITS = ['contain', 'cover'] as const;
+const EMBED_ASPECT_RATIOS = ['16:9', '4:3', 'auto'] as const;
+const EMBED_PROVIDERS = ['web', 'video', 'map', 'doc'] as const;
 export function normalizeNodeData(nodeType: string, raw: unknown): NodeData {
   const data = asJsonObject(raw);
   switch (nodeType) {
@@ -56,6 +58,28 @@ export function normalizeNodeData(nodeType: string, raw: unknown): NodeData {
         alt: asString(data.alt, ''),
         fit: asEnum(data.fit, IMAGE_FITS, 'contain'),
         caption: asString(data.caption, ''),
+      };
+    case 'pdf':
+      return {
+        assetId: asString(data.assetId, ''),
+        title: asString(data.title, 'PDF'),
+        fileName: asString(data.fileName, ''),
+        mime: asString(data.mime, 'application/pdf'),
+      };
+    case 'md':
+      return {
+        assetId: asString(data.assetId, ''),
+        title: asString(data.title, 'Markdown'),
+        fileName: asString(data.fileName, ''),
+        mime: asString(data.mime, 'text/markdown'),
+        previewText: asString(data.previewText, ''),
+      };
+    case 'embed':
+      return {
+        url: asString(data.url, ''),
+        title: asString(data.title, 'Web preview'),
+        provider: asEnum(data.provider, EMBED_PROVIDERS, 'web'),
+        aspectRatio: asEnum(data.aspectRatio, EMBED_ASPECT_RATIOS, '16:9'),
       };
     case 'text':
       return {text: asString(data.text, '')};
@@ -109,6 +133,30 @@ export function describeNode(node: CanvasNode): NodeDescription {
           data.assetId ? 'Image added' : 'No image source',
           data.fit === 'cover' ? 'Fills the frame' : 'Fits inside the frame',
         ],
+        state: [],
+        actions: [],
+      };
+    case 'pdf':
+      return {
+        label: asString(data.title, 'PDF') || 'PDF',
+        roleDescription: 'PDF document',
+        details: [asString(data.fileName, '') || 'PDF file'],
+        state: [],
+        actions: [],
+      };
+    case 'md':
+      return {
+        label: asString(data.title, 'Markdown') || 'Markdown',
+        roleDescription: 'Markdown document',
+        details: [asString(data.fileName, '') || 'Markdown file'],
+        state: [],
+        actions: [],
+      };
+    case 'embed':
+      return {
+        label: asString(data.title, 'Web preview') || 'Web preview',
+        roleDescription: 'Web preview',
+        details: [asString(data.url, '') || 'No web link'],
         state: [],
         actions: [],
       };

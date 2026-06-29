@@ -1,9 +1,6 @@
-import { cardNodeDefinition } from './nodeTypes/cardNode';
-import { canvasNodeDefinition } from './nodeTypes/canvasNode';
-import { checkNodeDefinition } from './nodeTypes/checkNode';
-import { imageNodeDefinition } from './nodeTypes/imageNode';
 import { cloneNodeData } from '../../core/nodeData';
 import type { CanvasNode, NodeData } from '../../core/nodePrimitives';
+import { BuiltInNodeTypes } from '../../domain/BuiltInNodeTypes';
 import {
   safeDescribeNodeContent,
   safeCreateNodeInteraction,
@@ -16,11 +13,19 @@ import {
   type DefinitionHitTestContext,
   type DefinitionRenderContext,
 } from './nodeDefinition/nodeDefinitionSafety';
-import { textNodeDefinition } from './nodeTypes/textNode';
 import type { NodeAddMenuMetadata, NodeDefinition, NodeDescription, NodeHitTarget, NodeHitTestContext, NodeInteractionController, NodeInteractionRegion, NodePortalInfo, NodePortalSummary, NodeRenderContext } from './nodeDefinition/nodeDefinitionTypes';
+import { cardNodeDefinition } from './nodeTypes/cardNode';
+import { canvasNodeDefinition } from './nodeTypes/canvasNode';
+import { checkNodeDefinition } from './nodeTypes/checkNode';
+import { embedNodeDefinition } from './nodeTypes/embedNode';
+import { imageNodeDefinition } from './nodeTypes/imageNode';
+import { markdownNodeDefinition } from './nodeTypes/markdownNode';
+import { pdfNodeDefinition } from './nodeTypes/pdfNode';
+import { textNodeDefinition } from './nodeTypes/textNode';
 import { unknownNodeDefinition } from './nodeTypes/unknownNode';
 
-const definitions = createRegistry([cardNodeDefinition, textNodeDefinition, imageNodeDefinition, canvasNodeDefinition, checkNodeDefinition]);
+const definitions = createRegistry([cardNodeDefinition, textNodeDefinition, imageNodeDefinition, canvasNodeDefinition, checkNodeDefinition, pdfNodeDefinition, markdownNodeDefinition, embedNodeDefinition]);
+const addMenuHiddenTypes = new Set<string>([BuiltInNodeTypes.pdf, BuiltInNodeTypes.md]);
 
 function createRegistry(items: NodeDefinition[]) {
   const map = new Map<string, NodeDefinition>();
@@ -55,10 +60,12 @@ export type RegisteredNodeAddOption = NodeAddMenuMetadata & {
 };
 
 export function registeredNodeAddOptions(): RegisteredNodeAddOption[] {
-  return registeredNodeDefinitions().map((definition) => ({
-    type: definition.type,
-    ...definition.addMenu,
-  }));
+  return registeredNodeDefinitions()
+    .filter((definition) => !addMenuHiddenTypes.has(definition.type))
+    .map((definition) => ({
+      type: definition.type,
+      ...definition.addMenu,
+    }));
 }
 
 export function parseNodeData(node: CanvasNode) {

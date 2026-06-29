@@ -29,6 +29,7 @@ export type NestedCanvasWorkspaceProps = {
   onArrangeCanvasMenuRequest?: (request: ArrangeCanvasMenuRequest) => void;
   onCanvasThemeMenuRequest?: (request: CanvasThemeMenuRequest) => void;
   onFileDrop?: (request: WorkspaceFileDropRequest) => void;
+  onTextPaste?: (request: WorkspaceTextPasteRequest) => boolean;
 };
 
 export type ArrangeCanvasMenuRequest = {
@@ -47,6 +48,13 @@ export type WorkspaceFileDropRequest = {
   canvasId: string;
   at: WorldPoint;
   files: File[];
+  source?: 'drop' | 'paste';
+};
+
+export type WorkspaceTextPasteRequest = {
+  canvasId: string;
+  at: WorldPoint;
+  text: string;
 };
 
 export type NestedCanvasWorkspaceChromeState = {
@@ -103,17 +111,18 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     onArrangeCanvasMenuRequest,
     onCanvasThemeMenuRequest,
     onFileDrop,
+    onTextPaste,
   },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const controllerRef = useRef<NativeNestedCanvasController | null>(null);
-  const callbacksRef = useRef({ onCollectionChange, onChromeStateChange, onArrangeCanvasMenuRequest, onCanvasThemeMenuRequest, onFileDrop });
+  const callbacksRef = useRef({ onCollectionChange, onChromeStateChange, onArrangeCanvasMenuRequest, onCanvasThemeMenuRequest, onFileDrop, onTextPaste });
   const initialCollectionRef = useRef(initialCollection);
 
   useEffect(() => {
-    callbacksRef.current = { onCollectionChange, onChromeStateChange, onArrangeCanvasMenuRequest, onCanvasThemeMenuRequest, onFileDrop };
-  }, [onCollectionChange, onChromeStateChange, onArrangeCanvasMenuRequest, onCanvasThemeMenuRequest, onFileDrop]);
+    callbacksRef.current = { onCollectionChange, onChromeStateChange, onArrangeCanvasMenuRequest, onCanvasThemeMenuRequest, onFileDrop, onTextPaste };
+  }, [onCollectionChange, onChromeStateChange, onArrangeCanvasMenuRequest, onCanvasThemeMenuRequest, onFileDrop, onTextPaste]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -130,6 +139,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
       onArrangeCanvasMenuRequest: (request) => callbacksRef.current.onArrangeCanvasMenuRequest?.(request),
       onCanvasThemeMenuRequest: (request) => callbacksRef.current.onCanvasThemeMenuRequest?.(request),
       onFileDrop: (request) => callbacksRef.current.onFileDrop?.(request),
+      onTextPaste: (request) => callbacksRef.current.onTextPaste?.(request) ?? false,
     });
     controllerRef.current = controller;
     return () => {

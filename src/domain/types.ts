@@ -122,5 +122,6 @@ export type EngineOptions = {
   highlightNodeIds?: string[];
   transformPastedNode?: (node: CanvasNode) => CanvasNode;
   pasteInteractionForNodes?: (nodes: CanvasNode[]) => string | null;
+  shouldUseSystemClipboardPaste?: (data: DataTransfer | null) => boolean;
   backgroundImage?: CanvasBackgroundImage | null;
 };

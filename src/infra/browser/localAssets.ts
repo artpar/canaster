@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie';
+import { isImageAssetMime, isSupportedWorkspaceAssetFile } from '../../core/workspaceAssetTypes';
 
 export type LocalAssetSummary = {
   id: string;
@@ -41,14 +42,14 @@ export function isLocalAssetId(assetId: string | null | undefined): assetId is s
   return typeof assetId === 'string' && assetId.startsWith(LOCAL_ASSET_PREFIX);
 }
 
-export async function saveLocalImageAsset(file: File): Promise<LocalAssetSummary> {
-  if (!file.type.startsWith('image/')) throw new Error('Choose an image file.');
+export async function saveLocalAsset(file: File): Promise<LocalAssetSummary> {
+  if (!isSupportedWorkspaceAssetFile(file)) throw new Error('Choose an image, PDF, or Markdown file.');
   const now = Date.now();
   const record: StoredLocalAsset = {
     id: `${LOCAL_ASSET_PREFIX}${assetToken()}`,
     schemaVersion: 1,
-    name: file.name || 'image',
-    mime: file.type,
+    name: file.name || 'file',
+    mime: file.type || 'application/octet-stream',
     blob: file,
     updatedAt: now,
   };
@@ -56,9 +57,14 @@ export async function saveLocalImageAsset(file: File): Promise<LocalAssetSummary
   return summaryFromRecord(record);
 }
 
+export async function saveLocalImageAsset(file: File): Promise<LocalAssetSummary> {
+  if (!isImageAssetMime(file.type)) throw new Error('Choose an image file.');
+  return saveLocalAsset(file);
+}
+
 export async function loadLocalAssetObject(assetId: string): Promise<LocalAssetObject> {
   const record = await db.assets.get(assetId);
-  if (!record || record.schemaVersion !== 1) throw new Error('Local image was not found on this device.');
+  if (!record || record.schemaVersion !== 1) throw new Error('Local file was not found on this device.');
   const previous = objectUrls.get(assetId);
   if (previous) URL.revokeObjectURL(previous);
   const objectUrl = URL.createObjectURL(record.blob);
@@ -68,8 +74,8 @@ export async function loadLocalAssetObject(assetId: string): Promise<LocalAssetO
 
 export async function loadLocalAssetFile(assetId: string): Promise<File> {
   const record = await db.assets.get(assetId);
-  if (!record || record.schemaVersion !== 1) throw new Error('Local image was not found on this device.');
-  return new File([record.blob], record.name || 'image', { type: record.mime || record.blob.type || 'application/octet-stream' });
+  if (!record || record.schemaVersion !== 1) throw new Error('Local file was not found on this device.');
+  return new File([record.blob], record.name || 'file', { type: record.mime || record.blob.type || 'application/octet-stream' });
 }
 
 export function releaseLocalAssetObjectUrls(): void {
@@ -85,7 +91,7 @@ function assetToken(): string {
 function summaryFromRecord(record: StoredLocalAsset): LocalAssetSummary {
   return {
     id: record.id,
-    name: record.name || 'Image',
+    name: record.name || 'File',
     mime: record.mime,
     updatedAt: new Date(record.updatedAt).toISOString(),
   };

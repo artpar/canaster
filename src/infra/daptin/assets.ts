@@ -1,4 +1,5 @@
 import type { DaptinJsonApiSingleResponse } from 'daptin-client';
+import { isImageAssetMime, isSupportedWorkspaceAssetFile } from '../../core/workspaceAssetTypes';
 import { getDaptinClient, getDaptinEndpoint, getToken, normalizeDaptinError, requireUsableStoredToken } from './daptinClient';
 
 export type CanasterAssetSummary = {
@@ -41,14 +42,14 @@ const PRIVATE_PERMISSION = 16256;
 const modelLoad = { promise: null as Promise<void> | null };
 const objectUrls = new Map<string, string>();
 
-export async function uploadImageAsset(file: File): Promise<CanasterAssetSummary> {
-  if (!file.type.startsWith('image/')) throw new Error('Choose an image file.');
-  return authenticatedAssetRequest('Could not upload this image', async () => {
+export async function uploadWorkspaceAsset(file: File): Promise<CanasterAssetSummary> {
+  if (!isSupportedWorkspaceAssetFile(file)) throw new Error('Choose an image, PDF, or Markdown file.');
+  return authenticatedAssetRequest('Could not upload this file', async () => {
     await ensureAssetModelLoaded();
     const encoded = await encodeAssetFile(file);
     const created = await getDaptinClient().jsonApi.create?.<DaptinAssetAttributes>(ASSET_TABLE, {
-      name: file.name || 'image',
-      mime: file.type,
+      name: file.name || 'file',
+      mime: file.type || 'application/octet-stream',
       file: [encoded],
     });
     if (!created?.data) throw new Error('Daptin asset create did not return a row');
@@ -57,6 +58,11 @@ export async function uploadImageAsset(file: File): Promise<CanasterAssetSummary
     await updateAsset(ref, { permission: PRIVATE_PERMISSION });
     return summaryFromRow(created.data as DaptinAssetRow, ref);
   });
+}
+
+export async function uploadImageAsset(file: File): Promise<CanasterAssetSummary> {
+  if (!isImageAssetMime(file.type)) throw new Error('Choose an image file.');
+  return uploadWorkspaceAsset(file);
 }
 
 export async function listImageAssets(): Promise<CanasterAssetSummary[]> {
@@ -68,13 +74,13 @@ export async function listImageAssets(): Promise<CanasterAssetSummary[]> {
     });
     return (response.data ?? [])
       .map((row) => row as DaptinAssetRow)
-      .filter((row) => assetId(row) && String(rowAttr(row, 'mime') ?? '').startsWith('image/'))
+      .filter((row) => assetId(row) && isImageAssetMime(String(rowAttr(row, 'mime') ?? '')))
       .map((row) => summaryFromRow(row));
   });
 }
 
 export async function loadAssetObject(assetRef: string): Promise<CanasterAssetObject> {
-  return authenticatedAssetRequest('Could not load this image asset', async () => {
+  return authenticatedAssetRequest('Could not load this file asset', async () => {
     await ensureAssetModelLoaded();
     const response = await getDaptinClient().jsonApi.find<DaptinAssetAttributes>(ASSET_TABLE, assetRef);
     if (!response.data) throw new Error(`Daptin asset not found: ${assetRef}`);
@@ -83,6 +89,20 @@ export async function loadAssetObject(assetRef: string): Promise<CanasterAssetOb
     if (!id) throw new Error('Daptin asset row is missing an id');
     const { objectUrl } = objectUrlForAsset(id, await fetchAssetBlob(id));
     return { ...summaryFromRow(row, id), objectUrl };
+  });
+}
+
+export async function loadAssetFile(assetRef: string): Promise<File> {
+  return authenticatedAssetRequest('Could not load this file asset', async () => {
+    await ensureAssetModelLoaded();
+    const response = await getDaptinClient().jsonApi.find<DaptinAssetAttributes>(ASSET_TABLE, assetRef);
+    if (!response.data) throw new Error(`Daptin asset not found: ${assetRef}`);
+    const row = response.data as DaptinAssetRow;
+    const id = assetId(row);
+    if (!id) throw new Error('Daptin asset row is missing an id');
+    const blob = await fetchAssetBlob(id);
+    const summary = summaryFromRow(row, id);
+    return new File([blob], summary.name || 'file', { type: summary.mime || blob.type || 'application/octet-stream' });
   });
 }
 
@@ -123,7 +143,7 @@ async function updateAsset(assetRef: string, attributes: DaptinAssetAttributes):
 
 async function encodeAssetFile(file: File): Promise<DaptinBlobFileObject> {
   return {
-    name: file.name || 'image',
+    name: file.name || 'file',
     file: await fileToDataUri(file),
     type: file.type || 'application/octet-stream',
   };
@@ -170,7 +190,7 @@ function rowAttr(row: DaptinAssetRow, key: keyof DaptinAssetAttributes): unknown
 function summaryFromRow(row: DaptinAssetRow, explicitId = assetId(row)): CanasterAssetSummary {
   return {
     id: explicitId,
-    name: String(rowAttr(row, 'name') ?? 'Image'),
+    name: String(rowAttr(row, 'name') ?? 'File'),
     mime: String(rowAttr(row, 'mime') ?? ''),
     updatedAt: stringOrNull(rowAttr(row, 'updated_at') ?? rowAttr(row, 'updatedAt')),
   };

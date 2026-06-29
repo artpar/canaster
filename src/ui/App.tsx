@@ -25,13 +25,24 @@ import {
     signOut,
     verifyEmailOtp,
 } from '../infra/daptin/canasterDocuments';
-import {loadAssetObject, uploadImageAsset} from '../infra/daptin/assets';
+import {loadAssetObject, uploadWorkspaceAsset} from '../infra/daptin/assets';
 import {
     isLocalAssetId,
     loadLocalAssetFile,
     loadLocalAssetObject,
-    saveLocalImageAsset
+    saveLocalAsset
 } from '../infra/browser/localAssets';
+import {
+    cleanAssetTitle,
+    isImageAssetMime,
+    isSupportedWorkspaceAssetFile,
+    workspaceAssetKindForFile
+} from '../core/workspaceAssetTypes';
+import {
+    embedProviderForUrl,
+    embedTitleForUrl,
+    normalizeEmbedUrl
+} from '../core/embedUrl';
 import {
     clearDaptinSession,
     DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY,
@@ -67,6 +78,7 @@ import {
     type NestedCanvasWorkspaceChromeState,
     type NestedCanvasWorkspaceHandle,
     type WorkspaceFileDropRequest,
+    type WorkspaceTextPasteRequest,
 } from './canvas/nested/NestedCanvasWorkspace';
 import {
     describeNode,
@@ -79,6 +91,7 @@ import {
 import {
     type CanvasArrangeLayout,
     type CanvasNode,
+    type NodeData,
     type WorldPoint
 } from '../domain/types';
 import {BuiltInNodeTypes} from '../domain/types';
@@ -738,11 +751,11 @@ export function App() {
         try {
             await workspaceRef.current?.flushWorkspaceSnapshot();
             let freshSnapshot = workspaceRef.current?.getWorkspaceSnapshot() ?? snapshot;
-            const promoted = await promoteLocalImageAssetsForOnlineSave(freshSnapshot);
+            const promoted = await promoteLocalAssetsForOnlineSave(freshSnapshot);
             if (promoted.changed) {
                 freshSnapshot = promoted.snapshot;
                 workspaceRef.current?.replaceWorkspaceSnapshot(freshSnapshot, {
-                    interaction: 'Images ready for online save',
+                    interaction: 'Files ready for online save',
                 });
             }
             if (activeDocumentId) {
@@ -922,42 +935,57 @@ export function App() {
 
     const handleWorkspaceFileDrop = useCallback(async (request: WorkspaceFileDropRequest) => {
         if (request.canvasId !== (workspaceRef.current?.collection().activeCanvasId ?? chromeState.collection.activeCanvasId)) return;
-        const imageFiles = request.files.filter((file) => file.type.startsWith('image/'));
-        if (!imageFiles.length) {
+        const supportedFiles = request.files.filter(isSupportedWorkspaceAssetFile);
+        if (!supportedFiles.length) {
             setSyncStatus((current) => current === 'saving' || current === 'loading' ? current : 'error');
-            setSyncMessage('Drop image files to add images.');
+            setSyncMessage('Use image, PDF, or Markdown files.');
             return;
         }
-        setSyncMessage(imageFiles.length > 1 ? `Adding ${imageFiles.length} images` : 'Adding image');
+        setSyncMessage(supportedFiles.length > 1 ? `Adding ${supportedFiles.length} files` : 'Adding file');
         try {
             const storeOnline = Boolean(activeDocumentId && signedIn && hasUsableStoredToken());
-            for (const [index, file] of imageFiles.entries()) {
-                const asset = await storeDroppedImage(file, storeOnline);
-                await cacheAssetImage(asset.id, asset.objectUrl);
+            for (const [index, file] of supportedFiles.entries()) {
+                const asset = await storeWorkspaceAsset(file, storeOnline);
+                if (isImageAssetMime(asset.mime)) await cacheAssetImage(asset.id, asset.objectUrl);
                 if (workspaceRef.current?.collection().activeCanvasId !== request.canvasId) {
-                    setSyncMessage('Image drop cancelled because the view changed.');
+                    setSyncMessage('File add cancelled because the view changed.');
                     return;
                 }
+                const node = await nodeCreateRequestForFile(file, asset);
                 const at = offsetDropPoint(request.at, index);
                 workspaceRef.current?.executeActiveCanvasCommand({
                     type    : 'create-node',
-                    nodeType: BuiltInNodeTypes.image,
+                    nodeType: node.nodeType,
                     source  : 'pointer',
                     at,
-                    data    : {
-                        assetId: asset.id,
-                        alt    : cleanImageName(asset.name),
-                        fit    : 'contain',
-                        caption: '',
-                    },
+                    data    : node.data,
                 });
             }
             workspaceRef.current?.refreshActiveCanvas();
         } catch (error) {
             setSyncStatus('error');
-            setSyncMessage(error instanceof Error ? error.message : 'Could not add this image.');
+            setSyncMessage(error instanceof Error ? error.message : 'Could not add this file.');
         }
     }, [activeDocumentId, chromeState.collection.activeCanvasId, signedIn]);
+
+    const handleWorkspaceTextPaste = useCallback((request: WorkspaceTextPasteRequest) => {
+        if (request.canvasId !== (workspaceRef.current?.collection().activeCanvasId ?? chromeState.collection.activeCanvasId)) return false;
+        const url = normalizeEmbedUrl(request.text, { allowLocalHttp: allowLocalHttpForCurrentHost() });
+        if (!url) return false;
+        workspaceRef.current?.executeActiveCanvasCommand({
+            type    : 'create-node',
+            nodeType: BuiltInNodeTypes.embed,
+            source  : 'pointer',
+            at      : request.at,
+            data    : {
+                url,
+                title      : embedTitleForUrl(url),
+                provider   : embedProviderForUrl(url),
+                aspectRatio: '16:9',
+            },
+        });
+        return true;
+    }, [chromeState.collection.activeCanvasId]);
 
     const handleCanvasThemeSelect = useCallback((themeId: CanasterThemeId | null, event: ReactMouseEvent<HTMLButtonElement>) => {
         const target = canvasThemeMenuTarget;
@@ -1183,6 +1211,7 @@ export function App() {
                         onArrangeCanvasMenuRequest={handleArrangeCanvasMenuRequest}
                         onCanvasThemeMenuRequest={handleCanvasThemeMenuRequest}
                         onFileDrop={handleWorkspaceFileDrop}
+                        onTextPaste={handleWorkspaceTextPaste}
                     />
                     {chromeState.collection.view.deleteConfirmation ? (<DeleteConfirmationPrompt
                         collection={chromeState.collection}
@@ -1223,13 +1252,65 @@ function saveActionLabel(status: SyncStatus, message: string, signedIn: boolean)
     return 'Save workspace online';
 }
 
-async function storeDroppedImage(file: File, online: boolean): Promise<{ id: string; name: string; objectUrl: string }> {
+type StoredWorkspaceAsset = {
+    id: string;
+    name: string;
+    mime: string;
+    objectUrl: string;
+};
+
+type FileNodeCreateRequest = {
+    nodeType: string;
+    data: NodeData;
+};
+
+async function storeWorkspaceAsset(file: File, online: boolean): Promise<StoredWorkspaceAsset> {
     if (online) {
-        const asset = await uploadImageAsset(file);
+        const asset = await uploadWorkspaceAsset(file);
         return loadAssetObject(asset.id);
     }
-    const asset = await saveLocalImageAsset(file);
+    const asset = await saveLocalAsset(file);
     return loadLocalAssetObject(asset.id);
+}
+
+async function nodeCreateRequestForFile(file: File, asset: StoredWorkspaceAsset): Promise<FileNodeCreateRequest> {
+    const kind = workspaceAssetKindForFile(file);
+    const title = cleanAssetTitle(asset.name || file.name, kind === 'pdf' ? 'PDF' : kind === 'markdown' ? 'Markdown' : 'Image');
+    if (kind === 'image') {
+        return {
+            nodeType: BuiltInNodeTypes.image,
+            data    : {
+                assetId: asset.id,
+                alt    : title,
+                fit    : 'contain',
+                caption: '',
+            },
+        };
+    }
+    if (kind === 'pdf') {
+        return {
+            nodeType: BuiltInNodeTypes.pdf,
+            data    : {
+                assetId : asset.id,
+                title,
+                fileName: asset.name || file.name || 'document.pdf',
+                mime    : asset.mime || 'application/pdf',
+            },
+        };
+    }
+    if (kind === 'markdown') {
+        return {
+            nodeType: BuiltInNodeTypes.md,
+            data    : {
+                assetId    : asset.id,
+                title,
+                fileName   : asset.name || file.name || 'note.md',
+                mime       : asset.mime || 'text/markdown',
+                previewText: await markdownPreviewForFile(file),
+            },
+        };
+    }
+    throw new Error('Use image, PDF, or Markdown files.');
 }
 
 function offsetDropPoint(point: WorldPoint, index: number): WorldPoint {
@@ -1237,11 +1318,40 @@ function offsetDropPoint(point: WorldPoint, index: number): WorldPoint {
     return { x: point.x + offset, y: point.y + offset };
 }
 
-function cleanImageName(name: string): string {
-    return name.replace(/\.[a-z0-9]+$/i, '').trim() || 'Image';
+function allowLocalHttpForCurrentHost(): boolean {
+    return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+}
+
+async function markdownPreviewForFile(file: File): Promise<string> {
+    const text = await file.text();
+    return text
+        .replace(/```[\s\S]*?```/g, ' ')
+        .replace(/`([^`]+)`/g, '$1')
+        .replace(/!\[[^\]]*]\([^)]*\)/g, ' ')
+        .replace(/\[([^\]]+)]\([^)]*\)/g, '$1')
+        .replace(/^#{1,6}\s*/gm, '')
+        .replace(/^[-*+]\s+/gm, '')
+        .replace(/^\d+\.\s+/gm, '')
+        .replace(/[*_~>#|]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 1600);
 }
 
 function imageAssetIdsInCollection(collection: CanvasDocumentCollection): string[] {
+    const ids = new Set<string>();
+    for (const document of Object.values(collection.documents)) {
+        const backgroundAssetId = document.appearance?.backgroundImage?.assetId;
+        if (backgroundAssetId) ids.add(backgroundAssetId);
+        for (const node of document.model.nodes) {
+            if (node.type !== BuiltInNodeTypes.image) continue;
+            for (const assetId of referencedAssetIdsForNode(node)) ids.add(assetId);
+        }
+    }
+    return [...ids];
+}
+
+function assetIdsInCollection(collection: CanvasDocumentCollection): string[] {
     const ids = new Set<string>();
     for (const document of Object.values(collection.documents)) {
         const backgroundAssetId = document.appearance?.backgroundImage?.assetId;
@@ -1253,15 +1363,15 @@ function imageAssetIdsInCollection(collection: CanvasDocumentCollection): string
     return [...ids];
 }
 
-async function promoteLocalImageAssetsForOnlineSave(
+async function promoteLocalAssetsForOnlineSave(
     snapshot: CanvasWorkspaceSnapshot
 ): Promise<{ snapshot: CanvasWorkspaceSnapshot; changed: boolean }> {
-    const localIds = localImageAssetIdsInSnapshot(snapshot);
+    const localIds = localAssetIdsInSnapshot(snapshot);
     if (!localIds.length) return { snapshot, changed: false };
     const promotedIds = new Map<string, string>();
     for (const localId of localIds) {
         const file = await loadLocalAssetFile(localId);
-        const asset = await uploadImageAsset(file);
+        const asset = await uploadWorkspaceAsset(file);
         promotedIds.set(localId, asset.id);
     }
     return {
@@ -1270,10 +1380,10 @@ async function promoteLocalImageAssetsForOnlineSave(
     };
 }
 
-function localImageAssetIdsInSnapshot(snapshot: CanvasWorkspaceSnapshot): string[] {
+function localAssetIdsInSnapshot(snapshot: CanvasWorkspaceSnapshot): string[] {
     const ids = new Set<string>();
     for (const collection of collectionsInSnapshot(snapshot)) {
-        for (const assetId of imageAssetIdsInCollection(collection)) {
+        for (const assetId of assetIdsInCollection(collection)) {
             if (isLocalAssetId(assetId)) ids.add(assetId);
         }
     }
