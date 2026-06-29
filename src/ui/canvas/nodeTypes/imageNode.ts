@@ -5,7 +5,7 @@ import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import { cachedAssetImage, cacheAssetImage } from '../imageAssets';
 import { createInlineTextInput, prepareInlineEditorMount, stopEvent } from '../inlineEditorDom';
 import type { JsonObject } from '../../../core/nodePrimitives';
-import { clipText, drawCompactNode, drawPlaceholderIcon, drawTypeBadge, nodeLayout, nodeText, wrapText } from '../nodeRendering';
+import { clipText, drawPlaceholderIcon, nodeLayout, nodeText, wrapText } from '../nodeRendering';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeContentRect, NodeDefinition, NodeInteractionRegion } from '../nodeDefinition/nodeDefinitionTypes';
 import type { CanvasTheme } from '../theme';
@@ -38,10 +38,7 @@ export const imageNodeDefinition: NodeDefinition<ImageNodeData> = defineNodeType
     ctx.strokeStyle = theme.nodeBorder;
     ctx.fillStyle = theme.mutedText;
 
-    if (state.quality === 'compact') {
-      drawCompactNode(ctx, contentRect, 'IMAGE', data.alt || data.caption || 'Image', theme);
-      return;
-    }
+    if (state.quality === 'compact' && !state.selected && !state.hovered) return;
 
     const frame = imageFrame(contentRect, theme);
     const cached = cachedAssetImage(data.assetId);
@@ -70,7 +67,6 @@ export const imageNodeDefinition: NodeDefinition<ImageNodeData> = defineNodeType
     if (state.selected || state.hovered) {
       drawImageFitControls(ctx, contentRect, data.fit, theme);
     }
-    drawTypeBadge(ctx, contentRect, 'IMAGE', theme);
   },
   describe({ data }) {
     return {

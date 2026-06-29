@@ -2,7 +2,7 @@ import { asString } from '../../../core/nodeData';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import { createInlineTextarea } from '../inlineEditorDom';
 import type { JsonObject } from '../../../core/nodePrimitives';
-import { drawCompactNode, drawNodeBodyLines, drawTypeBadge, nodeLayout, wrapText } from '../nodeRendering';
+import { drawNodeBodyLines, nodeLayout, wrapText } from '../nodeRendering';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
 
@@ -20,19 +20,11 @@ export const textNodeDefinition: NodeDefinition<TextNodeData> = defineNodeType({
   },
   render({ ctx, data, theme, contentRect, state }) {
     const layout = nodeLayout(theme);
-    ctx.fillStyle = theme.headerText;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-
-    if (state.quality === 'compact') {
-      drawCompactNode(ctx, contentRect, 'NOTE', firstLine(data.text) || 'Empty note', theme);
-      return;
-    }
+    if (state.quality === 'compact' && !state.selected && !state.hovered) return;
 
     const text = data.text.trim() ? data.text : 'Empty note';
-    const lines = wrapText(ctx, text, Math.max(0, contentRect.w - layout.insetX * 2), Math.max(1, Math.floor((contentRect.h - layout.footerHeight) / layout.bodyLineHeight)));
+    const lines = wrapText(ctx, text, Math.max(0, contentRect.w - layout.insetX * 2), Math.max(1, Math.floor(contentRect.h / layout.bodyLineHeight)));
     drawNodeBodyLines(ctx, contentRect, lines, theme, { y: contentRect.y + layout.titleY });
-    drawTypeBadge(ctx, contentRect, 'NOTE', theme);
   },
   describe({ data }) {
     const label = clipPlainText(firstLine(data.text), 60) || 'Empty note';

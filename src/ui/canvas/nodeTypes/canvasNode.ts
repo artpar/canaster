@@ -1,7 +1,7 @@
 import { asNullableString, asNumber, asString } from '../../../core/nodeData';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import type { JsonObject } from '../../../core/nodePrimitives';
-import { drawCompactNode, drawNodeMeta, drawNodeTitle, drawTypeBadge, nodeLayout, nodeText } from '../nodeRendering';
+import { nodeLayout, nodeText } from '../nodeRendering';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeContentRect, NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
 
@@ -26,36 +26,25 @@ export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = define
   render({ ctx, data, theme, contentRect, state }) {
     const text = nodeText(theme);
     const layout = nodeLayout(theme);
-    if (state.quality === 'compact' && !state.selected && !state.hovered) {
-      drawCompactNode(ctx, contentRect, 'VIEW', data.title || 'View', theme);
-      return;
+    if (state.quality === 'compact' && !state.selected && !state.hovered) return;
+
+    ctx.strokeStyle = theme.nodeBorder;
+    const preview = canvasPortalViewportRect(contentRect, theme);
+    const previewX = preview.x;
+    const previewY = preview.y;
+    const previewW = preview.w;
+    const previewH = preview.h;
+    ctx.strokeRect(previewX, previewY, previewW, previewH);
+    ctx.fillStyle = theme.mutedText;
+    ctx.font = text.label;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    if (!data.childCanvasId) {
+      ctx.fillText('No view inside', previewX + layout.insetX, previewY + layout.labelLineHeight * 0.6);
+    } else if (state.portalPreview === 'none') {
+      ctx.fillText(`${data.nodeCount} item${data.nodeCount === 1 ? '' : 's'} inside`, previewX + layout.insetX, previewY + layout.labelLineHeight * 0.6);
     }
-
-    drawNodeTitle(ctx, contentRect, data.title || 'View', theme, layout.titleY);
-
-    if (state.quality !== 'compact') {
-      ctx.strokeStyle = theme.nodeBorder;
-      const preview = canvasPortalViewportRect(contentRect, theme);
-      const previewX = preview.x;
-      const previewY = preview.y;
-      const previewW = preview.w;
-      const previewH = preview.h;
-      ctx.strokeRect(previewX, previewY, previewW, previewH);
-      ctx.fillStyle = theme.mutedText;
-      ctx.font = text.label;
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
-      if (!data.childCanvasId) {
-        ctx.fillText('No view inside', previewX + layout.insetX, previewY + layout.labelLineHeight * 0.6);
-      } else if (state.portalPreview === 'none') {
-        ctx.fillText(`${data.nodeCount} item${data.nodeCount === 1 ? '' : 's'} inside`, previewX + layout.insetX, previewY + layout.labelLineHeight * 0.6);
-      }
-      if (state.portalPreview !== 'live') drawPreviewBoxes(ctx, previewX, previewY, previewW, previewH, theme);
-    } else {
-      drawNodeMeta(ctx, contentRect, data.childCanvasId ? `${data.nodeCount} item${data.nodeCount === 1 ? '' : 's'} inside` : 'No view inside', theme);
-    }
-
-    drawTypeBadge(ctx, contentRect, 'VIEW', theme);
+    if (state.portalPreview !== 'live') drawPreviewBoxes(ctx, previewX, previewY, previewW, previewH, theme);
   },
   hitTest({ data, point, contentRect, theme }) {
     const preview = canvasPortalViewportRect(contentRect, theme);
@@ -112,8 +101,8 @@ export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = define
 export function canvasPortalViewportRect(contentRect: NodeContentRect, theme?: Parameters<typeof nodeLayout>[0]): NodeContentRect {
   const layout = theme ? nodeLayout(theme) : null;
   const inset = layout?.insetX ?? 6;
-  const top = layout ? layout.contentY - Math.round(layout.bodyLineHeight * 0.55) : 36;
-  const bottom = layout ? layout.footerHeight + layout.insetX : 72;
+  const top = layout ? layout.titleY : 10;
+  const bottom = layout ? layout.insetX : 12;
   return {
     x: contentRect.x + inset,
     y: contentRect.y + top,

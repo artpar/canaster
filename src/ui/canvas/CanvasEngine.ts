@@ -3,6 +3,7 @@ import { cloneNodeData } from '../../core/nodeData';
 import { canvasPortalViewportRect } from './nodeTypes/canvasNode';
 import { cachedAssetImage } from './imageAssets';
 import { createNodeInteraction, describeNode, hitTestNodeContent, nodeDefinitionFor, nodeDefinitionForType, nodeInteractionRegions, parseNodeData, portalInfoForNode, renderNodeContent } from './nodeRegistry';
+import { clipText, nodeText } from './nodeRendering';
 import type { NodeContentRect, NodeInteractionController, NodeInteractionRegion } from './nodeDefinition/nodeDefinitionTypes';
 import type {
   Camera,
@@ -31,7 +32,6 @@ const MIN_SCALE = 0.08;
 const MAX_SCALE = 4;
 const MAX_DPR = 2;
 const GRID_STEP = 32;
-const DRAG_HANDLE = 12;
 const RESIZE_HANDLE = 12;
 const FIXED_HANDLE_DRAW_SIZE = 16;
 const FIXED_HANDLE_HIT_SIZE = 28;
@@ -45,6 +45,9 @@ const WHEEL_LINE_PX = 16;
 const WHEEL_PAGE_PX = 640;
 const PREVIEW_FRAME_INTERVAL_MS = 50;
 const CONTEXT_FRAME_INTERVAL_MS = 100;
+const NODE_HEADER_MIN_WIDTH = 72;
+const NODE_HEADER_PAD_X = 8;
+const NODE_HEADER_HEIGHT = 22;
 
 type DragState =
   | { mode: 'pan'; pointerId: number; sx: number; sy: number; camX: number; camY: number; moved: boolean }
@@ -108,6 +111,13 @@ type CommandPlan = {
   operations: CanvasOperation[];
   change?: CanvasModelChange;
   interaction: string;
+};
+
+type NodeChromeState = {
+  selected: boolean;
+  primary: boolean;
+  hovered: boolean;
+  compact: boolean;
 };
 
 type ActiveNodeInteraction = {
@@ -650,6 +660,7 @@ export class CanvasEngine {
     }
     const compact = this.shouldUseCompactNodes(visibleNodes.length);
     for (const node of visibleNodes) this.drawNode(node, compact);
+    for (const node of visibleNodes) this.drawNodeHeader(node, compact);
     const renderedNodes = visibleNodes.length;
     this.lastRenderedNodeIds = visibleNodes.map((node) => node.id);
     this.lastRenderedNodes = renderedNodes;
@@ -833,15 +844,16 @@ export class CanvasEngine {
     const theme = this.themeForNode(renderNode);
     const definition = nodeDefinitionFor(renderNode);
     const data = parseNodeData(renderNode);
+    const chrome = this.nodeChromeState(renderNode, compact);
     const state = {
-      selected: this.selectedNodeIds.has(renderNode.id) || this.highlightNodeIds.has(renderNode.id),
-      primary: renderNode.id === this.primarySelectedNodeId,
-      hovered: renderNode.id === this.hoverNodeId,
+      selected: chrome.selected,
+      primary: chrome.primary,
+      hovered: chrome.hovered,
       quality: compact ? 'compact' as const : 'normal' as const,
       portalPreview: this.portalPreviewState(renderNode),
     };
 
-    this.drawNodeShell(renderNode, { selected: state.selected, primary: state.primary, hovered: state.hovered, compact }, theme);
+    this.drawNodeShell(renderNode, chrome, theme);
     const contentRect = this.nodeContentRect(renderNode, theme);
     ctx.save();
     this.clipToNodeContent(contentRect);
@@ -856,12 +868,40 @@ export class CanvasEngine {
     });
     ctx.restore();
     if (state.selected) {
-      this.drawDragHandle(renderNode, theme);
       this.drawResizeHandle(renderNode, theme);
     }
   }
 
-  private drawNodeShell(node: CanvasNode, state: { selected: boolean; primary: boolean; hovered: boolean; compact: boolean }, theme: CanvasTheme) {
+  private drawNodeHeader(node: CanvasNode, compact: boolean) {
+    const renderNode = this.renderNode(node);
+    const theme = this.themeForNode(renderNode);
+    const state = this.nodeChromeState(renderNode, compact);
+    const definition = nodeDefinitionFor(renderNode);
+    const label = describeNode(renderNode).label || definition.displayName;
+    const rect = this.nodeHeaderRect(renderNode, theme, label);
+    const text = nodeText(theme);
+    const padX = this.nodeHeaderPadX();
+    const labelWidth = Math.max(0, rect.w - padX * 2);
+
+    this.ctx.save();
+    this.ctx.shadowColor = theme.nodeShadow;
+    this.ctx.shadowBlur = state.selected || state.hovered ? Math.max(5, theme.nodeShadowBlur * 0.65) : Math.max(3, theme.nodeShadowBlur * 0.4);
+    this.ctx.shadowOffsetY = Math.max(1, theme.nodeShadowOffsetY * 0.45);
+    roundRectPath(this.ctx, rect.x, rect.y, rect.w, rect.h, Math.min(theme.nodeRadius, rect.h / 2));
+    this.ctx.fillStyle = theme.nodeBg;
+    this.ctx.fill();
+    this.ctx.restore();
+
+    this.ctx.save();
+    this.ctx.font = this.nodeHeaderFont(text.micro);
+    this.ctx.textAlign = 'left';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillStyle = theme.headerText;
+    this.ctx.fillText(clipText(this.ctx, label, labelWidth), rect.x + padX, rect.y + rect.h / 2);
+    this.ctx.restore();
+  }
+
+  private drawNodeShell(node: CanvasNode, state: NodeChromeState, theme: CanvasTheme) {
     const { ctx } = this;
     const selected = this.selectedNodeIds.has(node.id);
     const primary = node.id === this.primarySelectedNodeId;
@@ -909,31 +949,6 @@ export class CanvasEngine {
     this.ctx.fill();
   }
 
-  private drawDragHandle(node: CanvasNode, theme: CanvasTheme) {
-    const handle = this.dragHandleDrawRect(node);
-    const { ctx } = this;
-    ctx.save();
-    ctx.fillStyle = theme.nodeBg;
-    ctx.strokeStyle = theme.selected;
-    ctx.lineWidth = this.interactionHandleLength(1.4);
-    roundRectPath(ctx, handle.x, handle.y, handle.w, handle.h, this.interactionHandleLength(3));
-    ctx.fill();
-    ctx.stroke();
-    ctx.beginPath();
-    const dotRadius = Math.max(this.interactionHandleLength(0.8), handle.w / 12);
-    const x1 = handle.x + handle.w * 0.35;
-    const x2 = handle.x + handle.w * 0.65;
-    const y1 = handle.y + handle.h * 0.35;
-    const y2 = handle.y + handle.h * 0.65;
-    for (const [x, y] of [[x1, y1], [x2, y1], [x1, y2], [x2, y2]] as const) {
-      ctx.moveTo(x + dotRadius, y);
-      ctx.arc(x, y, dotRadius, 0, Math.PI * 2);
-    }
-    ctx.fillStyle = theme.selected;
-    ctx.fill();
-    ctx.restore();
-  }
-
   private nodeContentRect(node: CanvasNode, theme = this.themeForNode(node)): NodeContentRect {
     const padding = theme.nodePadding;
     return {
@@ -942,6 +957,48 @@ export class CanvasEngine {
       w: Math.max(0, node.w - padding * 2),
       h: Math.max(0, node.h - padding * 2),
     };
+  }
+
+  private nodeChromeState(node: CanvasNode, compact: boolean): NodeChromeState {
+    const selected = this.selectedNodeIds.has(node.id) || this.highlightNodeIds.has(node.id);
+    return {
+      selected,
+      primary: node.id === this.primarySelectedNodeId,
+      hovered: node.id === this.hoverNodeId,
+      compact,
+    };
+  }
+
+  private nodeHeaderRect(node: CanvasNode, theme: CanvasTheme, label = describeNode(node).label): NodeContentRect {
+    const text = nodeText(theme);
+    const height = this.interactionHandleSizing === 'screen-fixed' ?
+      this.interactionHandleLength(NODE_HEADER_HEIGHT) :
+      Math.max(NODE_HEADER_HEIGHT, theme.nodeLabelLineHeight + 8);
+    const minWidth = this.interactionHandleLength(NODE_HEADER_MIN_WIDTH);
+    const padX = this.nodeHeaderPadX();
+    const maxWidth = Math.max(minWidth, node.w);
+    this.ctx.save();
+    this.ctx.font = this.nodeHeaderFont(text.micro);
+    const labelWidth = this.ctx.measureText(label).width;
+    this.ctx.restore();
+    const preferredWidth = padX * 2 + Math.ceil(labelWidth);
+    const width = Math.min(maxWidth, Math.max(minWidth, preferredWidth));
+    return {
+      x: node.x,
+      y: node.y - height,
+      w: width,
+      h: height,
+    };
+  }
+
+  private nodeHeaderPadX(): number {
+    return this.interactionHandleLength(NODE_HEADER_PAD_X);
+  }
+
+  private nodeHeaderFont(font: string): string {
+    if (this.interactionHandleSizing !== 'screen-fixed') return font;
+    const scale = Math.max(this.camera.scale, MIN_SCALE);
+    return scaleCanvasFont(font, scale);
   }
 
   worldToScreenRect(rect: { x: number; y: number; w: number; h: number }): ScreenRect {
@@ -1001,7 +1058,8 @@ export class CanvasEngine {
     if (selectedDragNode) {
       this.closeNodeInteraction();
       if (selectedDragNode.id !== this.primarySelectedNodeId) {
-        this.applyCommandPlan(this.planSelectNode(selectedDragNode.id, 'pointer', 'add'), false);
+        const mode = this.selectedNodeIds.has(selectedDragNode.id) || event.shiftKey || event.metaKey || event.ctrlKey ? 'add' : 'replace';
+        this.applyCommandPlan(this.planSelectNode(selectedDragNode.id, 'pointer', mode), false);
       }
       this.drag = {
         mode: 'node',
@@ -1260,15 +1318,20 @@ export class CanvasEngine {
     }
     const point = this.eventPoint(event);
     const world = this.screenToWorld(point.x, point.y);
-    if (this.selectedResizeNodeAt(world) || this.selectedDragNodeAt(world)) {
+    if (this.selectedResizeNodeAt(world)) {
       event.preventDefault();
       return;
     }
     const node = this.nodeAt(world);
     if (node) {
       if (!this.selectedNodeIds.has(node.id)) this.executeCommand({ type: 'select-node', nodeId: node.id, mode: 'replace', source: 'pointer' });
-      const region = this.interactionRegionAt(node, world) ?? this.interactionRegionsFor(node)[0] ?? null;
+      const renderNode = this.renderNode(node);
+      const region = this.interactionRegionAt(node, world) ?? (pointInRect(world, renderNode) ? this.interactionRegionsFor(node)[0] : null) ?? null;
       if (region && this.startNodeInteraction(node, region, 'pointer')) {
+        event.preventDefault();
+        return;
+      }
+      if (this.selectedDragNodeAt(world)) {
         event.preventDefault();
         return;
       }
@@ -1326,7 +1389,12 @@ export class CanvasEngine {
     for (let i = this.model.nodes.length - 1; i >= 0; i--) {
       const node = this.model.nodes[i];
       if (!this.isNodeVisible(node)) continue;
-      if (point.x >= node.x && point.x <= node.x + node.w && point.y >= node.y && point.y <= node.y + node.h) {
+      const renderNode = this.renderNode(node);
+      const header = this.nodeHeaderRect(renderNode, this.themeForNode(renderNode));
+      if (
+        (point.x >= renderNode.x && point.x <= renderNode.x + renderNode.w && point.y >= renderNode.y && point.y <= renderNode.y + renderNode.h) ||
+        pointInRect(point, header)
+      ) {
         return node;
       }
     }
@@ -1345,8 +1413,9 @@ export class CanvasEngine {
   private selectedDragNodeAt(point: WorldPoint) {
     for (let i = this.model.nodes.length - 1; i >= 0; i--) {
       const node = this.model.nodes[i];
-      if (!this.selectedNodeIds.has(node.id) || !this.isNodeVisible(node)) continue;
-      if (this.isInsideDragHandle(point, node)) return node;
+      if (!this.isNodeVisible(node)) continue;
+      const renderNode = this.renderNode(node);
+      if (this.isInsideDragHandle(point, renderNode)) return node;
     }
     return null;
   }
@@ -1370,13 +1439,16 @@ export class CanvasEngine {
     const definition = nodeDefinitionFor(node);
     const data = parseNodeData(node);
     const theme = this.themeForNode(node);
+    const headerRect = this.nodeHeaderRect(node, theme, describeNode(node).label);
     return nodeInteractionRegions({
       definition,
       node,
       data,
       theme,
       contentRect: this.nodeContentRect(node, theme),
-    }).filter((region) => region.id.trim() && region.rect.w > 0 && region.rect.h > 0);
+    })
+      .map((region) => region.id === 'title' ? { ...region, rect: headerRect } : region)
+      .filter((region) => region.id.trim() && region.rect.w > 0 && region.rect.h > 0);
   }
 
   private interactionRegionAt(node: CanvasNode, point: WorldPoint): NodeInteractionRegion | null {
@@ -1557,23 +1629,6 @@ export class CanvasEngine {
     };
   }
 
-  private dragHandleRect(node: CanvasNode) {
-    const size = this.interactionHandleSize(DRAG_HANDLE, FIXED_HANDLE_HIT_SIZE);
-    return {
-      x: node.x - size / 2,
-      y: node.y - size / 2,
-      w: size,
-      h: size,
-    };
-  }
-
-  private dragHandleDrawRect(node: CanvasNode) {
-    if (this.interactionHandleSizing === 'world') return this.dragHandleRect(node);
-    const hit = this.dragHandleRect(node);
-    const size = this.interactionHandleLength(FIXED_HANDLE_DRAW_SIZE);
-    return centeredRect(hit, size);
-  }
-
   private interactionHandleSize(worldUnits: number, fixedScreenPx: number) {
     if (this.interactionHandleSizing === 'screen-fixed') return this.interactionHandleLength(fixedScreenPx);
     return worldUnits;
@@ -1590,8 +1645,7 @@ export class CanvasEngine {
   }
 
   private isInsideDragHandle(point: WorldPoint, node: CanvasNode) {
-    const rect = this.dragHandleRect(node);
-    return point.x >= rect.x && point.x <= rect.x + rect.w && point.y >= rect.y && point.y <= rect.y + rect.h;
+    return pointInRect(point, this.nodeHeaderRect(node, this.themeForNode(node)));
   }
 
   private modelBounds() {
@@ -1924,17 +1978,12 @@ function finiteNumberOrUndefined(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
-function positiveNumberOrUndefined(value: unknown) {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+function scaleCanvasFont(font: string, scale: number): string {
+  return font.replace(/(\d+(?:\.\d+)?)px/g, (_match, size: string) => `${Number(size) / scale}px`);
 }
 
-function centeredRect(rect: NodeGeometry, size: number): NodeGeometry {
-  return {
-    x: rect.x + (rect.w - size) / 2,
-    y: rect.y + (rect.h - size) / 2,
-    w: size,
-    h: size,
-  };
+function positiveNumberOrUndefined(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
 function previewGeometriesFrom(operations: CanvasOperation[]) {

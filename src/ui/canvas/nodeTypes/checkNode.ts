@@ -2,7 +2,7 @@ import { asString } from '../../../core/nodeData';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import { createInlineTextInput, prepareInlineEditorMount, stopEvent } from '../inlineEditorDom';
 import type { JsonObject } from '../../../core/nodePrimitives';
-import { clipText, drawCompactNode, drawNodeMeta, drawNodeTitle, drawTypeBadge, nodeLayout, nodeText } from '../nodeRendering';
+import { clipText, drawNodeMeta, nodeLayout, nodeText } from '../nodeRendering';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeContentRect, NodeDefinition, NodeInteractionRegion } from '../nodeDefinition/nodeDefinitionTypes';
 import type { CanvasTheme } from '../theme';
@@ -37,18 +37,16 @@ export const checkNodeDefinition: NodeDefinition<CheckNodeData> = defineNodeType
     const done = data.items.filter((item) => item.checked).length;
     const total = data.items.length;
 
-    if (state.quality === 'compact' && !state.selected && !state.hovered) {
-      drawCompactNode(ctx, contentRect, 'LIST', data.title || 'Checklist', theme);
-      return;
-    }
+    if (state.quality === 'compact' && !state.selected && !state.hovered) return;
 
-    drawNodeTitle(ctx, contentRect, data.title || 'Checklist', theme);
-    drawNodeMeta(ctx, contentRect, total ? `${done}/${total} done` : 'No checklist items', theme);
+    const metaY = layout.titleY;
+    const itemsY = layout.titleY + layout.labelLineHeight + Math.round(layout.labelLineHeight * 0.6);
+    drawNodeMeta(ctx, contentRect, total ? `${done}/${total} done` : 'No checklist items', theme, metaY);
 
-    const rows = visibleRows(contentRect.h, layout);
+    const rows = visibleRows(Math.max(0, contentRect.h - itemsY), layout);
     const visibleItems = data.items.slice(0, rows);
     const metrics = checklistMetrics(layout);
-    let y = contentRect.y + layout.contentY;
+    let y = contentRect.y + itemsY;
     for (const item of visibleItems) {
       drawCheckbox(ctx, contentRect.x + layout.insetX, y + metrics.checkboxOffsetY, item.checked, theme);
       ctx.fillStyle = item.checked ? theme.mutedText : theme.bodyText;
@@ -69,10 +67,8 @@ export const checkNodeDefinition: NodeDefinition<CheckNodeData> = defineNodeType
     } else if (data.items.length > visibleItems.length) {
       ctx.fillStyle = theme.mutedText;
       ctx.font = text.label;
-      ctx.fillText(`+${data.items.length - visibleItems.length} more`, contentRect.x + layout.insetX, contentRect.y + Math.max(0, contentRect.h - layout.footerHeight));
+      ctx.fillText(`+${data.items.length - visibleItems.length} more`, contentRect.x + layout.insetX, contentRect.y + Math.max(0, contentRect.h - layout.labelLineHeight));
     }
-
-    drawTypeBadge(ctx, contentRect, 'LIST', theme);
   },
   describe({ data }) {
     const done = data.items.filter((item) => item.checked).length;
@@ -143,15 +139,16 @@ export const checkNodeDefinition: NodeDefinition<CheckNodeData> = defineNodeType
 function checklistRegions(contentRect: NodeContentRect, data: CheckNodeData, theme: CanvasTheme): NodeInteractionRegion[] {
   const layout = nodeLayout(theme);
   const metrics = checklistMetrics(layout);
+  const itemsY = layout.titleY + layout.labelLineHeight + Math.round(layout.labelLineHeight * 0.6);
   const regions: NodeInteractionRegion[] = [{
     id: 'title',
-    rect: { x: contentRect.x + layout.insetX, y: contentRect.y + layout.titleY, w: Math.max(0, contentRect.w - layout.insetX * 2), h: layout.titleHeight + Math.round(layout.labelLineHeight * 0.15) },
+    rect: { x: contentRect.x + layout.insetX, y: contentRect.y, w: Math.max(0, contentRect.w - layout.insetX * 2), h: layout.titleHeight + Math.round(layout.labelLineHeight * 0.15) },
     cursor: 'text',
     label: 'checklist title',
   }];
-  const rows = visibleRows(contentRect.h, layout);
+  const rows = visibleRows(Math.max(0, contentRect.h - itemsY), layout);
   const visibleItems = data.items.slice(0, rows);
-  let y = contentRect.y + layout.contentY;
+  let y = contentRect.y + itemsY;
   for (const item of visibleItems) {
     regions.push({
       id: `item:${item.id}:checked`,

@@ -2,7 +2,7 @@ import { asEnum, asString } from '../../../core/nodeData';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import { createInlineTextarea, createInlineTextInput } from '../inlineEditorDom';
 import type { JsonObject } from '../../../core/nodePrimitives';
-import { drawAccentMark, drawCompactNode, drawNodeBodyLines, drawNodeTitle, drawTypeBadge, nodeLayout, wrapText } from '../nodeRendering';
+import { drawAccentMark, drawNodeBodyLines, nodeLayout, wrapText } from '../nodeRendering';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeDefinition, NodeContentRect, NodeInteractionRegion } from '../nodeDefinition/nodeDefinitionTypes';
 import type { CanvasTheme } from '../theme';
@@ -33,25 +33,17 @@ export const cardNodeDefinition: NodeDefinition<CardNodeData> = defineNodeType({
     const accent = theme.kind[data.accent];
     drawAccentMark(ctx, contentRect, accent, theme);
 
-    if (state.quality === 'compact' && !state.selected && !state.hovered) {
-      const accentOffset = layout.accentHeight + Math.round(layout.labelLineHeight * 0.5);
-      drawCompactNode(ctx, { ...contentRect, y: contentRect.y + accentOffset, h: Math.max(0, contentRect.h - accentOffset) }, data.accent.toUpperCase(), data.title || 'Untitled work item', theme);
-      return;
-    }
+    if (state.quality === 'compact' && !state.selected && !state.hovered) return;
 
-    const titleOffset = layout.titleY + layout.accentHeight + Math.round(layout.labelLineHeight * 0.5);
-    drawNodeTitle(ctx, contentRect, data.title || 'Untitled work item', theme, titleOffset);
-
+    const detailTop = layout.accentHeight + Math.round(layout.labelLineHeight * 0.7);
     const detailRect = {
       x: contentRect.x + layout.insetX,
-      y: contentRect.y + layout.contentY - Math.round(layout.bodyLineHeight * 0.22),
+      y: contentRect.y + detailTop,
       w: contentRect.w - layout.insetX * 2,
-      h: Math.max(0, contentRect.h - layout.contentY - layout.footerHeight),
+      h: Math.max(0, contentRect.h - detailTop),
     };
     const lines = wrapText(ctx, data.detail, Math.max(0, detailRect.w), cardDetailLineCapacity(detailRect, layout.bodyLineHeight));
     drawNodeBodyLines(ctx, detailRect, lines, theme, { x: detailRect.x, y: detailRect.y });
-
-    drawTypeBadge(ctx, contentRect, data.accent.toUpperCase(), theme);
   },
   describe({ data }) {
     return {
@@ -96,18 +88,17 @@ export const cardNodeDefinition: NodeDefinition<CardNodeData> = defineNodeType({
 
 function cardRegions(contentRect: NodeContentRect, theme: CanvasTheme): NodeInteractionRegion[] {
   const layout = nodeLayout(theme);
-  const accentGap = Math.round(layout.labelLineHeight * 0.4);
-  const detailLift = Math.round(layout.bodyLineHeight * 0.33);
+  const detailTop = layout.accentHeight + Math.round(layout.labelLineHeight * 0.7);
   return [
     {
       id: 'title',
-      rect: { x: contentRect.x + layout.insetX, y: contentRect.y + layout.titleY + layout.accentHeight + accentGap, w: Math.max(0, contentRect.w - layout.insetX * 2), h: layout.titleHeight + Math.round(layout.labelLineHeight * 0.25) },
+      rect: { x: contentRect.x + layout.insetX, y: contentRect.y, w: Math.max(0, contentRect.w - layout.insetX * 2), h: layout.titleHeight + Math.round(layout.labelLineHeight * 0.25) },
       cursor: 'text',
       label: 'work item title',
     },
     {
       id: 'detail',
-      rect: { x: contentRect.x + layout.insetX, y: contentRect.y + layout.contentY - detailLift, w: Math.max(0, contentRect.w - layout.insetX * 2), h: Math.max(layout.rowHeight, contentRect.h - layout.contentY - layout.footerHeight + detailLift) },
+      rect: { x: contentRect.x + layout.insetX, y: contentRect.y + detailTop, w: Math.max(0, contentRect.w - layout.insetX * 2), h: Math.max(layout.rowHeight, contentRect.h - detailTop) },
       cursor: 'text',
       label: 'work item detail',
     },
@@ -115,5 +106,5 @@ function cardRegions(contentRect: NodeContentRect, theme: CanvasTheme): NodeInte
 }
 
 function cardDetailLineCapacity(rect: NodeContentRect, lineHeight: number) {
-  return Math.max(0, Math.min(2, Math.floor(rect.h / lineHeight)));
+  return Math.max(0, Math.min(4, Math.floor(rect.h / lineHeight)));
 }
