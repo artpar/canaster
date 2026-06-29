@@ -540,11 +540,10 @@ button {
 }
 
 .portal-overlay {
-  background: var(--nested-pane-fill);
+  background: transparent;
   border-radius: var(--canaster-radius-panel);
   box-shadow:
     inset 0 0 0 var(--canaster-border-width) var(--canaster-color-panel-border),
-    inset 0 0 0 2px var(--nested-pane-border-inner),
     var(--canaster-shadow-chrome);
   backdrop-filter: var(--canaster-texture-panel-backdrop-filter);
   overflow: hidden;
@@ -557,10 +556,10 @@ button {
 
 .embedded-nested-viewport {
   position: absolute;
-  inset: var(--nested-pane-gutter);
+  inset: 0;
   display: grid;
   overflow: hidden;
-  border: var(--canaster-border-width) solid var(--nested-pane-border-inner);
+  border: 0;
   border-radius: calc(var(--canaster-radius-panel) - 2px);
   pointer-events: auto;
 }
@@ -594,14 +593,14 @@ button {
   overflow: hidden;
   border: var(--canaster-border-width) solid var(--nested-pane-border);
   border-radius: var(--canaster-radius-panel);
-  background: var(--nested-pane-fill);
+  background: transparent;
   box-shadow: 0 8px 18px rgba(16, 28, 38, 0.08);
   backdrop-filter: var(--canaster-texture-panel-backdrop-filter);
   pointer-events: auto;
 }
 
 .parent-context-canvas-viewport {
-  inset: var(--nested-pane-gutter);
+  inset: 0;
   border: var(--canaster-border-width) solid var(--nested-pane-border);
   border-radius: calc(var(--canaster-radius-panel) - 2px);
 }
@@ -1589,6 +1588,7 @@ button {
   z-index: 18;
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   gap: var(--canaster-viewport-control-gap);
   width: auto;
   height: auto;
@@ -1608,6 +1608,12 @@ button {
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0);
+}
+
+.canvas-viewport-control-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--canaster-viewport-control-gap);
 }
 
 .canvas-viewport-control-button {
@@ -1630,6 +1636,11 @@ button {
 .parent-context-canvas-viewport .canvas-viewport-controls {
   right: var(--canaster-embedded-viewport-control-inset);
   bottom: var(--canaster-embedded-viewport-control-inset);
+  gap: var(--canaster-embedded-viewport-control-gap);
+}
+
+.embedded-nested-viewport .canvas-viewport-control-row,
+.parent-context-canvas-viewport .canvas-viewport-control-row {
   gap: var(--canaster-embedded-viewport-control-gap);
 }
 

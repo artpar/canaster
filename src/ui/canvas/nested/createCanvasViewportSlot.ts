@@ -118,7 +118,14 @@ function createViewportControls(controls: CanvasViewportControl[]): HTMLDivEleme
   const group = document.createElement('div');
   group.className = 'canvas-viewport-controls';
   group.setAttribute('aria-label', 'Canvas controls');
-  for (const control of controls) group.append(createViewportControlButton(control));
+  const rowBreak = Math.ceil(controls.length / 2);
+  for (const rowControls of [controls.slice(0, rowBreak), controls.slice(rowBreak)]) {
+    if (!rowControls.length) continue;
+    const row = document.createElement('div');
+    row.className = 'canvas-viewport-control-row';
+    for (const control of rowControls) row.append(createViewportControlButton(control));
+    group.append(row);
+  }
   return group;
 }
 

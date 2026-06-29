@@ -904,6 +904,7 @@ export class NativeNestedCanvasController {
       }),
     });
     applyPortalOverlayStyle(viewportSlot.wrapper, layout);
+    viewportSlot.viewport.style.inset = '0';
     viewportSlot.viewport.dataset.depth = String(depth);
     parent.append(viewportSlot.wrapper);
     viewportSlot.engine.setModel(canvasDocument.model);
@@ -925,6 +926,7 @@ export class NativeNestedCanvasController {
     slot.viewportSlot.canvasId = canvasDocument.id;
     slot.viewportSlot.wrapper.dataset.canvasId = canvasDocument.id;
     slot.viewportSlot.viewport.dataset.canvasId = canvasDocument.id;
+    slot.viewportSlot.viewport.style.inset = '0';
     slot.viewportSlot.canvas.setAttribute('aria-label', `${canvasDocument.title} live preview`);
     slot.viewportSlot.engine.setCanvasId(canvasDocument.id);
     slot.viewportSlot.engine.setTheme(this.canvasThemeFor(canvasDocument.id));
@@ -1244,6 +1246,8 @@ export class NativeNestedCanvasController {
       }),
     });
     viewportSlot.wrapper.dataset.region = region;
+    viewportSlot.wrapper.style.background = 'transparent';
+    viewportSlot.viewport.style.inset = '0';
     viewportSlot.engine.setTheme(this.canvasThemeFor(canvasId));
     this.applyActiveHandleSizing(viewportSlot);
     this.record('parent-context:pane:create', { ownerKey, canvasId, region });
@@ -1695,6 +1699,7 @@ function applyPortalOverlayStyle(element: HTMLElement, layout: PortalLayout) {
   element.style.height = `${style.height}px`;
   element.style.overflow = 'hidden';
   element.style.borderRadius = `${style.borderRadius}px`;
+  element.style.background = 'transparent';
   element.style.pointerEvents = 'auto';
 }
 
