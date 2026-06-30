@@ -9,6 +9,7 @@ export type NodeData = JsonObject;
 
 export type CanvasNodeAppearance = {
   themeId?: string | null;
+  contentScale?: number | null;
 };
 
 export type CanvasNode<TData extends NodeData = NodeData> = {

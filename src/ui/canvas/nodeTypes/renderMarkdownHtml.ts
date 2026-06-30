@@ -3,7 +3,7 @@ import MarkdownIt from 'markdown-it';
 
 const markdown = new MarkdownIt({
   breaks: false,
-  html: false,
+  html: true,
   linkify: true,
   typographer: false,
 });

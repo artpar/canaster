@@ -5,13 +5,17 @@ import type { NodeContentRect } from '../nodeDefinition/nodeDefinitionTypes';
 import type { CanvasTheme } from '../theme';
 
 const MAX_CANVAS_MARKDOWN_CHARS = 20000;
+const MAX_MARKDOWN_BLOCK_CACHE_ENTRIES = 128;
+const MAX_MARKDOWN_LINE_CACHE_ENTRIES = 512;
 
 const markdown = new MarkdownIt({
   breaks: false,
-  html: false,
+  html: true,
   linkify: true,
   typographer: false,
 });
+const htmlImageTagPattern = new RegExp('<' + 'img\\b[^>]*>', 'gi');
+const htmlInlineImagePattern = new RegExp('^<' + 'img\\b', 'i');
 
 type MarkdownCanvasBlock =
   | { type: 'heading'; level: number; text: string; quoteDepth: number }
@@ -24,6 +28,9 @@ type ListState = {
   type: 'bullet' | 'ordered';
   next: number;
 };
+
+const markdownBlockCache = new Map<string, MarkdownCanvasBlock[]>();
+const markdownLineCache = new Map<string, string[]>();
 
 export function markdownTextForCanvasPreview(markdownText: string): string {
   return markdownText.trim().slice(0, MAX_CANVAS_MARKDOWN_CHARS);
@@ -43,7 +50,7 @@ export function drawMarkdownCanvasPreview(
     w: Math.max(0, rect.w - layout.insetX * 2),
     h: Math.max(0, rect.h - layout.contentY - layout.labelLineHeight),
   };
-  const blocks = markdownText.trim() ? markdownBlocks(markdownText) : [{ type: 'paragraph', text: 'No Markdown content', quoteDepth: 0 } satisfies MarkdownCanvasBlock];
+  const blocks = markdownText.trim() ? cachedMarkdownBlocks(markdownText) : [{ type: 'paragraph', text: 'No Markdown content', quoteDepth: 0 } satisfies MarkdownCanvasBlock];
   let y = bodyRect.y;
   const bottom = bodyRect.y + bodyRect.h;
 
@@ -57,6 +64,19 @@ export function drawMarkdownCanvasPreview(
     y = drawMarkdownBlock(ctx, bodyRect, y, bottom, block, theme, text);
   }
   ctx.restore();
+}
+
+function cachedMarkdownBlocks(markdownText: string): MarkdownCanvasBlock[] {
+  const cached = markdownBlockCache.get(markdownText);
+  if (cached) {
+    markdownBlockCache.delete(markdownText);
+    markdownBlockCache.set(markdownText, cached);
+    return cached;
+  }
+  const blocks = markdownBlocks(markdownText);
+  markdownBlockCache.set(markdownText, blocks);
+  trimCache(markdownBlockCache, MAX_MARKDOWN_BLOCK_CACHE_ENTRIES);
+  return blocks;
 }
 
 function markdownBlocks(markdownText: string): MarkdownCanvasBlock[] {
@@ -118,9 +138,46 @@ function markdownBlocks(markdownText: string): MarkdownCanvasBlock[] {
       case 'hr':
         blocks.push({ type: 'rule', quoteDepth });
         break;
+      case 'html_block':
+        blocks.push(...htmlBlocks(token.content, quoteDepth));
+        break;
     }
   }
   return blocks;
+}
+
+function htmlBlocks(html: string, quoteDepth: number): MarkdownCanvasBlock[] {
+  const blocks: MarkdownCanvasBlock[] = [];
+  const headingPattern = /<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = headingPattern.exec(html)) !== null) {
+    pushHtmlParagraphBlock(blocks, html.slice(lastIndex, match.index), quoteDepth);
+    const headingText = readableHtmlText(match[2] ?? '');
+    if (headingText) blocks.push({ type: 'heading', level: Number.parseInt(match[1] ?? '2', 10), text: headingText, quoteDepth });
+    lastIndex = match.index + match[0].length;
+  }
+
+  pushHtmlParagraphBlock(blocks, html.slice(lastIndex), quoteDepth);
+  return blocks;
+}
+
+function pushHtmlParagraphBlock(blocks: MarkdownCanvasBlock[], html: string, quoteDepth: number): void {
+  const text = readableHtmlText(html);
+  if (text) blocks.push({ type: 'paragraph', text, quoteDepth });
+}
+
+function readableHtmlText(html: string): string {
+  return decodeHtmlEntities(html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(?:p|div|section|article|header|footer|center|li)>/gi, '\n')
+    .replace(/<li\b[^>]*>/gi, '• ')
+    .replace(htmlImageTagPattern, (tag) => imageText(tag))
+    .replace(/<[^>]+>/g, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim());
 }
 
 function drawMarkdownBlock(
@@ -257,18 +314,80 @@ function inlineText(token: Token) {
     if (child.type === 'text' || child.type === 'code_inline') parts.push(child.content);
     if (child.type === 'softbreak' || child.type === 'hardbreak') parts.push('\n');
     if (child.type === 'image') parts.push(child.content || child.attrGet('alt') || 'Image');
+    if (child.type === 'html_inline') parts.push(htmlInlineText(child.content));
   }
   return (parts.length ? parts.join('') : token.content).replace(/[ \t]+\n/g, '\n').trim();
 }
 
+function htmlInlineText(html: string): string {
+  if (/^<br\s*\/?>$/i.test(html.trim())) return '\n';
+  if (htmlInlineImagePattern.test(html.trim())) return imageText(html);
+  return '';
+}
+
+function imageText(tag: string): string {
+  return htmlAttribute(tag, 'alt') || htmlAttribute(tag, 'title') || '';
+}
+
+function htmlAttribute(tag: string, name: string): string {
+  const pattern = new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i');
+  const match = pattern.exec(tag);
+  return decodeHtmlEntities(match?.[1] ?? match?.[2] ?? match?.[3] ?? '').trim();
+}
+
+function decodeHtmlEntities(value: string): string {
+  return value.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (entity, body: string) => {
+    if (body[0] === '#') {
+      const base = body[1]?.toLowerCase() === 'x' ? 16 : 10;
+      const raw = body[1]?.toLowerCase() === 'x' ? body.slice(2) : body.slice(1);
+      const codePoint = Number.parseInt(raw, base);
+      return Number.isFinite(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : entity;
+    }
+    switch (body.toLowerCase()) {
+      case 'amp':
+        return '&';
+      case 'apos':
+        return "'";
+      case 'gt':
+        return '>';
+      case 'lt':
+        return '<';
+      case 'nbsp':
+        return ' ';
+      case 'quot':
+        return '"';
+      default:
+        return entity;
+    }
+  });
+}
+
 function wrappedMarkdownLines(ctx: CanvasRenderingContext2D, value: string, maxWidth: number, font: string) {
+  const cacheKey = `${font}\n${Math.round(maxWidth)}\n${value}`;
+  const cached = markdownLineCache.get(cacheKey);
+  if (cached) {
+    markdownLineCache.delete(cacheKey);
+    markdownLineCache.set(cacheKey, cached);
+    return cached;
+  }
   const previousFont = ctx.font;
   ctx.font = font;
   const lines = value
     .split(/\n+/)
     .flatMap((line) => wrapText(ctx, line, maxWidth, Number.POSITIVE_INFINITY));
   ctx.font = previousFont;
-  return lines.length ? lines : [''];
+  const wrapped = lines.length ? lines : [''];
+  markdownLineCache.set(cacheKey, wrapped);
+  trimCache(markdownLineCache, MAX_MARKDOWN_LINE_CACHE_ENTRIES);
+  return wrapped;
+}
+
+function trimCache<TKey, TValue>(cache: Map<TKey, TValue>, maxEntries: number): void {
+  while (cache.size > maxEntries) {
+    const oldest = cache.keys().next();
+    if (oldest.done) return;
+    cache.delete(oldest.value);
+  }
 }
 
 function nextListMarker(stack: ListState[]) {

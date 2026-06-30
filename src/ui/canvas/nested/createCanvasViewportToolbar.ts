@@ -9,6 +9,8 @@ export type CanvasViewportToolbarControlEvent = {
 
 export type CanvasViewportToolbarOptions = {
   controls: CanvasViewportControl[];
+  ariaLabel?: string;
+  controlLabels?: Partial<Record<CanvasViewportControl, string>>;
   onControl?: (control: CanvasViewportControl, event: CanvasViewportToolbarControlEvent) => void;
 };
 
@@ -33,7 +35,7 @@ export function createCanvasViewportToolbar(options: CanvasViewportToolbarOption
   const group = document.createElement('div');
   group.className = 'canvas-viewport-controls';
   group.setAttribute('role', 'toolbar');
-  group.setAttribute('aria-label', 'View controls');
+  group.setAttribute('aria-label', options.ariaLabel ?? 'View controls');
   for (const { label, controls } of viewportControlGroups(options.controls)) {
     const rowControls = controls.filter((control) => options.controls.includes(control));
     if (!rowControls.length) continue;
@@ -41,7 +43,7 @@ export function createCanvasViewportToolbar(options: CanvasViewportToolbarOption
     row.className = 'canvas-viewport-control-row';
     row.setAttribute('role', 'group');
     row.setAttribute('aria-label', label);
-    for (const control of rowControls) row.append(createViewportControlButton(control, !options.onControl));
+    for (const control of rowControls) row.append(createViewportControlButton(control, !options.onControl, options.controlLabels?.[control]));
     group.append(row);
   }
   wireViewportControls(group, options.onControl);
@@ -65,14 +67,14 @@ export function setCanvasViewportToolbarVisible(toolbar: HTMLDivElement, visible
   }
 }
 
-function createViewportControlButton(control: CanvasViewportControl, disabled: boolean): HTMLButtonElement {
+function createViewportControlButton(control: CanvasViewportControl, disabled: boolean, label = controlLabels[control]): HTMLButtonElement {
   const button = document.createElement('button');
   button.className = 'icon-button canvas-viewport-control-button';
   button.type = 'button';
   button.dataset.control = control;
   button.disabled = disabled;
-  button.setAttribute('aria-label', controlLabels[control]);
-  button.title = controlLabels[control];
+  button.setAttribute('aria-label', label);
+  button.title = label;
   if (menuControls.has(control)) {
     button.setAttribute('aria-haspopup', 'menu');
     button.setAttribute('aria-expanded', 'false');

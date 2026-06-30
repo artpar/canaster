@@ -2127,6 +2127,27 @@ button {
   box-shadow: var(--canaster-shadow-chrome);
 }
 
+.node-content-zoom-controls {
+  right: auto;
+  bottom: auto;
+  z-index: 8;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.node-content-zoom-controls[aria-hidden='true'] {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+}
+
+.node-content-zoom-controls .canvas-viewport-control-button {
+  width: var(--canaster-icon-button-mobile-size);
+  height: var(--canaster-icon-button-mobile-size);
+  border-radius: var(--canaster-radius-panel);
+}
+
 .view-tree-panel {
   z-index: 12;
   display: flex;
@@ -3408,4 +3429,22 @@ button {
   .account-status.saving svg {
     animation: none;
   }
+}
+
+.node-inline-editor-layer > .node-content-zoom-controls.canvas-viewport-controls {
+  right: auto;
+  bottom: auto;
+  left: auto;
+  width: auto;
+  height: auto;
+  max-width: none;
+  transform-origin: right bottom;
+}
+
+.node-inline-editor-layer > .node-content-zoom-controls.canvas-viewport-controls:not([aria-hidden='true']) {
+  transform: translateY(0);
+}
+
+.node-inline-editor-layer > .node-content-zoom-controls.canvas-viewport-controls[aria-hidden='true'] {
+  transform: translateY(4px);
 }

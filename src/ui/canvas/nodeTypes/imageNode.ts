@@ -165,7 +165,7 @@ function createImagePicker(mount: HTMLElement, data: ImageNodeData, commit: (nex
     try {
       const asset = await uploadImageAsset(file);
       const object = await loadAssetObject(asset.id);
-      cacheAssetImage(object.id, object.objectUrl);
+      await cacheAssetImage(object.id, object.objectUrl);
       commit({ ...data, assetId: asset.id, alt: altDraft || data.alt || cleanImageName(asset.name) });
       close();
     } catch (error) {

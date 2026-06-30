@@ -33,8 +33,7 @@ export const markdownNodeDefinition: NodeDefinition<MarkdownNodeData> = defineNo
       markdownText: asString(raw.markdownText, ''),
     };
   },
-  render({ ctx, data, theme, contentRect, state }) {
-    if (state.quality === 'compact' && !state.selected && !state.hovered) return;
+  render({ ctx, data, theme, contentRect }) {
     drawMarkdownPreview(ctx, contentRect, data, theme);
   },
   describe({ data }) {

@@ -1,4 +1,5 @@
 import { cloneNodeData } from '../core/nodeData';
+import { cloneNodeAppearance } from '../core/nodeAppearance';
 import type { Camera, CanvasNode, CanvasSelectionState } from './types';
 import type {
   CanvasDocument,
@@ -207,10 +208,9 @@ function keepDocumentRecord<T>(record: Record<string, T>, documents: Record<Canv
 }
 
 function cloneNode(node: CanvasNode): CanvasNode {
-  const themeId = typeof node.appearance?.themeId === 'string' && node.appearance.themeId ? node.appearance.themeId : null;
   return {
     ...node,
-    appearance: themeId ? { themeId } : undefined,
+    appearance: cloneNodeAppearance(node.appearance),
     data: cloneNodeData(node.data),
   };
 }

@@ -1,4 +1,5 @@
 import { cloneNodeData } from '../core/nodeData';
+import { cloneNodeAppearance, nodeAppearanceWithTheme } from '../core/nodeAppearance';
 import {
   createCanvasPortalNode,
   describeNode,
@@ -201,7 +202,7 @@ export function setNodeThemeId(collection: CanvasDocumentCollection, canvasId: C
     changed = true;
     return {
       ...node,
-      appearance: themeId ? { themeId } : undefined,
+      appearance: nodeAppearanceWithTheme(node.appearance, themeId),
       data: cloneNodeData(node.data),
     };
   });
@@ -378,7 +379,7 @@ export function cloneModel(model: CanvasModel): CanvasModel {
 export function cloneNode(node: CanvasNode): CanvasNode {
   return {
     ...node,
-    appearance: cloneDocumentAppearance(node.appearance),
+    appearance: cloneNodeAppearance(node.appearance),
     data: cloneNodeData(node.data),
   };
 }
