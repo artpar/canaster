@@ -1,12 +1,14 @@
 import { asString } from '../../../core/nodeData';
+import type { NodeContentViewport } from '../../../core/nodeAppearance';
 import { cleanAssetTitle, workspaceAssetKindForFile } from '../../../core/workspaceAssetTypes';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import type { JsonObject } from '../../../core/nodePrimitives';
-import { clipText, drawNodeBodyLines, drawNodeMeta, nodeLayout, nodeText, wrapText } from '../nodeRendering';
+import { drawNodeMeta, nodeLayout } from '../nodeRendering';
 import { createFilePreviewShell, loadFileAssetObject, saveFileAsset } from './fileAssetPreview';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeContentRect, NodeDefinition, NodeInteractionRegion } from '../nodeDefinition/nodeDefinitionTypes';
 import type { CanvasTheme } from '../theme';
+import { drawPdfCanvasPreview } from './pdfCanvasPreview';
 
 type PdfNodeData = {
   assetId: string;
@@ -29,9 +31,9 @@ export const pdfNodeDefinition: NodeDefinition<PdfNodeData> = defineNodeType({
       mime: asString(raw.mime, 'application/pdf'),
     };
   },
-  render({ ctx, data, theme, contentRect, state }) {
+  render({ ctx, data, theme, contentRect, visibleContentRect, contentViewport, requestRender, state }) {
     if (state.quality === 'compact' && !state.selected && !state.hovered) return;
-    drawPdfShell(ctx, contentRect, data, theme);
+    drawPdfPreview(ctx, contentRect, visibleContentRect, contentViewport, data, theme, requestRender);
   },
   describe({ data }) {
     return {
@@ -54,52 +56,17 @@ export const pdfNodeDefinition: NodeDefinition<PdfNodeData> = defineNodeType({
   },
 });
 
-function drawPdfShell(ctx: CanvasRenderingContext2D, rect: NodeContentRect, data: PdfNodeData, theme: CanvasTheme) {
-  const layout = nodeLayout(theme);
-  const text = nodeText(theme);
-  const title = data.title || cleanAssetTitle(data.fileName, 'PDF');
-  const previewRect = {
-    x: rect.x + layout.insetX,
-    y: rect.y + layout.labelLineHeight,
-    w: Math.max(0, rect.w - layout.insetX * 2),
-    h: Math.max(0, rect.h - layout.labelLineHeight * 2),
-  };
-
-  ctx.save();
-  ctx.strokeStyle = theme.nodeBorder;
-  ctx.fillStyle = theme.bg;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.roundRect(previewRect.x, previewRect.y, previewRect.w, previewRect.h, theme.nodeControlRadius);
-  ctx.fill();
-  ctx.stroke();
-  ctx.restore();
-
-  const folded = Math.min(24, previewRect.w * 0.2, previewRect.h * 0.22);
-  ctx.save();
-  ctx.strokeStyle = theme.mutedText;
-  ctx.beginPath();
-  ctx.moveTo(previewRect.x + previewRect.w - folded, previewRect.y);
-  ctx.lineTo(previewRect.x + previewRect.w, previewRect.y + folded);
-  ctx.lineTo(previewRect.x + previewRect.w - folded, previewRect.y + folded);
-  ctx.closePath();
-  ctx.stroke();
-  ctx.restore();
-
+function drawPdfPreview(
+  ctx: CanvasRenderingContext2D,
+  rect: NodeContentRect,
+  visibleRect: NodeContentRect,
+  contentViewport: NodeContentViewport,
+  data: PdfNodeData,
+  theme: CanvasTheme,
+  requestRender: () => void,
+) {
   drawNodeMeta(ctx, rect, data.assetId ? 'PDF document' : 'Add a PDF file', theme, 0);
-  ctx.fillStyle = theme.headerText;
-  ctx.font = text.titleSmall;
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'top';
-  ctx.fillText(clipText(ctx, title, Math.max(0, previewRect.w - layout.insetX * 2)), previewRect.x + layout.insetX, previewRect.y + layout.contentY);
-
-  const detail = data.fileName && data.fileName !== title ? data.fileName : data.assetId ? 'Open PDF preview' : 'No file attached';
-  const lines = wrapText(ctx, detail, Math.max(0, previewRect.w - layout.insetX * 2), 2);
-  drawNodeBodyLines(ctx, previewRect, lines, theme, {
-    y: previewRect.y + layout.contentY + layout.bodyLineHeight,
-    color: theme.mutedText,
-    font: text.label,
-  });
+  drawPdfCanvasPreview(ctx, rect, data.assetId, data.fileName, theme, visibleRect, contentViewport, requestRender);
 }
 
 function pdfRegions(contentRect: NodeContentRect, theme: CanvasTheme): NodeInteractionRegion[] {

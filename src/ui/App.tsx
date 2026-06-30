@@ -92,7 +92,6 @@ import {
     describeNode,
     referencedAssetIdsForNode
 } from './canvas/nodeRegistry';
-import {markdownTextForCanvasPreview} from './canvas/nodeTypes/markdownCanvasPreview';
 import {
     cacheAssetImage,
     hasCachedAssetImage
@@ -1675,7 +1674,6 @@ async function nodeCreateRequestForFile(file: File, asset: StoredWorkspaceAsset)
         };
     }
     if (kind === 'markdown') {
-        const markdownText = await file.text();
         return {
             nodeType: BuiltInNodeTypes.md,
             data    : {
@@ -1683,7 +1681,7 @@ async function nodeCreateRequestForFile(file: File, asset: StoredWorkspaceAsset)
                 title,
                 fileName   : asset.name || file.name || 'note.md',
                 mime       : asset.mime || 'text/markdown',
-                markdownText: markdownTextForCanvasPreview(markdownText),
+                markdownText: '',
             },
         };
     }

@@ -1,3 +1,4 @@
+import { boundedMarkdownNodeText } from '../core/boundedMarkdownNodeText';
 import {
   asEnum,
   asJsonObject,
@@ -66,14 +67,16 @@ export function normalizeNodeData(nodeType: string, raw: unknown): NodeData {
         fileName: asString(data.fileName, ''),
         mime: asString(data.mime, 'application/pdf'),
       };
-    case 'md':
+    case 'md': {
+      const assetId = asString(data.assetId, '');
       return {
-        assetId: asString(data.assetId, ''),
+        assetId,
         title: asString(data.title, 'Markdown'),
         fileName: asString(data.fileName, ''),
         mime: asString(data.mime, 'text/markdown'),
-        markdownText: asString(data.markdownText, ''),
+        markdownText: assetId ? '' : boundedMarkdownNodeText(asString(data.markdownText, '')),
       };
+    }
     case 'embed':
       return {
         url: asString(data.url, ''),

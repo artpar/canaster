@@ -1,4 +1,5 @@
 import type { CanvasTheme } from '../theme';
+import type { NodeContentViewport } from '../../../core/nodeAppearance';
 import type { CanvasEditSource, CanvasNode, JsonObject, NodeData, NodeTypeId, WorldPoint } from '../../../core/nodePrimitives';
 
 export type NodeSize = {
@@ -29,7 +30,10 @@ export type NodeRenderContext<TData extends NodeData = NodeData> = {
   data: TData;
   theme: CanvasTheme;
   contentRect: NodeContentRect;
+  contentViewport: NodeContentViewport;
+  visibleContentRect: NodeContentRect;
   state: NodeRenderState;
+  requestRender(): void;
 };
 
 export type NodeHitTarget =

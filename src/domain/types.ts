@@ -38,6 +38,8 @@ export type CanvasCommand =
   | { type: 'move-selection'; dx: number; dy: number; source: CanvasEditSource }
   | { type: 'resize-selection'; dw: number; dh: number; source: CanvasEditSource }
   | { type: 'scale-selection-content'; factor: number; nodeIds?: string[]; source: CanvasEditSource }
+  | { type: 'pan-selection-content'; dx: number; dy: number; nodeIds?: string[]; source: CanvasEditSource }
+  | { type: 'reset-selection-content-pan'; nodeIds?: string[]; source: CanvasEditSource }
   | { type: 'reset-selection-content-scale'; nodeIds?: string[]; source: CanvasEditSource }
   | { type: 'delete-selection'; source: CanvasEditSource }
   | { type: 'copy-selection'; source: CanvasEditSource }
@@ -50,6 +52,11 @@ export type CanvasNodeGeometry = {
   h: number;
 };
 
+export type CanvasNodeContentPan = {
+  x: number;
+  y: number;
+};
+
 export type CanvasSelectionState = {
   selectedNodeIds: string[];
   primarySelectedNodeId: string | null;
@@ -60,6 +67,7 @@ export type CanvasOperation =
   | { type: 'set-selection'; from: CanvasSelectionState; to: CanvasSelectionState }
   | { type: 'set-node-geometry'; nodeId: string; from: CanvasNodeGeometry; to: CanvasNodeGeometry }
   | { type: 'set-node-content-scale'; nodeId: string; from: number; to: number }
+  | { type: 'set-node-content-pan'; nodeId: string; from: CanvasNodeContentPan; to: CanvasNodeContentPan }
   | { type: 'delete-nodes'; nodes: CanvasNode[] }
   | { type: 'create-nodes'; nodes: CanvasNode[] }
   | { type: 'set-paste-counter'; from: number; to: number }
@@ -69,6 +77,7 @@ export type CanvasModelChange =
   | { kind: 'node-move'; nodeId: string; nodeIds: string[]; source: CanvasEditSource }
   | { kind: 'node-resize'; nodeId: string; nodeIds: string[]; source: CanvasEditSource }
   | { kind: 'node-content-scale'; nodeId: string; nodeIds: string[]; source: CanvasEditSource }
+  | { kind: 'node-content-pan'; nodeId: string; nodeIds: string[]; source: CanvasEditSource }
   | { kind: 'node-delete'; nodeId: string | null; nodeIds: string[]; source: CanvasEditSource }
   | { kind: 'node-create'; nodeId: string | null; nodeIds: string[]; source: CanvasEditSource };
 

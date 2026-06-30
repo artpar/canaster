@@ -4,7 +4,6 @@ import { clipText, nodeLayout, nodeText, wrapText } from '../nodeRendering';
 import type { NodeContentRect } from '../nodeDefinition/nodeDefinitionTypes';
 import type { CanvasTheme } from '../theme';
 
-const MAX_CANVAS_MARKDOWN_CHARS = 20000;
 const MAX_MARKDOWN_BLOCK_CACHE_ENTRIES = 128;
 const MAX_MARKDOWN_LINE_CACHE_ENTRIES = 512;
 
@@ -17,7 +16,7 @@ const markdown = new MarkdownIt({
 const htmlImageTagPattern = new RegExp('<' + 'img\\b[^>]*>', 'gi');
 const htmlInlineImagePattern = new RegExp('^<' + 'img\\b', 'i');
 
-type MarkdownCanvasBlock =
+export type MarkdownCanvasBlock =
   | { type: 'heading'; level: number; text: string; quoteDepth: number }
   | { type: 'paragraph'; text: string; quoteDepth: number }
   | { type: 'listItem'; marker: string; text: string; depth: number; quoteDepth: number }
@@ -32,15 +31,12 @@ type ListState = {
 const markdownBlockCache = new Map<string, MarkdownCanvasBlock[]>();
 const markdownLineCache = new Map<string, string[]>();
 
-export function markdownTextForCanvasPreview(markdownText: string): string {
-  return markdownText.trim().slice(0, MAX_CANVAS_MARKDOWN_CHARS);
-}
-
 export function drawMarkdownCanvasPreview(
   ctx: CanvasRenderingContext2D,
   rect: NodeContentRect,
   markdownText: string,
   theme: CanvasTheme,
+  visibleRect: NodeContentRect,
 ) {
   const layout = nodeLayout(theme);
   const text = nodeText(theme);
@@ -51,14 +47,32 @@ export function drawMarkdownCanvasPreview(
     h: Math.max(0, rect.h - layout.contentY - layout.labelLineHeight),
   };
   const blocks = markdownText.trim() ? cachedMarkdownBlocks(markdownText) : [{ type: 'paragraph', text: 'No Markdown content', quoteDepth: 0 } satisfies MarkdownCanvasBlock];
+  drawMarkdownCanvasBlocks(ctx, rect, blocks, theme, visibleRect);
+}
+
+export function parseMarkdownCanvasBlocks(markdownText: string): MarkdownCanvasBlock[] {
+  return markdownBlocks(markdownText);
+}
+
+export function drawMarkdownCanvasBlocks(
+  ctx: CanvasRenderingContext2D,
+  rect: NodeContentRect,
+  blocks: MarkdownCanvasBlock[],
+  theme: CanvasTheme,
+  visibleRect: NodeContentRect,
+) {
+  const layout = nodeLayout(theme);
+  const text = nodeText(theme);
+  const bodyRect = {
+    x: rect.x + layout.insetX,
+    y: rect.y + layout.contentY + layout.labelLineHeight,
+    w: Math.max(0, rect.w - layout.insetX * 2),
+    h: Math.max(0, rect.h - layout.contentY - layout.labelLineHeight),
+  };
   let y = bodyRect.y;
-  const bottom = bodyRect.y + bodyRect.h;
+  const bottom = visibleRect.y + visibleRect.h;
 
   ctx.save();
-  ctx.beginPath();
-  ctx.rect(bodyRect.x, bodyRect.y, bodyRect.w, bodyRect.h);
-  ctx.clip();
-
   for (const block of blocks) {
     if (y >= bottom) break;
     y = drawMarkdownBlock(ctx, bodyRect, y, bottom, block, theme, text);

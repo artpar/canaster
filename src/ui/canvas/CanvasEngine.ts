@@ -3,7 +3,9 @@ import { cloneNodeData } from '../../core/nodeData';
 import {
   cloneNodeAppearance,
   contentScaleForNode,
+  contentViewportForNode,
   DEFAULT_NODE_CONTENT_SCALE,
+  nodeAppearanceWithContentOffset,
   nodeAppearanceWithContentScale,
 } from '../../core/nodeAppearance';
 import { canvasPortalViewportRect } from './nodeTypes/canvasNode';
@@ -20,6 +22,7 @@ import type {
   CanvasModel,
   CanvasModelChange,
   CanvasNode,
+  CanvasNodeContentPan,
   CanvasNodeVisibilityFilter,
   CanvasOperation,
   CanvasSelectionState,
@@ -60,6 +63,7 @@ const NODE_CONTENT_TOOLBAR_INSET = 8;
 
 type DragState =
   | { mode: 'pan'; pointerId: number; sx: number; sy: number; camX: number; camY: number; moved: boolean }
+  | { mode: 'content-pan'; pointerId: number; sx: number; sy: number; nodeIds: string[]; moved: boolean; command: CanvasCommand | null }
   | {
       mode: 'node';
       pointerId: number;
@@ -174,6 +178,7 @@ export class CanvasEngine {
   private cursorWorld: WorldPoint | null = null;
   private drag: DragState = null;
   private previewGeometries = new Map<string, NodeGeometry>();
+  private previewContentPans = new Map<string, CanvasNodeContentPan>();
   private touchPoints = new Map<number, ScreenPoint>();
   private gesture: TouchGestureState | null = null;
   private dpr = 1;
@@ -233,9 +238,10 @@ export class CanvasEngine {
       this.inlineLayer.setAttribute('aria-label', 'Inline panel editor');
       this.canvas.insertAdjacentElement('afterend', this.inlineLayer);
       this.nodeContentToolbar = createCanvasViewportToolbar({
-        controls: ['zoom-out', 'reset-zoom', 'zoom-in'],
-        ariaLabel: 'Panel content zoom',
+        controls: ['fit', 'zoom-out', 'reset-zoom', 'zoom-in'],
+        ariaLabel: 'Panel content viewport',
         controlLabels: {
+          fit: 'Center panel content',
           'reset-zoom': 'Reset panel content zoom',
           'zoom-in': 'Zoom panel content in',
           'zoom-out': 'Zoom panel content out',
@@ -464,14 +470,16 @@ export class CanvasEngine {
   private applyPreviewPlan(plan: CommandPlan) {
     this.interaction = plan.interaction;
     this.previewGeometries = previewGeometriesFrom(plan.operations);
+    this.previewContentPans = previewContentPansFrom(plan.operations);
     this.markDirty();
     this.emitStatus();
     return plan;
   }
 
   private clearPreview() {
-    if (!this.previewGeometries.size) return;
+    if (!this.previewGeometries.size && !this.previewContentPans.size) return;
     this.previewGeometries.clear();
+    this.previewContentPans.clear();
     this.markDirty();
   }
 
@@ -489,6 +497,10 @@ export class CanvasEngine {
         return this.planResizeSelection(command.dw, command.dh, command.source);
       case 'scale-selection-content':
         return this.planScaleSelectionContent(command.factor, command.source, command.nodeIds);
+      case 'pan-selection-content':
+        return this.planPanSelectionContent(command.dx, command.dy, command.source, command.nodeIds);
+      case 'reset-selection-content-pan':
+        return this.planResetSelectionContentPan(command.source, command.nodeIds);
       case 'reset-selection-content-scale':
         return this.planResetSelectionContentScale(command.source, command.nodeIds);
       case 'delete-selection':
@@ -599,6 +611,18 @@ export class CanvasEngine {
     return this.planSetSelectionContentScale(() => DEFAULT_NODE_CONTENT_SCALE, source, nodeIds);
   }
 
+  private planPanSelectionContent(dx: number, dy: number, source: CanvasEditSource, nodeIds?: string[]): CommandPlan {
+    if ((!Number.isFinite(dx) || dx === 0) && (!Number.isFinite(dy) || dy === 0)) return { operations: [], interaction: 'Panel pan unchanged' };
+    return this.planSetSelectionContentPan((node) => {
+      const viewport = contentViewportForNode(node);
+      return { x: viewport.offsetX + (Number.isFinite(dx) ? dx : 0), y: viewport.offsetY + (Number.isFinite(dy) ? dy : 0) };
+    }, source, nodeIds);
+  }
+
+  private planResetSelectionContentPan(source: CanvasEditSource, nodeIds?: string[]): CommandPlan {
+    return this.planSetSelectionContentPan(() => ({ x: 0, y: 0 }), source, nodeIds);
+  }
+
   private planSetSelectionContentScale(nextScaleForNode: (node: CanvasNode) => number, source: CanvasEditSource, nodeIds?: string[]): CommandPlan {
     const nodes = this.contentZoomTargetNodes(nodeIds);
     if (!nodes.length) return { operations: [], interaction: 'Panel zoom no target' };
@@ -613,6 +637,27 @@ export class CanvasEngine {
       operations,
       change: operations.length ? { kind: 'node-content-scale', nodeId: this.primarySelectedNodeId ?? changedNodeIds[0] ?? nodes[0].id, nodeIds: changedNodeIds, source } : undefined,
       interaction: operations.length ? (changedNodeIds.length > 1 ? 'Panel contents zoomed' : 'Panel content zoomed') : 'Panel zoom unchanged',
+    };
+  }
+
+  private planSetSelectionContentPan(nextPanForNode: (node: CanvasNode) => CanvasNodeContentPan, source: CanvasEditSource, nodeIds?: string[]): CommandPlan {
+    const nodes = this.contentZoomTargetNodes(nodeIds);
+    if (!nodes.length) return { operations: [], interaction: 'Panel pan no target' };
+    const operations: CanvasOperation[] = [];
+    for (const node of nodes) {
+      const viewport = contentViewportForNode(node);
+      const from = { x: viewport.offsetX, y: viewport.offsetY };
+      const next = nextPanForNode(node);
+      const toAppearance = nodeAppearanceWithContentOffset(node.appearance, next.x, next.y);
+      const toViewport = contentViewportForNode({ ...node, appearance: toAppearance });
+      const to = { x: toViewport.offsetX, y: toViewport.offsetY };
+      if (!sameContentPan(from, to)) operations.push({ type: 'set-node-content-pan', nodeId: node.id, from, to });
+    }
+    const changedNodeIds = operations.map((operation) => operation.type === 'set-node-content-pan' ? operation.nodeId : '').filter(Boolean);
+    return {
+      operations,
+      change: operations.length ? { kind: 'node-content-pan', nodeId: this.primarySelectedNodeId ?? changedNodeIds[0] ?? nodes[0].id, nodeIds: changedNodeIds, source } : undefined,
+      interaction: operations.length ? (changedNodeIds.length > 1 ? 'Panel contents panned' : 'Panel content panned') : 'Panel pan unchanged',
     };
   }
 
@@ -673,6 +718,9 @@ export class CanvasEngine {
       } else if (operation.type === 'set-node-content-scale') {
         const node = this.model.nodes.find((candidate) => candidate.id === operation.nodeId);
         if (node) node.appearance = nodeAppearanceWithContentScale(node.appearance, operation.to);
+      } else if (operation.type === 'set-node-content-pan') {
+        const node = this.model.nodes.find((candidate) => candidate.id === operation.nodeId);
+        if (node) node.appearance = nodeAppearanceWithContentOffset(node.appearance, operation.to.x, operation.to.y);
       } else if (operation.type === 'delete-nodes') {
         const deleteSet = new Set(operation.nodes.map((node) => node.id));
         this.model.nodes = this.model.nodes.filter((node) => !deleteSet.has(node.id));
@@ -946,6 +994,7 @@ export class CanvasEngine {
     ctx.save();
     this.clipToNodeContent(renderNode, contentRect, theme);
     this.applyNodeContentTransform(renderNode, contentRect);
+    const contentViewport = contentViewportForNode(renderNode);
     renderNodeContent({
       definition,
       ctx,
@@ -953,7 +1002,10 @@ export class CanvasEngine {
       data,
       theme,
       contentRect,
+      contentViewport,
+      visibleContentRect: this.visibleNodeContentRect(renderNode, contentRect, contentViewport),
       state,
+      requestRender: () => this.markDirty(),
     });
     ctx.restore();
     this.drawNodeBorder(renderNode, chrome, theme);
@@ -1196,6 +1248,27 @@ export class CanvasEngine {
           return;
         }
       }
+      if (!event.shiftKey && !event.metaKey && !event.ctrlKey && this.selectedNodeIds.has(node.id) && this.isInsideContentPanArea(node, world)) {
+        const nodeIds = this.nodeContentTargetIdsFor(node.id);
+        if (nodeIds.length) {
+          this.closeNodeInteraction();
+          this.drag = {
+            mode: 'content-pan',
+            pointerId: event.pointerId,
+            sx: world.x,
+            sy: world.y,
+            nodeIds,
+            moved: false,
+            command: null,
+          };
+          this.interaction = 'Pan panel content';
+          this.capturePointer(event.pointerId);
+          this.canvas.style.cursor = 'grabbing';
+          this.markDirty();
+          this.emitStatus();
+          return;
+        }
+      }
       const mode = event.shiftKey || event.metaKey || event.ctrlKey ? 'toggle' : this.selectedNodeIds.has(node.id) ? 'add' : 'replace';
       this.executeCommand({ type: 'select-node', nodeId: node.id, mode, source: 'pointer' });
       if (!this.selectedNodeIds.has(node.id)) {
@@ -1249,6 +1322,12 @@ export class CanvasEngine {
       const plan = this.applyPreviewPlan(this.planCommand(command));
       this.drag.command = plan.operations.length ? command : null;
       this.drag.moved = plan.operations.length > 0;
+    } else if (this.drag?.mode === 'content-pan') {
+      const command: CanvasCommand = { type: 'pan-selection-content', dx: world.x - this.drag.sx, dy: world.y - this.drag.sy, nodeIds: this.drag.nodeIds, source: 'pointer' };
+      const plan = this.applyPreviewPlan(this.planCommand(command));
+      this.drag.command = plan.operations.length ? command : null;
+      this.drag.moved = plan.operations.length > 0;
+      this.canvas.style.cursor = 'grabbing';
     } else if (this.drag?.mode === 'resize') {
       const minSize = nodeDefinitionFor(this.drag.node).minSize;
       const rawW = Math.max(minSize.w, world.x - this.drag.ox - this.drag.node.x);
@@ -1516,7 +1595,13 @@ export class CanvasEngine {
 
   private renderNode(node: CanvasNode): CanvasNode {
     const preview = this.previewGeometries.get(node.id);
-    return preview ? { ...node, ...preview } : node;
+    const pan = this.previewContentPans.get(node.id);
+    if (!preview && !pan) return node;
+    return {
+      ...node,
+      ...(preview ?? {}),
+      appearance: pan ? nodeAppearanceWithContentOffset(node.appearance, pan.x, pan.y) : node.appearance,
+    };
   }
 
   private screenToWorld(screenX: number, screenY: number): WorldPoint {
@@ -1700,6 +1785,8 @@ export class CanvasEngine {
     if (this.selectedDragNodeAt(point)) return this.drag?.mode === 'node' ? 'grabbing' : 'grab';
     if (node && node.id === this.primarySelectedNodeId) {
       const region = this.interactionRegionAt(node, point);
+      if (region?.activation === 'single') return region.cursor ?? 'pointer';
+      if (this.selectedNodeIds.has(node.id) && this.isInsideContentPanArea(node, point)) return this.drag?.mode === 'content-pan' ? 'grabbing' : 'grab';
       if (region) return region.cursor ?? 'pointer';
     }
     return 'default';
@@ -1844,6 +1931,9 @@ export class CanvasEngine {
     let commandCommitted = false;
     if (commit) {
       if (drag.mode === 'node' && drag.moved) {
+        this.clearPreview();
+        commandCommitted = drag.command ? this.executeCommand(drag.command) : false;
+      } else if (drag.mode === 'content-pan' && drag.moved) {
         this.clearPreview();
         commandCommitted = drag.command ? this.executeCommand(drag.command) : false;
       } else if (drag.mode === 'resize' && drag.moved) {
@@ -2063,6 +2153,10 @@ export class CanvasEngine {
   private handleNodeContentToolbarControl(control: CanvasViewportControl): void {
     const targetIds = this.nodeContentToolbarTargetIds();
     if (!targetIds.length) return;
+    if (control === 'fit') {
+      this.executeCommand({ type: 'reset-selection-content-pan', nodeIds: targetIds, source: 'pointer' });
+      return;
+    }
     if (control === 'zoom-in') {
       this.executeCommand({ type: 'scale-selection-content', factor: NODE_CONTENT_ZOOM_FACTOR, nodeIds: targetIds, source: 'pointer' });
       return;
@@ -2107,12 +2201,7 @@ export class CanvasEngine {
 
   private nodeContentToolbarTargetIds(): string[] {
     if (!this.nodeContentToolbarTarget) return [];
-    if (this.selectedNodeIds.has(this.nodeContentToolbarTarget)) {
-      return this.model.nodes
-        .filter((node) => this.selectedNodeIds.has(node.id) && this.canZoomNodeContent(node))
-        .map((node) => node.id);
-    }
-    return [this.nodeContentToolbarTarget];
+    return this.nodeContentTargetIdsFor(this.nodeContentToolbarTarget);
   }
 
   private contentZoomTargetNodes(nodeIds?: string[]): CanvasNode[] {
@@ -2120,43 +2209,71 @@ export class CanvasEngine {
     return this.model.nodes.filter((node) => ids.has(node.id) && this.canZoomNodeContent(node));
   }
 
+  private nodeContentTargetIdsFor(nodeId: string): string[] {
+    if (this.selectedNodeIds.has(nodeId)) {
+      return this.model.nodes
+        .filter((node) => this.selectedNodeIds.has(node.id) && this.canZoomNodeContent(node))
+        .map((node) => node.id);
+    }
+    const node = this.model.nodes.find((candidate) => candidate.id === nodeId && this.canZoomNodeContent(candidate));
+    return node ? [node.id] : [];
+  }
+
+  private isInsideContentPanArea(node: CanvasNode, point: WorldPoint): boolean {
+    if (!this.canZoomNodeContent(node)) return false;
+    const renderNode = this.renderNode(node);
+    return pointInRect(point, this.nodeContentRect(renderNode, this.themeForNode(renderNode)));
+  }
+
   private canZoomNodeContent(node: CanvasNode): boolean {
     return node.type !== BuiltInNodeTypes.canvas && this.isNodeVisible(node);
   }
 
   private applyNodeContentTransform(node: CanvasNode, contentRect: NodeContentRect): void {
-    const scale = contentScaleForNode(node);
-    if (scale === DEFAULT_NODE_CONTENT_SCALE) return;
+    const viewport = contentViewportForNode(node);
+    if (viewport.scale === DEFAULT_NODE_CONTENT_SCALE && viewport.offsetX === 0 && viewport.offsetY === 0) return;
     const centerX = contentRect.x + contentRect.w / 2;
     const centerY = contentRect.y + contentRect.h / 2;
+    this.ctx.translate(viewport.offsetX, viewport.offsetY);
     this.ctx.translate(centerX, centerY);
-    this.ctx.scale(scale, scale);
+    this.ctx.scale(viewport.scale, viewport.scale);
     this.ctx.translate(-centerX, -centerY);
   }
 
+  private visibleNodeContentRect(node: CanvasNode, contentRect: NodeContentRect, viewport = contentViewportForNode(node)): NodeContentRect {
+    const centerX = contentRect.x + contentRect.w / 2;
+    const centerY = contentRect.y + contentRect.h / 2;
+    return {
+      x: centerX + (contentRect.x - viewport.offsetX - centerX) / viewport.scale,
+      y: centerY + (contentRect.y - viewport.offsetY - centerY) / viewport.scale,
+      w: contentRect.w / viewport.scale,
+      h: contentRect.h / viewport.scale,
+    };
+  }
+
   private nodeContentLocalPoint(node: CanvasNode, point: WorldPoint, theme: CanvasTheme): WorldPoint {
-    const scale = contentScaleForNode(node);
-    if (scale === DEFAULT_NODE_CONTENT_SCALE) return point;
+    const viewport = contentViewportForNode(node);
+    if (viewport.scale === DEFAULT_NODE_CONTENT_SCALE && viewport.offsetX === 0 && viewport.offsetY === 0) return point;
     const contentRect = this.nodeContentRect(node, theme);
     const centerX = contentRect.x + contentRect.w / 2;
     const centerY = contentRect.y + contentRect.h / 2;
     return {
-      x: centerX + (point.x - centerX) / scale,
-      y: centerY + (point.y - centerY) / scale,
+      x: centerX + (point.x - viewport.offsetX - centerX) / viewport.scale,
+      y: centerY + (point.y - viewport.offsetY - centerY) / viewport.scale,
     };
   }
 
   private nodeContentVisualRect(node: CanvasNode, rect: NodeContentRect, theme: CanvasTheme): NodeContentRect {
-    const scale = contentScaleForNode(node);
-    if (scale === DEFAULT_NODE_CONTENT_SCALE) return rect;
+    const viewport = contentViewportForNode(node);
+    if (viewport.scale === DEFAULT_NODE_CONTENT_SCALE && viewport.offsetX === 0 && viewport.offsetY === 0) return rect;
     const contentRect = this.nodeContentRect(node, theme);
     const centerX = contentRect.x + contentRect.w / 2;
     const centerY = contentRect.y + contentRect.h / 2;
     return intersectNodeContentRects({
-      x: centerX + (rect.x - centerX) * scale,
-      y: centerY + (rect.y - centerY) * scale,
-      w: rect.w * scale,
-      h: rect.h * scale,
+      x: centerX + (rect.x - centerX) * viewport.scale + viewport.offsetX,
+      y: centerY + (rect.y - centerY) * viewport.scale + viewport.offsetY,
+      w: rect.w * viewport.scale,
+      h: rect.h * viewport.scale,
     }, contentRect);
   }
 }
@@ -2254,12 +2371,24 @@ function previewGeometriesFrom(operations: CanvasOperation[]) {
   return geometries;
 }
 
+function previewContentPansFrom(operations: CanvasOperation[]) {
+  const pans = new Map<string, CanvasNodeContentPan>();
+  for (const operation of operations) {
+    if (operation.type === 'set-node-content-pan') pans.set(operation.nodeId, operation.to);
+  }
+  return pans;
+}
+
 function operationAffectsRender(operation: CanvasOperation) {
   return operation.type !== 'set-clipboard' && operation.type !== 'set-paste-counter';
 }
 
 function sameGeometry(a: NodeGeometry, b: NodeGeometry) {
   return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+}
+
+function sameContentPan(a: CanvasNodeContentPan, b: CanvasNodeContentPan) {
+  return a.x === b.x && a.y === b.y;
 }
 
 function emptySelectionState(): CanvasSelectionState {
