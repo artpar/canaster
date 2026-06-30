@@ -3,11 +3,14 @@ import { DaptinClient } from 'daptin-client';
 export const DAPTIN_TOKEN_STORAGE_KEY = 'canaster:daptin:token';
 export const DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY = 'canaster:daptin:active-document';
 export const DAPTIN_LAST_EMAIL_STORAGE_KEY = 'canaster:daptin:last-email';
+export const DAPTIN_ENDPOINT_STORAGE_KEY = 'canaster:daptin:endpoint';
+export const DAPTIN_SESSION_ENDPOINT_STORAGE_KEY = 'canaster:daptin:session-endpoint';
 
 const DEFAULT_DAPTIN_ENDPOINT = 'http://localhost:6336';
 const DAPTIN_TOKEN_COOKIE_NAME = 'token';
 
 let client: DaptinClient | null = null;
+let clientEndpoint = '';
 let modelsLoadPromise: Promise<void> | null = null;
 
 export type CanasterApiErrorKind = 'session' | 'permission' | 'not-found' | 'network' | 'server' | 'invalid-response' | 'api';
@@ -27,21 +30,51 @@ export class CanasterApiError extends Error {
 }
 
 export function getDaptinEndpoint(): string {
+  const override = storedDaptinEndpointOverride();
+  if (override) return override;
   const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
-  return env?.VITE_DAPTIN_ENDPOINT || DEFAULT_DAPTIN_ENDPOINT;
+  return normalizeDaptinEndpoint(env?.VITE_DAPTIN_ENDPOINT || DEFAULT_DAPTIN_ENDPOINT);
+}
+
+export function setDaptinEndpointOverride(endpoint: string): void {
+  const currentEndpoint = getDaptinEndpoint();
+  const nextEndpoint = normalizeDaptinEndpoint(endpoint);
+  if (nextEndpoint) window.localStorage.setItem(DAPTIN_ENDPOINT_STORAGE_KEY, nextEndpoint);
+  else window.localStorage.removeItem(DAPTIN_ENDPOINT_STORAGE_KEY);
+
+  const resolvedEndpoint = getDaptinEndpoint();
+  if (resolvedEndpoint === currentEndpoint) return;
+  clearEndpointBoundSession();
+  resetDaptinClient();
+}
+
+export function clearDaptinEndpointOverride(): void {
+  setDaptinEndpointOverride('');
 }
 
 export function getToken(): string {
-  return window.localStorage.getItem(DAPTIN_TOKEN_STORAGE_KEY) ?? '';
+  const token = window.localStorage.getItem(DAPTIN_TOKEN_STORAGE_KEY) ?? '';
+  if (!token) return '';
+  const endpoint = getDaptinEndpoint();
+  const sessionEndpoint = window.localStorage.getItem(DAPTIN_SESSION_ENDPOINT_STORAGE_KEY);
+  if (!sessionEndpoint) {
+    window.localStorage.setItem(DAPTIN_SESSION_ENDPOINT_STORAGE_KEY, endpoint);
+    return token;
+  }
+  if (sessionEndpoint === endpoint) return token;
+  clearEndpointBoundSession();
+  return '';
 }
 
 export function setToken(token: string): void {
   window.localStorage.setItem(DAPTIN_TOKEN_STORAGE_KEY, token);
+  window.localStorage.setItem(DAPTIN_SESSION_ENDPOINT_STORAGE_KEY, getDaptinEndpoint());
   setTokenCookie(token);
 }
 
 export function clearToken(): void {
   window.localStorage.removeItem(DAPTIN_TOKEN_STORAGE_KEY);
+  window.localStorage.removeItem(DAPTIN_SESSION_ENDPOINT_STORAGE_KEY);
   clearTokenCookie();
   modelsLoadPromise = null;
 }
@@ -127,10 +160,41 @@ export function isSessionError(error: unknown): boolean {
 }
 
 export function getDaptinClient(): DaptinClient {
-  if (!client) {
-    client = new DaptinClient(getDaptinEndpoint(), false, { getToken }, {});
+  const endpoint = getDaptinEndpoint();
+  if (!client || clientEndpoint !== endpoint) {
+    client = new DaptinClient(endpoint, false, { getToken }, {});
+    clientEndpoint = endpoint;
+    modelsLoadPromise = null;
   }
   return client;
+}
+
+function resetDaptinClient(): void {
+  client = null;
+  clientEndpoint = '';
+  modelsLoadPromise = null;
+}
+
+function clearEndpointBoundSession(): void {
+  window.localStorage.removeItem(DAPTIN_TOKEN_STORAGE_KEY);
+  window.localStorage.removeItem(DAPTIN_SESSION_ENDPOINT_STORAGE_KEY);
+  window.localStorage.removeItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY);
+  clearTokenCookie();
+  modelsLoadPromise = null;
+}
+
+function storedDaptinEndpointOverride(): string {
+  return normalizeDaptinEndpoint(window.localStorage.getItem(DAPTIN_ENDPOINT_STORAGE_KEY) ?? '');
+}
+
+function normalizeDaptinEndpoint(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  try {
+    return new URL(trimmed, window.location.href).origin;
+  } catch {
+    return '';
+  }
 }
 
 function setTokenCookie(token: string): void {

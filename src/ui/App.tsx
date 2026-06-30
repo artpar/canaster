@@ -1,4 +1,5 @@
 import {
+    Bot,
     Check,
     Columns3,
     Copy,
@@ -53,6 +54,8 @@ import {
     clearDaptinSession,
     DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY,
     DAPTIN_LAST_EMAIL_STORAGE_KEY,
+    getDaptinEndpoint,
+    getToken,
     hasUsableStoredToken,
     isSessionError,
     normalizeDaptinError,
@@ -62,6 +65,7 @@ import {
     connectDaptinLive,
     type DaptinLiveEvent
 } from '../infra/daptin/daptinLive';
+import {createAgentAccessBrief} from '../app/agentAccess/createAgentAccessBrief';
 import {
     defaultStarterCollection,
     defaultStarterEntry,
@@ -150,7 +154,7 @@ const SAVED_MESSAGE = 'Saved online';
 const MENU_VIEWPORT_MARGIN = 12;
 const MENU_ANCHOR_GAP = 8;
 const DEFAULT_ADD_PANEL_MENU_HEIGHT = 280;
-const DEFAULT_EXPORT_MENU_HEIGHT = 184;
+const DEFAULT_EXPORT_MENU_HEIGHT = 228;
 
 function canasterMenuWidth() {
     const rawValue = window.getComputedStyle(document.documentElement).getPropertyValue('--canaster-menu-width');
@@ -188,8 +192,11 @@ type CanvasThemeMenuProps = {
 };
 
 type ExportMenuProps = {
+    agentAccessDisabled: boolean;
+    agentAccessHint: string;
     copyImageDisabled: boolean;
     position: ArrangeMenuPosition | null;
+    onCopyAgentAccess: () => void;
     onCopyDocument: () => void;
     onCopyImage: () => void;
     onCopyLink: () => void;
@@ -344,6 +351,20 @@ const ExportMenu = forwardRef<HTMLDivElement, ExportMenuProps>(function ExportMe
             <span>
                 <strong>Copy document</strong>
                 <small>Workspace JSON</small>
+            </span>
+        </button>
+        <button
+            className="arrange-menu-item"
+            type="button"
+            role="menuitem"
+            disabled={props.agentAccessDisabled}
+            title={props.agentAccessHint}
+            onClick={props.onCopyAgentAccess}
+        >
+            <Bot size={16}/>
+            <span>
+                <strong>Copy for agent</strong>
+                <small>{props.agentAccessHint}</small>
             </span>
         </button>
     </div>;
@@ -938,6 +959,32 @@ export function App() {
         }
     }, []);
 
+    const handleCopyAgentAccess = useCallback(async () => {
+        try {
+            if (!signedIn) throw new Error('Sign in before copying agent access');
+            if (!activeDocumentId) throw new Error('Save online before copying agent access');
+            if (syncStatus !== 'clean') throw new Error('Save online before copying agent access');
+            if (!hasUsableStoredToken()) throw new Error('Sign in again before copying agent access');
+            const token = getToken();
+            if (!token) throw new Error('Sign in again before copying agent access');
+            const savedDocument = documents.find((document) => document.id === activeDocumentId);
+            const state = workspaceRef.current?.currentWorkspaceUrlState(activeDocumentId);
+            if (state) replaceWorkspaceUrlState(state);
+            await copyTextToClipboard(createAgentAccessBrief({
+                appUrl        : window.location.href,
+                daptinEndpoint: getDaptinEndpoint(),
+                documentId    : activeDocumentId,
+                documentPath  : savedDocument?.path ?? '',
+                documentTitle,
+                token,
+            }));
+            setSyncMessage('Agent access copied');
+        } catch (error) {
+            setSyncStatus((current) => current === 'saving' || current === 'loading' ? current : 'error');
+            setSyncMessage(error instanceof Error ? error.message : 'Could not copy agent access.');
+        }
+    }, [activeDocumentId, documentTitle, documents, signedIn, syncStatus]);
+
     const handleRefreshDocuments = useCallback(async () => {
         if (!signedIn) {
             setAuthStep('email');
@@ -1347,6 +1394,17 @@ export function App() {
     const saveButtonLabel = saveActionLabel(syncStatus, syncMessage, signedIn);
     const exportActionDisabled = syncStatus === 'saving' || syncStatus === 'loading';
     const copyPreviewDisabled = exportActionDisabled || !canCopyPngToClipboard();
+    const agentAccessToken = getToken();
+    const agentAccessDisabled = exportActionDisabled || !signedIn || !activeDocumentId || syncStatus !== 'clean' ||
+        !agentAccessToken;
+    const agentAccessHint = agentAccessDisabled ?
+        agentAccessDisabledReason({
+            activeDocumentId,
+            signedIn,
+            syncStatus,
+            token: agentAccessToken,
+        }) :
+        'Prompt with live document access';
 
     return (<CanasterThemeProvider themeId={activeCanvasTheme}>
     <KeyboardShortcutsProvider>
@@ -1389,7 +1447,13 @@ export function App() {
             {exportMenuOpen ? (<ExportMenu
                 ref={exportMenuRef}
                 position={exportMenuPosition}
+                agentAccessDisabled={agentAccessDisabled}
+                agentAccessHint={agentAccessHint}
                 copyImageDisabled={copyPreviewDisabled}
+                onCopyAgentAccess={() => {
+                    closeExportMenu();
+                    void handleCopyAgentAccess();
+                }}
                 onCopyImage={() => {
                     closeExportMenu();
                     void handleCopyPreview();
@@ -1528,6 +1592,20 @@ function saveActionLabel(status: SyncStatus, message: string, signedIn: boolean)
     if (status === 'dirty') return 'Save online changes';
     if (status === 'clean') return message === SAVED_MESSAGE ? 'Saved online' : 'Save workspace online';
     return 'Save workspace online';
+}
+
+function agentAccessDisabledReason(input: {
+    activeDocumentId: string;
+    signedIn: boolean;
+    syncStatus: SyncStatus;
+    token: string;
+}): string {
+    if (input.syncStatus === 'saving' || input.syncStatus === 'loading') return 'Wait for sync to finish';
+    if (!input.signedIn || !input.token) return 'Sign in and save online';
+    if (!input.activeDocumentId) return 'Save online first';
+    if (input.syncStatus === 'dirty') return 'Save online first';
+    if (input.syncStatus === 'error') return 'Resolve sync before sharing';
+    return 'Save online first';
 }
 
 type StoredWorkspaceAsset = {
