@@ -9,22 +9,45 @@ export type DaptinLiveEvent = {
 };
 
 type DaptinLiveOptions = {
-  topicName: string;
+  topicName?: string;
+  ensureTopicName?: string;
   onEvent: (event: DaptinLiveEvent) => void;
   onUnauthorized?: () => void;
   onError?: (error: unknown) => void;
+  onReady?: () => void;
 };
 
 type DaptinLiveConnection = {
   close: () => void;
+  createTopic: (topicName: string) => Promise<void>;
+  publish: (topicName: string, message: unknown) => void;
+  request: (method: string, attributes?: Record<string, unknown>) => Promise<DaptinLiveResponse>;
+  subscribe: (topicName: string) => Promise<void>;
 };
+
+type DaptinLiveResponse = {
+  id: string;
+  method: string;
+  ok: boolean;
+  data: unknown;
+  error: string;
+  raw: unknown;
+};
+
+type PendingRequest = {
+  resolve: (response: DaptinLiveResponse) => void;
+  reject: (error: Error) => void;
+  timeout: number;
+};
+
+const REQUEST_TIMEOUT_MS = 15_000;
 
 export function connectDaptinLive(options: DaptinLiveOptions): DaptinLiveConnection {
   const token = getToken();
   if (!token) throw new Error('Daptin live connection requires a token');
 
   const socket = new WebSocket(liveEndpointFor(getDaptinEndpoint(), token));
-  const subscriptionId = crypto.randomUUID();
+  const pendingRequests = new Map<string, PendingRequest>();
   let closed = false;
 
   socket.addEventListener('message', (event) => {
@@ -38,11 +61,18 @@ export function connectDaptinLive(options: DaptinLiveOptions): DaptinLiveConnect
     }
 
     if (message.type === 'session') {
-      socket.send(JSON.stringify({
-        id: subscriptionId,
-        method: 'subscribe',
-        attributes: { topicName: options.topicName },
-      }));
+      void initializeConnection();
+      return;
+    }
+
+    if (message.type === 'response') {
+      const response = liveResponse(message);
+      const pending = pendingRequests.get(response.id);
+      if (!pending) return;
+      pendingRequests.delete(response.id);
+      window.clearTimeout(pending.timeout);
+      if (response.ok) pending.resolve(response);
+      else pending.reject(new Error(response.error || `${response.method || 'request'} failed`));
       return;
     }
 
@@ -60,12 +90,99 @@ export function connectDaptinLive(options: DaptinLiveOptions): DaptinLiveConnect
     if (!closed) options.onError?.(error);
   });
 
+  socket.addEventListener('close', () => {
+    if (closed) return;
+    closed = true;
+    rejectPendingRequests(new Error('Daptin live connection closed'));
+  });
+
   function closeSocket() {
     closed = true;
+    rejectPendingRequests(new Error('Daptin live connection closed'));
     if (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN) socket.close();
   }
 
-  return { close: closeSocket };
+  function rejectPendingRequests(error: Error) {
+    for (const pending of pendingRequests.values()) {
+      window.clearTimeout(pending.timeout);
+      pending.reject(error);
+    }
+    pendingRequests.clear();
+  }
+
+  async function initializeConnection() {
+    try {
+      let createTopicError: unknown = null;
+      if (options.ensureTopicName) {
+        try {
+          await createTopic(options.ensureTopicName);
+        } catch (error) {
+          createTopicError = error;
+        }
+      }
+      try {
+        if (options.topicName) await subscribe(options.topicName);
+      } catch (error) {
+        throw createTopicError ?? error;
+      }
+      if (createTopicError && !options.topicName) throw createTopicError;
+      options.onReady?.();
+    } catch (error) {
+      options.onError?.(error);
+    }
+  }
+
+  function request(method: string, attributes: Record<string, unknown> = {}): Promise<DaptinLiveResponse> {
+    if (closed) return Promise.reject(new Error('Daptin live connection is closed'));
+    if (socket.readyState !== WebSocket.OPEN) return Promise.reject(new Error('Daptin live connection is not open'));
+    const id = crypto.randomUUID();
+    const payload = { id, method, attributes };
+    return new Promise((resolve, reject) => {
+      const timeout = window.setTimeout(() => {
+        pendingRequests.delete(id);
+        reject(new Error(`${method} timed out`));
+      }, REQUEST_TIMEOUT_MS);
+      pendingRequests.set(id, { resolve, reject, timeout });
+      socket.send(JSON.stringify(payload));
+    });
+  }
+
+  async function createTopic(topicName: string) {
+    await request('create-topicName', { name: topicName });
+  }
+
+  function publish(topicName: string, message: unknown) {
+    if (closed) throw new Error('Daptin live connection is closed');
+    if (socket.readyState !== WebSocket.OPEN) throw new Error('Daptin live connection is not open');
+    socket.send(JSON.stringify({
+      id: crypto.randomUUID(),
+      method: 'new-message',
+      attributes: { topicName, message },
+    }));
+  }
+
+  async function subscribe(topicName: string) {
+    await request('subscribe', { topicName });
+  }
+
+  return {
+    close: closeSocket,
+    createTopic,
+    publish,
+    request,
+    subscribe,
+  };
+}
+
+function liveResponse(message: Record<string, unknown>): DaptinLiveResponse {
+  return {
+    id: stringField(message.id),
+    method: stringField(message.method),
+    ok: message.ok === true,
+    data: decodePayload(message.data),
+    error: stringField(message.error),
+    raw: message,
+  };
 }
 
 function liveEndpointFor(endpoint: string, token: string): string {

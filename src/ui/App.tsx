@@ -67,6 +67,11 @@ import {
 } from '../infra/daptin/daptinLive';
 import {createAgentAccessBrief} from '../app/agentAccess/createAgentAccessBrief';
 import {
+    connectCanasterAgentBridge,
+    type CanasterAgentBridgeConnection
+} from '../app/agentBridge/CanasterAgentBridge';
+import {agentTopicName} from '../app/agentBridge/AgentProtocol';
+import {
     defaultStarterCollection,
     defaultStarterEntry,
     starterCatalog,
@@ -152,6 +157,7 @@ const DEFAULT_DOCUMENT_TITLE = 'Canaster Workspace';
 const LOCAL_SAVE_MESSAGE = 'Saved on this device';
 const ONLINE_READY_MESSAGE = 'Ready to save online';
 const SAVED_MESSAGE = 'Saved online';
+const SIGN_IN_SAVE_MESSAGE = 'Sign in to save online';
 const MENU_VIEWPORT_MARGIN = 12;
 const MENU_ANCHOR_GAP = 8;
 const DEFAULT_ADD_PANEL_MENU_HEIGHT = 280;
@@ -435,7 +441,18 @@ export function App() {
     const [syncMessage, setSyncMessage] = useState(
         () => (hasInitialStoredSession ? 'Checking saved workspaces' : LOCAL_SAVE_MESSAGE));
     const activeDocumentIdRef = useRef(activeDocumentId);
+    const documentTitleRef = useRef(documentTitle);
+    const documentsRef = useRef(documents);
+    const signedInRef = useRef(signedIn);
+    const syncMessageRef = useRef(syncMessage);
     const syncStatusRef = useRef(syncStatus);
+    const agentBridgeRef = useRef<CanasterAgentBridgeConnection | null>(null);
+    const agentPageIdRef = useRef(crypto.randomUUID());
+    const agentStateVersionRef = useRef(1);
+    const lastAgentStateSignatureRef = useRef('');
+    const lastAgentVersionSignatureRef = useRef('');
+    const suppressNextAgentStateEffectRef = useRef(false);
+    const suppressNextAgentStateTimerRef = useRef<number | null>(null);
     const initialCollection = useMemo(() => defaultStarterCollection(), []);
     const workspaceStorageKey = activeDocumentId ? remoteWorkspaceStorageKey(activeDocumentId) :
         STARTER_WORKSPACE_STORAGE_KEY;
@@ -450,6 +467,7 @@ export function App() {
         canRedo                : false,
         storageReady           : false,
     }));
+    const chromeStateRef = useRef(chromeState);
     const activeCanvasTheme = normalizeCanasterThemeId(canvasThemeId(
         chromeState.collection,
         chromeState.collection.activeCanvasId
@@ -537,8 +555,107 @@ export function App() {
     }, [activeDocumentId]);
 
     useEffect(() => {
+        documentTitleRef.current = documentTitle;
+    }, [documentTitle]);
+
+    useEffect(() => {
+        documentsRef.current = documents;
+    }, [documents]);
+
+    useEffect(() => {
+        signedInRef.current = signedIn;
+    }, [signedIn]);
+
+    useEffect(() => {
+        syncMessageRef.current = syncMessage;
+    }, [syncMessage]);
+
+    useEffect(() => {
         syncStatusRef.current = syncStatus;
     }, [syncStatus]);
+
+    useEffect(() => {
+        chromeStateRef.current = chromeState;
+    }, [chromeState]);
+
+    const currentAgentStateSignature = useCallback(() => {
+        const fallback = chromeStateRef.current;
+        const collection = workspaceRef.current?.collection() ?? fallback.collection;
+        const activeCanvasId = collection.activeCanvasId;
+        return snapshotSignature({
+            activeDocumentId: activeDocumentIdRef.current,
+            activeCanvasId,
+            camera          : collection.view.cameras[activeCanvasId] ?? null,
+            collection,
+            documentTitle   : documentTitleRef.current,
+            selection       : collection.view.selections[activeCanvasId] ?? null,
+            syncMessage     : syncMessageRef.current,
+            syncStatus      : syncStatusRef.current,
+        });
+    }, []);
+
+    const bumpAgentStateVersion = useCallback(() => {
+        agentStateVersionRef.current += 1;
+        suppressNextAgentStateEffectRef.current = true;
+        if (suppressNextAgentStateTimerRef.current !== null) window.clearTimeout(suppressNextAgentStateTimerRef.current);
+        suppressNextAgentStateTimerRef.current = window.setTimeout(() => {
+            suppressNextAgentStateEffectRef.current = false;
+            suppressNextAgentStateTimerRef.current = null;
+        }, 1000);
+        const signature = currentAgentStateSignature();
+        lastAgentStateSignatureRef.current = signature;
+        lastAgentVersionSignatureRef.current = signature;
+        return agentStateVersionRef.current;
+    }, [currentAgentStateSignature]);
+
+    const refreshAgentStateVersion = useCallback(() => {
+        const signature = currentAgentStateSignature();
+        if (signature !== lastAgentVersionSignatureRef.current) {
+            agentStateVersionRef.current += 1;
+            lastAgentVersionSignatureRef.current = signature;
+        }
+        return agentStateVersionRef.current;
+    }, [currentAgentStateSignature]);
+
+    useEffect(() => {
+        const selection = chromeState.collection.view.selections[chromeState.collection.activeCanvasId] ?? null;
+        const camera = chromeState.collection.view.cameras[chromeState.collection.activeCanvasId] ?? null;
+        const signature = currentAgentStateSignature();
+        if (signature === lastAgentStateSignatureRef.current) return;
+        if (suppressNextAgentStateEffectRef.current) {
+            suppressNextAgentStateEffectRef.current = false;
+            if (suppressNextAgentStateTimerRef.current !== null) {
+                window.clearTimeout(suppressNextAgentStateTimerRef.current);
+                suppressNextAgentStateTimerRef.current = null;
+            }
+            if (signature !== lastAgentVersionSignatureRef.current) {
+                agentStateVersionRef.current += 1;
+                lastAgentVersionSignatureRef.current = signature;
+            }
+        } else {
+            if (signature !== lastAgentVersionSignatureRef.current) {
+                agentStateVersionRef.current += 1;
+                lastAgentVersionSignatureRef.current = signature;
+            }
+        }
+        lastAgentStateSignatureRef.current = signature;
+        agentBridgeRef.current?.emitEvent('workspace.changed', {
+            activeCanvasId: chromeState.collection.activeCanvasId,
+            title: documentTitle,
+        });
+        agentBridgeRef.current?.emitEvent('selection.changed', {
+            activeCanvasId: chromeState.collection.activeCanvasId,
+            selection,
+        });
+        agentBridgeRef.current?.emitEvent('view.changed', {
+            activeCanvasId: chromeState.collection.activeCanvasId,
+            camera,
+        });
+        agentBridgeRef.current?.emitEvent('sync.changed', {
+            message: syncMessage,
+            status: syncStatus,
+        });
+    }, [activeDocumentId, chromeState, documentTitle, syncMessage, syncStatus]);
 
     useEffect(() => {
         const pending = pendingUrlStateRef.current;
@@ -617,44 +734,49 @@ export function App() {
         return rows;
     }, []);
 
-    const loadDaptinDocument = useCallback(
+    const openDaptinDocument = useCallback(
         async (documentRef: string, knownDocuments: CanasterDocumentSummary[] = []) => {
-            if (!documentRef) return;
+            if (!documentRef) throw new Error('No saved workspace is open.');
             setSyncStatus('loading');
             setSyncMessage('Opening workspace');
+            const loadedDocument = await loadDocumentDetails(documentRef);
+            const snapshot = loadedDocument.snapshot;
+            const title = knownDocuments.find((document) => document.id === documentRef)?.title ??
+                loadedDocument.title ?? titleFromSnapshot(snapshot);
+            const nextStorageKey = remoteWorkspaceStorageKey(documentRef);
+            await saveWorkspaceSnapshot(snapshot, nextStorageKey);
+            lastSavedSnapshotSignatureRef.current = snapshotSignature(snapshot);
+            ignoreDirtyUntilRef.current = Date.now() + 1200;
+            workspaceRef.current?.replaceWorkspaceSnapshot(snapshot, {
+                storageKey : nextStorageKey,
+                interaction: 'Document loaded',
+            });
+            applyPendingUrlState(documentRef);
+            window.localStorage.setItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY, documentRef);
+            setActiveDocumentId(documentRef);
+            setDocumentTitle(title);
+            setSyncStatus('clean');
+            setSyncMessage(SAVED_MESSAGE);
+            window.setTimeout(() => {
+                const currentSnapshot = workspaceRef.current?.getWorkspaceSnapshot();
+                if (currentSnapshot && snapshotSignature(currentSnapshot) ===
+                    lastSavedSnapshotSignatureRef.current) {
+                    setSyncStatus('clean');
+                    setSyncMessage(SAVED_MESSAGE);
+                }
+            }, 1600);
+        }, [applyPendingUrlState]);
+
+    const loadDaptinDocument = useCallback(
+        async (documentRef: string, knownDocuments: CanasterDocumentSummary[] = []) => {
             try {
-                const loadedDocument = await loadDocumentDetails(documentRef);
-                const snapshot = loadedDocument.snapshot;
-                const title = knownDocuments.find((document) => document.id === documentRef)?.title ??
-                    loadedDocument.title ?? titleFromSnapshot(snapshot);
-                const nextStorageKey = remoteWorkspaceStorageKey(documentRef);
-                await saveWorkspaceSnapshot(snapshot, nextStorageKey);
-                lastSavedSnapshotSignatureRef.current = snapshotSignature(snapshot);
-                ignoreDirtyUntilRef.current = Date.now() + 1200;
-                workspaceRef.current?.replaceWorkspaceSnapshot(snapshot, {
-                    storageKey : nextStorageKey,
-                    interaction: 'Document loaded',
-                });
-                applyPendingUrlState(documentRef);
-                window.localStorage.setItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY, documentRef);
-                setActiveDocumentId(documentRef);
-                setDocumentTitle(title);
-                setSyncStatus('clean');
-                setSyncMessage(SAVED_MESSAGE);
-                window.setTimeout(() => {
-                    const currentSnapshot = workspaceRef.current?.getWorkspaceSnapshot();
-                    if (currentSnapshot && snapshotSignature(currentSnapshot) ===
-                        lastSavedSnapshotSignatureRef.current) {
-                        setSyncStatus('clean');
-                        setSyncMessage(SAVED_MESSAGE);
-                    }
-                }, 1600);
+                await openDaptinDocument(documentRef, knownDocuments);
             } catch (error) {
                 if (await recoverSessionError(error)) return;
                 setSyncStatus('error');
                 setSyncMessage(workspaceErrorMessage(error, 'open'));
             }
-        }, [applyPendingUrlState, recoverSessionError]);
+        }, [openDaptinDocument, recoverSessionError]);
 
     useEffect(() => {
         if (!signedIn) return;
@@ -857,63 +979,68 @@ export function App() {
         await startLocalDraftFromCatalog(starterEntryById(entryId));
     }, [startLocalDraftFromCatalog]);
 
-    const handleSaveOnline = useCallback(async () => {
+    const saveOnlineDocument = useCallback(async () => {
         if (!signedIn) {
             setAuthStep('email');
             setSidePanelOpen(true);
             setAccountOpen(true);
             setSyncStatus('anonymous');
-            setSyncMessage('Sign in to save online');
-            return;
+            setSyncMessage(SIGN_IN_SAVE_MESSAGE);
+            throw new Error(SIGN_IN_SAVE_MESSAGE);
         }
         const snapshot = workspaceRef.current?.getWorkspaceSnapshot();
         if (!snapshot) {
             setSyncStatus('error');
             setSyncMessage('Workspace is not ready yet');
-            return;
+            throw new Error('Workspace is not ready yet');
         }
         setSyncStatus('saving');
         setSyncMessage('Saving workspace');
-        try {
-            await workspaceRef.current?.flushWorkspaceSnapshot();
-            let freshSnapshot = workspaceRef.current?.getWorkspaceSnapshot() ?? snapshot;
-            const promoted = await promoteLocalAssetsForOnlineSave(freshSnapshot);
-            if (promoted.changed) {
-                freshSnapshot = promoted.snapshot;
-                workspaceRef.current?.replaceWorkspaceSnapshot(freshSnapshot, {
-                    interaction: 'Files ready for online save',
-                });
-            }
-            setSyncMessage('Preparing workspace preview');
-            const previewCapture = await workspaceRef.current?.captureActiveCanvasPreview();
-            if (!previewCapture) throw new Error('Workspace preview is not ready yet');
-            setSyncMessage('Uploading workspace preview');
-            const previewImage = await uploadWorkspacePreviewImage(previewCapture, documentTitle);
-            freshSnapshot = setWorkspaceSnapshotPreviewImage(freshSnapshot, previewImage);
-            if (activeDocumentId) {
-                await saveDocument(activeDocumentId, freshSnapshot, documentTitle);
-                await saveWorkspaceSnapshot(freshSnapshot, remoteWorkspaceStorageKey(activeDocumentId));
-            } else {
-                const documentRef = await createDocument(documentTitle, freshSnapshot);
-                await saveWorkspaceSnapshot(freshSnapshot, remoteWorkspaceStorageKey(documentRef));
-                window.localStorage.setItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY, documentRef);
-                setActiveDocumentId(documentRef);
-            }
-            ignoreDirtyUntilRef.current = Date.now() + 1200;
+        await workspaceRef.current?.flushWorkspaceSnapshot();
+        let freshSnapshot = workspaceRef.current?.getWorkspaceSnapshot() ?? snapshot;
+        const promoted = await promoteLocalAssetsForOnlineSave(freshSnapshot);
+        if (promoted.changed) {
+            freshSnapshot = promoted.snapshot;
             workspaceRef.current?.replaceWorkspaceSnapshot(freshSnapshot, {
-                interaction: 'Workspace preview saved',
-                persist    : false,
+                interaction: 'Files ready for online save',
             });
-            lastSavedSnapshotSignatureRef.current = snapshotSignature(freshSnapshot);
-            await refreshDocuments();
-            setSyncStatus('clean');
-            setSyncMessage(SAVED_MESSAGE);
+        }
+        setSyncMessage('Preparing workspace preview');
+        const previewCapture = await workspaceRef.current?.captureActiveCanvasPreview();
+        if (!previewCapture) throw new Error('Workspace preview is not ready yet');
+        setSyncMessage('Uploading workspace preview');
+        const previewImage = await uploadWorkspacePreviewImage(previewCapture, documentTitle);
+        freshSnapshot = setWorkspaceSnapshotPreviewImage(freshSnapshot, previewImage);
+        if (activeDocumentId) {
+            await saveDocument(activeDocumentId, freshSnapshot, documentTitle);
+            await saveWorkspaceSnapshot(freshSnapshot, remoteWorkspaceStorageKey(activeDocumentId));
+        } else {
+            const documentRef = await createDocument(documentTitle, freshSnapshot);
+            await saveWorkspaceSnapshot(freshSnapshot, remoteWorkspaceStorageKey(documentRef));
+            window.localStorage.setItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY, documentRef);
+            setActiveDocumentId(documentRef);
+        }
+        ignoreDirtyUntilRef.current = Date.now() + 1200;
+        workspaceRef.current?.replaceWorkspaceSnapshot(freshSnapshot, {
+            interaction: 'Workspace preview saved',
+            persist    : false,
+        });
+        lastSavedSnapshotSignatureRef.current = snapshotSignature(freshSnapshot);
+        await refreshDocuments();
+        setSyncStatus('clean');
+        setSyncMessage(SAVED_MESSAGE);
+    }, [activeDocumentId, documentTitle, refreshDocuments, signedIn]);
+
+    const handleSaveOnline = useCallback(async () => {
+        try {
+            await saveOnlineDocument();
         } catch (error) {
+            if (error instanceof Error && error.message === SIGN_IN_SAVE_MESSAGE) return;
             if (await recoverSessionError(error)) return;
             setSyncStatus('error');
             setSyncMessage(workspaceErrorMessage(error, 'save'));
         }
-    }, [activeDocumentId, documentTitle, recoverSessionError, refreshDocuments, signedIn]);
+    }, [recoverSessionError, saveOnlineDocument]);
 
     const handleDownloadPreview = useCallback(async () => {
         try {
@@ -970,6 +1097,7 @@ export function App() {
             if (!token) throw new Error('Sign in again before copying agent access');
             const savedDocument = documents.find((document) => document.id === activeDocumentId);
             const state = workspaceRef.current?.currentWorkspaceUrlState(activeDocumentId);
+            const agentTopic = agentTopicName(activeDocumentId, agentPageIdRef.current);
             if (state) replaceWorkspaceUrlState(state);
             await copyTextToClipboard(createAgentAccessBrief({
                 appUrl        : window.location.href,
@@ -977,6 +1105,7 @@ export function App() {
                 documentId    : activeDocumentId,
                 documentPath  : savedDocument?.path ?? '',
                 documentTitle,
+                agentTopic,
                 token,
             }));
             setSyncMessage('Agent access copied');
@@ -1007,6 +1136,45 @@ export function App() {
             setSyncMessage(workspaceErrorMessage(error, 'refresh'));
         }
     }, [activeDocumentId, recoverSessionError, refreshDocuments, signedIn]);
+
+    useEffect(() => {
+        if (!signedIn || !activeDocumentId || !hasUsableStoredToken()) {
+            agentBridgeRef.current?.close();
+            agentBridgeRef.current = null;
+            return;
+        }
+        const bridge = connectCanasterAgentBridge({
+            appUrl       : () => window.location.href,
+            bumpStateVersion: bumpAgentStateVersion,
+            documentId   : activeDocumentId,
+            documentTitle: () => documentTitleRef.current,
+            topicName    : agentTopicName(activeDocumentId, agentPageIdRef.current),
+            reloadDocument: async () => {
+                const documentRef = activeDocumentIdRef.current;
+                if (!documentRef) throw new Error('No saved workspace is open.');
+                const rows = documentsRef.current.length ? documentsRef.current : await refreshDocuments();
+                await openDaptinDocument(documentRef, rows);
+            },
+            saveOnline: async () => {
+                await saveOnlineDocument();
+                agentBridgeRef.current?.emitEvent('document.saved', {
+                    documentId: activeDocumentIdRef.current,
+                });
+            },
+            stateVersion: refreshAgentStateVersion,
+            syncState   : () => ({
+                message : syncMessageRef.current,
+                signedIn: signedInRef.current,
+                status  : syncStatusRef.current,
+            }),
+            workspace: () => workspaceRef.current,
+        });
+        agentBridgeRef.current = bridge;
+        return () => {
+            if (agentBridgeRef.current === bridge) agentBridgeRef.current = null;
+            bridge.close();
+        };
+    }, [activeDocumentId, bumpAgentStateVersion, openDaptinDocument, refreshAgentStateVersion, refreshDocuments, saveOnlineDocument, signedIn]);
 
     const updateArrangeMenuPositionForRect = useCallback((rect: Pick<DOMRect, 'bottom' | 'right'>) => {
         const margin = 12;
