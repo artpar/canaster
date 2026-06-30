@@ -3,11 +3,15 @@ import {
     useRef
 } from "react";
 import {
+    AlertCircle,
     CheckCircle2,
+    Clock3,
     Cloud,
+    KeyRound,
     LogIn,
     LogOut,
     Mail,
+    Save,
     ShieldCheck,
     UserCircle,
     X
@@ -50,6 +54,13 @@ export function AccountPopover({
     const busy = syncStatus === 'loading' || syncStatus === 'saving';
     const submitDisabled = busy || !authEmail.trim() || (authStep === 'otp' && !authOtp.trim());
     const dialogRef = useRef<HTMLElement | null>(null);
+    const modeLabel = accountModeLabel(authStep, signedIn);
+    const syncLabel = syncStatusLabel(syncStatus, signedIn);
+    const syncDescription = syncStatusDescription(syncStatus, signedIn);
+    const accountAccessLabel = signedIn ? 'Connected' : authStep === 'otp' ? 'Code pending' : 'Email code';
+    const saveScopeLabel = signedIn ? 'Account workspaces' : 'This browser';
+    const verificationLabel = signedIn ? 'Ready to open online workspaces' :
+        authStep === 'otp' ? 'Enter the code from your email' : 'No password needed';
 
     useEffect(() => {
         if (docked) return;
@@ -106,7 +117,7 @@ export function AccountPopover({
             <div className="account-popover-header">
                 <div>
                     <span>Account</span>
-                    <span>{signedIn ? 'Signed in' : authStep === 'otp' ? 'Enter code' : 'Email sign in'}</span>
+                    <span>{modeLabel}</span>
                 </div>
                 <button
                     className="utility-close"
@@ -121,23 +132,43 @@ export function AccountPopover({
             <div className="account-popover-body">
                 <section className="account-primary-panel" aria-label={signedIn ? 'Signed-in account' : 'Sign in'}>
                     {!signedIn ? (<div className="account-stepper">
-                        <span className={`account-step ${authStep === 'email' && !signedIn ? 'active' : 'complete'}`}>
+                        <span className={`account-step ${authStep === 'email' ? 'active' : 'complete'}`}>
                             <Mail size={14}/>
                             Email
                         </span>
-                        <span className={`account-step ${authStep === 'otp' ? 'active' : signedIn ? 'complete' : ''}`}>
+                        <span className={`account-step ${authStep === 'otp' ? 'active' : ''}`}>
                             <ShieldCheck size={14}/>
                             Code
                         </span>
                     </div>) : null}
                     {signedIn ? (<div className="account-signed-in">
-                        <div className="account-identity">
-                            <span className="account-avatar" aria-hidden="true">
-                                <UserCircle size={20}/>
+                        <div className="account-identity-card">
+                            <div className="account-identity">
+                                <span className="account-avatar" aria-hidden="true">
+                                    <UserCircle size={20}/>
+                                </span>
+                                <div>
+                                    <span>Canaster account</span>
+                                    <span>{authEmail || 'Signed in on this browser'}</span>
+                                </div>
+                            </div>
+                            <span className="account-connection-badge">
+                                <CheckCircle2 size={13}/>
+                                Online save ready
                             </span>
+                        </div>
+                        <div className="account-session-grid" aria-label="Account readiness">
                             <div>
-                                <span>Canaster account</span>
-                                <span>{authEmail || 'Signed in on this browser'}</span>
+                                <span><ShieldCheck size={14}/>Account access</span>
+                                <strong>{accountAccessLabel}</strong>
+                            </div>
+                            <div>
+                                <span><Save size={14}/>Save scope</span>
+                                <strong>{saveScopeLabel}</strong>
+                            </div>
+                            <div>
+                                <span><Cloud size={14}/>Workspace state</span>
+                                <strong>{syncLabel}</strong>
                             </div>
                         </div>
                         <button className="drawer-action" type="button" onClick={onSignOut}>
@@ -154,10 +185,13 @@ export function AccountPopover({
                         <div className="account-auth-copy">
                             <span>{authStep === 'otp' ? 'Check email' : 'Save workspaces online'}</span>
                             <p>{authStep === 'otp' ? `Enter the 4-digit code sent to ${authEmail || 'your email'}.` :
-                                'Sign in with email to open and save account workspaces.'}</p>
+                                'Use email to open and save account workspaces.'}</p>
                         </div>
                         <label className="account-field">
-                            <span>Email</span>
+                            <span className="account-field-label">
+                                Email
+                                {authStep === 'otp' ? <em>Code sent</em> : null}
+                            </span>
                             <input name="email" type="email" autoComplete="email" value={authEmail}
                                    autoFocus={authStep === 'email'}
                                    data-account-initial-focus={authStep === 'email' ? 'true' : undefined}
@@ -165,11 +199,14 @@ export function AccountPopover({
                                    onChange={(event) => onEmailChange(event.target.value)}/>
                         </label>
                         {authStep === 'otp' ? (<label className="account-field account-code-field">
-                            <span>Code</span>
+                            <span className="account-field-label">
+                                Code
+                                <em>{authOtp.length}/4 digits</em>
+                            </span>
                             <div className="account-code-slots" aria-hidden="true">
                                 {[0, 1, 2, 3].map((slot) => (
                                     <span
-                                        className={slot === authOtp.length ? 'active' : authOtp[slot] ? 'filled' : ''}
+                                        className={codeSlotClassName(slot, authOtp)}
                                         key={slot}
                                     >
                                         {authOtp[slot] || ''}
@@ -181,6 +218,7 @@ export function AccountPopover({
                                 type="text"
                                 inputMode="numeric"
                                 autoComplete="one-time-code"
+                                aria-label="Email sign-in code"
                                 pattern="[0-9]*"
                                 maxLength={4}
                                 autoFocus
@@ -190,8 +228,9 @@ export function AccountPopover({
                             />
                         </label>) : null}
                         <button className="account-submit" type="submit" disabled={submitDisabled}>
-                            {authStep === 'otp' ? <CheckCircle2 size={15}/> : <LogIn size={15}/>}
-                            {authStep === 'otp' ? 'Verify code' : 'Send code'}
+                            {busy ? <Clock3 size={15}/> : authStep === 'otp' ? <CheckCircle2 size={15}/> : <LogIn size={15}/>}
+                            {busy ? authStep === 'otp' ? 'Checking code' : 'Sending code' :
+                                authStep === 'otp' ? 'Verify code' : 'Send code'}
                         </button>
                         {authStep === 'otp' ? (
                             <button className="account-text-action" type="button" onClick={() => onAuthStepChange('email')}>
@@ -200,11 +239,28 @@ export function AccountPopover({
                     </form>)}
                 </section>
                 <section className="account-sync-panel" aria-label="Save status">
-                    <span className={`account-sync-mark ${syncStatus}`} aria-hidden="true">
-                        <Cloud size={22}/>
-                    </span>
-                    <div>
-                        <span>{syncStatusLabel(syncStatus, signedIn)}</span>
+                    <div className={`account-sync-hero ${syncStatus}`}>
+                        <span className={`account-sync-mark ${syncStatus}`} aria-hidden="true">
+                            {syncStatus === 'error' ? <AlertCircle size={22}/> : <Cloud size={22}/>}
+                        </span>
+                        <div>
+                            <span>{syncLabel}</span>
+                            <p>{syncDescription}</p>
+                        </div>
+                    </div>
+                    <div className="account-trust-list" aria-label="Account and save details">
+                        <div>
+                            <span><KeyRound size={14}/>Account access</span>
+                            <strong>{accountAccessLabel}</strong>
+                        </div>
+                        <div>
+                            <span><Save size={14}/>Save scope</span>
+                            <strong>{saveScopeLabel}</strong>
+                        </div>
+                        <div>
+                            <span><ShieldCheck size={14}/>Verification</span>
+                            <strong>{verificationLabel}</strong>
+                        </div>
                     </div>
                     <div className={`account-status ${syncStatus}`} role="status" aria-live="polite">
                         <SyncStatusIcon status={syncStatus}/>
@@ -225,6 +281,18 @@ export function AccountPopover({
     );
 }
 
+function accountModeLabel(authStep: AuthStep, signedIn: boolean): string {
+    if (signedIn) return 'Signed in';
+    if (authStep === 'otp') return 'Enter code';
+    return 'Email sign in';
+}
+
+function codeSlotClassName(slot: number, authOtp: string): string {
+    if (authOtp[slot]) return 'filled';
+    if (slot === authOtp.length && authOtp.length < 4) return 'active';
+    return '';
+}
+
 function syncStatusLabel(syncStatus: SyncStatus, signedIn: boolean): string {
     if (!signedIn) return 'Local workspace';
     if (syncStatus === 'clean') return 'Saved online';
@@ -233,6 +301,16 @@ function syncStatusLabel(syncStatus: SyncStatus, signedIn: boolean): string {
     if (syncStatus === 'saving') return 'Saving workspace';
     if (syncStatus === 'loading') return 'Checking workspace';
     return 'Workspace status';
+}
+
+function syncStatusDescription(syncStatus: SyncStatus, signedIn: boolean): string {
+    if (!signedIn) return 'Your current workspace stays on this browser until you sign in.';
+    if (syncStatus === 'clean') return 'Changes are saved to your account and ready to reopen.';
+    if (syncStatus === 'dirty') return 'Recent edits are waiting for the next save.';
+    if (syncStatus === 'error') return 'Canaster could not finish the last account save.';
+    if (syncStatus === 'saving') return 'Canaster is saving the current workspace now.';
+    if (syncStatus === 'loading') return 'Canaster is checking account workspaces.';
+    return 'Canaster is watching this workspace for account saves.';
 }
 
 function initialDialogFocusTarget(dialog: HTMLElement | null): HTMLElement | null {
