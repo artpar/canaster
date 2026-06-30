@@ -74,6 +74,7 @@ import {
     initialViewportStatus,
     NestedCanvasWorkspace,
     type ArrangeCanvasMenuRequest,
+    type CanvasAddPanelMenuRequest,
     type CanvasThemeMenuRequest,
     type NestedCanvasWorkspaceChromeState,
     type NestedCanvasWorkspaceHandle,
@@ -306,6 +307,7 @@ export function App() {
     const [canvasThemeMenuTarget, setCanvasThemeMenuTarget] = useState<ToolbarMenuTarget | null>(null);
     const [addPanelMenuOpen, setAddPanelMenuOpen] = useState(false);
     const [addPanelMenuPosition, setAddPanelMenuPosition] = useState<ArrangeMenuPosition | null>(null);
+    const [addPanelMenuTarget, setAddPanelMenuTarget] = useState<CanvasAddPanelMenuRequest | null>(null);
     const [addPanelQuery, setAddPanelQuery] = useState('');
     const [addPanelActiveIndex, setAddPanelActiveIndex] = useState(0);
     const [sidePanelOpen, setSidePanelOpen] = useState(() => window.matchMedia('(min-width: 641px)').matches);
@@ -348,6 +350,21 @@ export function App() {
         chromeState.collection,
         canvasThemeMenuTarget?.canvasId ?? chromeState.collection.activeCanvasId
     );
+    const viewportControlMenuState = useMemo(() => {
+        if (arrangeMenuOpen && arrangeMenuTarget) {
+            return {
+                canvasId: arrangeMenuTarget.canvasId,
+                control : 'arrange' as const,
+            };
+        }
+        if (canvasThemeMenuOpen && canvasThemeMenuTarget) {
+            return {
+                canvasId: canvasThemeMenuTarget.canvasId,
+                control : 'theme' as const,
+            };
+        }
+        return null;
+    }, [arrangeMenuOpen, arrangeMenuTarget, canvasThemeMenuOpen, canvasThemeMenuTarget]);
 
     const handleChromeStateChange = useCallback((next: NestedCanvasWorkspaceChromeState) => {
         setChromeState(next);
@@ -825,6 +842,18 @@ export function App() {
         });
     }, []);
 
+    const updateAddPanelMenuPositionForRect = useCallback((rect: Pick<DOMRect, 'bottom' | 'right'>) => {
+        const margin = 12;
+        const menuWidth = canasterMenuWidth();
+        const left = Math.max(margin,
+            Math.min(window.innerWidth - menuWidth - margin, rect.right - menuWidth));
+        const top = Math.max(margin, Math.min(window.innerHeight - 280, rect.bottom + 8));
+        setAddPanelMenuPosition({
+            left,
+            top
+        });
+    }, []);
+
     const updateAddPanelMenuPosition = useCallback(() => {
         const button = addPanelButtonRef.current;
         if (!button) return;
@@ -863,6 +892,7 @@ export function App() {
             bottom: anchor.y + anchor.h,
         });
         setAddPanelMenuOpen(false);
+        setAddPanelMenuTarget(null);
         setAddPanelQuery('');
         setAddPanelActiveIndex(0);
         closeCanvasThemeMenu();
@@ -881,6 +911,7 @@ export function App() {
         });
         closeArrangeMenu();
         setAddPanelMenuOpen(false);
+        setAddPanelMenuTarget(null);
         setAddPanelQuery('');
         setAddPanelActiveIndex(0);
         setCanvasThemeMenuOpen(true);
@@ -890,20 +921,37 @@ export function App() {
         setAddPanelMenuOpen(false);
         setAddPanelQuery('');
         setAddPanelActiveIndex(0);
+        setAddPanelMenuTarget(null);
     }, []);
 
     const handleToggleAddPanelMenu = useCallback(() => {
         setAddPanelMenuOpen((open) => {
-            if (!open) updateAddPanelMenuPosition();
-            if (!open) closeArrangeMenu();
-            if (!open) closeCanvasThemeMenu();
-            if (!open) {
-                setAddPanelQuery('');
-                setAddPanelActiveIndex(0);
+            if (open) {
+                setAddPanelMenuTarget(null);
+                return false;
             }
-            return !open;
+            setAddPanelMenuTarget(null);
+            updateAddPanelMenuPosition();
+            closeArrangeMenu();
+            closeCanvasThemeMenu();
+            setAddPanelQuery('');
+            setAddPanelActiveIndex(0);
+            return true;
         });
     }, [closeArrangeMenu, closeCanvasThemeMenu, updateAddPanelMenuPosition]);
+
+    const handleCanvasAddPanelMenuRequest = useCallback((request: CanvasAddPanelMenuRequest) => {
+        setAddPanelMenuTarget(request);
+        updateAddPanelMenuPositionForRect({
+            right : request.anchor.x + request.anchor.w,
+            bottom: request.anchor.y + request.anchor.h,
+        });
+        closeArrangeMenu();
+        closeCanvasThemeMenu();
+        setAddPanelQuery('');
+        setAddPanelActiveIndex(0);
+        setAddPanelMenuOpen(true);
+    }, [closeArrangeMenu, closeCanvasThemeMenu, updateAddPanelMenuPositionForRect]);
 
     const handleArrangeCanvas = useCallback((layout: CanvasArrangeLayout, event: ReactMouseEvent<HTMLButtonElement>) => {
         const target = arrangeMenuTarget;
@@ -925,13 +973,16 @@ export function App() {
     }, [arrangeMenuTarget, chromeState.collection, closeArrangeMenu]);
 
     const handleCreatePanel = useCallback((nodeType: string) => {
+        const activeCanvasId = workspaceRef.current?.collection().activeCanvasId ?? chromeState.collection.activeCanvasId;
+        const target = addPanelMenuTarget?.canvasId === activeCanvasId ? addPanelMenuTarget : null;
         workspaceRef.current?.executeActiveCanvasCommand({
             type  : 'create-node',
             nodeType,
-            source: 'nonvisual'
+            source: target ? 'pointer' : 'nonvisual',
+            ...(target ? { at: target.at } : {}),
         });
         closeAddPanelMenu();
-    }, [closeAddPanelMenu]);
+    }, [addPanelMenuTarget, chromeState.collection.activeCanvasId, closeAddPanelMenu]);
 
     const handleWorkspaceFileDrop = useCallback(async (request: WorkspaceFileDropRequest) => {
         if (request.canvasId !== (workspaceRef.current?.collection().activeCanvasId ?? chromeState.collection.activeCanvasId)) return;
@@ -1074,7 +1125,17 @@ export function App() {
 
     useEffect(() => {
         if (!addPanelMenuOpen) return;
-        updateAddPanelMenuPosition();
+        const updateOpenAddPanelMenuPosition = () => {
+            if (addPanelMenuTarget) {
+                updateAddPanelMenuPositionForRect({
+                    right : addPanelMenuTarget.anchor.x + addPanelMenuTarget.anchor.w,
+                    bottom: addPanelMenuTarget.anchor.y + addPanelMenuTarget.anchor.h,
+                });
+                return;
+            }
+            updateAddPanelMenuPosition();
+        };
+        updateOpenAddPanelMenuPosition();
         const handlePointerDown = (event: PointerEvent) => {
             const target = event.target;
             if (!(target instanceof Node)) return;
@@ -1086,15 +1147,15 @@ export function App() {
         };
         document.addEventListener('pointerdown', handlePointerDown);
         document.addEventListener('keydown', handleKeyDown);
-        window.addEventListener('resize', updateAddPanelMenuPosition);
-        window.addEventListener('scroll', updateAddPanelMenuPosition, true);
+        window.addEventListener('resize', updateOpenAddPanelMenuPosition);
+        window.addEventListener('scroll', updateOpenAddPanelMenuPosition, true);
         return () => {
             document.removeEventListener('pointerdown', handlePointerDown);
             document.removeEventListener('keydown', handleKeyDown);
-            window.removeEventListener('resize', updateAddPanelMenuPosition);
-            window.removeEventListener('scroll', updateAddPanelMenuPosition, true);
+            window.removeEventListener('resize', updateOpenAddPanelMenuPosition);
+            window.removeEventListener('scroll', updateOpenAddPanelMenuPosition, true);
         };
-    }, [addPanelMenuOpen, closeAddPanelMenu, updateAddPanelMenuPosition]);
+    }, [addPanelMenuOpen, addPanelMenuTarget, closeAddPanelMenu, updateAddPanelMenuPosition, updateAddPanelMenuPositionForRect]);
 
     const viewTree = useMemo(() => buildViewTree(chromeState.collection), [chromeState.collection]);
     const saveButtonLabel = saveActionLabel(syncStatus, syncMessage, signedIn);
@@ -1127,7 +1188,7 @@ export function App() {
                 }}
                 addPanel={{
                     buttonRef: addPanelButtonRef,
-                    open     : addPanelMenuOpen,
+                    open     : addPanelMenuOpen && !addPanelMenuTarget,
                     onToggle : handleToggleAddPanelMenu
                 }}
             />
@@ -1206,8 +1267,10 @@ export function App() {
                         parentContextVisible={parentContextVisible}
                         fitOnFirstLoad={fitWorkspaceOnFirstLoad}
                         storageKey={workspaceStorageKey}
+                        viewportControlMenuState={viewportControlMenuState}
                         onCollectionChange={handleWorkspaceCollectionChange}
                         onChromeStateChange={handleChromeStateChange}
+                        onCanvasAddPanelMenuRequest={handleCanvasAddPanelMenuRequest}
                         onArrangeCanvasMenuRequest={handleArrangeCanvasMenuRequest}
                         onCanvasThemeMenuRequest={handleCanvasThemeMenuRequest}
                         onFileDrop={handleWorkspaceFileDrop}

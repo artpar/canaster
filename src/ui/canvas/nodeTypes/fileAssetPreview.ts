@@ -1,5 +1,6 @@
-import { isLocalAssetId, loadLocalAssetFile, loadLocalAssetObject } from '../../../infra/browser/localAssets';
-import { loadAssetFile, loadAssetObject, type CanasterAssetObject } from '../../../infra/daptin/assets';
+import { isLocalAssetId, loadLocalAssetFile, loadLocalAssetObject, saveLocalAsset } from '../../../infra/browser/localAssets';
+import { loadAssetFile, loadAssetObject, uploadWorkspaceAsset, type CanasterAssetObject } from '../../../infra/daptin/assets';
+import { hasUsableStoredToken } from '../../../infra/daptin/daptinClient';
 import { prepareInlineEditorMount, stopEvent } from '../inlineEditorDom';
 
 export type FileAssetObject = CanasterAssetObject;
@@ -10,6 +11,15 @@ export function loadFileAssetObject(assetId: string): Promise<FileAssetObject> {
 
 export function loadFileAssetFile(assetId: string): Promise<File> {
   return isLocalAssetId(assetId) ? loadLocalAssetFile(assetId) : loadAssetFile(assetId);
+}
+
+export async function saveFileAsset(file: File): Promise<FileAssetObject> {
+  if (hasUsableStoredToken()) {
+    const asset = await uploadWorkspaceAsset(file);
+    return loadAssetObject(asset.id);
+  }
+  const asset = await saveLocalAsset(file);
+  return loadLocalAssetObject(asset.id);
 }
 
 export function createFilePreviewShell(mount: HTMLElement, className: string, title: string) {

@@ -15,7 +15,7 @@ import type {
 import { createWorkspaceHistory, createWorkspaceSnapshot } from '../../../domain/workspaceHistory';
 import type { WorkspaceUrlState } from '../../../infra/browser/workspaceUrlLocation';
 import type {CanasterThemeId} from '../../theme/CanasterTheme';
-import { NativeNestedCanvasController } from './NativeNestedCanvasController';
+import { NativeNestedCanvasController, type CanvasViewportControlMenuState } from './NativeNestedCanvasController';
 
 export type NestedCanvasWorkspaceProps = {
   initialCollection: CanvasDocumentCollection;
@@ -24,8 +24,10 @@ export type NestedCanvasWorkspaceProps = {
   animationEnabled?: boolean;
   fitOnFirstLoad?: boolean;
   storageKey?: string;
+  viewportControlMenuState?: CanvasViewportControlMenuState;
   onCollectionChange?: (collection: CanvasDocumentCollection, changes: DocumentModelChange[]) => void;
   onChromeStateChange?: (state: NestedCanvasWorkspaceChromeState) => void;
+  onCanvasAddPanelMenuRequest?: (request: CanvasAddPanelMenuRequest) => void;
   onArrangeCanvasMenuRequest?: (request: ArrangeCanvasMenuRequest) => void;
   onCanvasThemeMenuRequest?: (request: CanvasThemeMenuRequest) => void;
   onFileDrop?: (request: WorkspaceFileDropRequest) => void;
@@ -42,6 +44,12 @@ export type CanvasThemeMenuRequest = {
   canvasId: string;
   anchor?: ScreenRect;
   metaOrCtrl?: boolean;
+};
+
+export type CanvasAddPanelMenuRequest = {
+  canvasId: string;
+  anchor: ScreenRect;
+  at: WorldPoint;
 };
 
 export type WorkspaceFileDropRequest = {
@@ -106,8 +114,10 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     parentContextVisible = true,
     fitOnFirstLoad = true,
     storageKey,
+    viewportControlMenuState = null,
     onCollectionChange,
     onChromeStateChange,
+    onCanvasAddPanelMenuRequest,
     onArrangeCanvasMenuRequest,
     onCanvasThemeMenuRequest,
     onFileDrop,
@@ -117,12 +127,12 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
 ) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const controllerRef = useRef<NativeNestedCanvasController | null>(null);
-  const callbacksRef = useRef({ onCollectionChange, onChromeStateChange, onArrangeCanvasMenuRequest, onCanvasThemeMenuRequest, onFileDrop, onTextPaste });
+  const callbacksRef = useRef({ onCollectionChange, onChromeStateChange, onCanvasAddPanelMenuRequest, onArrangeCanvasMenuRequest, onCanvasThemeMenuRequest, onFileDrop, onTextPaste });
   const initialCollectionRef = useRef(initialCollection);
 
   useEffect(() => {
-    callbacksRef.current = { onCollectionChange, onChromeStateChange, onArrangeCanvasMenuRequest, onCanvasThemeMenuRequest, onFileDrop, onTextPaste };
-  }, [onCollectionChange, onChromeStateChange, onArrangeCanvasMenuRequest, onCanvasThemeMenuRequest, onFileDrop, onTextPaste]);
+    callbacksRef.current = { onCollectionChange, onChromeStateChange, onCanvasAddPanelMenuRequest, onArrangeCanvasMenuRequest, onCanvasThemeMenuRequest, onFileDrop, onTextPaste };
+  }, [onCollectionChange, onChromeStateChange, onCanvasAddPanelMenuRequest, onArrangeCanvasMenuRequest, onCanvasThemeMenuRequest, onFileDrop, onTextPaste]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -136,6 +146,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
       storageKey,
       onCollectionChange: (collection, changes) => callbacksRef.current.onCollectionChange?.(collection, changes),
       onChromeStateChange: (state) => callbacksRef.current.onChromeStateChange?.(state),
+      onCanvasAddPanelMenuRequest: (request) => callbacksRef.current.onCanvasAddPanelMenuRequest?.(request),
       onArrangeCanvasMenuRequest: (request) => callbacksRef.current.onArrangeCanvasMenuRequest?.(request),
       onCanvasThemeMenuRequest: (request) => callbacksRef.current.onCanvasThemeMenuRequest?.(request),
       onFileDrop: (request) => callbacksRef.current.onFileDrop?.(request),
@@ -159,6 +170,10 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
   useEffect(() => {
     controllerRef.current?.setParentContextVisible(parentContextVisible);
   }, [parentContextVisible]);
+
+  useEffect(() => {
+    controllerRef.current?.setViewportControlMenuState(viewportControlMenuState);
+  }, [viewportControlMenuState]);
 
   useImperativeHandle(ref, () => ({
     fitActiveCanvas: () => controllerRef.current?.fitActiveCanvas(),

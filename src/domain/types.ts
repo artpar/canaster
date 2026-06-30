@@ -111,6 +111,7 @@ export type EngineOptions = {
   beforeCommand?: (command: CanvasCommand) => CanvasCommand | false;
   onNodeAction?: (nodeId: string, actionId: string, source: CanvasEditSource) => boolean;
   onCanvasDoubleClick?: (canvasId: string, event: MouseEvent) => boolean;
+  onCanvasAddMenuRequest?: (canvasId: string, event: MouseEvent, at: WorldPoint) => boolean;
   onNodeDataChange?: (nodeId: string, from: NodeData, to: NodeData, source: CanvasEditSource) => boolean;
   onStatus?: (status: ViewportStatus) => void;
   onModelChange?: (model: CanvasModel, change: CanvasModelChange) => void;

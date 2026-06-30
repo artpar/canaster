@@ -1,6 +1,5 @@
 import { cloneNodeData } from '../../core/nodeData';
 import type { CanvasNode, NodeData } from '../../core/nodePrimitives';
-import { BuiltInNodeTypes } from '../../domain/BuiltInNodeTypes';
 import {
   safeDescribeNodeContent,
   safeCreateNodeInteraction,
@@ -25,7 +24,6 @@ import { textNodeDefinition } from './nodeTypes/textNode';
 import { unknownNodeDefinition } from './nodeTypes/unknownNode';
 
 const definitions = createRegistry([cardNodeDefinition, textNodeDefinition, imageNodeDefinition, canvasNodeDefinition, checkNodeDefinition, pdfNodeDefinition, markdownNodeDefinition, embedNodeDefinition]);
-const addMenuHiddenTypes = new Set<string>([BuiltInNodeTypes.pdf, BuiltInNodeTypes.md]);
 
 function createRegistry(items: NodeDefinition[]) {
   const map = new Map<string, NodeDefinition>();
@@ -60,12 +58,10 @@ export type RegisteredNodeAddOption = NodeAddMenuMetadata & {
 };
 
 export function registeredNodeAddOptions(): RegisteredNodeAddOption[] {
-  return registeredNodeDefinitions()
-    .filter((definition) => !addMenuHiddenTypes.has(definition.type))
-    .map((definition) => ({
-      type: definition.type,
-      ...definition.addMenu,
-    }));
+  return registeredNodeDefinitions().map((definition) => ({
+    type: definition.type,
+    ...definition.addMenu,
+  }));
 }
 
 export function parseNodeData(node: CanvasNode) {

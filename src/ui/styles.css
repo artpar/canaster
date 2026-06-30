@@ -469,6 +469,17 @@ button {
   overflow: auto;
 }
 
+.file-attach-panel {
+  display: grid;
+  gap: var(--canaster-panel-gap);
+}
+
+.file-attach-panel input[type='file'] {
+  height: auto;
+  padding: var(--canaster-space-xs) var(--canaster-input-padding-inline);
+  font-size: var(--canaster-font-label-size);
+}
+
 .file-preview-frame,
 .embed-editor-frame {
   display: block;

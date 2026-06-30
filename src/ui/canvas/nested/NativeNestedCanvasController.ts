@@ -50,6 +50,7 @@ import { normalizeEmbedUrl } from '../../../core/embedUrl';
 import { DEFAULT_WORKSPACE_STORAGE_ID, loadWorkspaceSnapshot, loadWorkspaceSnapshotMirror, saveWorkspaceSnapshot, saveWorkspaceSnapshotMirror } from '../../../infra/browser/workspaceStorage';
 import { ACTIVE_ENGINE_FRAME_BUDGET_MS, livePortalSlotsFor, MAX_LIVE_PORTAL_PREVIEWS, MAX_TOTAL_ENGINES } from './engineSlots';
 import { createCanvasViewportSlot, type CanvasViewportControl, type CanvasViewportControlEvent, type CanvasViewportSlot } from './createCanvasViewportSlot';
+import { setCanvasViewportToolbarControlExpanded, setCanvasViewportToolbarVisible } from './createCanvasViewportToolbar';
 import {
   buildParentContextField,
   DEFAULT_PARENT_CONTEXT_PANE_LAYOUT,
@@ -60,7 +61,7 @@ import {
   type ParentContextPaneLayoutConstraints,
 } from './parentContextField';
 import { portalOverlayStyle } from './portalLayout';
-import type { ArrangeCanvasMenuRequest, CanvasThemeMenuRequest, NestedCanvasWorkspaceChromeState, WorkspaceFileDropRequest, WorkspaceTextPasteRequest } from './NestedCanvasWorkspace';
+import type { ArrangeCanvasMenuRequest, CanvasAddPanelMenuRequest, CanvasThemeMenuRequest, NestedCanvasWorkspaceChromeState, WorkspaceFileDropRequest, WorkspaceTextPasteRequest } from './NestedCanvasWorkspace';
 import type { WorkspaceUrlPaneCamera, WorkspaceUrlState } from '../../../infra/browser/workspaceUrlLocation';
 import {hasMetaOrCtrlShortcutModifier} from '../../KeyboardShortcuts';
 import type {CanasterThemeId} from '../../theme/CanasterTheme';
@@ -75,11 +76,17 @@ export type NativeNestedCanvasControllerOptions = {
   storageKey?: string;
   onCollectionChange?: (collection: CanvasDocumentCollection, changes: DocumentModelChange[]) => void;
   onChromeStateChange?: (state: NestedCanvasWorkspaceChromeState) => void;
+  onCanvasAddPanelMenuRequest?: (request: CanvasAddPanelMenuRequest) => void;
   onArrangeCanvasMenuRequest?: (request: ArrangeCanvasMenuRequest) => void;
   onCanvasThemeMenuRequest?: (request: CanvasThemeMenuRequest) => void;
   onFileDrop?: (request: WorkspaceFileDropRequest) => void;
   onTextPaste?: (request: WorkspaceTextPasteRequest) => boolean;
 };
+
+export type CanvasViewportControlMenuState = {
+  canvasId: CanvasDocumentId;
+  control: 'arrange' | 'theme';
+} | null;
 
 type Slot = {
   key: string;
@@ -142,6 +149,7 @@ export class NativeNestedCanvasController {
   private readonly fitOnFirstLoad: boolean;
   private readonly onCollectionChange?: (collection: CanvasDocumentCollection, changes: DocumentModelChange[]) => void;
   private readonly onChromeStateChange?: (state: NestedCanvasWorkspaceChromeState) => void;
+  private readonly onCanvasAddPanelMenuRequest?: (request: CanvasAddPanelMenuRequest) => void;
   private readonly onArrangeCanvasMenuRequest?: (request: ArrangeCanvasMenuRequest) => void;
   private readonly onCanvasThemeMenuRequest?: (request: CanvasThemeMenuRequest) => void;
   private readonly onFileDrop?: (request: WorkspaceFileDropRequest) => void;
@@ -180,6 +188,7 @@ export class NativeNestedCanvasController {
   private commitCount = 0;
   private canvasModelChangeCount = 0;
   private controlOwnerKey = 'active';
+  private viewportControlMenuState: CanvasViewportControlMenuState = null;
   private parentContextVisible: boolean;
   private resizeObserver: ResizeObserver;
 
@@ -191,6 +200,7 @@ export class NativeNestedCanvasController {
     this.storageKey = options.storageKey ?? DEFAULT_WORKSPACE_STORAGE_ID;
     this.onCollectionChange = options.onCollectionChange;
     this.onChromeStateChange = options.onChromeStateChange;
+    this.onCanvasAddPanelMenuRequest = options.onCanvasAddPanelMenuRequest;
     this.onArrangeCanvasMenuRequest = options.onArrangeCanvasMenuRequest;
     this.onCanvasThemeMenuRequest = options.onCanvasThemeMenuRequest;
     this.onFileDrop = options.onFileDrop;
@@ -314,6 +324,18 @@ export class NativeNestedCanvasController {
     this.flushOverlayRender();
     this.scheduleOverlayRender();
     this.emitChromeState();
+  }
+
+  setViewportControlMenuState(state: CanvasViewportControlMenuState): void {
+    const next = state ? { ...state } : null;
+    if (
+      this.viewportControlMenuState?.canvasId === next?.canvasId &&
+      this.viewportControlMenuState?.control === next?.control
+    ) {
+      return;
+    }
+    this.viewportControlMenuState = next;
+    this.syncViewportControlMenuState();
   }
 
   fitActiveCanvas() {
@@ -548,13 +570,42 @@ export class NativeNestedCanvasController {
   }
 
   private syncViewportControlVisibility(): void {
+    const touchControlsVisible = window.matchMedia('(hover: none)').matches;
     const syncSlot = (slot: CanvasViewportSlot | null) => {
       if (!slot) return;
-      slot.viewport.dataset.controlsVisible = String(slot.key === this.controlOwnerKey);
+      const visibleForOwner = slot.key === this.controlOwnerKey;
+      const visible = visibleForOwner || touchControlsVisible;
+      slot.viewport.dataset.controlsVisible = String(visibleForOwner);
+      if (slot.controls) {
+        setCanvasViewportToolbarVisible(slot.controls, visible);
+        this.syncViewportControlMenuStateForSlot(slot);
+      }
     };
     syncSlot(this.activeSlot);
     for (const slot of this.slots.values()) syncSlot(slot.viewportSlot);
     for (const slot of this.parentContextSlots.values()) syncSlot(slot.viewportSlot);
+  }
+
+  private syncViewportControlMenuState(): void {
+    const syncSlot = (slot: CanvasViewportSlot | null) => {
+      if (!slot?.controls) return;
+      this.syncViewportControlMenuStateForSlot(slot);
+    };
+    syncSlot(this.activeSlot);
+    for (const slot of this.slots.values()) syncSlot(slot.viewportSlot);
+    for (const slot of this.parentContextSlots.values()) syncSlot(slot.viewportSlot);
+  }
+
+  private syncViewportControlMenuStateForSlot(slot: CanvasViewportSlot): void {
+    if (!slot.controls) return;
+    for (const control of ['arrange', 'theme'] as const) {
+      setCanvasViewportToolbarControlExpanded(
+        slot.controls,
+        control,
+        this.viewportControlMenuState?.canvasId === slot.canvasId &&
+          this.viewportControlMenuState.control === control,
+      );
+    }
   }
 
   private ensureControlOwnerSlotExists(): void {
@@ -751,6 +802,7 @@ export class NativeNestedCanvasController {
     canvasIdForEngine: CanvasDocumentId | (() => CanvasDocumentId),
     options: {
       beforeCommandSelection?: () => CanvasSelectionState | null;
+      onCanvasAddMenuRequest?: EngineOptions['onCanvasAddMenuRequest'];
       onCanvasDoubleClick?: EngineOptions['onCanvasDoubleClick'];
       onFrameMetrics?: EngineOptions['onFrameMetrics'];
       onModelChange?: EngineOptions['onModelChange'];
@@ -796,6 +848,16 @@ export class NativeNestedCanvasController {
       onControl: (slot, control, anchor) => this.handleViewportControl(slot, control, anchor),
       engineOptions: this.editableEngineOptions(() => this.collectionRef.current.activeCanvasId, {
         beforeCommandSelection: () => this.activeEngine()?.getSelectionState() ?? null,
+        onCanvasAddMenuRequest: (canvasId, event, at) => {
+          if (!this.onCanvasAddPanelMenuRequest) return false;
+          this.onCanvasAddPanelMenuRequest({
+            canvasId,
+            anchor: { x: event.clientX, y: event.clientY, w: 1, h: 1 },
+            at,
+          });
+          this.setStatus({ ...this.status, interaction: 'Choose panel' });
+          return true;
+        },
         onStatus: (status) => this.handleActiveStatus(this.collectionRef.current.activeCanvasId, status),
         onModelChange: (model, change) => this.handleActiveModelChange(this.collectionRef.current.activeCanvasId, model, change),
         onPortalLayout: (layouts) => this.handleActivePortalLayouts(layouts),

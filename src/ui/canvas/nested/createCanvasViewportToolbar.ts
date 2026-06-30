@@ -13,39 +13,79 @@ export type CanvasViewportToolbarOptions = {
 };
 
 const controlLabels: Record<CanvasViewportControl, string> = {
-  arrange: 'Arrange canvas panels',
-  fit: 'Center map',
-  'reset-zoom': 'Reset map zoom',
-  theme: 'Change canvas theme',
+  arrange: 'Arrange panels',
+  fit: 'Center view',
+  'reset-zoom': 'Reset view zoom',
+  theme: 'Change view theme',
   'zoom-in': 'Zoom in',
   'zoom-out': 'Zoom out',
 };
 
+const controlGroups: { label: string; controls: CanvasViewportControl[] }[] = [
+  { label: 'View recovery', controls: ['fit', 'reset-zoom'] },
+  { label: 'View zoom', controls: ['zoom-out', 'zoom-in'] },
+  { label: 'View setup', controls: ['arrange', 'theme'] },
+];
+
+const menuControls = new Set<CanvasViewportControl>(['arrange', 'theme']);
+
 export function createCanvasViewportToolbar(options: CanvasViewportToolbarOptions): HTMLDivElement {
   const group = document.createElement('div');
   group.className = 'canvas-viewport-controls';
-  group.setAttribute('aria-label', 'Canvas controls');
-  const rowBreak = Math.ceil(options.controls.length / 2);
-  for (const rowControls of [options.controls.slice(0, rowBreak), options.controls.slice(rowBreak)]) {
+  group.setAttribute('role', 'toolbar');
+  group.setAttribute('aria-label', 'View controls');
+  for (const { label, controls } of viewportControlGroups(options.controls)) {
+    const rowControls = controls.filter((control) => options.controls.includes(control));
     if (!rowControls.length) continue;
     const row = document.createElement('div');
     row.className = 'canvas-viewport-control-row';
-    for (const control of rowControls) row.append(createViewportControlButton(control));
+    row.setAttribute('role', 'group');
+    row.setAttribute('aria-label', label);
+    for (const control of rowControls) row.append(createViewportControlButton(control, !options.onControl));
     group.append(row);
   }
   wireViewportControls(group, options.onControl);
   return group;
 }
 
-function createViewportControlButton(control: CanvasViewportControl): HTMLButtonElement {
+export function setCanvasViewportToolbarControlExpanded(
+  toolbar: HTMLDivElement,
+  control: CanvasViewportControl,
+  expanded: boolean,
+): void {
+  const button = toolbar.querySelector<HTMLButtonElement>(`[data-control="${control}"]`);
+  if (button?.getAttribute('aria-haspopup') === 'menu') button.setAttribute('aria-expanded', String(expanded));
+}
+
+export function setCanvasViewportToolbarVisible(toolbar: HTMLDivElement, visible: boolean): void {
+  toolbar.toggleAttribute('inert', !visible);
+  toolbar.setAttribute('aria-hidden', String(!visible));
+  for (const button of toolbar.querySelectorAll<HTMLButtonElement>('button')) {
+    button.tabIndex = visible ? 0 : -1;
+  }
+}
+
+function createViewportControlButton(control: CanvasViewportControl, disabled: boolean): HTMLButtonElement {
   const button = document.createElement('button');
   button.className = 'icon-button canvas-viewport-control-button';
   button.type = 'button';
   button.dataset.control = control;
+  button.disabled = disabled;
   button.setAttribute('aria-label', controlLabels[control]);
   button.title = controlLabels[control];
+  if (menuControls.has(control)) {
+    button.setAttribute('aria-haspopup', 'menu');
+    button.setAttribute('aria-expanded', 'false');
+  }
   button.append(createViewportControlIcon(control));
   return button;
+}
+
+function viewportControlGroups(controls: CanvasViewportControl[]): { label: string; controls: CanvasViewportControl[] }[] {
+  const knownControls = new Set(controlGroups.flatMap((group) => group.controls));
+  const unknownControls = controls.filter((control) => !knownControls.has(control));
+  if (!unknownControls.length) return controlGroups;
+  return [...controlGroups, { label: 'Other view controls', controls: unknownControls }];
 }
 
 function createViewportControlIcon(control: CanvasViewportControl): SVGSVGElement {

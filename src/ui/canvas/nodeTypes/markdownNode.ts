@@ -1,9 +1,9 @@
 import { asString } from '../../../core/nodeData';
-import { cleanAssetTitle } from '../../../core/workspaceAssetTypes';
+import { cleanAssetTitle, workspaceAssetKindForFile } from '../../../core/workspaceAssetTypes';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import type { JsonObject } from '../../../core/nodePrimitives';
 import { drawNodeBodyLines, drawNodeMeta, nodeLayout, wrapText } from '../nodeRendering';
-import { createFilePreviewShell, loadFileAssetFile } from './fileAssetPreview';
+import { createFilePreviewShell, loadFileAssetFile, saveFileAsset } from './fileAssetPreview';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeContentRect, NodeDefinition, NodeInteractionRegion } from '../nodeDefinition/nodeDefinitionTypes';
 import type { CanvasTheme } from '../theme';
@@ -49,7 +49,7 @@ export const markdownNodeDefinition: NodeDefinition<MarkdownNodeData> = defineNo
   },
   createInteraction(ctx) {
     if (ctx.region.id !== 'preview') return null;
-    return createMarkdownPreview(ctx.mount, ctx.data, ctx.requestClose);
+    return createMarkdownPreview(ctx.mount, ctx.data, (nextData) => ctx.requestCommit(nextData, 'pointer'), ctx.requestClose);
   },
   referencedAssetIds({ data }) {
     return data.assetId ? [data.assetId] : [];
@@ -85,12 +85,12 @@ function markdownRegions(contentRect: NodeContentRect, theme: CanvasTheme): Node
   }];
 }
 
-function createMarkdownPreview(mount: HTMLElement, data: MarkdownNodeData, close: () => void) {
+function createMarkdownPreview(mount: HTMLElement, data: MarkdownNodeData, commit: (nextData: MarkdownNodeData) => void, close: () => void) {
   const shell = createFilePreviewShell(mount, 'node-inline-markdown-preview', data.title || 'Markdown');
   let disposed = false;
   shell.closeButton.addEventListener('click', close);
   if (!data.assetId) {
-    shell.setMessage('No Markdown file attached.');
+    renderMarkdownAttach(shell.body, data, commit);
   } else {
     shell.setMessage('Loading Markdown');
     void loadFileAssetFile(data.assetId)
@@ -109,10 +109,71 @@ function createMarkdownPreview(mount: HTMLElement, data: MarkdownNodeData, close
   }
   return {
     focus() {
-      shell.closeButton.focus({ preventScroll: true });
+      shell.body.querySelector<HTMLElement>('input, button, a')?.focus({ preventScroll: true });
     },
     dispose() {
       disposed = true;
     },
   };
+}
+
+function renderMarkdownAttach(body: HTMLElement, data: MarkdownNodeData, commit: (nextData: MarkdownNodeData) => void) {
+  body.replaceChildren();
+  const panel = document.createElement('div');
+  panel.className = 'file-attach-panel';
+
+  const message = document.createElement('p');
+  message.className = 'file-preview-message';
+  message.textContent = 'Attach a Markdown file to this panel.';
+
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.md,.markdown,text/markdown,text/x-markdown';
+  input.setAttribute('aria-label', 'Choose Markdown file');
+  input.addEventListener('change', () => {
+    const file = input.files?.[0] ?? null;
+    if (!file) return;
+    if (workspaceAssetKindForFile(file) !== 'markdown') {
+      message.textContent = 'Choose a Markdown file.';
+      input.value = '';
+      return;
+    }
+    message.textContent = 'Attaching Markdown';
+    input.disabled = true;
+    void Promise.all([saveFileAsset(file), file.text()])
+      .then(([asset, text]) => {
+        const title = cleanAssetTitle(asset.name || file.name, 'Markdown');
+        commit({
+          ...data,
+          assetId: asset.id,
+          title,
+          fileName: asset.name || file.name || 'note.md',
+          mime: asset.mime || file.type || 'text/markdown',
+          previewText: markdownPreviewText(text),
+        });
+      })
+      .catch((error) => {
+        input.disabled = false;
+        input.value = '';
+        message.textContent = error instanceof Error ? error.message : 'Could not attach Markdown';
+      });
+  });
+
+  panel.append(message, input);
+  body.append(panel);
+}
+
+function markdownPreviewText(text: string): string {
+  return text
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/!\[[^\]]*]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]+)]\([^)]*\)/g, '$1')
+    .replace(/^#{1,6}\s*/gm, '')
+    .replace(/^[-*+]\s+/gm, '')
+    .replace(/^\d+\.\s+/gm, '')
+    .replace(/[*_~>#|]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 1600);
 }

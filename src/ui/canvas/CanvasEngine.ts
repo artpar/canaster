@@ -136,6 +136,7 @@ export class CanvasEngine {
   private readonly onNodeAction?: (nodeId: string, actionId: string, source: CanvasEditSource) => boolean;
   private readonly onNodeDataChange?: (nodeId: string, from: NodeData, to: NodeData, source: CanvasEditSource) => boolean;
   private readonly onCanvasDoubleClick?: (canvasId: string, event: MouseEvent) => boolean;
+  private readonly onCanvasAddMenuRequest?: (canvasId: string, event: MouseEvent, at: WorldPoint) => boolean;
   private readonly onStatus?: (status: ViewportStatus) => void;
   private readonly onModelChange?: (model: CanvasModel, change: CanvasModelChange) => void;
   private readonly onPortalLayout?: (layouts: PortalLayout[]) => void;
@@ -194,6 +195,7 @@ export class CanvasEngine {
     this.onNodeAction = options.onNodeAction;
     this.onNodeDataChange = options.onNodeDataChange;
     this.onCanvasDoubleClick = options.onCanvasDoubleClick;
+    this.onCanvasAddMenuRequest = options.onCanvasAddMenuRequest;
     this.onStatus = options.onStatus;
     this.onModelChange = options.onModelChange;
     this.onPortalLayout = options.onPortalLayout;
@@ -1034,6 +1036,7 @@ export class CanvasEngine {
 
   private onPointerDown = (event: PointerEvent) => {
     if (!this.acceptsInput()) return;
+    if (event.pointerType !== 'touch' && event.button !== 0) return;
     event.preventDefault();
     this.canvas.focus({ preventScroll: true });
     const point = this.eventPoint(event);
@@ -1382,8 +1385,34 @@ export class CanvasEngine {
       this.zoomAt(point.x, point.y, 1.55);
       return;
     }
+    if (this.requestAddMenuForEmptyCanvas(event)) return;
     this.executeCommand({ type: 'create-node', nodeType: BuiltInNodeTypes.card, source: 'pointer', at: world });
   };
+
+  private onContextMenu = (event: MouseEvent) => {
+    if (!this.acceptsInput()) return;
+    this.requestAddMenuForEmptyCanvas(event);
+  };
+
+  private requestAddMenuForEmptyCanvas(event: MouseEvent): boolean {
+    if (!this.onCanvasAddMenuRequest) return false;
+    const point = this.eventPoint(event);
+    const world = this.screenToWorld(point.x, point.y);
+    this.cursorWorld = world;
+    if (this.selectedResizeNodeAt(world) || this.nodeAt(world)) {
+      event.preventDefault();
+      event.stopPropagation();
+      return false;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    this.canvas.focus({ preventScroll: true });
+    this.closeNodeInteraction();
+    if (!this.onCanvasAddMenuRequest(this.canvasId, event, world)) return false;
+    this.interaction = 'Choose panel';
+    this.emitStatus();
+    return true;
+  }
 
   private zoomAt(screenX: number, screenY: number, factor: number) {
     const next = clamp(this.camera.scale * factor, MIN_SCALE, MAX_SCALE);
@@ -1860,6 +1889,7 @@ export class CanvasEngine {
       window.addEventListener('blur', this.onWindowBlur);
       this.canvas.addEventListener('wheel', this.onWheel, { passive: false });
       this.canvas.addEventListener('dblclick', this.onDoubleClick);
+      this.canvas.addEventListener('contextmenu', this.onContextMenu);
       this.inputListenersAttached = true;
       return;
     }
@@ -1880,6 +1910,7 @@ export class CanvasEngine {
     window.removeEventListener('blur', this.onWindowBlur);
     this.canvas.removeEventListener('wheel', this.onWheel);
     this.canvas.removeEventListener('dblclick', this.onDoubleClick);
+    this.canvas.removeEventListener('contextmenu', this.onContextMenu);
     this.inputListenersAttached = false;
   }
 
