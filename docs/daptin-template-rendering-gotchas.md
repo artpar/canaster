@@ -461,6 +461,73 @@ This creates or updates:
 
 Restart Daptin after creating this row unless it was created before startup.
 
+## Production Deploy Attempt 2026-06-30
+
+What succeeded:
+
+- Commit `42587ec17766c785d6e8d7d4a9c673385d29a5b9` was pushed to `main`.
+- GitHub Actions run `28465332292` completed successfully.
+- The workflow built and deployed image `asia-south1-docker.pkg.dev/agent4-471206/canaster/daptin:42587ec17766c785d6e8d7d4a9c673385d29a5b9`.
+- The workflow built `dist/index_with_og.html` and uploaded it to `gs://canaster-daptin-storage/canaster/index_with_og.html`.
+- The workflow deployed the new Daptin container to `canaster-daptin-vm` and its built-in runtime smoke passed.
+
+Post-deploy Daptin state verified through `daptin-cli`:
+
+```bash
+daptin-cli --endpoint https://api.canaster.in --output json list world --filter table_name=document --page-size 1
+```
+
+Result:
+
+```text
+world.permission(document): 1003811
+world_schema_json.DefaultPermission(document): 16256
+```
+
+What is still blocked:
+
+- `get_canaster_document_by_public_path` is not registered on production:
+
+```bash
+daptin-cli --endpoint https://api.canaster.in describe action document get_canaster_document_by_public_path
+```
+
+Returned:
+
+```text
+action "get_canaster_document_by_public_path" not found on "document"
+```
+
+- Creating the missing `action` row through `daptin-cli create action ...` returned `403 TableAccessPermissionChecker`.
+- Listing or provisioning `site` and `template` rows through `daptin-cli` returned `403 TableAccessPermissionChecker` or `entity "site"/"template" not found`.
+- Fresh password signin for `admin@canaster.in` returned `403` because production intentionally disabled the built-in guest `signin` action.
+- The retained CLI token decodes to `admin@canaster.in`, but the admin user's `administrators` relation row has permission `561441`. Updating that relation row to `2097151` through `daptin-cli` also returned `403 TableAccessPermissionChecker`.
+- Local `gcloud compute ssh` could not inspect or restart the VM after the deploy because the local `gcloud` account required interactive reauthentication.
+
+Browser smoke:
+
+```text
+https://canaster.in/d/share-e2e-admin-483921/E2E-Workspace
+```
+
+Returned HTTP `200` and the Canaster SPA hydrated to the sign-in flow, but the page head was the static fallback:
+
+```text
+title: Canway
+description: empty
+canonical: empty
+og:title: empty
+og:url: empty
+twitter:card: empty
+```
+
+Interpretation:
+
+- The production site upload is live.
+- The frontend path handling is live.
+- The Daptin routed-template metadata is not live because the production `template` row is not present or not registered.
+- The remaining production work requires an admin-capable Daptin CLI session or a refreshed local GCP session to inspect the VM and restart after the template row is provisioned.
+
 ## Current Canaster Files
 
 - `daptin/schema_canaster_share.yaml`: schema action that exposes `.document`.
