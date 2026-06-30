@@ -128,6 +128,7 @@ import {
     AddPanelPopover,
     PANEL_CREATE_OPTIONS
 } from "./AddPanelPopover";
+import {AccountPopover} from "./AccountPopover";
 import {
     SidePanel,
     ViewTreeNode
@@ -1573,6 +1574,21 @@ export function App() {
                         null}
                 </div>
             </div>
+            {accountOpen ? (<AccountPopover
+                authEmail={authEmail}
+                authOtp={authOtp}
+                authStep={authStep}
+                signedIn={signedIn}
+                syncMessage={syncMessage}
+                syncStatus={syncStatus}
+                onAuthStepChange={setAuthStep}
+                onClose={() => setAccountOpen(false)}
+                onEmailChange={handleAuthEmailChange}
+                onOtpChange={setAuthOtp}
+                onRequestEmailOtp={() => void handleRequestEmailOtp()}
+                onSignOut={() => void handleSignOut()}
+                onVerifyEmailOtp={() => void handleVerifyEmailOtp()}
+            />) : null}
         </section>
     </main>
     </KeyboardShortcutsProvider>

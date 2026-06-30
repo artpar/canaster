@@ -9,10 +9,7 @@ import {
     UserCircle,
     X
 } from "lucide-react";
-import {
-    AccountPopover,
-    type AccountPopoverProps
-} from "./AccountPopover";
+import type {AccountPopoverProps} from "./AccountPopover";
 import {CatalogPanel} from "./CatalogPanel";
 import {DocumentsPanel} from "./DocumentsPanel";
 import type {StarterCatalogEntry} from "../app/starterWorkspace/types";
@@ -101,19 +98,20 @@ export function SidePanel({
                 onSaveOnline={onSaveOnline}
             />
             <section className="sidepanel-account-footer" aria-label="Account">
-                {account.open ? (
-                    <AccountPopover {...account} docked onClose={account.onClose}/>
-                ) : (
-                    <button className="account-footer-button" type="button" onClick={account.onToggle}>
-                        <span className="account-footer-icon" aria-hidden="true">
-                            {signedIn ? <UserCircle size={17}/> : <LogIn size={17}/>}
-                        </span>
-                        <span className="account-footer-copy">
-                            <span>{signedIn ? 'Account' : 'Sign in'}</span>
-                            <span>{signedIn ? authIdentity(account.authEmail) : 'Save workspaces online'}</span>
-                        </span>
-                    </button>
-                )}
+                <button
+                    className={`account-footer-button${account.open ? ' active' : ''}`}
+                    type="button"
+                    aria-expanded={account.open}
+                    onClick={account.onToggle}
+                >
+                    <span className="account-footer-icon" aria-hidden="true">
+                        {signedIn ? <UserCircle size={17}/> : <LogIn size={17}/>}
+                    </span>
+                    <span className="account-footer-copy">
+                        <span>{signedIn ? 'Account' : 'Sign in'}</span>
+                        <span>{signedIn ? authIdentity(account.authEmail) : 'Save workspaces online'}</span>
+                    </span>
+                </button>
             </section>
         </aside>
     );
