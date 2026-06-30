@@ -71,7 +71,11 @@ jobs:
       - name: Build frontend for production Daptin
         run: |
           set -euo pipefail
-          VITE_DAPTIN_ENDPOINT="https://api.canaster.in" VITE_CANASTER_STORAGE_MODE=daptin npm run build
+          VITE_DAPTIN_ENDPOINT="https://api.canaster.in" \
+            VITE_CANASTER_STORAGE_MODE=daptin \
+            VITE_CANASTER_PUBLIC_ORIGIN="https://canaster.in" \
+            VITE_CANASTER_OG_IMAGE_URL="https://canaster.in/og-image.svg" \
+            npm run build
 
       - name: Upload frontend to site storage
         run: |
@@ -80,6 +84,7 @@ jobs:
           SITE_URI="gs://$GCP_STORAGE_BUCKET/$SITE_PATH"
           gcloud storage rsync ./dist "$SITE_URI" --recursive --delete-unmatched-destination-objects
           gcloud storage ls "$SITE_URI/index.html" >/dev/null
+          gcloud storage ls "$SITE_URI/index_with_og.html" >/dev/null
 
       - name: Deploy Daptin to VM
         run: |

@@ -6,8 +6,11 @@ Tables:
     Permission: 561440
 
   # Application-owned user data.
+  # GuestExecute is required for Daptin routed templates whose action_config
+  # executes document actions; action rows still gate which document actions
+  # guests can actually run.
   - TableName: document
-    Permission: 1003779
+    Permission: 1003811
     DefaultPermission: 16256
 
   - TableName: asset

@@ -12,17 +12,22 @@ export type WorkspaceUrlPaneCamera = {
 
 export type WorkspaceUrlState = {
   documentId: string | null;
+  shareUsername?: string;
+  shareSlug?: string;
   activeCanvasId: CanvasDocumentId;
   activeCamera: Camera;
   paneCameras: WorkspaceUrlPaneCamera[];
 };
 
 const STATE_PARAM = 's';
+const SHARE_PATH_PREFIX = '/d/';
 const VERSION = 'v1';
+const ROOT_CANVAS_ID = 'root';
+const DEFAULT_CAMERA: Camera = { x: 0, y: 0, scale: 1 };
 
-export function readWorkspaceUrlState(search = window.location.search): WorkspaceUrlState | null {
+export function readWorkspaceUrlState(search = window.location.search, pathname = window.location.pathname): WorkspaceUrlState | null {
   const params = new URLSearchParams(search);
-  return parseWorkspaceUrlState(params.get(STATE_PARAM));
+  return parseWorkspaceUrlState(params.get(STATE_PARAM)) ?? workspaceUrlStateFromSharePath(pathname);
 }
 
 export function replaceWorkspaceUrlState(state: WorkspaceUrlState) {
@@ -35,6 +40,14 @@ export function replaceWorkspaceUrlState(state: WorkspaceUrlState) {
   const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
   if (next === current) return;
   window.history.replaceState(window.history.state, '', next);
+}
+
+export function shareDocumentUrl(username: string, slug: string, baseUrl = window.location.href): string {
+  const url = new URL(baseUrl);
+  url.pathname = `${SHARE_PATH_PREFIX}${encodeURIComponent(username.trim())}/${encodeURIComponent(slug.trim())}`;
+  url.search = '';
+  url.hash = '';
+  return url.toString();
 }
 
 export function serializeWorkspaceUrlState(state: WorkspaceUrlState): string {
@@ -71,6 +84,27 @@ function serializePaneCamera(pane: WorkspaceUrlPaneCamera): string {
     encodePart(pane.targetSignature),
     serializeCamera(pane.camera),
   ].join(':');
+}
+
+function workspaceUrlStateFromSharePath(pathname: string): WorkspaceUrlState | null {
+  const sharePath = sharePathParts(pathname);
+  if (!sharePath) return null;
+  return {
+    documentId: null,
+    shareUsername: sharePath.username,
+    shareSlug: sharePath.slug,
+    activeCanvasId: ROOT_CANVAS_ID,
+    activeCamera: DEFAULT_CAMERA,
+    paneCameras: [],
+  };
+}
+
+function sharePathParts(pathname: string): { username: string; slug: string } | null {
+  if (!pathname.startsWith(SHARE_PATH_PREFIX)) return null;
+  const [rawUsername = '', rawSlug = ''] = pathname.slice(SHARE_PATH_PREFIX.length).split('/');
+  const username = decodePart(rawUsername).trim();
+  const slug = decodePart(rawSlug).trim();
+  return username && slug ? { username, slug } : null;
 }
 
 function parsePaneCameras(value: string): WorkspaceUrlPaneCamera[] {

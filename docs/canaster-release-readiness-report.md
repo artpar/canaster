@@ -87,11 +87,11 @@ Email OTP and mailbox provisioning were separately verified in production on 202
 
 Document storage uses the Daptin-standard access shape:
 
-- `world.permission(document)=1003779`
+- `world.permission(document)=1003811`
 - `world.usergroup_id -> users` relation permission: `1032192`
 - `world_schema_json.DefaultPermission(document)=16256`
 
-This lets authenticated users in the built-in `users` group create/update/delete owned documents while keeping anonymous clients out and keeping new document rows private to the owner. Do not replace this with guest create/update/delete bits, and do not manipulate generated join tables directly.
+This lets authenticated users in the built-in `users` group create/update/delete owned documents while keeping anonymous create/update/delete closed and keeping new document rows private to the owner. The guest execute bit is present only so Daptin routed-template document actions can run. Do not replace this with guest create/update/delete bits, and do not manipulate generated join tables directly.
 
 Mailbox provisioning uses table defaults:
 

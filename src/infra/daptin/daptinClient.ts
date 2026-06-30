@@ -102,6 +102,12 @@ export function tokenEmail(token = getToken()): string {
   return typeof email === 'string' && email.includes('@') ? email : '';
 }
 
+export function tokenName(token = getToken()): string {
+  const claims = tokenClaims(token);
+  const name = claims?.name ?? claims?.Name;
+  return typeof name === 'string' && name.trim() ? name.trim() : '';
+}
+
 export function tokenExpired(token = getToken(), leewaySeconds = 30): boolean {
   if (!token) return true;
   const claims = tokenClaims(token);

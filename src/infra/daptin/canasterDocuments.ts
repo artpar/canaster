@@ -1,4 +1,5 @@
 import type { DaptinJsonApiSingleResponse } from 'daptin-client';
+import { safeDocumentSlug } from '../../core/documentSlug';
 import type { CanvasWorkspaceSnapshot } from '../../domain/documentTypes';
 import { hydrateWorkspaceSnapshot } from '../../domain/workspaceHistory';
 import { clearToken, ensureDaptinModelsLoaded, getDaptinClient, normalizeDaptinError, requireUsableStoredToken, setToken } from './daptinClient';
@@ -6,6 +7,8 @@ import { clearToken, ensureDaptinModelsLoaded, getDaptinClient, normalizeDaptinE
 export type CanasterDocumentSummary = {
   id: string;
   title: string;
+  publicOwner: string;
+  slug: string;
   path: string;
   permission: number;
   updatedAt: string | null;
@@ -88,17 +91,11 @@ export async function listDocuments(): Promise<CanasterDocumentSummary[]> {
     return (response.data ?? [])
       .map((row) => row as DaptinDocumentRow)
       .filter((row) => documentId(row) && String(rowAttr(row, 'document_extension') ?? '').toLowerCase() === 'json')
-      .map((row) => ({
-        id: documentId(row),
-        title: documentTitle(row),
-        path: String(rowAttr(row, 'document_path') ?? ''),
-        permission: Number(rowAttr(row, 'permission') ?? 0),
-        updatedAt: stringOrNull(rowAttr(row, 'updated_at') ?? rowAttr(row, 'updatedAt')),
-      }));
+      .map(documentSummary);
   });
 }
 
-export async function createDocument(title: string, snapshot: CanvasWorkspaceSnapshot): Promise<string> {
+export async function createDocument(title: string, snapshot: CanvasWorkspaceSnapshot, publicOwner: string): Promise<string> {
   return authenticatedDaptinRequest('Could not create a saved workspace', async () => {
     const client = getDaptinClient();
     const documentKey = crypto.randomUUID();
@@ -113,13 +110,14 @@ export async function createDocument(title: string, snapshot: CanvasWorkspaceSna
     if (!created?.data) throw new Error('Daptin document create did not return a row');
     const ref = documentId(created.data as DaptinDocumentRow);
     if (!ref) throw new Error('Daptin document create did not return a reference id');
+    const name = documentStorageName(publicOwner, title);
     await updateDocument(ref, { permission: PRIVATE_PERMISSION });
     await updateDocument(ref, {
-      document_name: `${safeDocumentTitle(title)}.canaster.json`,
+      document_name: name,
       document_path: `/canaster/documents/${ref}.canaster.json`,
       document_extension: 'json',
       mime_type: 'application/json',
-      document_content: encodeSnapshotContent(`${safeDocumentTitle(title)}.canaster.json`, snapshot),
+      document_content: encodeSnapshotContent(name, snapshot),
     });
     return ref;
   });
@@ -143,12 +141,12 @@ export async function loadDocumentDetails(documentRef: string): Promise<Canaster
   });
 }
 
-export async function saveDocument(documentRef: string, snapshot: CanvasWorkspaceSnapshot, title?: string): Promise<void> {
+export async function saveDocument(documentRef: string, snapshot: CanvasWorkspaceSnapshot, title?: string, publicOwner?: string): Promise<void> {
   return authenticatedDaptinRequest('Could not save this workspace', async () => {
     const current = await getDocumentRow(documentRef);
     const name = title === undefined
       ? String(rowAttr(current, 'document_name') ?? `${documentRef}.canaster.json`)
-      : `${safeDocumentTitle(title)}.canaster.json`;
+      : documentStorageName(publicOwner || documentOwnerSlug(current), title);
     await updateDocument(documentRef, {
       ...(title === undefined ? {} : {
         document_name: name,
@@ -158,6 +156,20 @@ export async function saveDocument(documentRef: string, snapshot: CanvasWorkspac
       document_extension: 'json',
       mime_type: 'application/json',
     });
+  });
+}
+
+export async function findDocumentByPublicPath(publicOwner: string, slug: string): Promise<CanasterDocumentSummary | null> {
+  return authenticatedDaptinRequest('Could not open this shared workspace', async () => {
+    const response = await getDaptinClient().jsonApi.findAll<DaptinDocumentAttributes>('document', {
+      page: { size: 1 },
+      query: [
+        { column: 'document_name', operator: 'is', value: `${publicOwner}/${slug}.canaster.json` },
+        { column: 'document_extension', operator: 'is', value: 'json' },
+      ],
+    });
+    const row = (response.data?.[0] ?? null) as DaptinDocumentRow | null;
+    return row ? documentSummary(row) : null;
   });
 }
 
@@ -269,12 +281,36 @@ function rowAttr(row: DaptinDocumentRow, key: keyof DaptinDocumentAttributes): u
 }
 
 function documentTitle(row: DaptinDocumentRow): string {
-  const name = String(rowAttr(row, 'document_name') ?? 'Untitled');
+  const name = documentSlug(row) || 'Untitled';
   return name.endsWith('.canaster.json') ? name.slice(0, -'.canaster.json'.length) : name;
 }
 
-function safeDocumentTitle(title: string): string {
-  return (title.trim() || 'Untitled').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'Untitled';
+function documentSummary(row: DaptinDocumentRow): CanasterDocumentSummary {
+  const title = documentTitle(row);
+  return {
+    id: documentId(row),
+    title,
+    publicOwner: documentOwnerSlug(row),
+    slug: safeDocumentSlug(title),
+    path: String(rowAttr(row, 'document_path') ?? ''),
+    permission: Number(rowAttr(row, 'permission') ?? 0),
+    updatedAt: stringOrNull(rowAttr(row, 'updated_at') ?? rowAttr(row, 'updatedAt')),
+  };
+}
+
+function documentStorageName(publicOwner: string, title: string): string {
+  const owner = publicOwner.trim() || 'account';
+  return `${owner}/${safeDocumentSlug(title)}.canaster.json`;
+}
+
+function documentOwnerSlug(row: DaptinDocumentRow): string {
+  const name = String(rowAttr(row, 'document_name') ?? '');
+  return name.includes('/') ? name.split('/')[0] ?? '' : '';
+}
+
+function documentSlug(row: DaptinDocumentRow): string {
+  const name = String(rowAttr(row, 'document_name') ?? 'Untitled');
+  return name.includes('/') ? name.slice(name.lastIndexOf('/') + 1) : name;
 }
 
 function stringOrNull(value: unknown): string | null {

@@ -14,6 +14,7 @@
     "daptin:smoke": "node scripts/daptin-smoke.mjs",
     "daptin:smoke:local": "DAPTIN_SMOKE_ENDPOINT=http://localhost:6336 DAPTIN_SMOKE_CLI_CONFIG=.tmp/daptin/local-site-cli.yaml node scripts/daptin-smoke.mjs",
     "daptin:live:e2e": "node scripts/canaster-live-e2e.mjs",
+    "daptin:provision-share-template": "scripts/provision-canaster-share-template.sh",
     "daptin:check:cloud": "curl -fsS 'https://api.canaster.in/api/world?page%5Bsize%5D=1' >/dev/null"
   },
   "dependencies": {

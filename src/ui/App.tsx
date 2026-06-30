@@ -24,6 +24,7 @@ import {
 import {
     type CanasterDocumentSummary,
     createDocument,
+    findDocumentByPublicPath,
     listDocuments,
     loadDocumentDetails,
     requestEmailOtp,
@@ -38,6 +39,13 @@ import {
     loadLocalAssetObject,
     saveLocalAsset
 } from '../infra/browser/localAssets';
+import {publicAccountSlugFromIdentity} from '../core/publicAccountSlug';
+import {safeDocumentSlug} from '../core/documentSlug';
+import {
+    embedProviderForUrl,
+    embedTitleForUrl,
+    normalizeEmbedUrl
+} from '../core/embedUrl';
 import {
     cleanAssetTitle,
     isImageAssetMime,
@@ -45,11 +53,6 @@ import {
     workspaceAssetKindForFile
 } from '../core/workspaceAssetTypes';
 import {workspacePreviewAssetFileName} from '../core/workspacePreviewAssetFileName';
-import {
-    embedProviderForUrl,
-    embedTitleForUrl,
-    normalizeEmbedUrl
-} from '../core/embedUrl';
 import {
     clearDaptinSession,
     DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY,
@@ -60,6 +63,7 @@ import {
     isSessionError,
     normalizeDaptinError,
     tokenEmail,
+    tokenName,
 } from '../infra/daptin/daptinClient';
 import {
     connectDaptinLive,
@@ -127,6 +131,7 @@ import {
 import {
     readWorkspaceUrlState,
     replaceWorkspaceUrlState,
+    shareDocumentUrl,
     type WorkspaceUrlState
 } from '../infra/browser/workspaceUrlLocation';
 import {
@@ -411,6 +416,7 @@ export function App() {
     if (initialUrlStateRef.current === null) initialUrlStateRef.current = readWorkspaceUrlState();
     const pendingUrlStateRef = useRef<WorkspaceUrlState | null>(initialUrlStateRef.current,);
     const urlStateReadyRef = useRef(!pendingUrlStateRef.current);
+    const preserveShareUrlRef = useRef(Boolean(initialUrlStateRef.current?.shareUsername && initialUrlStateRef.current.shareSlug));
     const [accountOpen, setAccountOpen] = useState(false);
     const [arrangeMenuOpen, setArrangeMenuOpen] = useState(false);
     const [arrangeMenuPosition, setArrangeMenuPosition] = useState<ArrangeMenuPosition | null>(null);
@@ -538,7 +544,7 @@ export function App() {
             urlStateReadyRef.current = true;
             return false;
         }
-        if (pending.documentId !== documentRef) return false;
+        if (pending.documentId && pending.documentId !== documentRef) return false;
         pendingUrlStateRef.current = null;
         urlStateReadyRef.current = true;
         return workspaceRef.current?.openWorkspaceUrlState(pending) ?? false;
@@ -659,7 +665,7 @@ export function App() {
 
     useEffect(() => {
         const pending = pendingUrlStateRef.current;
-        if (!pending?.documentId || signedIn) return;
+        if ((!pending?.documentId && !pending?.shareUsername) || signedIn) return;
         setAuthStep('email');
         setSidePanelOpen(true);
         setAccountOpen(true);
@@ -669,11 +675,12 @@ export function App() {
 
     useEffect(() => {
         const pending = pendingUrlStateRef.current;
-        if (!pending || pending.documentId || !chromeState.storageReady) return;
+        if (!pending || pending.documentId || pending.shareUsername || !chromeState.storageReady) return;
         applyPendingUrlState(null);
     }, [applyPendingUrlState, chromeState.collection, chromeState.storageReady]);
 
     useEffect(() => {
+        if (preserveShareUrlRef.current) return;
         if (!urlStateReadyRef.current || pendingUrlStateRef.current || !chromeState.storageReady) return;
         const updateUrl = window.setTimeout(() => {
             const state = workspaceRef.current?.currentWorkspaceUrlState(activeDocumentId || null);
@@ -783,6 +790,39 @@ export function App() {
         let canceled = false;
         setSyncStatus('loading');
         setSyncMessage('Checking saved workspaces');
+        const pendingShare = pendingUrlStateRef.current?.shareUsername && pendingUrlStateRef.current.shareSlug
+            ? {
+                username: pendingUrlStateRef.current.shareUsername,
+                slug    : pendingUrlStateRef.current.shareSlug,
+            }
+            : null;
+        if (pendingShare) {
+            refreshDocuments()
+                .then(async (rows) => {
+                    if (canceled) return;
+                    const listed = rows.find((document) => document.publicOwner === pendingShare.username &&
+                        document.slug === pendingShare.slug);
+                    const sharedDocument = listed ?? await findDocumentByPublicPath(pendingShare.username, pendingShare.slug);
+                    if (canceled) return;
+                    if (!sharedDocument) {
+                        setSyncStatus('error');
+                        setSyncMessage('That shared workspace was not found. Check the link or sign in with another account.');
+                        return;
+                    }
+                    await loadDaptinDocument(sharedDocument.id, listed ? rows : [sharedDocument, ...rows]);
+                })
+                .catch((error) => {
+                    if (canceled) return;
+                    void recoverSessionError(error).then((recovered) => {
+                        if (recovered || canceled) return;
+                        setSyncStatus('error');
+                        setSyncMessage(workspaceErrorMessage(error, 'open'));
+                    });
+                });
+            return () => {
+                canceled = true;
+            };
+        }
         const restoredDocumentId = activeDocumentId ||
             window.localStorage.getItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY) || '';
         if (restoredDocumentId) {
@@ -822,7 +862,7 @@ export function App() {
         return () => {
             canceled = true;
         };
-    }, [signedIn]);
+    }, [activeDocumentId, loadDaptinDocument, recoverSessionError, refreshDocuments, signedIn]);
 
     const handleDocumentLiveEvent = useCallback(async (event: DaptinLiveEvent) => {
         if (event.topic !== 'document') return;
@@ -997,6 +1037,8 @@ export function App() {
         setSyncStatus('saving');
         setSyncMessage('Saving workspace');
         await workspaceRef.current?.flushWorkspaceSnapshot();
+        const publicOwner = publicAccountSlugFromIdentity(nameFromStoredToken(), authEmail || emailFromStoredToken());
+        if (!publicOwner) throw new Error('Sign in again before saving this workspace online.');
         let freshSnapshot = workspaceRef.current?.getWorkspaceSnapshot() ?? snapshot;
         const promoted = await promoteLocalAssetsForOnlineSave(freshSnapshot);
         if (promoted.changed) {
@@ -1012,10 +1054,10 @@ export function App() {
         const previewImage = await uploadWorkspacePreviewImage(previewCapture, documentTitle);
         freshSnapshot = setWorkspaceSnapshotPreviewImage(freshSnapshot, previewImage);
         if (activeDocumentId) {
-            await saveDocument(activeDocumentId, freshSnapshot, documentTitle);
+            await saveDocument(activeDocumentId, freshSnapshot, documentTitle, publicOwner);
             await saveWorkspaceSnapshot(freshSnapshot, remoteWorkspaceStorageKey(activeDocumentId));
         } else {
-            const documentRef = await createDocument(documentTitle, freshSnapshot);
+            const documentRef = await createDocument(documentTitle, freshSnapshot, publicOwner);
             await saveWorkspaceSnapshot(freshSnapshot, remoteWorkspaceStorageKey(documentRef));
             window.localStorage.setItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY, documentRef);
             setActiveDocumentId(documentRef);
@@ -1029,7 +1071,7 @@ export function App() {
         await refreshDocuments();
         setSyncStatus('clean');
         setSyncMessage(SAVED_MESSAGE);
-    }, [activeDocumentId, documentTitle, refreshDocuments, signedIn]);
+    }, [activeDocumentId, authEmail, documentTitle, refreshDocuments, signedIn]);
 
     const handleSaveOnline = useCallback(async () => {
         try {
@@ -1065,15 +1107,16 @@ export function App() {
 
     const handleCopyWorkspaceLink = useCallback(async () => {
         try {
-            const state = workspaceRef.current?.currentWorkspaceUrlState(activeDocumentId || null);
-            if (state) replaceWorkspaceUrlState(state);
-            await copyTextToClipboard(window.location.href);
+            if (!activeDocumentId) throw new Error('Save online before copying a workspace link.');
+            const publicOwner = publicAccountSlugFromIdentity(nameFromStoredToken(), authEmail || emailFromStoredToken());
+            if (!publicOwner) throw new Error('Sign in again before copying a workspace link.');
+            await copyTextToClipboard(shareDocumentUrl(publicOwner, safeDocumentSlug(documentTitle)));
             setSyncMessage('Workspace link copied');
-        } catch {
+        } catch (error) {
             setSyncStatus((current) => current === 'saving' || current === 'loading' ? current : 'error');
-            setSyncMessage('Could not copy workspace link.');
+            setSyncMessage(error instanceof Error ? error.message : 'Could not copy workspace link.');
         }
-    }, [activeDocumentId]);
+    }, [activeDocumentId, authEmail, documentTitle]);
 
     const handleCopyWorkspaceDocument = useCallback(async () => {
         try {
@@ -2213,6 +2256,10 @@ function stringField(value: unknown): string {
 
 function emailFromStoredToken(): string {
     return tokenEmail();
+}
+
+function nameFromStoredToken(): string {
+    return tokenName();
 }
 
 function snapshotSignature(snapshot: unknown): string {

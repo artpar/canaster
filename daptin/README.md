@@ -24,6 +24,35 @@ Canaster ships an actions-only schema file for email OTP auth:
 - `verify_canaster_email_otp` on `user_account` accepts `email` and `otp`, runs `otp.login.verify`, returns Daptin's `client.store.set` token response, and then provisions the user's Daptin mailbox if it is missing.
 - Both action rows use `Permission: 32` (`GuestExecute`) so the public auth surface is action execution only. This does not grant anonymous CRUD on `document` or `user_account`.
 
+Canaster ships a routed-template action for shared document pages:
+
+- `get_canaster_document_by_public_path` on `document` accepts `username` and `slug`.
+- The action returns `Reference: document`, matching Daptin routed-template data shape used by 100x templates.
+- The public route is `/d/:username/:slug`.
+- The action queries `document_name == username + "/" + slug + ".canaster.json"` and `document_extension == "json"`.
+- Today, `username` means Canaster's public account slug stored in `user_account.name`. New OTP-created accounts set it to a sanitized email local part plus six random digits, for example `artpar-123456`. The frontend reads the JWT `name` claim and uses that same value when saving `document_name` and copying share links. A future editable username system needs an explicit account-profile contract; do not infer one from this route alone.
+- The action row uses `Permission: 2085152`, which preserves the normal owner/group action shape and adds `GuestExecute`. Bare `32` (`GuestExecute` only) is not enough for this routed-template action path.
+- The `document` table permission must include `GuestExecute` (`1003811`) so Daptin can execute document actions from a guest-routed template. This still does not grant anonymous document create/update/delete.
+- After deploy, verify the imported action row through `daptin-cli`; local Daptin `v0.12.26` imported this schema once as `2085120` and required an explicit `daptin-cli update action <ref> permission=2085152` repair.
+- Anonymous access still depends on normal Daptin row permissions. Private rows are not exposed by this action; the SPA then shows the sign-in flow after hydration.
+
+The template row itself is not schema-seeded. Daptin registers `template.url_pattern` routes from database rows at startup, so an operator must create or update the row after the site reference is known:
+
+```bash
+npm run daptin:provision-share-template -- --site-ref <site_reference_id> --config <daptin_cli_config>
+```
+
+That command creates or updates a `template` row equivalent to:
+
+- `name`: `CanasterDocument`
+- `content`: `subsite://<site_reference_id>/index_with_og.html`
+- `url_pattern`: `["/d/:username/:slug"]`
+- `action_config`: `{"action":"get_canaster_document_by_public_path","type":"document"}`
+- `mime_type`: `text/html`
+- `permission`: table default. Do not force a restrictive row permission during create; local Daptin testing showed that can trip `TableAccessPermissionChecker`.
+
+Create the template row before starting the production Daptin process when possible. If the row is created or changed after Daptin is already running, restart Daptin so `CreateTemplateHooks` registers `/d/:username/:slug`.
+
 Mailbox provisioning is deliberately attached to OTP verification, not OTP request. A successful verify creates one `mail_account` row for the verified email address and creates the default `mail_box` rows (`INBOX`, `Draft`, `Sent`, `Archive`, `Trash`, `Spam`) through normal entity foreign-key columns. It does not write generated join tables. The `mail_account` and `mail_box` table defaults are `DefaultPermission: 569633`, which grants the owner `Refer` so Daptin can use those rows as foreign keys when storing mail. The mailbox password is generated server-side, stays under Daptin's bcrypt input limit, and is not returned to the browser; expose an authenticated mailbox-password reset action later if direct IMAP/SMTP client login is needed.
 
 Inbound SMTP stores messages as the recipient user, so production must grant the built-in `users` usergroup table-level create on the `mail` world row. The intended state is `world.permission(mail)=561408` and a `usergroup(users).world_id -> mail` relation permission of `638976` (`Group: Peek, Read, Create, Execute`). The generated `world_world_id_has_usergroup_usergroup_id` relation table default is `DefaultPermission: 638976`; existing relation rows that predate the default must be repaired to the same permission. Do not grant `GuestCreate` on `mail`.
@@ -41,7 +70,7 @@ Production email delivery uses Daptin SMTP, not AWS SES. The OTP action sends fr
 
 The production `document` table currently creates new rows with `world_schema_json.DefaultPermission=16256`. Keep the MVP create flow conservative anyway: create a harmless placeholder row, immediately PATCH `permission: 16256`, then PATCH the real JSON file content.
 
-Production after admin lockdown must grant `document` table access to authenticated users through the built-in `users` usergroup, not through guest create/update/delete bits. The current production setting is `world.permission(document)=1003779`, with the `document` world row related to `users` through `usergroup_id` and that relation carrying `permission=1032192` (`Group: Peek, Read, Create, Update, Delete, Execute`). Anonymous `POST`, `PATCH`, and `DELETE` on `document` return `403`; anonymous `GET` only works for rows explicitly patched public-readable. The normal signed-in browser save path creates, patches, and deletes owned document rows successfully. Verify the browser journey with a normal non-admin account before release; a privileged CLI smoke does not prove the user path.
+Production after admin lockdown must grant `document` table access to authenticated users through the built-in `users` usergroup, not through guest create/update/delete bits. The current intended setting is `world.permission(document)=1003811`, with the `document` world row related to `users` through `usergroup_id` and that relation carrying `permission=1032192` (`Group: Peek, Read, Create, Update, Delete, Execute`). Anonymous `POST`, `PATCH`, and `DELETE` on `document` return `403`; anonymous `GET` only works for rows explicitly patched public-readable, and anonymous `Execute` is present so Daptin routed-template actions can run when their action row also grants `GuestExecute`. The normal signed-in browser save path creates, patches, and deletes owned document rows successfully. Verify the browser journey with a normal non-admin account before release; a privileged CLI smoke does not prove the user path.
 
 ## Local Daptin Startup
 
@@ -100,9 +129,11 @@ Current public TLS shape:
 - Daptin HTTPS is enabled through `/_config/backend/enable_https=true` and backend `hostname=api.canaster.in`.
 - As of 2026-06-18, the VM at `34.14.185.249` serves the Canway frontend on HTTP and Daptin API on HTTP/HTTPS when the correct Host/SNI is used. Public DNS cutover from the old load balancer is still required.
 - Public frontend auth calls should use `https://api.canaster.in`; after this schema is deployed, browser auth uses the schema-managed email OTP actions `request_canaster_email_otp` and `verify_canaster_email_otp`.
-- Production document storage has `world.permission(document)=1003779`, `world.usergroup_id -> users` relation permission `1032192`, and `DefaultPermission(document)=16256`. Update relation-row permission through Daptin JSON:API on `world_world_id_has_usergroup_usergroup_id`; do not use direct SQL or anonymous guest create/update/delete bits for the save path.
+- Production document storage has `world.permission(document)=1003811`, `world.usergroup_id -> users` relation permission `1032192`, and `DefaultPermission(document)=16256`. The extra `GuestExecute` bit is required for Daptin routed-template actions and does not grant anonymous create/update/delete. Update relation-row permission through `daptin-cli`; do not use direct SQL, raw HTTP, or anonymous guest create/update/delete bits for the save path.
 
 See `docs/daptin-backend-groundwork.md` for the exact GCP commands and required CI/CD variables.
+
+See `docs/daptin-template-rendering-gotchas.md` for routed-template behavior, 100x reference patterns, slug mapping, and Daptin CLI pitfalls found while implementing Canaster share metadata.
 
 ## Required CI/CD Configuration
 
