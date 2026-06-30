@@ -5,7 +5,7 @@ import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import { cachedAssetImage, cacheAssetImage } from '../imageAssets';
 import { prepareInlineEditorMount, stopEvent } from '../inlineEditorDom';
 import type { JsonObject } from '../../../core/nodePrimitives';
-import { drawPlaceholderIcon, nodeLayout, nodeText } from '../nodeRendering';
+import { drawPlaceholderIcon } from '../nodeRendering';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeContentRect, NodeDefinition, NodeInteractionRegion } from '../nodeDefinition/nodeDefinitionTypes';
 import type { CanvasTheme } from '../theme';
@@ -22,13 +22,13 @@ type ImageNodeData = {
 export const imageNodeDefinition: NodeDefinition<ImageNodeData> = defineNodeType<ImageNodeData>({
   ...nodeTypeSpecs.image,
   createDefaultData() {
-    return { assetId: null, alt: '', fit: 'contain', caption: '' };
+    return { assetId: null, alt: '', fit: 'cover', caption: '' };
   },
   parseData(raw) {
     return {
       assetId: asNullableString(raw.assetId),
       alt: asString(raw.alt, ''),
-      fit: asEnum(raw.fit, IMAGE_FITS, 'contain'),
+      fit: asEnum(raw.fit, IMAGE_FITS, 'cover'),
       caption: asString(raw.caption, ''),
     };
   },
@@ -43,9 +43,6 @@ export const imageNodeDefinition: NodeDefinition<ImageNodeData> = defineNodeType
       drawImage(ctx, cached, frame, data.fit);
     } else {
       drawPlaceholderIcon(ctx, frame, data.assetId ? 'LOADING' : 'IMAGE', theme);
-    }
-    if (state.selected || state.hovered) {
-      drawImageFitControls(ctx, contentRect, data.fit, theme);
     }
   },
   describe({ data }) {
@@ -64,12 +61,6 @@ export const imageNodeDefinition: NodeDefinition<ImageNodeData> = defineNodeType
     return imageRegions(contentRect, theme);
   },
   createInteraction(ctx) {
-    if (ctx.region.id === 'fit-contain' || ctx.region.id === 'fit-cover') {
-      const fit = ctx.region.id === 'fit-cover' ? 'cover' : 'contain';
-      if (ctx.data.fit !== fit) ctx.requestCommit({ ...ctx.data, fit }, 'pointer');
-      requestAnimationFrame(ctx.requestClose);
-      return { dispose() {} };
-    }
     if (ctx.region.id !== 'image-frame') return null;
     return createImagePicker(ctx.mount, ctx.data, (nextData) => ctx.requestCommit(nextData, 'pointer'), ctx.requestClose);
   },
@@ -80,12 +71,7 @@ export const imageNodeDefinition: NodeDefinition<ImageNodeData> = defineNodeType
 
 function imageRegions(contentRect: NodeContentRect, theme: CanvasTheme): NodeInteractionRegion[] {
   const frame = imageFrame(contentRect, theme);
-  const controls = imageFitControlRects(contentRect, theme);
-  return [
-    { id: 'image-frame', rect: frame, cursor: 'pointer', label: 'image' },
-    { id: 'fit-contain', rect: controls.contain, cursor: 'pointer', label: 'fit image inside frame' },
-    { id: 'fit-cover', rect: controls.cover, cursor: 'pointer', label: 'fill image frame' },
-  ];
+  return [{ id: 'image-frame', rect: frame, cursor: 'pointer', label: 'image' }];
 }
 
 function imageFrame(contentRect: NodeContentRect, theme: CanvasTheme) {
@@ -96,46 +82,6 @@ function imageFrame(contentRect: NodeContentRect, theme: CanvasTheme) {
     w: contentRect.w,
     h: contentRect.h,
   };
-}
-
-function imageFitControlRects(contentRect: NodeContentRect, theme: CanvasTheme) {
-  const layout = nodeLayout(theme);
-  const controlWidth = imageFitControlWidth(layout);
-  const controlHeight = Math.max(14, layout.labelLineHeight + Math.round(layout.labelLineHeight * 0.15));
-  const controlGap = Math.max(4, Math.round(layout.insetX * 0.8));
-  const y = contentRect.y + Math.max(layout.titleY, contentRect.h - layout.footerHeight + Math.round((layout.footerHeight - controlHeight) / 2));
-  return {
-    contain: { x: contentRect.x + Math.max(0, contentRect.w - controlWidth * 2 - controlGap), y, w: controlWidth, h: controlHeight },
-    cover: { x: contentRect.x + Math.max(0, contentRect.w - controlWidth), y, w: controlWidth, h: controlHeight },
-  };
-}
-
-function imageFitControlWidth(layout: ReturnType<typeof nodeLayout>) {
-  return Math.max(42, layout.rowHeight * 2 + layout.insetX);
-}
-
-function drawImageFitControls(ctx: CanvasRenderingContext2D, contentRect: NodeContentRect, fit: 'contain' | 'cover', theme: CanvasTheme) {
-  const controls = imageFitControlRects(contentRect, theme);
-  drawFitPill(ctx, controls.contain, 'Fit', fit === 'contain', theme);
-  drawFitPill(ctx, controls.cover, 'Fill', fit === 'cover', theme);
-}
-
-function drawFitPill(ctx: CanvasRenderingContext2D, rect: { x: number; y: number; w: number; h: number }, label: string, active: boolean, theme: CanvasTheme) {
-  const text = nodeText(theme);
-  ctx.save();
-  ctx.fillStyle = active ? theme.selected : theme.nodeBg;
-  ctx.strokeStyle = active ? theme.selected : theme.mutedText;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.roundRect(rect.x, rect.y, rect.w, rect.h, theme.nodeControlRadius);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = active ? theme.nodeBg : theme.bodyText;
-  ctx.font = text.micro;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(label, rect.x + rect.w / 2, rect.y + rect.h / 2 + 0.5);
-  ctx.restore();
 }
 
 function createImagePicker(mount: HTMLElement, data: ImageNodeData, commit: (nextData: ImageNodeData) => void, close: () => void) {

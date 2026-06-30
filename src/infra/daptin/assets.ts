@@ -1,5 +1,6 @@
 import type { DaptinJsonApiSingleResponse } from 'daptin-client';
 import { isImageAssetMime, isSupportedWorkspaceAssetFile } from '../../core/workspaceAssetTypes';
+import { isWorkspacePreviewAssetFileName } from '../../core/workspacePreviewAssetFileName';
 import { getDaptinClient, getDaptinEndpoint, getToken, normalizeDaptinError, requireUsableStoredToken } from './daptinClient';
 
 export type CanasterAssetSummary = {
@@ -75,6 +76,7 @@ export async function listImageAssets(): Promise<CanasterAssetSummary[]> {
     return (response.data ?? [])
       .map((row) => row as DaptinAssetRow)
       .filter((row) => assetId(row) && isImageAssetMime(String(rowAttr(row, 'mime') ?? '')))
+      .filter((row) => !isWorkspacePreviewAssetFileName(String(rowAttr(row, 'name') ?? '')))
       .map((row) => summaryFromRow(row));
   });
 }

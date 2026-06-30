@@ -128,6 +128,12 @@ type ActiveNodeInteraction = {
   controller: NodeInteractionController;
 };
 
+export type CanvasPngCapture = {
+  blob: Blob;
+  width: number;
+  height: number;
+};
+
 export class CanvasEngine {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
@@ -339,6 +345,24 @@ export class CanvasEngine {
     this.frameQueued = false;
     this.render();
     this.dirty = false;
+  }
+
+  capturePngBlob(): Promise<CanvasPngCapture> {
+    this.flushRender();
+    const { canvas } = this;
+    return new Promise((resolve, reject) => {
+      try {
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error('Could not capture workspace preview'));
+            return;
+          }
+          resolve({ blob, width: canvas.width, height: canvas.height });
+        }, 'image/png');
+      } catch (error) {
+        reject(error);
+      }
+    });
   }
 
   getSelectionState(): CanvasSelectionState {

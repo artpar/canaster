@@ -22,6 +22,16 @@ export type CanvasDocumentCollection = {
 
 export type CanvasWorkspaceAppearance = {
   themeId: string;
+  previewImage?: CanvasWorkspacePreviewImage | null;
+};
+
+export type CanvasWorkspacePreviewImage = {
+  assetId: string;
+  mime: 'image/png';
+  width: number;
+  height: number;
+  capturedAt: string;
+  canvasId: CanvasDocumentId;
 };
 
 export type CanvasDocumentAppearance = {

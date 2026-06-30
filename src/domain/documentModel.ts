@@ -7,7 +7,7 @@ import {
   updatePortalSummaryForNode,
 } from './nodeSemantics';
 import type { CanvasBackgroundImage } from '../core/canvasAppearance';
-import type { CanvasDocument, CanvasDocumentAppearance, CanvasDocumentCollection, CanvasDocumentId, CanvasWorkspaceAppearance, PortalNode, SerializableNestedCanvasViewState, StackFrame } from './documentTypes';
+import type { CanvasDocument, CanvasDocumentAppearance, CanvasDocumentCollection, CanvasDocumentId, CanvasWorkspaceAppearance, CanvasWorkspacePreviewImage, CanvasWorkspaceSnapshot, PortalNode, SerializableNestedCanvasViewState, StackFrame } from './documentTypes';
 import type { NodePortalInfo } from './nodeSemantics';
 import {
   type Camera,
@@ -139,8 +139,22 @@ export function updateNodeData(collection: CanvasDocumentCollection, canvasId: C
 export function setWorkspaceThemeId(collection: CanvasDocumentCollection, themeId: string): CanvasDocumentCollection {
   if (collection.appearance?.themeId === themeId) return collection;
   const next = cloneDocumentCollection(collection);
-  next.appearance = { themeId };
+  next.appearance = cloneWorkspaceAppearance({ ...next.appearance, themeId });
   return syncDerivedView(next);
+}
+
+export function setWorkspacePreviewImage(collection: CanvasDocumentCollection, previewImage: CanvasWorkspacePreviewImage | null): CanvasDocumentCollection {
+  const nextPreviewImage = cloneWorkspacePreviewImage(previewImage);
+  if (sameWorkspacePreviewImage(collection.appearance?.previewImage ?? null, nextPreviewImage)) return collection;
+  const next = cloneDocumentCollection(collection);
+  next.appearance = cloneWorkspaceAppearance({ ...next.appearance, previewImage: nextPreviewImage });
+  return syncDerivedView(next);
+}
+
+export function setWorkspaceSnapshotPreviewImage(snapshot: CanvasWorkspaceSnapshot, previewImage: CanvasWorkspacePreviewImage | null): CanvasWorkspaceSnapshot {
+  const next = structuredClone(snapshot) as CanvasWorkspaceSnapshot;
+  next.history.present = setWorkspacePreviewImage(next.history.present, previewImage);
+  return next;
 }
 
 export function setCanvasThemeId(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId, themeId: string | null): CanvasDocumentCollection {
@@ -386,9 +400,36 @@ export function syncDerivedView(collection: CanvasDocumentCollection): CanvasDoc
 }
 
 function cloneWorkspaceAppearance(appearance: CanvasWorkspaceAppearance | undefined): CanvasWorkspaceAppearance {
+  const previewImage = cloneWorkspacePreviewImage(appearance?.previewImage ?? null);
   return {
     themeId: typeof appearance?.themeId === 'string' && appearance.themeId ? appearance.themeId : DEFAULT_WORKSPACE_APPEARANCE.themeId,
+    ...(previewImage ? { previewImage } : {}),
   };
+}
+
+function cloneWorkspacePreviewImage(previewImage: CanvasWorkspacePreviewImage | null | undefined): CanvasWorkspacePreviewImage | null {
+  const assetId = typeof previewImage?.assetId === 'string' ? previewImage.assetId.trim() : '';
+  const canvasId = typeof previewImage?.canvasId === 'string' ? previewImage.canvasId.trim() : '';
+  if (!assetId || !canvasId) return null;
+  return {
+    assetId,
+    mime: 'image/png',
+    width: positiveNumberOrUndefined(previewImage?.width) ?? 1,
+    height: positiveNumberOrUndefined(previewImage?.height) ?? 1,
+    capturedAt: typeof previewImage?.capturedAt === 'string' && previewImage.capturedAt ? previewImage.capturedAt : new Date(0).toISOString(),
+    canvasId,
+  };
+}
+
+function sameWorkspacePreviewImage(a: CanvasWorkspacePreviewImage | null, b: CanvasWorkspacePreviewImage | null): boolean {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  return a.assetId === b.assetId &&
+    a.mime === b.mime &&
+    a.width === b.width &&
+    a.height === b.height &&
+    a.capturedAt === b.capturedAt &&
+    a.canvasId === b.canvasId;
 }
 
 function cloneDocumentAppearance(appearance: CanvasDocumentAppearance | undefined): CanvasDocumentAppearance | undefined {

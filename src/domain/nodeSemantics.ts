@@ -56,7 +56,7 @@ export function normalizeNodeData(nodeType: string, raw: unknown): NodeData {
       return {
         assetId: asNullableString(data.assetId),
         alt: asString(data.alt, ''),
-        fit: asEnum(data.fit, IMAGE_FITS, 'contain'),
+        fit: asEnum(data.fit, IMAGE_FITS, 'cover'),
         caption: asString(data.caption, ''),
       };
     case 'pdf':
@@ -72,7 +72,7 @@ export function normalizeNodeData(nodeType: string, raw: unknown): NodeData {
         title: asString(data.title, 'Markdown'),
         fileName: asString(data.fileName, ''),
         mime: asString(data.mime, 'text/markdown'),
-        previewText: asString(data.previewText, ''),
+        markdownText: asString(data.markdownText, ''),
       };
     case 'embed':
       return {

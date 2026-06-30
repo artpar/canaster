@@ -2,24 +2,26 @@ import { asString } from '../../../core/nodeData';
 import { cleanAssetTitle, workspaceAssetKindForFile } from '../../../core/workspaceAssetTypes';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import type { JsonObject } from '../../../core/nodePrimitives';
-import { drawNodeBodyLines, drawNodeMeta, nodeLayout, wrapText } from '../nodeRendering';
+import { drawNodeMeta, nodeLayout } from '../nodeRendering';
 import { createFilePreviewShell, loadFileAssetFile, saveFileAsset } from './fileAssetPreview';
+import { drawMarkdownCanvasPreview, markdownTextForCanvasPreview } from './markdownCanvasPreview';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeContentRect, NodeDefinition, NodeInteractionRegion } from '../nodeDefinition/nodeDefinitionTypes';
 import type { CanvasTheme } from '../theme';
+import { renderMarkdownHtml } from './renderMarkdownHtml';
 
 type MarkdownNodeData = {
   assetId: string;
   title: string;
   fileName: string;
   mime: string;
-  previewText: string;
+  markdownText: string;
 } & JsonObject;
 
 export const markdownNodeDefinition: NodeDefinition<MarkdownNodeData> = defineNodeType({
   ...nodeTypeSpecs.md,
   createDefaultData() {
-    return { assetId: '', title: 'Markdown', fileName: '', mime: 'text/markdown', previewText: '' };
+    return { assetId: '', title: 'Markdown', fileName: '', mime: 'text/markdown', markdownText: '' };
   },
   parseData(raw) {
     const fileName = asString(raw.fileName, '');
@@ -28,7 +30,7 @@ export const markdownNodeDefinition: NodeDefinition<MarkdownNodeData> = defineNo
       title: asString(raw.title, cleanAssetTitle(fileName, 'Markdown')),
       fileName,
       mime: asString(raw.mime, 'text/markdown'),
-      previewText: asString(raw.previewText, ''),
+      markdownText: asString(raw.markdownText, ''),
     };
   },
   render({ ctx, data, theme, contentRect, state }) {
@@ -57,17 +59,8 @@ export const markdownNodeDefinition: NodeDefinition<MarkdownNodeData> = defineNo
 });
 
 function drawMarkdownPreview(ctx: CanvasRenderingContext2D, rect: NodeContentRect, data: MarkdownNodeData, theme: CanvasTheme) {
-  const layout = nodeLayout(theme);
-  const bodyY = layout.contentY + layout.labelLineHeight;
-  const preview = data.previewText.trim() || (data.assetId ? 'Open Markdown preview' : 'No file attached');
   drawNodeMeta(ctx, rect, data.assetId ? 'Markdown document' : 'Add a Markdown file', theme, 0);
-  const lines = wrapText(
-    ctx,
-    preview,
-    Math.max(0, rect.w - layout.insetX * 2),
-    Math.max(1, Math.floor((rect.h - bodyY) / layout.bodyLineHeight)),
-  );
-  drawNodeBodyLines(ctx, rect, lines, theme, { y: rect.y + bodyY });
+  drawMarkdownCanvasPreview(ctx, rect, data.assetId ? data.markdownText : 'No file attached', theme);
 }
 
 function markdownRegions(contentRect: NodeContentRect, theme: CanvasTheme): NodeInteractionRegion[] {
@@ -98,9 +91,10 @@ function createMarkdownPreview(mount: HTMLElement, data: MarkdownNodeData, commi
       .then((text) => {
         if (disposed) return;
         shell.body.replaceChildren();
-        const preview = document.createElement('pre');
-        preview.className = 'markdown-preview-text';
-        preview.textContent = text || 'Empty Markdown file';
+        const preview = document.createElement('article');
+        preview.className = 'markdown-preview-document';
+        preview.innerHTML = renderMarkdownHtml(text);
+        openMarkdownLinksInNewTabs(preview);
         shell.body.append(preview);
       })
       .catch((error) => {
@@ -115,6 +109,22 @@ function createMarkdownPreview(mount: HTMLElement, data: MarkdownNodeData, commi
       disposed = true;
     },
   };
+}
+
+function openMarkdownLinksInNewTabs(root: HTMLElement) {
+  for (const anchor of root.querySelectorAll<HTMLAnchorElement>('a[href]')) {
+    anchor.target = '_blank';
+    anchor.rel = 'noopener noreferrer';
+  }
+  root.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const anchor = target.closest<HTMLAnchorElement>('a[href]');
+    if (!anchor || !root.contains(anchor)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    window.open(anchor.href, '_blank', 'noopener,noreferrer');
+  });
 }
 
 function renderMarkdownAttach(body: HTMLElement, data: MarkdownNodeData, commit: (nextData: MarkdownNodeData) => void) {
@@ -149,7 +159,7 @@ function renderMarkdownAttach(body: HTMLElement, data: MarkdownNodeData, commit:
           title,
           fileName: asset.name || file.name || 'note.md',
           mime: asset.mime || file.type || 'text/markdown',
-          previewText: markdownPreviewText(text),
+          markdownText: markdownTextForCanvasPreview(text),
         });
       })
       .catch((error) => {
@@ -161,19 +171,4 @@ function renderMarkdownAttach(body: HTMLElement, data: MarkdownNodeData, commit:
 
   panel.append(message, input);
   body.append(panel);
-}
-
-function markdownPreviewText(text: string): string {
-  return text
-    .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/!\[[^\]]*]\([^)]*\)/g, ' ')
-    .replace(/\[([^\]]+)]\([^)]*\)/g, '$1')
-    .replace(/^#{1,6}\s*/gm, '')
-    .replace(/^[-*+]\s+/gm, '')
-    .replace(/^\d+\.\s+/gm, '')
-    .replace(/[*_~>#|]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 1600);
 }

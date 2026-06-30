@@ -1,8 +1,12 @@
 import {
     Check,
     Columns3,
+    Copy,
+    Download,
+    FileText,
     LayoutGrid,
     LayoutList,
+    Link2,
     Rows3,
 } from 'lucide-react';
 import {
@@ -11,6 +15,7 @@ import {
     type MutableRefObject,
     useCallback,
     useEffect,
+    useLayoutEffect,
     useMemo,
     useRef,
     useState
@@ -25,7 +30,7 @@ import {
     signOut,
     verifyEmailOtp,
 } from '../infra/daptin/canasterDocuments';
-import {loadAssetObject, uploadWorkspaceAsset} from '../infra/daptin/assets';
+import {loadAssetObject, uploadImageAsset, uploadWorkspaceAsset} from '../infra/daptin/assets';
 import {
     isLocalAssetId,
     loadLocalAssetFile,
@@ -38,6 +43,7 @@ import {
     isSupportedWorkspaceAssetFile,
     workspaceAssetKindForFile
 } from '../core/workspaceAssetTypes';
+import {workspacePreviewAssetFileName} from '../core/workspacePreviewAssetFileName';
 import {
     embedProviderForUrl,
     embedTitleForUrl,
@@ -68,7 +74,8 @@ import type {StarterCatalogEntry} from '../app/starterWorkspace/types';
 import {
     canvasThemeId,
     documentThemeId,
-    portalDataForNode
+    portalDataForNode,
+    setWorkspaceSnapshotPreviewImage
 } from '../domain/documentModel';
 import {
     initialViewportStatus,
@@ -85,6 +92,7 @@ import {
     describeNode,
     referencedAssetIdsForNode
 } from './canvas/nodeRegistry';
+import {markdownTextForCanvasPreview} from './canvas/nodeTypes/markdownCanvasPreview';
 import {
     cacheAssetImage,
     hasCachedAssetImage
@@ -99,6 +107,7 @@ import {BuiltInNodeTypes} from '../domain/types';
 import type {
     CanvasDocumentCollection,
     CanvasDocumentId,
+    CanvasWorkspacePreviewImage,
     CanvasWorkspaceSnapshot,
     DocumentCommand
 } from '../domain/documentTypes';
@@ -139,11 +148,29 @@ const DEFAULT_DOCUMENT_TITLE = 'Canaster Workspace';
 const LOCAL_SAVE_MESSAGE = 'Saved on this device';
 const ONLINE_READY_MESSAGE = 'Ready to save online';
 const SAVED_MESSAGE = 'Saved online';
+const MENU_VIEWPORT_MARGIN = 12;
+const MENU_ANCHOR_GAP = 8;
+const DEFAULT_ADD_PANEL_MENU_HEIGHT = 280;
+const DEFAULT_EXPORT_MENU_HEIGHT = 184;
 
 function canasterMenuWidth() {
     const rawValue = window.getComputedStyle(document.documentElement).getPropertyValue('--canaster-menu-width');
     const parsed = Number.parseFloat(rawValue);
     return Number.isFinite(parsed) ? parsed : 224;
+}
+
+function anchoredMenuPosition(rect: Pick<DOMRect, 'bottom' | 'right' | 'top'>, menuHeight: number): ArrangeMenuPosition {
+    const margin = MENU_VIEWPORT_MARGIN;
+    const menuWidth = canasterMenuWidth();
+    const left = Math.max(margin,
+        Math.min(window.innerWidth - menuWidth - margin, rect.right - menuWidth));
+    const lowestTop = Math.max(margin, window.innerHeight - menuHeight - margin);
+    const belowTop = rect.bottom + MENU_ANCHOR_GAP;
+    const aboveTop = rect.top - menuHeight - MENU_ANCHOR_GAP;
+    return {
+        left,
+        top: belowTop <= lowestTop ? Math.max(margin, belowTop) : Math.max(margin, Math.min(lowestTop, aboveTop)),
+    };
 }
 
 
@@ -159,6 +186,15 @@ type CanvasThemeMenuProps = {
     position: ArrangeMenuPosition | null;
     themes: CanasterTheme[];
     onSelect: (themeId: CanasterThemeId | null, event: ReactMouseEvent<HTMLButtonElement>) => void;
+};
+
+type ExportMenuProps = {
+    copyImageDisabled: boolean;
+    position: ArrangeMenuPosition | null;
+    onCopyDocument: () => void;
+    onCopyImage: () => void;
+    onCopyLink: () => void;
+    onSaveImage: () => void;
 };
 
 type ToolbarMenuTarget = {
@@ -266,6 +302,54 @@ const CanvasThemeMenu = forwardRef<HTMLDivElement, CanvasThemeMenuProps>(functio
     </div>;
 });
 
+const ExportMenu = forwardRef<HTMLDivElement, ExportMenuProps>(function ExportMenu(props, ref) {
+    return <div
+        ref={ref}
+        className="arrange-menu export-menu"
+        role="menu"
+        aria-label="Export workspace"
+        style={props.position ? {
+            top : props.position.top,
+            left: props.position.left
+        } : undefined}
+    >
+        <button
+            className="arrange-menu-item"
+            type="button"
+            role="menuitem"
+            disabled={props.copyImageDisabled}
+            onClick={props.onCopyImage}
+        >
+            <Copy size={16}/>
+            <span>
+                <strong>Copy as image</strong>
+                <small>PNG to clipboard</small>
+            </span>
+        </button>
+        <button className="arrange-menu-item" type="button" role="menuitem" onClick={props.onSaveImage}>
+            <Download size={16}/>
+            <span>
+                <strong>Save image</strong>
+                <small>Download PNG</small>
+            </span>
+        </button>
+        <button className="arrange-menu-item" type="button" role="menuitem" onClick={props.onCopyLink}>
+            <Link2 size={16}/>
+            <span>
+                <strong>Copy link</strong>
+                <small>Current workspace URL</small>
+            </span>
+        </button>
+        <button className="arrange-menu-item" type="button" role="menuitem" onClick={props.onCopyDocument}>
+            <FileText size={16}/>
+            <span>
+                <strong>Copy document</strong>
+                <small>Workspace JSON</small>
+            </span>
+        </button>
+    </div>;
+});
+
 function WorkspaceHistoryShortcuts({workspaceRef}: { workspaceRef: MutableRefObject<NestedCanvasWorkspaceHandle | null> }) {
     useKeyboardShortcut({
         key       : 'z',
@@ -285,6 +369,8 @@ export function App() {
     const workspaceRef = useRef<NestedCanvasWorkspaceHandle | null>(null);
     const arrangeMenuRef = useRef<HTMLDivElement | null>(null);
     const canvasThemeMenuRef = useRef<HTMLDivElement | null>(null);
+    const exportMenuButtonRef = useRef<HTMLButtonElement | null>(null);
+    const exportMenuRef = useRef<HTMLDivElement | null>(null);
     const addPanelButtonRef = useRef<HTMLButtonElement | null>(null);
     const addPanelMenuRef = useRef<HTMLDivElement | null>(null);
     const addPanelSearchRef = useRef<HTMLInputElement | null>(null);
@@ -305,6 +391,8 @@ export function App() {
     const [canvasThemeMenuOpen, setCanvasThemeMenuOpen] = useState(false);
     const [canvasThemeMenuPosition, setCanvasThemeMenuPosition] = useState<ArrangeMenuPosition | null>(null);
     const [canvasThemeMenuTarget, setCanvasThemeMenuTarget] = useState<ToolbarMenuTarget | null>(null);
+    const [exportMenuOpen, setExportMenuOpen] = useState(false);
+    const [exportMenuPosition, setExportMenuPosition] = useState<ArrangeMenuPosition | null>(null);
     const [addPanelMenuOpen, setAddPanelMenuOpen] = useState(false);
     const [addPanelMenuPosition, setAddPanelMenuPosition] = useState<ArrangeMenuPosition | null>(null);
     const [addPanelMenuTarget, setAddPanelMenuTarget] = useState<CanvasAddPanelMenuRequest | null>(null);
@@ -775,6 +863,12 @@ export function App() {
                     interaction: 'Files ready for online save',
                 });
             }
+            setSyncMessage('Preparing workspace preview');
+            const previewCapture = await workspaceRef.current?.captureActiveCanvasPreview();
+            if (!previewCapture) throw new Error('Workspace preview is not ready yet');
+            setSyncMessage('Uploading workspace preview');
+            const previewImage = await uploadWorkspacePreviewImage(previewCapture, documentTitle);
+            freshSnapshot = setWorkspaceSnapshotPreviewImage(freshSnapshot, previewImage);
             if (activeDocumentId) {
                 await saveDocument(activeDocumentId, freshSnapshot, documentTitle);
                 await saveWorkspaceSnapshot(freshSnapshot, remoteWorkspaceStorageKey(activeDocumentId));
@@ -784,9 +878,13 @@ export function App() {
                 window.localStorage.setItem(DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY, documentRef);
                 setActiveDocumentId(documentRef);
             }
+            ignoreDirtyUntilRef.current = Date.now() + 1200;
+            workspaceRef.current?.replaceWorkspaceSnapshot(freshSnapshot, {
+                interaction: 'Workspace preview saved',
+                persist    : false,
+            });
             lastSavedSnapshotSignatureRef.current = snapshotSignature(freshSnapshot);
             await refreshDocuments();
-            ignoreDirtyUntilRef.current = Date.now() + 1200;
             setSyncStatus('clean');
             setSyncMessage(SAVED_MESSAGE);
         } catch (error) {
@@ -795,6 +893,51 @@ export function App() {
             setSyncMessage(workspaceErrorMessage(error, 'save'));
         }
     }, [activeDocumentId, documentTitle, recoverSessionError, refreshDocuments, signedIn]);
+
+    const handleDownloadPreview = useCallback(async () => {
+        try {
+            const previewCapture = await workspaceRef.current?.captureActiveCanvasPreview();
+            if (!previewCapture) throw new Error('Workspace preview is not ready yet');
+            downloadBlob(previewCapture.blob, previewImageFileName(documentTitle));
+        } catch {
+            setSyncStatus((current) => current === 'saving' || current === 'loading' ? current : 'error');
+            setSyncMessage('Could not download workspace preview.');
+        }
+    }, [documentTitle]);
+
+    const handleCopyPreview = useCallback(async () => {
+        try {
+            await copyPngCaptureToClipboard(() => workspaceRef.current?.captureActiveCanvasPreview() ?? Promise.resolve(null));
+            setSyncMessage('Workspace preview copied');
+        } catch {
+            setSyncStatus((current) => current === 'saving' || current === 'loading' ? current : 'error');
+            setSyncMessage('Could not copy workspace preview.');
+        }
+    }, []);
+
+    const handleCopyWorkspaceLink = useCallback(async () => {
+        try {
+            const state = workspaceRef.current?.currentWorkspaceUrlState(activeDocumentId || null);
+            if (state) replaceWorkspaceUrlState(state);
+            await copyTextToClipboard(window.location.href);
+            setSyncMessage('Workspace link copied');
+        } catch {
+            setSyncStatus((current) => current === 'saving' || current === 'loading' ? current : 'error');
+            setSyncMessage('Could not copy workspace link.');
+        }
+    }, [activeDocumentId]);
+
+    const handleCopyWorkspaceDocument = useCallback(async () => {
+        try {
+            const snapshot = workspaceRef.current?.getWorkspaceSnapshot();
+            if (!snapshot) throw new Error('Workspace is not ready yet');
+            await copyTextToClipboard(JSON.stringify(snapshot, null, 2));
+            setSyncMessage('Workspace document copied');
+        } catch {
+            setSyncStatus((current) => current === 'saving' || current === 'loading' ? current : 'error');
+            setSyncMessage('Could not copy workspace document.');
+        }
+    }, []);
 
     const handleRefreshDocuments = useCallback(async () => {
         if (!signedIn) {
@@ -842,31 +985,25 @@ export function App() {
         });
     }, []);
 
-    const updateAddPanelMenuPositionForRect = useCallback((rect: Pick<DOMRect, 'bottom' | 'right'>) => {
-        const margin = 12;
-        const menuWidth = canasterMenuWidth();
-        const left = Math.max(margin,
-            Math.min(window.innerWidth - menuWidth - margin, rect.right - menuWidth));
-        const top = Math.max(margin, Math.min(window.innerHeight - 280, rect.bottom + 8));
-        setAddPanelMenuPosition({
-            left,
-            top
-        });
+    const updateAddPanelMenuPositionForRect = useCallback((rect: Pick<DOMRect, 'bottom' | 'right' | 'top'>) => {
+        const menuHeight = addPanelMenuRef.current?.getBoundingClientRect().height ?? DEFAULT_ADD_PANEL_MENU_HEIGHT;
+        setAddPanelMenuPosition(anchoredMenuPosition(rect, menuHeight));
     }, []);
 
     const updateAddPanelMenuPosition = useCallback(() => {
         const button = addPanelButtonRef.current;
         if (!button) return;
         const rect = button.getBoundingClientRect();
-        const margin = 12;
-        const menuWidth = canasterMenuWidth();
-        const left = Math.max(margin,
-            Math.min(window.innerWidth - menuWidth - margin, rect.right - menuWidth));
-        const top = Math.max(margin, Math.min(window.innerHeight - 280, rect.bottom + 8));
-        setAddPanelMenuPosition({
-            left,
-            top
-        });
+        const menuHeight = addPanelMenuRef.current?.getBoundingClientRect().height ?? DEFAULT_ADD_PANEL_MENU_HEIGHT;
+        setAddPanelMenuPosition(anchoredMenuPosition(rect, menuHeight));
+    }, []);
+
+    const updateExportMenuPosition = useCallback(() => {
+        const button = exportMenuButtonRef.current;
+        if (!button) return;
+        const rect = button.getBoundingClientRect();
+        const menuHeight = exportMenuRef.current?.getBoundingClientRect().height ?? DEFAULT_EXPORT_MENU_HEIGHT;
+        setExportMenuPosition(anchoredMenuPosition(rect, menuHeight));
     }, []);
 
     const closeArrangeMenu = useCallback(() => {
@@ -879,6 +1016,11 @@ export function App() {
         setCanvasThemeMenuOpen(false);
         setCanvasThemeMenuPosition(null);
         setCanvasThemeMenuTarget(null);
+    }, []);
+
+    const closeExportMenu = useCallback(() => {
+        setExportMenuOpen(false);
+        setExportMenuPosition(null);
     }, []);
 
     const handleArrangeCanvasMenuRequest = useCallback((request: ArrangeCanvasMenuRequest) => {
@@ -895,9 +1037,10 @@ export function App() {
         setAddPanelMenuTarget(null);
         setAddPanelQuery('');
         setAddPanelActiveIndex(0);
+        closeExportMenu();
         closeCanvasThemeMenu();
         setArrangeMenuOpen(true);
-    }, [closeCanvasThemeMenu, updateArrangeMenuPositionForRect]);
+    }, [closeCanvasThemeMenu, closeExportMenu, updateArrangeMenuPositionForRect]);
 
     const handleCanvasThemeMenuRequest = useCallback((request: CanvasThemeMenuRequest) => {
         setCanvasThemeMenuTarget({
@@ -914,8 +1057,9 @@ export function App() {
         setAddPanelMenuTarget(null);
         setAddPanelQuery('');
         setAddPanelActiveIndex(0);
+        closeExportMenu();
         setCanvasThemeMenuOpen(true);
-    }, [closeArrangeMenu, updateCanvasThemeMenuPositionForRect]);
+    }, [closeArrangeMenu, closeExportMenu, updateCanvasThemeMenuPositionForRect]);
 
     const closeAddPanelMenu = useCallback(() => {
         setAddPanelMenuOpen(false);
@@ -923,6 +1067,20 @@ export function App() {
         setAddPanelActiveIndex(0);
         setAddPanelMenuTarget(null);
     }, []);
+
+    const handleToggleExportMenu = useCallback(() => {
+        setExportMenuOpen((open) => {
+            if (open) {
+                setExportMenuPosition(null);
+                return false;
+            }
+            updateExportMenuPosition();
+            closeArrangeMenu();
+            closeCanvasThemeMenu();
+            closeAddPanelMenu();
+            return true;
+        });
+    }, [closeAddPanelMenu, closeArrangeMenu, closeCanvasThemeMenu, updateExportMenuPosition]);
 
     const handleToggleAddPanelMenu = useCallback(() => {
         setAddPanelMenuOpen((open) => {
@@ -934,24 +1092,27 @@ export function App() {
             updateAddPanelMenuPosition();
             closeArrangeMenu();
             closeCanvasThemeMenu();
+            closeExportMenu();
             setAddPanelQuery('');
             setAddPanelActiveIndex(0);
             return true;
         });
-    }, [closeArrangeMenu, closeCanvasThemeMenu, updateAddPanelMenuPosition]);
+    }, [closeArrangeMenu, closeCanvasThemeMenu, closeExportMenu, updateAddPanelMenuPosition]);
 
     const handleCanvasAddPanelMenuRequest = useCallback((request: CanvasAddPanelMenuRequest) => {
         setAddPanelMenuTarget(request);
         updateAddPanelMenuPositionForRect({
             right : request.anchor.x + request.anchor.w,
+            top   : request.anchor.y,
             bottom: request.anchor.y + request.anchor.h,
         });
         closeArrangeMenu();
         closeCanvasThemeMenu();
+        closeExportMenu();
         setAddPanelQuery('');
         setAddPanelActiveIndex(0);
         setAddPanelMenuOpen(true);
-    }, [closeArrangeMenu, closeCanvasThemeMenu, updateAddPanelMenuPositionForRect]);
+    }, [closeArrangeMenu, closeCanvasThemeMenu, closeExportMenu, updateAddPanelMenuPositionForRect]);
 
     const handleArrangeCanvas = useCallback((layout: CanvasArrangeLayout, event: ReactMouseEvent<HTMLButtonElement>) => {
         const target = arrangeMenuTarget;
@@ -1123,12 +1284,13 @@ export function App() {
         };
     }, [canvasThemeMenuOpen, closeCanvasThemeMenu]);
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         if (!addPanelMenuOpen) return;
         const updateOpenAddPanelMenuPosition = () => {
             if (addPanelMenuTarget) {
                 updateAddPanelMenuPositionForRect({
                     right : addPanelMenuTarget.anchor.x + addPanelMenuTarget.anchor.w,
+                    top   : addPanelMenuTarget.anchor.y,
                     bottom: addPanelMenuTarget.anchor.y + addPanelMenuTarget.anchor.h,
                 });
                 return;
@@ -1157,8 +1319,35 @@ export function App() {
         };
     }, [addPanelMenuOpen, addPanelMenuTarget, closeAddPanelMenu, updateAddPanelMenuPosition, updateAddPanelMenuPositionForRect]);
 
+    useLayoutEffect(() => {
+        if (!exportMenuOpen) return;
+        const updateOpenExportMenuPosition = () => updateExportMenuPosition();
+        updateOpenExportMenuPosition();
+        const handlePointerDown = (event: PointerEvent) => {
+            const target = event.target;
+            if (!(target instanceof Node)) return;
+            if (exportMenuButtonRef.current?.contains(target) || exportMenuRef.current?.contains(target)) return;
+            closeExportMenu();
+        };
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') closeExportMenu();
+        };
+        document.addEventListener('pointerdown', handlePointerDown);
+        document.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('resize', updateOpenExportMenuPosition);
+        window.addEventListener('scroll', updateOpenExportMenuPosition, true);
+        return () => {
+            document.removeEventListener('pointerdown', handlePointerDown);
+            document.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('resize', updateOpenExportMenuPosition);
+            window.removeEventListener('scroll', updateOpenExportMenuPosition, true);
+        };
+    }, [closeExportMenu, exportMenuOpen, updateExportMenuPosition]);
+
     const viewTree = useMemo(() => buildViewTree(chromeState.collection), [chromeState.collection]);
     const saveButtonLabel = saveActionLabel(syncStatus, syncMessage, signedIn);
+    const exportActionDisabled = syncStatus === 'saving' || syncStatus === 'loading';
+    const copyPreviewDisabled = exportActionDisabled || !canCopyPngToClipboard();
 
     return (<CanasterThemeProvider themeId={activeCanvasTheme}>
     <KeyboardShortcutsProvider>
@@ -1186,12 +1375,39 @@ export function App() {
                     parentContextVisible,
                     onToggleParentContext: () => setParentContextVisible((visible) => !visible)
                 }}
+                exportMenu={{
+                    buttonRef: exportMenuButtonRef,
+                    disabled : exportActionDisabled,
+                    open     : exportMenuOpen,
+                    onToggle : handleToggleExportMenu
+                }}
                 addPanel={{
                     buttonRef: addPanelButtonRef,
                     open     : addPanelMenuOpen && !addPanelMenuTarget,
                     onToggle : handleToggleAddPanelMenu
                 }}
             />
+            {exportMenuOpen ? (<ExportMenu
+                ref={exportMenuRef}
+                position={exportMenuPosition}
+                copyImageDisabled={copyPreviewDisabled}
+                onCopyImage={() => {
+                    closeExportMenu();
+                    void handleCopyPreview();
+                }}
+                onSaveImage={() => {
+                    closeExportMenu();
+                    void handleDownloadPreview();
+                }}
+                onCopyLink={() => {
+                    closeExportMenu();
+                    void handleCopyWorkspaceLink();
+                }}
+                onCopyDocument={() => {
+                    closeExportMenu();
+                    void handleCopyWorkspaceDocument();
+                }}
+            />) : null}
             {addPanelMenuOpen ? (<AddPanelPopover
                 ref={addPanelMenuRef}
                 searchRef={addPanelSearchRef}
@@ -1327,6 +1543,8 @@ type FileNodeCreateRequest = {
     data: NodeData;
 };
 
+type WorkspacePreviewCapture = NonNullable<Awaited<ReturnType<NestedCanvasWorkspaceHandle['captureActiveCanvasPreview']>>>;
+
 async function storeWorkspaceAsset(file: File, online: boolean): Promise<StoredWorkspaceAsset> {
     if (online) {
         const asset = await uploadWorkspaceAsset(file);
@@ -1334,6 +1552,101 @@ async function storeWorkspaceAsset(file: File, online: boolean): Promise<StoredW
     }
     const asset = await saveLocalAsset(file);
     return loadLocalAssetObject(asset.id);
+}
+
+async function uploadWorkspacePreviewImage(capture: WorkspacePreviewCapture, documentTitle: string): Promise<CanvasWorkspacePreviewImage> {
+    const capturedAt = new Date().toISOString();
+    const file = new File([capture.blob], workspacePreviewAssetFileName({
+        capturedAt,
+        canvasId: capture.canvasId,
+        documentTitle,
+    }), {type: 'image/png'});
+    const asset = await uploadImageAsset(file);
+    return {
+        assetId   : asset.id,
+        mime      : 'image/png',
+        width     : capture.width,
+        height    : capture.height,
+        capturedAt,
+        canvasId  : capture.canvasId,
+    };
+}
+
+function previewImageFileName(documentTitle: string): string {
+    const slug = documentTitle
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 48);
+    return `${slug || 'canaster-workspace'}-preview.png`;
+}
+
+function downloadBlob(blob: Blob, fileName: string): void {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.rel = 'noopener';
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function canCopyPngToClipboard(): boolean {
+    return typeof ClipboardItem !== 'undefined' && Boolean(navigator.clipboard?.write);
+}
+
+function copyPngCaptureToClipboard(capture: () => Promise<WorkspacePreviewCapture | null>): Promise<void> {
+    if (!canCopyPngToClipboard()) throw new Error('Image clipboard is not available');
+    const pngBlob = Promise.resolve().then(capture).then((previewCapture) => {
+        if (!previewCapture) throw new Error('Workspace preview is not ready yet');
+        return pngBlobForClipboard(previewCapture.blob);
+    });
+    return navigator.clipboard.write([
+        new ClipboardItem({
+            'image/png': pngBlob,
+        }),
+    ]);
+}
+
+function pngBlobForClipboard(blob: Blob): Blob {
+    return blob.type === 'image/png' ? blob : new Blob([blob], {type: 'image/png'});
+}
+
+async function copyTextToClipboard(text: string): Promise<void> {
+    if (navigator.clipboard?.writeText) {
+        try {
+            await navigator.clipboard.writeText(text);
+            return;
+        } catch {
+        }
+    }
+    if (copyTextWithHiddenTextarea(text)) return;
+    throw new Error('Text clipboard is not available');
+}
+
+function copyTextWithHiddenTextarea(text: string): boolean {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.top = '0';
+    document.body.append(textarea);
+    const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    textarea.focus();
+    textarea.select();
+    let copied = false;
+    try {
+        copied = document.execCommand('copy');
+    } catch {
+        copied = false;
+    }
+    textarea.remove();
+    activeElement?.focus();
+    return copied;
 }
 
 async function nodeCreateRequestForFile(file: File, asset: StoredWorkspaceAsset): Promise<FileNodeCreateRequest> {
@@ -1362,6 +1675,7 @@ async function nodeCreateRequestForFile(file: File, asset: StoredWorkspaceAsset)
         };
     }
     if (kind === 'markdown') {
+        const markdownText = await file.text();
         return {
             nodeType: BuiltInNodeTypes.md,
             data    : {
@@ -1369,7 +1683,7 @@ async function nodeCreateRequestForFile(file: File, asset: StoredWorkspaceAsset)
                 title,
                 fileName   : asset.name || file.name || 'note.md',
                 mime       : asset.mime || 'text/markdown',
-                previewText: await markdownPreviewForFile(file),
+                markdownText: markdownTextForCanvasPreview(markdownText),
             },
         };
     }
@@ -1383,22 +1697,6 @@ function offsetDropPoint(point: WorldPoint, index: number): WorldPoint {
 
 function allowLocalHttpForCurrentHost(): boolean {
     return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-}
-
-async function markdownPreviewForFile(file: File): Promise<string> {
-    const text = await file.text();
-    return text
-        .replace(/```[\s\S]*?```/g, ' ')
-        .replace(/`([^`]+)`/g, '$1')
-        .replace(/!\[[^\]]*]\([^)]*\)/g, ' ')
-        .replace(/\[([^\]]+)]\([^)]*\)/g, '$1')
-        .replace(/^#{1,6}\s*/gm, '')
-        .replace(/^[-*+]\s+/gm, '')
-        .replace(/^\d+\.\s+/gm, '')
-        .replace(/[*_~>#|]/g, '')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, 1600);
 }
 
 function imageAssetIdsInCollection(collection: CanvasDocumentCollection): string[] {
@@ -1416,6 +1714,8 @@ function imageAssetIdsInCollection(collection: CanvasDocumentCollection): string
 
 function assetIdsInCollection(collection: CanvasDocumentCollection): string[] {
     const ids = new Set<string>();
+    const previewAssetId = collection.appearance?.previewImage?.assetId;
+    if (previewAssetId) ids.add(previewAssetId);
     for (const document of Object.values(collection.documents)) {
         const backgroundAssetId = document.appearance?.backgroundImage?.assetId;
         if (backgroundAssetId) ids.add(backgroundAssetId);
@@ -1464,6 +1764,14 @@ function collectionsInSnapshot(snapshot: CanvasWorkspaceSnapshot): CanvasDocumen
 function rewriteSnapshotAssetIds(snapshot: CanvasWorkspaceSnapshot, promotedIds: Map<string, string>): CanvasWorkspaceSnapshot {
     const next = structuredClone(snapshot) as CanvasWorkspaceSnapshot;
     for (const collection of collectionsInSnapshot(next)) {
+        const previewAssetId = collection.appearance?.previewImage?.assetId;
+        const promotedPreviewId = previewAssetId ? promotedIds.get(previewAssetId) : null;
+        if (promotedPreviewId && collection.appearance?.previewImage) {
+            collection.appearance.previewImage = {
+                ...collection.appearance.previewImage,
+                assetId: promotedPreviewId,
+            };
+        }
         for (const document of Object.values(collection.documents)) {
             const backgroundAssetId = document.appearance?.backgroundImage?.assetId;
             const promotedBackgroundId = backgroundAssetId ? promotedIds.get(backgroundAssetId) : null;

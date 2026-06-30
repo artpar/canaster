@@ -15,7 +15,7 @@ import type {
 import { createWorkspaceHistory, createWorkspaceSnapshot } from '../../../domain/workspaceHistory';
 import type { WorkspaceUrlState } from '../../../infra/browser/workspaceUrlLocation';
 import type {CanasterThemeId} from '../../theme/CanasterTheme';
-import { NativeNestedCanvasController, type CanvasViewportControlMenuState } from './NativeNestedCanvasController';
+import { NativeNestedCanvasController, type CanvasViewportControlMenuState, type CanvasWorkspacePreviewCapture } from './NativeNestedCanvasController';
 
 export type NestedCanvasWorkspaceProps = {
   initialCollection: CanvasDocumentCollection;
@@ -94,6 +94,7 @@ export type NestedCanvasWorkspaceHandle = {
   replaceWorkspaceSnapshot(snapshot: CanvasWorkspaceSnapshot, options?: { storageKey?: string; interaction?: string; persist?: boolean }): void;
   setStorageKey(storageKey: string): void;
   flushWorkspaceSnapshot(): Promise<void>;
+  captureActiveCanvasPreview(): Promise<CanvasWorkspacePreviewCapture | null>;
 };
 
 export const initialViewportStatus: ViewportStatus = {
@@ -193,6 +194,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     replaceWorkspaceSnapshot: (snapshot: CanvasWorkspaceSnapshot, options?: { storageKey?: string; interaction?: string; persist?: boolean }) => controllerRef.current?.replaceWorkspaceSnapshot(snapshot, options),
     setStorageKey: (nextStorageKey: string) => controllerRef.current?.setStorageKey(nextStorageKey),
     flushWorkspaceSnapshot: () => controllerRef.current?.flushWorkspaceSnapshot() ?? Promise.resolve(),
+    captureActiveCanvasPreview: () => controllerRef.current?.captureActiveCanvasPreview() ?? Promise.resolve(null),
   }), [initialCollection]);
 
   return <div ref={hostRef} className="nested-workspace" aria-label="Workspace map" />;

@@ -507,15 +507,69 @@ button {
   line-height: var(--canaster-line-body);
 }
 
-.markdown-preview-text {
+.markdown-preview-document {
   margin: 0;
   max-height: min(420px, calc(100vh - 220px));
   overflow: auto;
-  white-space: pre-wrap;
   color: var(--canaster-color-text-body);
   font-family: var(--canaster-font-family);
   font-size: var(--canaster-font-body-size);
   line-height: var(--canaster-line-body);
+}
+
+.markdown-preview-document > :first-child {
+  margin-top: 0;
+}
+
+.markdown-preview-document > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-preview-document h1,
+.markdown-preview-document h2,
+.markdown-preview-document h3 {
+  margin: var(--canaster-space-md) 0 var(--canaster-space-xs);
+  color: var(--canaster-color-text-high);
+  font-size: var(--canaster-font-title-size);
+  line-height: var(--canaster-line-title);
+}
+
+.markdown-preview-document p,
+.markdown-preview-document ul,
+.markdown-preview-document ol,
+.markdown-preview-document blockquote,
+.markdown-preview-document pre {
+  margin: 0 0 var(--canaster-space-sm);
+}
+
+.markdown-preview-document ul,
+.markdown-preview-document ol {
+  padding-left: var(--canaster-space-xl);
+}
+
+.markdown-preview-document a {
+  color: var(--canaster-color-action-primary);
+}
+
+.markdown-preview-document code,
+.markdown-preview-document pre {
+  border-radius: var(--canaster-radius-control);
+  background: var(--canaster-color-panel-muted);
+}
+
+.markdown-preview-document code {
+  padding: 0 var(--canaster-space-xxs);
+  font-size: var(--canaster-font-label-size);
+}
+
+.markdown-preview-document pre {
+  overflow: auto;
+  padding: var(--canaster-space-sm);
+}
+
+.markdown-preview-document pre code {
+  padding: 0;
+  background: transparent;
 }
 
 .embed-editor-form {
@@ -1647,12 +1701,16 @@ button {
   position: fixed;
   z-index: 32;
   width: var(--canaster-menu-width);
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
   padding: var(--canaster-menu-padding);
   border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
   border-radius: var(--canaster-radius-panel);
   background: var(--canaster-color-panel-raised);
   box-shadow: var(--canaster-shadow-menu);
   backdrop-filter: var(--canaster-texture-panel-backdrop-filter);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   pointer-events: auto;
 }
 
@@ -1729,6 +1787,16 @@ button {
 .arrange-menu-item:hover {
   color: var(--canaster-color-text-high);
   background: var(--canaster-color-hover);
+}
+
+.arrange-menu-item:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.arrange-menu-item:disabled:hover {
+  color: var(--canaster-color-text-high);
+  background: transparent;
 }
 
 .arrange-menu-item[aria-selected='true'] {

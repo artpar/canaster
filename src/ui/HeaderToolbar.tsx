@@ -5,6 +5,7 @@ import {
     PanelLeftOpen,
     PanelsTopLeft,
     Redo2,
+    Share2,
     Undo2
 } from "lucide-react";
 import {IconButton} from "./IconButton";
@@ -29,6 +30,12 @@ export type HeaderToolbarProps = {
     view: {
         parentContextVisible: boolean,
         onToggleParentContext: () => void
+    },
+    exportMenu: {
+        buttonRef: MutableRefObject<HTMLButtonElement | null>,
+        disabled: boolean,
+        open: boolean,
+        onToggle: () => void
     },
     addPanel: {
         buttonRef: MutableRefObject<HTMLButtonElement | null>,
@@ -99,6 +106,19 @@ export function HeaderToolbar(props: HeaderToolbarProps) {
                 >
                     <PanelsTopLeft size={17}/>
                 </IconButton>
+                <button
+                    ref={props.exportMenu.buttonRef}
+                    className="icon-button"
+                    type="button"
+                    aria-label="Export workspace"
+                    aria-haspopup="menu"
+                    aria-expanded={props.exportMenu.open}
+                    title="Export workspace"
+                    disabled={props.exportMenu.disabled}
+                    onClick={props.exportMenu.onToggle}
+                >
+                    <Share2 size={17}/>
+                </button>
             </div>
         </div>
     </div>;

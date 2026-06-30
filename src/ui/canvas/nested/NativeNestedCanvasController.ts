@@ -88,6 +88,13 @@ export type CanvasViewportControlMenuState = {
   control: 'arrange' | 'theme';
 } | null;
 
+export type CanvasWorkspacePreviewCapture = {
+  blob: Blob;
+  width: number;
+  height: number;
+  canvasId: CanvasDocumentId;
+};
+
 type Slot = {
   key: string;
   parentCanvasId: CanvasDocumentId;
@@ -792,6 +799,28 @@ export class NativeNestedCanvasController {
 
   private activeEngine() {
     return this.activeSlot?.engine ?? null;
+  }
+
+  async captureActiveCanvasPreview(): Promise<CanvasWorkspacePreviewCapture | null> {
+    const slot = this.activeSlot;
+    if (!slot) return null;
+    const canvasId = slot.canvasId;
+    this.flushActiveCanvasRender();
+    this.flushOverlayRender();
+    await nextAnimationFrame();
+    const capture = await captureViewportCanvases(slot.viewport, slot.canvas, this.visibleViewportEngines(slot.viewport));
+    return {
+      ...capture,
+      canvasId,
+    };
+  }
+
+  private visibleViewportEngines(viewport: HTMLElement) {
+    const engines = [this.activeSlot?.engine ?? null];
+    for (const slot of this.slots.values()) {
+      if (viewport.contains(slot.viewportSlot.canvas)) engines.push(slot.viewportSlot.engine);
+    }
+    return engines.filter((engine): engine is CanvasViewportSlot['engine'] => Boolean(engine));
   }
 
   private applyActiveHandleSizing(slot: CanvasViewportSlot) {
@@ -1853,6 +1882,71 @@ function sizeSignature(rect: DOMRect) {
 
 function rectSizeSignature(rect: { w: number; h: number }) {
   return `${Math.round(rect.w)}x${Math.round(rect.h)}`;
+}
+
+function nextAnimationFrame(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+async function captureViewportCanvases(viewport: HTMLElement, baseCanvas: HTMLCanvasElement, engines: CanvasViewportSlot['engine'][]) {
+  for (const engine of engines) engine.flushRender();
+  const baseRect = baseCanvas.getBoundingClientRect();
+  if (baseRect.width <= 0 || baseRect.height <= 0) throw new Error('Workspace preview is not ready yet');
+  const width = Math.max(1, baseCanvas.width || Math.round(baseRect.width * (window.devicePixelRatio || 1)));
+  const height = Math.max(1, baseCanvas.height || Math.round(baseRect.height * (window.devicePixelRatio || 1)));
+  const scaleX = width / baseRect.width;
+  const scaleY = height / baseRect.height;
+  const output = document.createElement('canvas');
+  output.width = width;
+  output.height = height;
+  const ctx = output.getContext('2d');
+  if (!ctx) throw new Error('Workspace preview canvas is unavailable');
+  ctx.clearRect(0, 0, width, height);
+  for (const canvas of viewportCanvasesInPaintOrder(viewport, baseRect)) {
+    const rect = canvas.getBoundingClientRect();
+    ctx.drawImage(
+      canvas,
+      (rect.left - baseRect.left) * scaleX,
+      (rect.top - baseRect.top) * scaleY,
+      rect.width * scaleX,
+      rect.height * scaleY,
+    );
+  }
+  const blob = await canvasToPngBlob(output);
+  return { blob, width, height };
+}
+
+function viewportCanvasesInPaintOrder(viewport: HTMLElement, baseRect: DOMRect): HTMLCanvasElement[] {
+  return [...viewport.querySelectorAll('canvas')]
+    .filter((element): element is HTMLCanvasElement => element instanceof HTMLCanvasElement)
+    .filter((canvas) => {
+      if (canvas.width <= 0 || canvas.height <= 0) return false;
+      const style = window.getComputedStyle(canvas);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+      const rect = canvas.getBoundingClientRect();
+      return rect.width > 0 &&
+        rect.height > 0 &&
+        rect.right > baseRect.left &&
+        rect.left < baseRect.right &&
+        rect.bottom > baseRect.top &&
+        rect.top < baseRect.bottom;
+    });
+}
+
+function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    try {
+      canvas.toBlob((blob) => {
+        if (blob) {
+          resolve(blob);
+          return;
+        }
+        reject(new Error('Could not capture workspace preview'));
+      }, 'image/png');
+    } catch (error) {
+      reject(error);
+    }
+  });
 }
 
 function screenRectToDomRect(rect: { x: number; y: number; w: number; h: number }): DOMRect {
