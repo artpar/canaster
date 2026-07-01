@@ -1,11 +1,16 @@
 import {
     forwardRef,
+    useEffect,
+    useRef,
     type Ref
 } from "react";
 import {X} from "lucide-react";
+import {AddPanelNodePreview} from "./AddPanelNodePreview";
 import {registeredNodeAddOptions, type RegisteredNodeAddOption} from "./canvas/nodeRegistry";
 
 export const PANEL_CREATE_OPTIONS = registeredNodeAddOptions();
+
+const ADD_PANEL_OPTIONS_ID = 'add-panel-options';
 
 
 type PanelCreateOption = RegisteredNodeAddOption;
@@ -38,6 +43,16 @@ export const AddPanelPopover = forwardRef<HTMLDivElement, AddPanelPopoverProps>(
     ref,
 ) {
     const activeOption = options[activeIndex] ?? null;
+    const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+    useEffect(() => {
+        optionRefs.current.length = options.length;
+        const activeOptionElement = optionRefs.current[activeIndex];
+        activeOptionElement?.scrollIntoView({
+            block: 'nearest',
+        });
+    }, [activeIndex, options.length]);
+
     return (
         <div
             ref={ref}
@@ -65,7 +80,8 @@ export const AddPanelPopover = forwardRef<HTMLDivElement, AddPanelPopoverProps>(
                     return;
                 }
                 if (/^[1-9]$/.test(event.key)) {
-                    const option = options[Number(event.key) - 1];
+                    const shortcutIndex = Number(event.key) - 1;
+                    const option = shortcutIndex < 9 ? options[shortcutIndex] : undefined;
                     if (option) {
                         event.preventDefault();
                         onCreate(option.type);
@@ -77,30 +93,47 @@ export const AddPanelPopover = forwardRef<HTMLDivElement, AddPanelPopoverProps>(
                 ref={searchRef}
                 className="add-panel-search"
                 type="search"
+                name="add-panel-search"
                 aria-label="Search panel types"
+                aria-controls={ADD_PANEL_OPTIONS_ID}
+                aria-activedescendant={activeOption ? optionIdForType(activeOption.type) : undefined}
                 placeholder="Add panel"
                 value={query}
                 onChange={(event) => onQueryChange(event.target.value)}
             />
-            <div className="add-panel-options" role="listbox" aria-label="Panel types">
-                {options.length ? options.map((option, index) => (
-                    <button
-                        key={option.type}
-                        className="arrange-menu-item add-panel-menu-item"
-                        type="button"
-                        role="option"
-                        aria-selected={index === activeIndex}
-                        onMouseEnter={() => onActiveIndexChange(index)}
-                        onClick={() => onCreate(option.type)}
-                    >
-                        <span className="panel-type-mark" aria-hidden="true">{option.badge}</span>
-                        <span>
-              <strong>{option.label}</strong>
-              <small>{option.detail}</small>
-            </span>
-                        <kbd>{index + 1}</kbd>
-                    </button>
-                )) : (
+            <div id={ADD_PANEL_OPTIONS_ID} className="add-panel-options" role="listbox" aria-label="Panel types">
+                {options.length ? options.map((option, index) => {
+                    const shortcut = shortcutForIndex(index);
+                    return (
+                        <button
+                            key={option.type}
+                            ref={(element) => {
+                                optionRefs.current[index] = element;
+                            }}
+                            id={optionIdForType(option.type)}
+                            className="add-panel-menu-item"
+                            type="button"
+                            role="option"
+                            aria-selected={index === activeIndex}
+                            onMouseEnter={() => onActiveIndexChange(index)}
+                            onClick={() => onCreate(option.type)}
+                            aria-label={shortcut ? `${option.label}. Press ${shortcut} to add.` : option.label}
+                            data-panel-type={option.type}
+                        >
+                            <span className="add-panel-option-header">
+                                <span className="add-panel-option-copy">
+                                    <strong>{option.label}</strong>
+                                </span>
+                                {shortcut ? <kbd aria-hidden="true">{shortcut}</kbd> : null}
+                            </span>
+                            <AddPanelNodePreview
+                                type={option.type}
+                                className="add-panel-row-preview"
+                                height={160}
+                            />
+                        </button>
+                    );
+                }) : (
                     <div className="add-panel-empty">No panel type</div>
                 )}
             </div>
@@ -110,3 +143,11 @@ export const AddPanelPopover = forwardRef<HTMLDivElement, AddPanelPopoverProps>(
         </div>
     );
 });
+
+function shortcutForIndex(index: number) {
+    return index >= 0 && index < 9 ? String(index + 1) : null;
+}
+
+function optionIdForType(type: string) {
+    return `add-panel-option-${type}`;
+}

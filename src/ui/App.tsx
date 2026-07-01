@@ -165,7 +165,8 @@ const SAVED_MESSAGE = 'Saved online';
 const SIGN_IN_SAVE_MESSAGE = 'Sign in to save online';
 const MENU_VIEWPORT_MARGIN = 12;
 const MENU_ANCHOR_GAP = 8;
-const DEFAULT_ADD_PANEL_MENU_HEIGHT = 280;
+const DEFAULT_ADD_PANEL_MENU_HEIGHT = 560;
+const DEFAULT_ADD_PANEL_MENU_WIDTH = 360;
 const DEFAULT_EXPORT_MENU_HEIGHT = 228;
 
 function canasterMenuWidth() {
@@ -174,9 +175,16 @@ function canasterMenuWidth() {
     return Number.isFinite(parsed) ? parsed : 224;
 }
 
-function anchoredMenuPosition(rect: Pick<DOMRect, 'bottom' | 'right' | 'top'>, menuHeight: number): ArrangeMenuPosition {
+function clampedAddPanelMenuWidth() {
+    return Math.max(0, Math.min(DEFAULT_ADD_PANEL_MENU_WIDTH, window.innerWidth - MENU_VIEWPORT_MARGIN * 2));
+}
+
+function anchoredMenuPosition(
+    rect: Pick<DOMRect, 'bottom' | 'right' | 'top'>,
+    menuHeight: number,
+    menuWidth = canasterMenuWidth(),
+): ArrangeMenuPosition {
     const margin = MENU_VIEWPORT_MARGIN;
-    const menuWidth = canasterMenuWidth();
     const left = Math.max(margin,
         Math.min(window.innerWidth - menuWidth - margin, rect.right - menuWidth));
     const lowestTop = Math.max(margin, window.innerHeight - menuHeight - margin);
@@ -1359,16 +1367,20 @@ export function App() {
     }, []);
 
     const updateAddPanelMenuPositionForRect = useCallback((rect: Pick<DOMRect, 'bottom' | 'right' | 'top'>) => {
-        const menuHeight = addPanelMenuRef.current?.getBoundingClientRect().height ?? DEFAULT_ADD_PANEL_MENU_HEIGHT;
-        setAddPanelMenuPosition(anchoredMenuPosition(rect, menuHeight));
+        const menuRect = addPanelMenuRef.current?.getBoundingClientRect();
+        const menuHeight = menuRect?.height ?? DEFAULT_ADD_PANEL_MENU_HEIGHT;
+        const menuWidth = menuRect?.width ?? clampedAddPanelMenuWidth();
+        setAddPanelMenuPosition(anchoredMenuPosition(rect, menuHeight, menuWidth));
     }, []);
 
     const updateAddPanelMenuPosition = useCallback(() => {
         const button = addPanelButtonRef.current;
         if (!button) return;
         const rect = button.getBoundingClientRect();
-        const menuHeight = addPanelMenuRef.current?.getBoundingClientRect().height ?? DEFAULT_ADD_PANEL_MENU_HEIGHT;
-        setAddPanelMenuPosition(anchoredMenuPosition(rect, menuHeight));
+        const menuRect = addPanelMenuRef.current?.getBoundingClientRect();
+        const menuHeight = menuRect?.height ?? DEFAULT_ADD_PANEL_MENU_HEIGHT;
+        const menuWidth = menuRect?.width ?? clampedAddPanelMenuWidth();
+        setAddPanelMenuPosition(anchoredMenuPosition(rect, menuHeight, menuWidth));
     }, []);
 
     const updateExportMenuPosition = useCallback(() => {
