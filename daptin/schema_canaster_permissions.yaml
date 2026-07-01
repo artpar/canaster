@@ -44,5 +44,29 @@ Tables:
   - TableName: mail_server
     Permission: 561408
 
+  # Admin-managed Daptin system tables used by deployment/provisioning.
+  # These remain closed to guests; administrators get full table access through
+  # their usergroup relation so daptin-cli can manage runtime rows.
+  - TableName: action
+    Permission: 2085120
+    DefaultGroups:
+      - Name: administrators
+        Permission: 2097151
+
+  - TableName: template
+    Permission: 2085120
+    DefaultGroups:
+      - Name: administrators
+        Permission: 2097151
+
   - TableName: site
-    Permission: 561408
+    Permission: 2085120
+    DefaultGroups:
+      - Name: administrators
+        Permission: 2097151
+
+  - TableName: user_account_user_account_id_has_usergroup_usergroup_id
+    Permission: 2085120
+    DefaultGroups:
+      - Name: administrators
+        Permission: 2097151
