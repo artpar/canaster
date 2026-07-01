@@ -114,7 +114,7 @@ Current production status as of 2026-06-24 15:29 IST:
 - Daptin logs show IMAPS server setup for `imap.canaster.in` on `:993`.
 - Daptin `cloud_store.name=canaster-mail`, reference `019edc18-5fe3-7370-be4f-ac76ded67a78`, points at `canaster-mail:canaster-daptin-storage` with credential `canaster-site` for cloud-store-backed raw `mail.mail` and `outbox.mail` bodies.
 - Daptin `cloud_store.name=assets`, id `4`, points at `canaster-assets:canaster-daptin-storage` with credential `canaster-site` for image panel uploads.
-- Daptin `world.permission(document)=1003811` and `world.permission(asset)=741632`, both with `world_schema_json.DefaultPermission=16256`, and `world.usergroup_id -> users` relation permission `1032192`. This gives signed-in users table-level document create/update/delete and row-level owner reads/deletes, allows guests to read only rows explicitly patched public, keeps guest create/update/delete closed, and includes the `GuestExecute` bit required by Daptin routed-template document actions.
+- Daptin `world.permission(document)=1003811` and `world.permission(asset)=741632`, both with `world_schema_json.DefaultPermission=16256`. The 2026-07-01 intended usergroup relation state is `document.world_id -> users` permission `999424` and `asset.world_id -> users` permission `737280`. This gives signed-in users table-level create/update/delete where needed without Group Read, preserves owner/private row reads, allows guests to read only rows explicitly made public by schema-managed visibility actions, keeps guest create/update/delete closed, and includes the `GuestExecute` bit required by Daptin routed-template document actions.
 - Production permission hardening on 2026-06-24 removed guest table access from sensitive system tables. `signin`, `signup`, `reset-password`, and `reset-password-verify` are not guest-executable. `request_canaster_email_otp` and `verify_canaster_email_otp` remain the only guest-executable auth actions. Daptin still serves `/api/world` and `/api/action` metadata to guests; do not store secrets in action schemas or world metadata.
 - VM outbound SMTP verification passed for `gmail-smtp-in.l.google.com:25` and `smtp.gmail.com:465`.
 - Public DNS is authoritative on Namecheap BasicDNS at `dns1.registrar-servers.com` and `dns2.registrar-servers.com`.
@@ -553,8 +553,8 @@ Permanent local smoke behavior:
 
 - `npm run daptin:smoke:local` uses the existing CLI token in `.tmp/daptin/local-site-cli.yaml`.
 - It does not sign up a new user against the permanent local Daptin server.
-- It verifies built-in `document` JSON blob create/update/read/delete, private guest `403`, public guest read `200`, guest delete `403`, and snapshot decode.
-- On 2026-06-16 14:52 IST the permanent local create permission was `561441`; the smoke does not depend on a specific create default and instead verifies the explicit private/public permission patches.
+- It verifies built-in `document` JSON blob create/update/read/delete, schema-managed private/public visibility actions, private guest `403`, public guest read `200`, guest delete `403`, and snapshot decode.
+- On 2026-06-16 14:52 IST the permanent local create permission was `561441`; the smoke does not depend on a specific create default and instead verifies the explicit private/public visibility actions.
 
 ### Historical Production Site/GCS Bootstrap Status
 
@@ -793,7 +793,7 @@ Production image panel upload RCA on 2026-06-24:
 
 - Symptom: signed-in image panel upload returned permission denied.
 - Cause: the `asset` table existed, but production did not yet have the `assets` cloud store or the `users -> asset` table-access relation. The schema smoke covered privileged/isolated asset creation, not the normal signed-in production user path.
-- Fix: created the GCS-backed `assets` cloud store, set `world.permission(asset)=741632`, added the `users -> asset` relation with permission `770048`, restarted Daptin so the cloud store was loaded, and verified with real OTP sessions that asset create, private permission patch, owner JSON:API read, and owner artifact download succeed.
+- Fix: created the GCS-backed `assets` cloud store, set `world.permission(asset)=741632`, added the `users -> asset` relation with permission `770048`, restarted Daptin so the cloud store was loaded, and verified with real OTP sessions that asset create, private visibility update, owner JSON:API read, and owner artifact download succeed.
 - Security note: on 2026-06-24, production testing showed Daptin served raw file bytes from `/asset/asset/<ref>/file` even when JSON:API row access returned `403` to guests and non-owners. This is tracked as `daptin/daptin#232` and fixed in Daptin commit `af6ff72b`. Canaster should use the artifact route through authenticated `fetch`, not direct `<img src>`, so the bearer token is sent and Daptin can enforce row permissions.
 
 Final production OTP smoke on 2026-06-24 after `daptin/daptin:v0.12.25`:

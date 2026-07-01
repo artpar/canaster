@@ -1,6 +1,14 @@
-import type {MutableRefObject} from "react";
+import {
+    useEffect,
+    useRef,
+    useState,
+    type MutableRefObject
+} from "react";
 import {
     FilePlus2,
+    Globe2,
+    Link2,
+    LockKeyhole,
     PanelLeftClose,
     PanelLeftOpen,
     PanelsTopLeft,
@@ -8,6 +16,7 @@ import {
     Share2,
     Undo2
 } from "lucide-react";
+import type {DocumentVisibility} from "../infra/daptin/documentPermissions";
 import {IconButton} from "./IconButton";
 
 export type HeaderToolbarProps = {
@@ -41,10 +50,49 @@ export type HeaderToolbarProps = {
         buttonRef: MutableRefObject<HTMLButtonElement | null>,
         open: boolean,
         onToggle: () => void
+    },
+    visibility: {
+        active: DocumentVisibility | null,
+        editable: boolean,
+        signedIn: boolean,
+        busy: boolean,
+        onCopyLink: () => void,
+        onSet: (visibility: DocumentVisibility) => void
     }
 };
 
 export function HeaderToolbar(props: HeaderToolbarProps) {
+    const [visibilityOpen, setVisibilityOpen] = useState(false);
+    const visibilityRef = useRef<HTMLDivElement | null>(null);
+    const visibilityBusy = props.visibility.busy;
+    const visibility = props.visibility.active ?? 'private';
+    const hasOnlineDocument = props.visibility.signedIn && props.visibility.active !== null;
+    const canChangeVisibility = hasOnlineDocument && props.visibility.editable && !visibilityBusy;
+    const canCopyLink = hasOnlineDocument && visibility === 'public' && !visibilityBusy;
+    const visibilityTitle = visibilityTitleForState({
+        canChangeVisibility,
+        editable          : props.visibility.editable,
+        hasOnlineDocument,
+        signedIn          : props.visibility.signedIn,
+    });
+
+    useEffect(() => {
+        if (!visibilityOpen) return;
+        const onPointerDown = (event: PointerEvent) => {
+            if (visibilityRef.current?.contains(event.target as Node)) return;
+            setVisibilityOpen(false);
+        };
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setVisibilityOpen(false);
+        };
+        document.addEventListener('pointerdown', onPointerDown);
+        document.addEventListener('keydown', onKeyDown);
+        return () => {
+            document.removeEventListener('pointerdown', onPointerDown);
+            document.removeEventListener('keydown', onKeyDown);
+        };
+    }, [visibilityOpen]);
+
     return <div className="topbar" aria-label="Workspace tools">
         <div className="topbar-zone topbar-identity">
             <button
@@ -120,6 +168,89 @@ export function HeaderToolbar(props: HeaderToolbarProps) {
                     <Share2 size={17}/>
                 </button>
             </div>
+            <div className="toolbar-group workspace-visibility-control" ref={visibilityRef}>
+                <button
+                    className={`icon-button workspace-visibility-trigger ${visibility}`}
+                    type="button"
+                    aria-label={`Workspace visibility: ${visibilityLabel(visibility)}`}
+                    aria-haspopup="dialog"
+                    aria-expanded={visibilityOpen}
+                    title={hasOnlineDocument ? `Workspace is ${visibilityLabel(visibility).toLowerCase()}` :
+                        'Save online before changing workspace visibility'}
+                    disabled={!props.visibility.signedIn}
+                    onClick={() => setVisibilityOpen((open) => !open)}
+                >
+                    <LockKeyhole size={17}/>
+                </button>
+                {visibilityOpen ? (
+                    <div className="workspace-visibility-popover" role="dialog" aria-label="Workspace visibility">
+                        <div className="workspace-visibility-summary">
+                            <span>{visibilityLabel(visibility)}</span>
+                            <span>{visibility === 'public' ? 'Anyone with the link can open it' : 'Only you can open it'}</span>
+                        </div>
+                        <div className="document-visibility-controls" role="group" aria-label="Change workspace visibility">
+                            <button
+                                className={`document-visibility-option${visibility === 'private' ? ' active' : ''}`}
+                                type="button"
+                                aria-pressed={visibility === 'private'}
+                                disabled={!canChangeVisibility}
+                                title={visibilityTitle}
+                                onClick={() => props.visibility.onSet('private')}
+                            >
+                                <LockKeyhole size={14}/>
+                                <span>Private</span>
+                            </button>
+                            <button
+                                className={`document-visibility-option${visibility === 'public' ? ' active' : ''}`}
+                                type="button"
+                                aria-pressed={visibility === 'public'}
+                                disabled={!canChangeVisibility}
+                                title={visibilityTitle}
+                                onClick={() => props.visibility.onSet('public')}
+                            >
+                                <Globe2 size={14}/>
+                                <span>Public</span>
+                            </button>
+                        </div>
+                        <button
+                            className="document-visibility-link"
+                            type="button"
+                            disabled={!canCopyLink}
+                            title={visibility === 'public' ? 'Copy public workspace link' :
+                                'Make this workspace public before copying a share link'}
+                            onClick={() => {
+                                setVisibilityOpen(false);
+                                props.visibility.onCopyLink();
+                            }}
+                        >
+                            <Link2 size={14}/>
+                            <span>Copy link</span>
+                        </button>
+                    </div>
+                ) : null}
+            </div>
         </div>
     </div>;
+}
+
+function visibilityLabel(visibility: DocumentVisibility): string {
+    return visibility === 'public' ? 'Public' : 'Private';
+}
+
+function visibilityTitleForState({
+                                     canChangeVisibility,
+                                     editable,
+                                     hasOnlineDocument,
+                                     signedIn,
+                                 }: {
+    canChangeVisibility: boolean;
+    editable: boolean;
+    hasOnlineDocument: boolean;
+    signedIn: boolean;
+}): string {
+    if (canChangeVisibility) return 'Change workspace visibility';
+    if (!signedIn) return 'Sign in before changing workspace visibility';
+    if (!hasOnlineDocument) return 'Save online before changing workspace visibility';
+    if (!editable) return 'Only the owner can change workspace visibility';
+    return 'Workspace visibility is updating';
 }

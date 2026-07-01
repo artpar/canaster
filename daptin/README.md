@@ -5,7 +5,8 @@ This directory is the backend contract for Canaster. Daptin is the backend; Cana
 ## Daptin Responsibilities
 
 - Auth, users, groups, row ownership, and permission bitmasks.
-- CRUD APIs for built-in `document`.
+- CRUD APIs for built-in `document` content and metadata.
+- Schema-managed actions for `document` and `asset` permission changes.
 - Static hosting through Daptin `site` and `cloud_store` for production frontend delivery.
 - Cloud-store-backed raw SMTP/IMAP message storage through `mail.mail` and `outbox.mail`.
 - JSON file blob persistence through `document.document_content`.
@@ -37,6 +38,15 @@ Canaster ships a routed-template action for shared document pages:
 - After deploy, verify the imported action row through `daptin-cli`; local Daptin `v0.12.26` imported this schema once as `2085120` and required an explicit `daptin-cli update action <ref> permission=2085152` repair.
 - Anonymous access still depends on normal Daptin row permissions. Private rows are not exposed by this action; the SPA then shows the sign-in flow after hydration.
 
+Canaster also ships explicit owner-only visibility actions:
+
+- `set_canaster_document_private` and `set_canaster_document_public` run on a specific `document` instance.
+- `set_canaster_asset_private` and `set_canaster_asset_public` run on a specific `asset` instance.
+- Each action checks `subject.user_account_id == user.reference_id` before patching `permission`; non-owners receive a `client.notify` error response.
+- The browser must call these actions through `daptin-client.actionManager.doAction(..., { referenceId })`. It must not change `permission` through generic JSON:API `PATCH` on `document` or `asset`.
+- Public/private actions are fixed transitions: private is `16256`, public is `16259`. The browser does not supply arbitrary permission values.
+- These four action rows must be related to the built-in `users` usergroup so normal signed-in accounts can execute them without making the actions guest-executable. Use `daptin-cli relate action <action_ref> usergroup_id <users_ref>` for each action after schema import, then verify the relation exposes Group Execute. Do not use direct SQL or raw HTTP for this repair.
+
 The template row itself is not schema-seeded. Daptin registers `template.url_pattern` routes from database rows at startup, so an operator must create or update the row after the site reference is known:
 
 ```bash
@@ -58,7 +68,7 @@ Mailbox provisioning is deliberately attached to OTP verification, not OTP reque
 
 Inbound SMTP stores messages as the recipient user, so production must grant the built-in `users` usergroup table-level create on the `mail` world row. The intended state is `world.permission(mail)=561408` and a `usergroup(users).world_id -> mail` relation permission of `638976` (`Group: Peek, Read, Create, Execute`). The generated `world_world_id_has_usergroup_usergroup_id` relation table default is `DefaultPermission: 638976`; existing relation rows that predate the default must be repaired to the same permission. Do not grant `GuestCreate` on `mail`.
 
-File-backed panels use `daptin/schema_canaster_assets.yaml`, which adds an `asset` table with short fields: `name`, `mime`, and cloud-store-backed blob `file`. Production must create a Daptin `cloud_store` row named `assets` backed by GCS before file upload is enabled. The `asset` table should follow the document table's authenticated-user access shape except delete: owner/private row default (`DefaultPermission: 16256`) and a `users` usergroup relation that grants Peek, Read, Create, Update, and Execute. Do not store file bytes in workspace JSON; file-backed nodes keep only `assetId` plus display metadata.
+File-backed panels use `daptin/schema_canaster_assets.yaml`, which adds an `asset` table with short fields: `name`, `mime`, and cloud-store-backed blob `file`. Production must create a Daptin `cloud_store` row named `assets` backed by GCS before file upload is enabled. The `asset` table should follow the document table's authenticated-user access shape except delete: owner/private row default (`DefaultPermission: 16256`) and a `users` usergroup relation that grants Peek, Create, Update, and Execute without Group Read. Do not store file bytes in workspace JSON; file-backed nodes keep only `assetId` plus display metadata. Asset permission changes use the schema-managed asset visibility actions, not generic JSON:API `PATCH`.
 
 Production email delivery uses Daptin SMTP, not AWS SES. The OTP action sends from `login@canaster.in` with `mail_server_hostname: mail.canaster.in`. Production must have:
 
@@ -69,9 +79,9 @@ Production email delivery uses Daptin SMTP, not AWS SES. The OTP action sends fr
 - DNS for `canaster.in`, `mail.canaster.in`, and DKIM selector `d1._domainkey.canaster.in` using the apex certificate public key; and
 - Daptin's scheduled `outbox.process` action running so queued `mail.send` messages are retried. The OTP action sets `send_immediately: true`, so Daptin attempts delivery for the newly created cloud-store-backed outbox row before returning.
 
-The production `document` table currently creates new rows with `world_schema_json.DefaultPermission=16256`. Keep the MVP create flow conservative anyway: create a harmless placeholder row, immediately PATCH `permission: 16256`, then PATCH the real JSON file content.
+The production `document` table creates new rows with `world_schema_json.DefaultPermission=16256`. Keep the MVP create flow conservative: create a harmless placeholder row under that private default, then PATCH the real JSON file content. Do not use generic JSON:API `PATCH` for `permission`; use the schema-managed visibility actions for public/private transitions.
 
-Production after admin lockdown must grant `document` table access to authenticated users through the built-in `users` usergroup, not through guest create/update/delete bits. The current intended setting is `world.permission(document)=1003811`, with the `document` world row related to `users` through `usergroup_id` and that relation carrying `permission=1032192` (`Group: Peek, Read, Create, Update, Delete, Execute`). Anonymous `POST`, `PATCH`, and `DELETE` on `document` return `403`; anonymous `GET` only works for rows explicitly patched public-readable, and anonymous `Execute` is present so Daptin routed-template actions can run when their action row also grants `GuestExecute`. The normal signed-in browser save path creates, patches, and deletes owned document rows successfully. Verify the browser journey with a normal non-admin account before release; a privileged CLI smoke does not prove the user path.
+Production after admin lockdown must grant `document` table access to authenticated users through the built-in `users` usergroup, not through guest create/update/delete bits or row-level default groups. The current intended setting is `world.permission(document)=1003811`, with the `document` world row related to `users` through `usergroup_id` and that relation carrying `permission=999424` (`Group: Peek, Create, Update, Delete, Execute`, no Group Read). Anonymous `POST`, `PATCH`, and `DELETE` on `document` return `403`; anonymous `GET` only works for rows explicitly made public-readable by the document visibility action, and anonymous `Execute` is present so Daptin routed-template actions can run when their action row also grants `GuestExecute`. The normal signed-in browser save path creates, updates, and deletes owned document rows successfully. Verify the browser journey with a normal non-admin account before release; a privileged CLI smoke does not prove the user path.
 
 ## Local Daptin Startup
 
@@ -130,7 +140,7 @@ Current public TLS shape:
 - Daptin HTTPS is enabled through `/_config/backend/enable_https=true` and backend `hostname=api.canaster.in`.
 - As of 2026-06-18, the VM at `34.14.185.249` serves the Canway frontend on HTTP and Daptin API on HTTP/HTTPS when the correct Host/SNI is used. Public DNS cutover from the old load balancer is still required.
 - Public frontend auth calls should use `https://api.canaster.in`; after this schema is deployed, browser auth uses the schema-managed email OTP actions `request_canaster_email_otp` and `verify_canaster_email_otp`.
-- Production document storage has `world.permission(document)=1003811`, `world.usergroup_id -> users` relation permission `1032192`, and `DefaultPermission(document)=16256`. The extra `GuestExecute` bit is required for Daptin routed-template actions and does not grant anonymous create/update/delete. Update relation-row permission through `daptin-cli`; do not use direct SQL, raw HTTP, or anonymous guest create/update/delete bits for the save path.
+- Production document storage has `world.permission(document)=1003811`, `world.usergroup_id -> users` relation permission `999424`, and `DefaultPermission(document)=16256`. Production asset storage has `world.permission(asset)=741632`, `world.usergroup_id -> users` relation permission `737280`, and `DefaultPermission(asset)=16256`. These world-usergroup relations grant signed-in users table-level create/update where needed without Group Read, so private rows are visible only to their owner. Do not add `DefaultGroups` on `document` or `asset`, because those become row-level group relations and leak private rows. The extra document `GuestExecute` bit is required for Daptin routed-template actions and does not grant anonymous create/update/delete. The four visibility action rows must also be related to the built-in `users` usergroup so signed-in owners can execute the narrow actions. Update relation-row permission through `daptin-cli`; do not use direct SQL, raw HTTP, or anonymous guest create/update/delete bits for the save path.
 
 See `docs/daptin-backend-groundwork.md` for the exact GCP commands and required CI/CD variables.
 

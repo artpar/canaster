@@ -19,11 +19,19 @@ const smokeCliConfig = process.env.DAPTIN_SMOKE_CLI_CONFIG || '';
 const PRIVATE_PERMISSION = 16256;
 const PUBLIC_READ_PERMISSION = 16259;
 const DOCUMENT_TABLE_PERMISSION = 1003811;
-const DOCUMENT_USERS_RELATION_PERMISSION = 1032192;
+const DOCUMENT_USERS_RELATION_PERMISSION = 999424;
+const ASSET_TABLE_PERMISSION = 741632;
+const ASSET_USERS_RELATION_PERMISSION = 737280;
 const MAIL_OWNER_REFER_PERMISSION = 569633;
 const WORLD_USERGROUP_RELATION_PERMISSION = 638976;
 const USER_ACCOUNT_AUTH_PERMISSION = 561440;
 const GUEST_ACTION_EXECUTE_PERMISSION = 32;
+const VISIBILITY_ACTION_NAMES = [
+  'set_canaster_document_private',
+  'set_canaster_document_public',
+  'set_canaster_asset_private',
+  'set_canaster_asset_public',
+];
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -358,24 +366,46 @@ async function ensureCanasterAuthPermissions({ authenticatedClient, baseUrl, tok
 }
 
 async function ensureDocumentUsersRelationPermission({ authenticatedClient, baseUrl, token }) {
-  const worldBody = await authenticatedClient.jsonApi.findAll('world', { page: { size: 500 } });
-  const documentWorld = (worldBody.data ?? []).find((row) => rowAttr(row, 'table_name') === 'document');
-  assert(documentWorld, 'Daptin built-in document table is missing');
-  const documentWorldRef = rowId(documentWorld);
-  assert(documentWorldRef, 'document world row has no reference id');
+  return ensureWorldUsersRelationPermission({
+    authenticatedClient,
+    baseUrl,
+    token,
+    tableName: 'document',
+    tablePermission: DOCUMENT_TABLE_PERMISSION,
+    relationPermission: DOCUMENT_USERS_RELATION_PERMISSION,
+  });
+}
 
-  if (rowAttr(documentWorld, 'permission') !== DOCUMENT_TABLE_PERMISSION) {
-    const { response } = await authenticatedJsonApiRequest(baseUrl, token, `/api/world/${documentWorldRef}`, {
+async function ensureAssetUsersRelationPermission({ authenticatedClient, baseUrl, token }) {
+  return ensureWorldUsersRelationPermission({
+    authenticatedClient,
+    baseUrl,
+    token,
+    tableName: 'asset',
+    tablePermission: ASSET_TABLE_PERMISSION,
+    relationPermission: ASSET_USERS_RELATION_PERMISSION,
+  });
+}
+
+async function ensureWorldUsersRelationPermission({ authenticatedClient, baseUrl, token, tableName, tablePermission, relationPermission }) {
+  const worldBody = await authenticatedClient.jsonApi.findAll('world', { page: { size: 500 } });
+  const world = (worldBody.data ?? []).find((row) => rowAttr(row, 'table_name') === tableName);
+  assert(world, `Daptin ${tableName} table is missing`);
+  const worldRef = rowId(world);
+  assert(worldRef, `${tableName} world row has no reference id`);
+
+  if (rowAttr(world, 'permission') !== tablePermission) {
+    const { response } = await authenticatedJsonApiRequest(baseUrl, token, `/api/world/${worldRef}`, {
       method: 'PATCH',
       body: JSON.stringify({
         data: {
           type: 'world',
-          id: documentWorldRef,
-          attributes: { permission: DOCUMENT_TABLE_PERMISSION },
+          id: worldRef,
+          attributes: { permission: tablePermission },
         },
       }),
     });
-    assert(response.status === 200, `document world permission patch failed with ${response.status}`);
+    assert(response.status === 200, `${tableName} world permission patch failed with ${response.status}`);
   }
 
   const usergroupsBody = await authenticatedClient.jsonApi.findAll('usergroup', { page: { size: 100 } });
@@ -384,48 +414,77 @@ async function ensureDocumentUsersRelationPermission({ authenticatedClient, base
   const usersGroupRef = rowId(usersGroup);
   assert(usersGroupRef, 'users usergroup has no reference id');
 
-  let relationRow = await documentUsersRelationRow(baseUrl, token, documentWorldRef, usersGroupRef);
+  let relationRow = await relatedUsersGroupRow(baseUrl, token, 'world', worldRef, usersGroupRef);
   if (!relationRow) {
-    const { response } = await authenticatedJsonApiRequest(baseUrl, token, `/api/world/${documentWorldRef}/relationships/usergroup_id`, {
+    const { response } = await authenticatedJsonApiRequest(baseUrl, token, `/api/world/${worldRef}/relationships/usergroup_id`, {
       method: 'PATCH',
       body: JSON.stringify({
         data: [{
           type: 'usergroup',
           id: usersGroupRef,
-          attributes: { permission: DOCUMENT_USERS_RELATION_PERMISSION },
+          attributes: { permission: relationPermission },
         }],
       }),
     });
-    assert(response.status === 200 || response.status === 204, `document/users relation add failed with ${response.status}`);
-    relationRow = await documentUsersRelationRow(baseUrl, token, documentWorldRef, usersGroupRef);
+    assert(response.status === 200 || response.status === 204, `${tableName}/users relation add failed with ${response.status}`);
+    relationRow = await relatedUsersGroupRow(baseUrl, token, 'world', worldRef, usersGroupRef);
   }
-  assert(relationRow, 'document/users relation is missing after repair');
+  assert(relationRow, `${tableName}/users relation is missing after repair`);
 
-  if (rowAttr(relationRow, 'permission') !== DOCUMENT_USERS_RELATION_PERMISSION) {
+  if (rowAttr(relationRow, 'permission') !== relationPermission) {
     const relationRef = rowId(relationRow);
-    assert(relationRef, 'document/users relation row has no reference id');
+    assert(relationRef, `${tableName}/users relation row has no reference id`);
     const { response } = await authenticatedJsonApiRequest(baseUrl, token, `/api/world_world_id_has_usergroup_usergroup_id/${relationRef}`, {
       method: 'PATCH',
       body: JSON.stringify({
         data: {
           type: 'world_world_id_has_usergroup_usergroup_id',
           id: relationRef,
-          attributes: { permission: DOCUMENT_USERS_RELATION_PERMISSION },
+          attributes: { permission: relationPermission },
         },
       }),
     });
-    assert(response.status === 200, `document/users relation permission patch failed with ${response.status}`);
-    relationRow = await documentUsersRelationRow(baseUrl, token, documentWorldRef, usersGroupRef);
+    assert(response.status === 200, `${tableName}/users relation permission patch failed with ${response.status}`);
+    relationRow = await relatedUsersGroupRow(baseUrl, token, 'world', worldRef, usersGroupRef);
   }
 
-  assert(rowAttr(relationRow, 'permission') === DOCUMENT_USERS_RELATION_PERMISSION, 'document/users relation permission mismatch');
-  return { documentWorldRef, usersGroupRef, relationRef: rowId(relationRow) };
+  assert(rowAttr(relationRow, 'permission') === relationPermission, `${tableName}/users relation permission mismatch`);
+  return { worldRef, usersGroupRef, relationRef: rowId(relationRow), tableName, relationPermission };
 }
 
-async function documentUsersRelationRow(baseUrl, token, documentWorldRef, usersGroupRef) {
-  const { response, body } = await authenticatedJsonApiRequest(baseUrl, token, `/api/world/${documentWorldRef}/usergroup_id`);
-  assert(response.status === 200, `document related usergroups returned ${response.status}`);
+async function relatedUsersGroupRow(baseUrl, token, entity, ref, usersGroupRef) {
+  const { response, body } = await authenticatedJsonApiRequest(baseUrl, token, `/api/${entity}/${ref}/usergroup_id`);
+  assert(response.status === 200, `${entity} related usergroups returned ${response.status}`);
   return (body?.data ?? []).find((row) => rowAttr(row, 'name') === 'users' || rowAttr(row, 'relation_reference_id') === usersGroupRef || rowId(row) === usersGroupRef) ?? null;
+}
+
+async function ensureVisibilityActionUsersRelations({ authenticatedClient, baseUrl, token }) {
+  const usergroupsBody = await authenticatedClient.jsonApi.findAll('usergroup', { page: { size: 100 } });
+  const usersGroup = (usergroupsBody.data ?? []).find((row) => rowAttr(row, 'name') === 'users');
+  assert(usersGroup, 'Daptin users usergroup is missing');
+  const usersGroupRef = rowId(usersGroup);
+  assert(usersGroupRef, 'users usergroup has no reference id');
+
+  const actionsBody = await authenticatedClient.jsonApi.findAll('action', { page: { size: 500 } });
+  const actions = new Map((actionsBody.data ?? []).map((row) => [rowAttr(row, 'action_name'), row]));
+  for (const actionName of VISIBILITY_ACTION_NAMES) {
+    const actionRow = actions.get(actionName);
+    assert(actionRow, `visibility action is missing: ${actionName}`);
+    const actionRef = rowId(actionRow);
+    assert(actionRef, `${actionName} has no reference id`);
+    const relationRow = await relatedUsersGroupRow(baseUrl, token, 'action', actionRef, usersGroupRef);
+    if (relationRow) continue;
+    const { response } = await authenticatedJsonApiRequest(baseUrl, token, `/api/action/${actionRef}/relationships/usergroup_id`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        data: [{
+          type: 'usergroup',
+          id: usersGroupRef,
+        }],
+      }),
+    });
+    assert(response.status === 200 || response.status === 204, `${actionName}/users relation add failed with ${response.status}`);
+  }
 }
 
 async function assertCanasterOtpMailServerReferPath(baseUrl) {
@@ -616,6 +675,16 @@ async function main() {
       baseUrl,
       token,
     });
+    const assetUsersRelation = await ensureAssetUsersRelationPermission({
+      authenticatedClient,
+      baseUrl,
+      token,
+    });
+    await ensureVisibilityActionUsersRelations({
+      authenticatedClient,
+      baseUrl,
+      token,
+    });
     const assetsCloudStoreRef = await ensureAssetsCloudStore({
       authenticatedClient,
       baseUrl,
@@ -680,15 +749,13 @@ async function main() {
     const createPermission = rowAttr(createBody.data, 'permission');
     assert(typeof createPermission === 'number', `document create did not return numeric permission, got ${createPermission}`);
 
-    // daptin-client@0.7.12 runtime expects update(model, { id, ...attrs }).
-    const privatePatchBody = await normalUserClient.jsonApi.update('document', {
-      id: documentRef,
-      permission: PRIVATE_PERMISSION,
-    });
-    assert(rowAttr(privatePatchBody.data, 'permission') === PRIVATE_PERMISSION, 'private permission patch did not persist');
+    await normalUserClient.actionManager.doAction('document', 'set_canaster_document_private', {}, { referenceId: documentRef });
+    let visibilityBody = await normalUserClient.jsonApi.find('document', documentRef);
+    assert(rowAttr(visibilityBody.data, 'permission') === PRIVATE_PERMISSION, 'private visibility action did not persist');
 
     const snapshot = canasterSnapshot();
     const realFile = encodeSnapshotFile(`${documentKey}.canaster.json`, snapshot);
+    // daptin-client@0.7.12 runtime expects update(model, { id, ...attrs }).
     await normalUserClient.jsonApi.update('document', {
       id: documentRef,
       document_name: `${documentKey}.canaster.json`,
@@ -708,11 +775,9 @@ async function main() {
     assert(decoded.history.present.view.cameras.root.zoom === 0.8, 'decoded camera zoom mismatch');
     assert(decoded.history.present.documents.root.model.nodes[0].id === 'smoke-node', 'decoded node mismatch');
 
-    const publicPatchBody = await normalUserClient.jsonApi.update('document', {
-      id: documentRef,
-      permission: PUBLIC_READ_PERMISSION,
-    });
-    assert(rowAttr(publicPatchBody.data, 'permission') === PUBLIC_READ_PERMISSION, 'public permission patch did not persist');
+    await normalUserClient.actionManager.doAction('document', 'set_canaster_document_public', {}, { referenceId: documentRef });
+    visibilityBody = await normalUserClient.jsonApi.find('document', documentRef);
+    assert(rowAttr(visibilityBody.data, 'permission') === PUBLIC_READ_PERMISSION, 'public visibility action did not persist');
 
     const { response: rawGuestPublicResponse, body: rawGuestPublicBody } = await request(baseUrl, `/api/document/${documentRef}`);
     assert(rawGuestPublicResponse.status === 200, `public document should return 200 to guest; raw status ${rawGuestPublicResponse.status}`);
@@ -732,19 +797,16 @@ async function main() {
     const assetKey = `smoke-image-${Date.now()}`;
     const imageSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><rect width="2" height="2" fill="#5aa7ff"/></svg>`;
     const assetFile = encodeBlobFile(`${assetKey}.svg`, 'image/svg+xml', imageSvg);
-    const assetCreateBody = await authenticatedClient.jsonApi.create('asset', {
+    const assetCreateBody = await normalUserClient.jsonApi.create('asset', {
       name: `${assetKey}.svg`,
       mime: 'image/svg+xml',
       file: [assetFile],
     });
     const assetRef = rowId(assetCreateBody.data);
     assert(assetRef, 'asset create did not return a reference id');
-    const assetPrivatePatchBody = await authenticatedClient.jsonApi.update('asset', {
-      id: assetRef,
-      permission: PRIVATE_PERMISSION,
-    });
-    assert(rowAttr(assetPrivatePatchBody.data, 'permission') === PRIVATE_PERMISSION, 'asset private permission patch did not persist');
-    const assetGetBody = await authenticatedClient.jsonApi.find('asset', assetRef);
+    await normalUserClient.actionManager.doAction('asset', 'set_canaster_asset_private', {}, { referenceId: assetRef });
+    const assetGetBody = await normalUserClient.jsonApi.find('asset', assetRef);
+    assert(rowAttr(assetGetBody.data, 'permission') === PRIVATE_PERMISSION, 'asset private visibility action did not persist');
     assert(rowAttr(assetGetBody.data, 'name') === `${assetKey}.svg`, 'asset read returned wrong name');
     assert(rowAttr(assetGetBody.data, 'mime') === 'image/svg+xml', 'asset read returned wrong MIME type');
     const guestAssetDownloadResponse = await fetch(`${baseUrl}/asset/asset/${assetRef}/file`);
@@ -753,7 +815,7 @@ async function main() {
       `private asset artifact should not be guest-readable; got ${guestAssetDownloadResponse.status}`,
     );
     const assetDownloadResponse = await fetch(`${baseUrl}/asset/asset/${assetRef}/file`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${normalUserToken}` },
     });
     assert(assetDownloadResponse.status === 200, `asset artifact download returned ${assetDownloadResponse.status}`);
     assert(assetDownloadResponse.headers.get('content-type')?.startsWith('image/svg+xml'), 'asset artifact returned wrong MIME type');
@@ -771,10 +833,13 @@ async function main() {
       canasterMailServerRef,
       canasterDkimCertificateRef,
       documentUsersRelation,
+      assetUsersRelation,
       privatePermission: PRIVATE_PERMISSION,
       publicPermission: PUBLIC_READ_PERMISSION,
       documentTablePermission: DOCUMENT_TABLE_PERMISSION,
       documentUsersRelationPermission: DOCUMENT_USERS_RELATION_PERMISSION,
+      assetTablePermission: ASSET_TABLE_PERMISSION,
+      assetUsersRelationPermission: ASSET_USERS_RELATION_PERMISSION,
       createPermission,
       decodedActiveCanvasId: decoded.history.present.activeCanvasId,
       decodedNodeCount: decoded.history.present.documents.root.model.nodes.length,

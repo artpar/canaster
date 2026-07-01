@@ -1,7 +1,7 @@
-import type { DaptinJsonApiSingleResponse } from 'daptin-client';
 import { isImageAssetMime, isSupportedWorkspaceAssetFile } from '../../core/workspaceAssetTypes';
 import { isWorkspacePreviewAssetFileName } from '../../core/workspacePreviewAssetFileName';
 import { getDaptinClient, getDaptinEndpoint, getToken, normalizeDaptinError, requireUsableStoredToken } from './daptinClient';
+import { daptinActionFailureMessage } from './daptinActionFailureMessage';
 
 export type CanasterAssetSummary = {
   id: string;
@@ -13,6 +13,8 @@ export type CanasterAssetSummary = {
 export type CanasterAssetObject = CanasterAssetSummary & {
   objectUrl: string;
 };
+
+export type AssetVisibility = 'private' | 'public';
 
 type DaptinAssetAttributes = {
   name?: string;
@@ -39,7 +41,8 @@ type DaptinBlobFileObject = {
 };
 
 const ASSET_TABLE = 'asset';
-const PRIVATE_PERMISSION = 16256;
+const SET_ASSET_PRIVATE_ACTION = 'set_canaster_asset_private';
+const SET_ASSET_PUBLIC_ACTION = 'set_canaster_asset_public';
 const modelLoad = { promise: null as Promise<void> | null };
 const objectUrls = new Map<string, string>();
 
@@ -56,7 +59,7 @@ export async function uploadWorkspaceAsset(file: File): Promise<CanasterAssetSum
     if (!created?.data) throw new Error('Daptin asset create did not return a row');
     const ref = assetId(created.data as DaptinAssetRow);
     if (!ref) throw new Error('Daptin asset create did not return a reference id');
-    await updateAsset(ref, { permission: PRIVATE_PERMISSION });
+    await setAssetVisibility(ref, 'private');
     return summaryFromRow(created.data as DaptinAssetRow, ref);
   });
 }
@@ -113,6 +116,17 @@ export function releaseAssetObjectUrls(): void {
   objectUrls.clear();
 }
 
+export async function setAssetVisibility(assetRef: string, visibility: AssetVisibility): Promise<void> {
+  return authenticatedAssetRequest('Could not update file visibility', async () => {
+    await ensureAssetModelLoaded();
+    const response = await getDaptinClient().actionManager.doAction(ASSET_TABLE, assetVisibilityActionName(visibility), {}, {
+      referenceId: assetRef,
+    });
+    const failureMessage = daptinActionFailureMessage(response);
+    if (failureMessage) throw new Error(failureMessage);
+  });
+}
+
 async function authenticatedAssetRequest<T>(fallbackMessage: string, run: () => Promise<T>): Promise<T> {
   try {
     requireUsableStoredToken();
@@ -132,15 +146,6 @@ async function ensureAssetModelLoaded(): Promise<void> {
       });
   }
   return modelLoad.promise;
-}
-
-async function updateAsset(assetRef: string, attributes: DaptinAssetAttributes): Promise<DaptinJsonApiSingleResponse<DaptinAssetAttributes>> {
-  const update = getDaptinClient().jsonApi.update as unknown as (
-    typeName: string,
-    payload: DaptinAssetAttributes & { id: string },
-  ) => Promise<DaptinJsonApiSingleResponse<DaptinAssetAttributes>>;
-  if (!update) throw new Error('daptin-client jsonApi.update is unavailable');
-  return update.call(getDaptinClient().jsonApi, ASSET_TABLE, { id: assetRef, ...attributes });
 }
 
 async function encodeAssetFile(file: File): Promise<DaptinBlobFileObject> {
@@ -170,6 +175,10 @@ function objectUrlForAsset(assetRef: string, blob: Blob): { objectUrl: string } 
   const objectUrl = URL.createObjectURL(blob);
   objectUrls.set(assetRef, objectUrl);
   return { objectUrl };
+}
+
+function assetVisibilityActionName(visibility: AssetVisibility): string {
+  return visibility === 'public' ? SET_ASSET_PUBLIC_ACTION : SET_ASSET_PRIVATE_ACTION;
 }
 
 function fileToDataUri(file: File): Promise<string> {

@@ -1,10 +1,16 @@
 import {
     CheckCircle2,
     FilePlus2,
+    Globe2,
+    LockKeyhole,
     RefreshCw,
     Save
 } from "lucide-react";
 import type {CanasterDocumentSummary} from "../infra/daptin/canasterDocuments";
+import {
+    type DocumentVisibility,
+    documentVisibilityFromPermission
+} from "../infra/daptin/documentPermissions";
 import {SyncStatusIcon} from "./SyncStatusIcon";
 
 type DocumentsPanelProps = {
@@ -83,6 +89,7 @@ export function DocumentsPanel({
                     <ul className="document-list" aria-label="Saved workspaces">
                         {documents.map((document) => {
                             const active = document.id === activeDocumentId;
+                            const rowVisibility = documentVisibilityFromPermission(document.permission);
                             return (
                                 <li key={document.id} className="document-row">
                                     <button
@@ -91,11 +98,15 @@ export function DocumentsPanel({
                                         aria-current={active ? 'page' : undefined}
                                         onClick={() => onOpenDocument(document.id)}
                                     >
-                    <span className="document-row-title">
-                      {active ? <CheckCircle2 size={14}/> : <span className="document-row-dot"/>}
-                        <span>{document.title}</span>
-                    </span>
-                                        <span>{formatDocumentDate(document.updatedAt)}</span>
+                                        <span className="document-row-title">
+                                            {active ? <CheckCircle2 size={14}/> : <span className="document-row-dot"/>}
+                                            <span>{document.title}</span>
+                                        </span>
+                                        <span className={`document-row-visibility ${rowVisibility}`}>
+                                            {rowVisibility === 'public' ? <Globe2 size={12}/> : <LockKeyhole size={12}/>}
+                                            <span>{visibilityLabel(rowVisibility)}</span>
+                                        </span>
+                                        <span className="document-row-date">{formatDocumentDate(document.updatedAt)}</span>
                                     </button>
                                 </li>
                             );
@@ -117,4 +128,8 @@ export function DocumentsPanel({
             )}
         </section>
     );
+}
+
+function visibilityLabel(visibility: DocumentVisibility | null): string {
+    return visibility === 'public' ? 'Public' : 'Private';
 }

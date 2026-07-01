@@ -1,4 +1,96 @@
 Actions:
+  - Name: set_canaster_document_private
+    OnType: document
+    InstanceOptional: false
+    Label: Make Canaster document private
+    Permission: 2085120
+    InFields: []
+    OutFields:
+      - Type: client.notify
+        Method: ACTIONRESPONSE
+        Condition: '!subject.user_account_id.toString() != user.reference_id.toString()'
+        SkipInResponse: false
+        Attributes:
+          type: error
+          message: Only the owner can change workspace visibility.
+      - Type: document
+        Method: PATCH
+        Reference: document
+        Condition: '!subject.user_account_id.toString() == user.reference_id.toString()'
+        SkipInResponse: false
+        Attributes:
+          reference_id: $subject.reference_id
+          permission: 16256
+
+  - Name: set_canaster_document_public
+    OnType: document
+    InstanceOptional: false
+    Label: Make Canaster document public
+    Permission: 2085120
+    InFields: []
+    OutFields:
+      - Type: client.notify
+        Method: ACTIONRESPONSE
+        Condition: '!subject.user_account_id.toString() != user.reference_id.toString()'
+        SkipInResponse: false
+        Attributes:
+          type: error
+          message: Only the owner can change workspace visibility.
+      - Type: document
+        Method: PATCH
+        Reference: document
+        Condition: '!subject.user_account_id.toString() == user.reference_id.toString()'
+        SkipInResponse: false
+        Attributes:
+          reference_id: $subject.reference_id
+          permission: 16259
+
+  - Name: set_canaster_asset_private
+    OnType: asset
+    InstanceOptional: false
+    Label: Make Canaster asset private
+    Permission: 2085120
+    InFields: []
+    OutFields:
+      - Type: client.notify
+        Method: ACTIONRESPONSE
+        Condition: '!subject.user_account_id.toString() != user.reference_id.toString()'
+        SkipInResponse: false
+        Attributes:
+          type: error
+          message: Only the owner can change file visibility.
+      - Type: asset
+        Method: PATCH
+        Reference: asset
+        Condition: '!subject.user_account_id.toString() == user.reference_id.toString()'
+        SkipInResponse: false
+        Attributes:
+          reference_id: $subject.reference_id
+          permission: 16256
+
+  - Name: set_canaster_asset_public
+    OnType: asset
+    InstanceOptional: false
+    Label: Make Canaster asset public
+    Permission: 2085120
+    InFields: []
+    OutFields:
+      - Type: client.notify
+        Method: ACTIONRESPONSE
+        Condition: '!subject.user_account_id.toString() != user.reference_id.toString()'
+        SkipInResponse: false
+        Attributes:
+          type: error
+          message: Only the owner can change file visibility.
+      - Type: asset
+        Method: PATCH
+        Reference: asset
+        Condition: '!subject.user_account_id.toString() == user.reference_id.toString()'
+        SkipInResponse: false
+        Attributes:
+          reference_id: $subject.reference_id
+          permission: 16259
+
   - Name: get_canaster_document_by_public_path
     OnType: document
     InstanceOptional: true

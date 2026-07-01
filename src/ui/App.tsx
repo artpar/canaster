@@ -29,9 +29,14 @@ import {
     loadDocumentDetails,
     requestEmailOtp,
     saveDocument,
+    setDocumentVisibility,
     signOut,
     verifyEmailOtp,
 } from '../infra/daptin/canasterDocuments';
+import {
+    type DocumentVisibility,
+    documentVisibilityFromPermission
+} from '../infra/daptin/documentPermissions';
 import {loadAssetObject, uploadImageAsset, uploadWorkspaceAsset} from '../infra/daptin/assets';
 import {
     isLocalAssetId,
@@ -426,6 +431,7 @@ export function App() {
     const urlStateReadyRef = useRef(!pendingUrlStateRef.current);
     const preserveShareUrlRef = useRef(Boolean(initialUrlStateRef.current?.shareUsername && initialUrlStateRef.current.shareSlug));
     const documentOpenRequestIdRef = useRef(0);
+    const ignoreActiveDocumentLiveUntilRef = useRef<{ documentRef: string; until: number } | null>(null);
     const [accountOpen, setAccountOpen] = useState(false);
     const [arrangeMenuOpen, setArrangeMenuOpen] = useState(false);
     const [arrangeMenuPosition, setArrangeMenuPosition] = useState<ArrangeMenuPosition | null>(null);
@@ -492,6 +498,16 @@ export function App() {
         chromeState.collection,
         canvasThemeMenuTarget?.canvasId ?? chromeState.collection.activeCanvasId
     );
+    const activeDocument = useMemo(
+        () => documents.find((document) => document.id === activeDocumentId) ?? null,
+        [activeDocumentId, documents]
+    );
+    const activeDocumentVisibility = activeDocument ? documentVisibilityFromPermission(activeDocument.permission) : null;
+    const currentPublicOwner = signedIn
+        ? publicAccountSlugFromIdentity(nameFromStoredToken(), authEmail || emailFromStoredToken())
+        : '';
+    const activeDocumentEditable = Boolean(activeDocument && currentPublicOwner &&
+        activeDocument.publicOwner === currentPublicOwner);
     const viewportControlMenuState = useMemo(() => {
         if (arrangeMenuOpen && arrangeMenuTarget) {
             return {
@@ -984,6 +1000,14 @@ export function App() {
             const rows = await refreshDocuments();
             const liveDocumentRef = liveDocumentId(event);
             const currentDocumentRef = activeDocumentIdRef.current;
+            const ignoredLiveUpdate = ignoreActiveDocumentLiveUntilRef.current;
+            if (ignoredLiveUpdate && Date.now() > ignoredLiveUpdate.until) {
+                ignoreActiveDocumentLiveUntilRef.current = null;
+            }
+            if (ignoredLiveUpdate && liveDocumentRef === ignoredLiveUpdate.documentRef &&
+                Date.now() <= ignoredLiveUpdate.until) {
+                return;
+            }
             if (!liveDocumentRef || !currentDocumentRef || liveDocumentRef !== currentDocumentRef) return;
             if (syncStatusRef.current === 'saving' || syncStatusRef.current === 'loading') return;
             const currentSnapshot = workspaceRef.current?.getWorkspaceSnapshot();
@@ -1231,6 +1255,9 @@ export function App() {
     const handleCopyWorkspaceLink = useCallback(async () => {
         try {
             if (!activeDocumentId) throw new Error('Save online before copying a workspace link.');
+            if (activeDocumentVisibility !== 'public') {
+                throw new Error('Make this workspace public before copying a share link.');
+            }
             const publicOwner = publicAccountSlugFromIdentity(nameFromStoredToken(), authEmail || emailFromStoredToken());
             if (!publicOwner) throw new Error('Sign in again before copying a workspace link.');
             await copyTextToClipboard(shareDocumentUrl(publicOwner, safeDocumentSlug(documentTitle)));
@@ -1239,7 +1266,59 @@ export function App() {
             setSyncStatus((current) => current === 'saving' || current === 'loading' ? current : 'error');
             setSyncMessage(error instanceof Error ? error.message : 'Could not copy workspace link.');
         }
-    }, [activeDocumentId, authEmail, documentTitle]);
+    }, [activeDocumentId, activeDocumentVisibility, authEmail, documentTitle]);
+
+    const handleSetDocumentVisibility = useCallback(async (visibility: DocumentVisibility) => {
+        if (!signedIn) {
+            setAuthStep('email');
+            setSidePanelOpen(true);
+            setAccountOpen(true);
+            setSyncStatus('anonymous');
+            setSyncMessage('Sign in before changing workspace visibility');
+            return;
+        }
+        if (!activeDocumentId) {
+            setSyncStatus('anonymous');
+            setSyncMessage('Save online before changing workspace visibility');
+            return;
+        }
+        if (!activeDocumentEditable) {
+            setSyncStatus('error');
+            setSyncMessage('Only the owner can change workspace visibility');
+            return;
+        }
+        if (activeDocumentVisibility === visibility) return;
+        const currentSnapshot = workspaceRef.current?.getWorkspaceSnapshot();
+        const hasUnsavedWorkspaceChanges = syncStatusRef.current === 'dirty' ||
+            Boolean(currentSnapshot && snapshotSignature(currentSnapshot) !== lastSavedSnapshotSignatureRef.current);
+        setSyncStatus('saving');
+        setSyncMessage(visibility === 'public' ? 'Making workspace public' : 'Making workspace private');
+        try {
+            ignoreActiveDocumentLiveUntilRef.current = { documentRef: activeDocumentId, until: Date.now() + 10000 };
+            await setDocumentVisibility(activeDocumentId, visibility);
+            ignoreActiveDocumentLiveUntilRef.current = { documentRef: activeDocumentId, until: Date.now() + 10000 };
+            await refreshDocuments();
+            if (hasUnsavedWorkspaceChanges) {
+                setSyncStatus('dirty');
+                setSyncMessage(visibility === 'public'
+                    ? 'Workspace is public. Unsaved online changes'
+                    : 'Workspace is private. Unsaved online changes');
+            } else {
+                setSyncStatus('clean');
+                setSyncMessage(visibility === 'public' ? 'Workspace is public' : 'Workspace is private');
+            }
+        } catch (error) {
+            if (await recoverSessionError(error)) return;
+            setSyncStatus('error');
+            const fallback = visibility === 'public'
+                ? 'Could not make this workspace public. Check access and try again.'
+                : 'Could not make this workspace private. Check access and try again.';
+            const apiError = normalizeDaptinError(error, fallback);
+            setSyncMessage(apiError.kind === 'permission'
+                ? 'Only the owner can change workspace visibility'
+                : apiError.message || fallback);
+        }
+    }, [activeDocumentEditable, activeDocumentId, activeDocumentVisibility, recoverSessionError, refreshDocuments, signedIn]);
 
     const handleCopyWorkspaceDocument = useCallback(async () => {
         try {
@@ -1784,6 +1863,14 @@ export function App() {
                     buttonRef: addPanelButtonRef,
                     open     : addPanelMenuOpen && !addPanelMenuTarget,
                     onToggle : handleToggleAddPanelMenu
+                }}
+                visibility={{
+                    active     : activeDocumentVisibility,
+                    editable   : activeDocumentEditable,
+                    signedIn,
+                    busy       : syncStatus === 'loading' || syncStatus === 'saving',
+                    onCopyLink : () => void handleCopyWorkspaceLink(),
+                    onSet      : (visibility) => void handleSetDocumentVisibility(visibility)
                 }}
             />
             {exportMenuOpen ? (<ExportMenu

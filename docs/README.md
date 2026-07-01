@@ -15,12 +15,13 @@ Read these first:
 9. `product-complete-remaining-dents-report.md` - product-completeness and residual-risk audit that identified the remaining dents.
 10. `canway-technical-dents-audit-report.md` - latest full technical-dents audit before the product-complete pass.
 11. `canvas-foundation-gap-closure-report.md` - earlier browser-probe automation, accessibility boundary, multi-touch policy, churn, and model-shape evidence.
+12. `document-visibility-implementation.md` - current private/public document visibility contract backed by Daptin `document.permission`, with group sharing explicitly deferred.
 
 Historical audit reports and goal prompts in this directory are useful for provenance, but they may describe issues that were later fixed or reclassified. Treat them as audit history unless a latest report explicitly references them as current evidence.
 
-Source-owned project surface is the React/Vite frontend, canvas engine, native nested-canvas runtime, fixture/profile tooling, and docs. `dist/` is generated build output and `node_modules/` is installed dependency output; neither should be treated as authored source.
+Source-owned project surface is the React/Vite frontend, canvas engine, native nested-canvas runtime, Daptin adapter boundary, fixture/profile tooling, and docs. `dist/` is generated build output and `node_modules/` is installed dependency output; neither should be treated as authored source.
 
-Out of scope for the current repo: ER diagrams, database schema, backend API, auth, persistence architecture, routing, collaboration, and export implementation. Those are product-layer tasks unless corresponding code is added.
+Out of scope for the current repo: custom Canaster backend services, ER diagrams for new app-owned tables, collaboration, and normalized persistence models. Daptin-backed auth, document persistence, asset storage, routing, and visibility are in scope only through the existing Daptin boundary.
 
 Local verification gate:
 

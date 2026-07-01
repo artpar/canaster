@@ -3,11 +3,14 @@ import { safeDocumentSlug } from '../../core/documentSlug';
 import type { CanvasWorkspaceSnapshot } from '../../domain/documentTypes';
 import { hydrateWorkspaceSnapshot } from '../../domain/workspaceHistory';
 import { clearToken, ensureDaptinModelsLoaded, getDaptinClient, normalizeDaptinError, requireUsableStoredToken, setToken } from './daptinClient';
+import { daptinActionFailureMessage } from './daptinActionFailureMessage';
+import type { DocumentVisibility } from './documentPermissions';
 
 export type CanasterDocumentSummary = {
   id: string;
   title: string;
   publicOwner: string;
+  ownerAccountId: string;
   slug: string;
   path: string;
   permission: number;
@@ -26,11 +29,17 @@ type DaptinDocumentAttributes = {
   mime_type?: string;
   document_content?: string;
   permission?: number;
+  user_account_id?: string;
   updated_at?: string;
   updatedAt?: string;
   reference_id?: string;
   referenceId?: string;
 };
+
+type DaptinDocumentWritableAttributes = Pick<
+  DaptinDocumentAttributes,
+  'document_name' | 'document_path' | 'document_extension' | 'mime_type' | 'document_content'
+>;
 
 type DaptinDocumentRow = {
   id?: string;
@@ -45,10 +54,10 @@ type DaptinFileObject = {
   type: 'application/json';
 };
 
-const PRIVATE_PERMISSION = 16256;
-const PUBLIC_READ_PERMISSION = 16259;
 const REQUEST_EMAIL_OTP_ACTION = 'request_canaster_email_otp';
 const VERIFY_EMAIL_OTP_ACTION = 'verify_canaster_email_otp';
+const SET_DOCUMENT_PRIVATE_ACTION = 'set_canaster_document_private';
+const SET_DOCUMENT_PUBLIC_ACTION = 'set_canaster_document_public';
 
 export async function requestEmailOtp(input: { email: string }): Promise<void> {
   return daptinRequest('Could not send a sign-in code', async () => {
@@ -111,7 +120,7 @@ export async function createDocument(title: string, snapshot: CanvasWorkspaceSna
     const ref = documentId(created.data as DaptinDocumentRow);
     if (!ref) throw new Error('Daptin document create did not return a reference id');
     const name = documentStorageName(publicOwner, title);
-    await updateDocument(ref, { permission: PRIVATE_PERMISSION });
+    await executeDocumentVisibilityAction(ref, 'private');
     await updateDocument(ref, {
       document_name: name,
       document_path: `/canaster/documents/${ref}.canaster.json`,
@@ -175,13 +184,19 @@ export async function findDocumentByPublicPath(publicOwner: string, slug: string
 
 export async function makeDocumentPrivate(documentRef: string): Promise<void> {
   return authenticatedDaptinRequest('Could not make this workspace private', async () => {
-    await updateDocument(documentRef, { permission: PRIVATE_PERMISSION });
+    await executeDocumentVisibilityAction(documentRef, 'private');
   });
 }
 
 export async function makeDocumentPublic(documentRef: string): Promise<void> {
   return authenticatedDaptinRequest('Could not make this workspace public', async () => {
-    await updateDocument(documentRef, { permission: PUBLIC_READ_PERMISSION });
+    await executeDocumentVisibilityAction(documentRef, 'public');
+  });
+}
+
+export async function setDocumentVisibility(documentRef: string, visibility: DocumentVisibility): Promise<void> {
+  return authenticatedDaptinRequest('Could not update workspace visibility', async () => {
+    await executeDocumentVisibilityAction(documentRef, visibility);
   });
 }
 
@@ -200,14 +215,23 @@ async function getDocumentRow(documentRef: string): Promise<DaptinDocumentRow> {
   return response.data as DaptinDocumentRow;
 }
 
-async function updateDocument(documentRef: string, attributes: DaptinDocumentAttributes): Promise<DaptinJsonApiSingleResponse<DaptinDocumentAttributes>> {
+async function updateDocument(documentRef: string, attributes: DaptinDocumentWritableAttributes): Promise<DaptinJsonApiSingleResponse<DaptinDocumentAttributes>> {
   await ensureDaptinModelsLoaded();
   const update = getDaptinClient().jsonApi.update as unknown as (
     typeName: string,
-    payload: DaptinDocumentAttributes & { id: string },
+    payload: DaptinDocumentWritableAttributes & { id: string },
   ) => Promise<DaptinJsonApiSingleResponse<DaptinDocumentAttributes>>;
   if (!update) throw new Error('daptin-client jsonApi.update is unavailable');
   return update.call(getDaptinClient().jsonApi, 'document', { id: documentRef, ...attributes });
+}
+
+async function executeDocumentVisibilityAction(documentRef: string, visibility: DocumentVisibility): Promise<void> {
+  await ensureDaptinModelsLoaded();
+  const response = await getDaptinClient().actionManager.doAction('document', documentVisibilityActionName(visibility), {}, {
+    referenceId: documentRef,
+  });
+  const failureMessage = daptinActionFailureMessage(response);
+  if (failureMessage) throw new Error(failureMessage);
 }
 
 async function authenticatedDaptinRequest<T>(fallbackMessage: string, run: () => Promise<T>): Promise<T> {
@@ -228,22 +252,6 @@ async function daptinRequest<T>(fallbackMessage: string, run: () => Promise<T>):
 
 function encodeSnapshotContent(name: string, snapshot: CanvasWorkspaceSnapshot): string {
   return JSON.stringify([{ name, file: encodeJsonDataUri(hydrateWorkspaceSnapshot(snapshot)), type: 'application/json' } satisfies DaptinFileObject]);
-}
-
-function daptinActionFailureMessage(response: unknown): string {
-  if (!Array.isArray(response)) return '';
-  for (const item of response) {
-    if (!isRecord(item) || item.ResponseType !== 'client.notify' || !isRecord(item.Attributes)) continue;
-    const type = item.Attributes.type;
-    if (type !== 'error' && type !== 'failed') continue;
-    const message = item.Attributes.message;
-    return typeof message === 'string' && message.trim() ? message : 'Daptin action failed';
-  }
-  return '';
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
 }
 
 function decodeSnapshotContent(documentContent: string): CanvasWorkspaceSnapshot {
@@ -291,6 +299,7 @@ function documentSummary(row: DaptinDocumentRow): CanasterDocumentSummary {
     id: documentId(row),
     title,
     publicOwner: documentOwnerSlug(row),
+    ownerAccountId: String(rowAttr(row, 'user_account_id') ?? ''),
     slug: safeDocumentSlug(title),
     path: String(rowAttr(row, 'document_path') ?? ''),
     permission: Number(rowAttr(row, 'permission') ?? 0),
@@ -301,6 +310,10 @@ function documentSummary(row: DaptinDocumentRow): CanasterDocumentSummary {
 function documentStorageName(publicOwner: string, title: string): string {
   const owner = publicOwner.trim() || 'account';
   return `${owner}/${safeDocumentSlug(title)}.canaster.json`;
+}
+
+function documentVisibilityActionName(visibility: DocumentVisibility): string {
+  return visibility === 'public' ? SET_DOCUMENT_PUBLIC_ACTION : SET_DOCUMENT_PRIVATE_ACTION;
 }
 
 function documentOwnerSlug(row: DaptinDocumentRow): string {
