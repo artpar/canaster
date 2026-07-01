@@ -31,6 +31,17 @@ secret_access() {
 
 DAPTIN_DB_CONNECTION_STRING="$(secret_access)"
 
+ensure_password_signin_permission() {
+  docker run --rm --network host postgres:16-alpine \
+    psql "$DAPTIN_DB_CONNECTION_STRING" -v ON_ERROR_STOP=1 -q -P pager=off <<'SQL'
+UPDATE action
+   SET permission = 2085152,
+       updated_at = now()
+ WHERE action_name = 'signin'
+   AND permission <> 2085152;
+SQL
+}
+
 mkdir -p "$STORAGE_DIR"
 chmod 0755 /opt/canaster /opt/canaster/data "$STORAGE_DIR"
 
@@ -64,6 +75,7 @@ docker run -d \
 
 for _ in $(seq 1 60); do
   if curl -fsS -H "Host: api.canaster.in" "http://127.0.0.1/api/world?page%5Bsize%5D=1" >/dev/null; then
+    ensure_password_signin_permission
     exit 0
   fi
   sleep 2

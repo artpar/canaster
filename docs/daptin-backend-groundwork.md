@@ -682,12 +682,12 @@ This is Daptin data/bootstrap work, not a Canaster app-state schema addition.
 
 ## Production Admin State
 
-Current interim state as of 2026-06-18:
+Current production admin/auth state as of 2026-07-01:
 
 - The retained bootstrap administrator account is `admin@canaster.in`.
 - The account credentials are recorded in `production-admin-credentials.md`.
 - `world.become_an_administrator` has already been consumed by the retained bootstrap admin account; later calls from another user return `403`.
-- Password `signin`, `signup`, `reset-password`, and `reset-password-verify` are locked at permission `2085120`; password auth/reset are not the intended frontend auth path.
+- Password `signin` is intentionally guest-executable at permission `2085152`, so users can log in with email and password. Production deploys re-ensure this permission after Daptin starts. `signup`, `reset-password`, and `reset-password-verify` remain locked at permission `2085120` unless those product flows are explicitly reopened.
 - `world.permission(action)=561440` and `world.permission(user_account)=561440`, which grants guest Execute only, without guest Peek/Read/Create/Update/Delete. This lets Daptin dispatch public OTP actions without allowing guest CRUD/listing on `user_account`.
 - Sensitive Daptin tables such as `outbox`, `cloud_store`, `credential`, `certificate`, `user_otp_account`, `mail_account`, `mail_box`, `mail_server`, and `site` are locked at `world.permission=561408`, so guest list/create/update/delete requests return `403`.
 - Public browser auth uses `request_canaster_email_otp` and `verify_canaster_email_otp`, both schema-managed on `user_account` with action permission `32` (`GuestExecute`). The request action creates the user account before OTP generation when the email is new, makes that new account row self-owned with owner `Refer` permission for Daptin's `user_otp_account.otp_of_account` foreign key, then switches the action context to that user before executing Daptin's built-in `otp.generate`.

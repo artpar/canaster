@@ -598,29 +598,39 @@ ProcessTemplateRoute [CanasterDocument] ["/d/:username/:slug"]
 TemplateRoute [/d/:username/:slug] => CanasterDocument
 ```
 
-A public smoke document was created for route verification:
+A temporary smoke document was used for the first route check, then deleted:
 
 ```text
 document_name: canaster-smoke/Production-OG-Smoke.canaster.json
 reference_id: 019f1c45-0648-7744-87c0-23da7db50068
 permission: 16259
+deleted: 2026-07-01
 ```
 
-Browser smoke URL:
+A real existing production document was made routeable and public-readable for
+the durable shared-document verification:
 
 ```text
-https://canaster.in/d/canaster-smoke/Production-OG-Smoke
+document_name: canaster-admin/Canaster-Introduction.canaster.json
+reference_id: 019f197f-9f2c-758b-ab56-ac1cd8794a4d
+permission: 16259
+```
+
+Browser verification URL:
+
+```text
+https://canaster.in/d/canaster-admin/Canaster-Introduction
 ```
 
 Verified server-rendered head:
 
 ```text
-title: Production-OG-Smoke | Canaster
+title: Canaster-Introduction | Canaster
 description: Open this Canaster workspace to inspect, update, and organize work visually.
 robots: index,follow
-canonical: https://canaster.in/d/canaster-smoke/Production-OG-Smoke
-og:title: Production-OG-Smoke
-og:url: https://canaster.in/d/canaster-smoke/Production-OG-Smoke
+canonical: https://canaster.in/d/canaster-admin/Canaster-Introduction
+og:title: Canaster-Introduction
+og:url: https://canaster.in/d/canaster-admin/Canaster-Introduction
 og:image: https://canaster.in/og-image.svg
 twitter:card: summary_large_image
 ```

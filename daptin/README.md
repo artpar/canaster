@@ -23,6 +23,7 @@ Canaster ships an actions-only schema file for email OTP auth:
 - `request_canaster_email_otp` on `user_account` accepts `email`, creates the user account if missing, makes that new account row self-owned with owner `Refer` permission for Daptin's OTP-profile foreign key, switches the action context to that user, generates a Daptin OTP, and sends it through Daptin's `mail.send` SMTP performer.
 - `verify_canaster_email_otp` on `user_account` accepts `email` and `otp`, runs `otp.login.verify`, returns Daptin's `client.store.set` token response, and then provisions the user's Daptin mailbox if it is missing.
 - Both action rows use `Permission: 32` (`GuestExecute`) so the public auth surface is action execution only. This does not grant anonymous CRUD on `document` or `user_account`.
+- Built-in password `signin` must stay guest-executable for users who log in with email and password. Production deploys enforce `action.permission(signin)=2085152` after Daptin starts. Do not relock `signin` to `2085120`; keep `signup`, `reset-password`, and `reset-password-verify` locked unless the product explicitly reopens those flows.
 
 Canaster ships a routed-template action for shared document pages:
 
