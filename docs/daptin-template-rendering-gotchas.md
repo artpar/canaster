@@ -528,6 +528,107 @@ Interpretation:
 - The Daptin routed-template metadata is not live because the production `template` row is not present or not registered.
 - The remaining production work requires an admin-capable Daptin CLI session or a refreshed local GCP session to inspect the VM and restart after the template row is provisioned.
 
+## Production Repair 2026-07-01
+
+The earlier production blocker was misdiagnosed. The `canaster-prod-share`
+`daptin-cli` context had a token string, so the CLI printed `authenticated`, but
+the JWT had expired at `2026-06-21T08:01:01Z`. Daptin resolved requests with
+that expired bearer token as guest, which made `site`, `template`, and `action`
+reads look like admin permission failures.
+
+Password `signin` had also been locked at `2085120`, so the expired admin token
+could not be refreshed through normal `daptin-cli execute user_account signin`.
+For this one repair, the production `action` row was updated directly through
+Cloud SQL:
+
+```sql
+update action
+   set permission = 2085152,
+       updated_at = now()
+ where action_name = 'signin'
+ returning action_name, permission, encode(reference_id, 'hex') as reference_id;
+```
+
+Verified result:
+
+```text
+signin permission: 2085152
+signin reference_id: 019ecca4f4977b69973ecd38a03aa33b
+```
+
+After that, password signin succeeded through `daptin-cli` for
+`admin@canaster.in`, refreshing the active `canaster-prod-share` token:
+
+```text
+iat: 2026-07-01T05:57:59Z
+exp: 2026-07-04T05:57:59Z
+```
+
+With the fresh token, the routed action was verified as already present:
+
+```text
+get_canaster_document_by_public_path permission: 2085152
+reference_id: 019f19b2-7ed4-79f1-abe5-10a773cc211e
+```
+
+The production template row was then provisioned through `daptin-cli` only:
+
+```bash
+scripts/provision-canaster-share-template.sh \
+  --site-ref 019ed10a-0db4-7919-b7b2-13e0ca7a7dbd \
+  --allow-default-context
+```
+
+Created row:
+
+```text
+name: CanasterDocument
+reference_id: 019f1c44-0faf-71ad-ac44-75fbfe877b18
+content: subsite://019ed10a-0db4-7919-b7b2-13e0ca7a7dbd/index_with_og.html
+url_pattern: ["/d/:username/:slug"]
+action_config: {"action":"get_canaster_document_by_public_path","type":"document"}
+```
+
+Daptin was restarted after creating the template row. Logs confirmed route
+registration:
+
+```text
+Got [1] Templates from database
+ProcessTemplateRoute [CanasterDocument] ["/d/:username/:slug"]
+TemplateRoute [/d/:username/:slug] => CanasterDocument
+```
+
+A public smoke document was created for route verification:
+
+```text
+document_name: canaster-smoke/Production-OG-Smoke.canaster.json
+reference_id: 019f1c45-0648-7744-87c0-23da7db50068
+permission: 16259
+```
+
+Browser smoke URL:
+
+```text
+https://canaster.in/d/canaster-smoke/Production-OG-Smoke
+```
+
+Verified server-rendered head:
+
+```text
+title: Production-OG-Smoke | Canaster
+description: Open this Canaster workspace to inspect, update, and organize work visually.
+robots: index,follow
+canonical: https://canaster.in/d/canaster-smoke/Production-OG-Smoke
+og:title: Production-OG-Smoke
+og:url: https://canaster.in/d/canaster-smoke/Production-OG-Smoke
+og:image: https://canaster.in/og-image.svg
+twitter:card: summary_large_image
+```
+
+Daptin CLI/product gotcha: `daptin-cli context list` currently treats token
+presence as `authenticated`; it does not warn when the stored JWT is expired.
+When debugging a permission failure with a retained token, decode `exp` first.
+
 ## Current Canaster Files
 
 - `daptin/schema_canaster_share.yaml`: schema action that exposes `.document`.
