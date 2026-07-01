@@ -19,6 +19,28 @@ export function isEmbeddableUrl(raw: string, options: { allowLocalHttp?: boolean
   return Boolean(normalizeEmbedUrl(raw, options));
 }
 
+export function embedFrameUrlForUrl(raw: string): string {
+  try {
+    const url = new URL(raw);
+    const host = url.hostname.replace(/^www\./, '').toLowerCase();
+    if (host === 'youtu.be') {
+      const videoId = url.pathname.split('/').filter(Boolean)[0];
+      return videoId ? `https://www.youtube.com/embed/${encodeURIComponent(videoId)}` : url.href;
+    }
+    if (host === 'youtube.com' || host === 'm.youtube.com') {
+      const videoId = url.searchParams.get('v');
+      return videoId ? `https://www.youtube.com/embed/${encodeURIComponent(videoId)}` : url.href;
+    }
+    if (host === 'vimeo.com') {
+      const videoId = url.pathname.split('/').filter(Boolean)[0];
+      return videoId ? `https://player.vimeo.com/video/${encodeURIComponent(videoId)}` : url.href;
+    }
+    return url.href;
+  } catch {
+    return raw;
+  }
+}
+
 export function embedTitleForUrl(raw: string): string {
   try {
     const url = new URL(raw);

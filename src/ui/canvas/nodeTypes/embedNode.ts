@@ -1,6 +1,7 @@
 import { asEnum, asString } from '../../../core/nodeData';
 import {
   embedProviderForUrl,
+  embedFrameUrlForUrl,
   embedTitleForUrl,
   normalizeEmbedUrl,
   type EmbedAspectRatio,
@@ -8,7 +9,6 @@ import {
 } from '../../../core/embedUrl';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import type { JsonObject } from '../../../core/nodePrimitives';
-import { drawNodeBodyLines, drawNodeMeta, nodeLayout, wrapText } from '../nodeRendering';
 import { prepareInlineEditorMount, stopEvent } from '../inlineEditorDom';
 import { nodeEditInteractionRegion } from './nodeContentInteractionRegion';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
@@ -63,30 +63,16 @@ export const embedNodeDefinition: NodeDefinition<EmbedNodeData> = defineNodeType
 });
 
 function drawEmbedPreview(ctx: CanvasRenderingContext2D, rect: NodeContentRect, data: EmbedNodeData, theme: CanvasTheme) {
-  const layout = nodeLayout(theme);
   const normalized = normalizeEmbedUrl(data.url, { allowLocalHttp: allowLocalHttpForCurrentHost() });
-  const title = data.title || (normalized ? embedTitleForUrl(normalized) : 'Web preview');
-  const status = normalized ? `${data.provider.toUpperCase()} preview` : 'Add a safe web link';
-  drawNodeMeta(ctx, rect, status, theme, layout.labelLineHeight * 0.35);
-
-  const frame = {
-    x: rect.x + layout.insetX,
-    y: rect.y + layout.contentY + layout.labelLineHeight,
-    w: Math.max(0, rect.w - layout.insetX * 2),
-    h: Math.max(0, rect.h - layout.contentY - layout.labelLineHeight * 2),
-  };
   ctx.save();
   ctx.strokeStyle = normalized ? theme.selected : theme.nodeBorder;
   ctx.fillStyle = theme.bg;
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.roundRect(frame.x, frame.y, frame.w, frame.h, theme.nodeControlRadius);
+  ctx.roundRect(rect.x, rect.y, rect.w, rect.h, theme.nodeControlRadius);
   ctx.fill();
   ctx.stroke();
   ctx.restore();
-
-  const lines = wrapText(ctx, normalized ? title : 'Paste or enter an HTTPS link', Math.max(0, frame.w - layout.insetX * 2), 3);
-  drawNodeBodyLines(ctx, frame, lines, theme, { y: frame.y + layout.contentY });
 }
 
 function createEmbedEditor(mount: HTMLElement, data: EmbedNodeData, commit: (nextData: EmbedNodeData) => void, close: () => void) {
@@ -159,9 +145,11 @@ function createEmbedEditor(mount: HTMLElement, data: EmbedNodeData, commit: (nex
     const iframe = document.createElement('iframe');
     iframe.className = 'embed-editor-frame';
     iframe.title = data.title || embedTitleForUrl(normalized);
-    iframe.src = normalized;
+    iframe.src = embedFrameUrlForUrl(normalized);
     iframe.loading = 'lazy';
     iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+    iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+    iframe.allowFullscreen = true;
     iframe.sandbox.add('allow-same-origin', 'allow-scripts', 'allow-popups', 'allow-forms');
     preview.append(iframe);
   };

@@ -23,6 +23,7 @@ type KeyboardShortcutsContextValue = {
 type ShortcutModifierEvent = {
     ctrlKey: boolean;
     metaKey: boolean;
+    shiftKey: boolean;
 };
 
 const KeyboardShortcutsContext = createContext<KeyboardShortcutsContextValue | null>(null);
@@ -75,6 +76,10 @@ export function useKeyboardShortcut(shortcut: KeyboardShortcut) {
 
 export function hasMetaOrCtrlShortcutModifier(event: ShortcutModifierEvent): boolean {
     return event.metaKey || event.ctrlKey;
+}
+
+export function hasSelectionShortcutModifier(event: ShortcutModifierEvent): boolean {
+    return event.shiftKey || hasMetaOrCtrlShortcutModifier(event);
 }
 
 function matchesShortcut(event: KeyboardEvent, shortcut: KeyboardShortcut) {

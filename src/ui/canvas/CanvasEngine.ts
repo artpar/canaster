@@ -1,5 +1,7 @@
 import { canvasThemeFor, type CanvasTheme } from './theme';
-import { cloneNodeData } from '../../core/nodeData';
+import { hasSelectionShortcutModifier } from '../KeyboardShortcuts';
+import { asString, cloneNodeData } from '../../core/nodeData';
+import { embedFrameUrlForUrl, embedTitleForUrl, normalizeEmbedUrl } from '../../core/embedUrl';
 import {
   cloneNodeAppearance,
   contentScaleForNode,
@@ -49,8 +51,6 @@ const CULL_MARGIN_SCREEN = 96;
 const SNAP_STEP = GRID_STEP;
 const KEYBOARD_STEP = SNAP_STEP;
 const KEYBOARD_FAST_STEP = SNAP_STEP * 4;
-const COMPACT_NODE_SCALE = 0.22;
-const COMPACT_NODE_COUNT = 350;
 const WHEEL_LINE_PX = 16;
 const WHEEL_PAGE_PX = 640;
 const PREVIEW_FRAME_INTERVAL_MS = 50;
@@ -61,9 +61,20 @@ const NODE_HEADER_HEIGHT = 22;
 const NODE_CONTENT_ZOOM_FACTOR = 1.22;
 const NODE_CONTENT_TOOLBAR_INSET = 8;
 const PRIMARY_NODE_EDIT_REGION_ID = 'edit';
+const MARQUEE_DRAG_THRESHOLD = 3;
 
 type DragState =
   | { mode: 'pan'; pointerId: number; sx: number; sy: number; camX: number; camY: number; moved: boolean }
+  | {
+      mode: 'marquee';
+      pointerId: number;
+      sx: number;
+      sy: number;
+      start: WorldPoint;
+      current: WorldPoint;
+      moved: boolean;
+      initialSelection: CanvasSelectionState;
+    }
   | { mode: 'content-pan'; pointerId: number; sx: number; sy: number; nodeIds: string[]; moved: boolean; command: CanvasCommand | null }
   | {
       mode: 'node';
@@ -142,6 +153,12 @@ type ActiveNodeInteraction = {
   controller: NodeInteractionController;
 };
 
+type EmbedOverlaySlot = {
+  frame: HTMLIFrameElement;
+  root: HTMLDivElement;
+  src: string;
+};
+
 export type CanvasPngCapture = {
   blob: Blob;
   width: number;
@@ -205,6 +222,7 @@ export class CanvasEngine {
   private lastRenderedNodeIds: string[] = [];
   private activeNodeInteraction: ActiveNodeInteraction | null = null;
   private nodeContentToolbarTarget: string | null = null;
+  private embedOverlaySlots = new Map<string, EmbedOverlaySlot>();
 
   constructor(canvas: HTMLCanvasElement, options: EngineOptions = {}) {
     const ctx = canvas.getContext('2d');
@@ -270,6 +288,7 @@ export class CanvasEngine {
     if (this.statusFrame !== null) cancelAnimationFrame(this.statusFrame);
     if (this.throttleTimer !== null) window.clearTimeout(this.throttleTimer);
     this.closeNodeInteraction();
+    this.disposeEmbedOverlays();
     this.inlineLayer?.remove();
     this.resizeObserver.disconnect();
     this.detachInputListeners();
@@ -445,7 +464,7 @@ export class CanvasEngine {
       this.emitStatus();
       return false;
     }
-    if (command.type !== 'select-node') this.closeNodeInteraction();
+    if (command.type !== 'select-node' && command.type !== 'select-nodes') this.closeNodeInteraction();
     const guarded = this.beforeCommand?.(command) ?? command;
     if (guarded === false) {
       this.emitStatus();
@@ -490,6 +509,8 @@ export class CanvasEngine {
         return this.planCreateNode(command.nodeType, command.source, command.at, command.data);
       case 'select-node':
         return this.planSelectNode(command.nodeId, command.source, command.mode ?? 'replace');
+      case 'select-nodes':
+        return this.planSelectNodes(command.nodeIds, command.source);
       case 'select-all-nodes':
         return this.planSelectAllNodes(command.source);
       case 'clear-selection':
@@ -554,6 +575,25 @@ export class CanvasEngine {
     return {
       operations: sameSelectionState(from, to) ? [] : [{ type: 'set-selection', from, to }],
       interaction: sourceInteraction(source, 'selection'),
+    };
+  }
+
+  private planSelectNodes(nodeIds: string[], source: CanvasEditSource): CommandPlan {
+    const requested = new Set(nodeIds);
+    const selectedNodeIds = this.model.nodes
+      .filter((node) => requested.has(node.id) && this.isNodeVisible(node))
+      .map((node) => node.id);
+    const from = this.selectionState();
+    const to = {
+      selectedNodeIds,
+      primarySelectedNodeId: selectedNodeIds[0] ?? null,
+      resizeMode: false,
+    };
+    const count = selectedNodeIds.length;
+    const selectedLabel = source === 'ai' ? 'AI selected' : 'Selected';
+    return {
+      operations: sameSelectionState(from, to) ? [] : [{ type: 'set-selection', from, to }],
+      interaction: count > 1 ? `${selectedLabel} ${count} panes` : count === 1 ? `${selectedLabel} pane` : 'Selection cleared',
     };
   }
 
@@ -812,9 +852,10 @@ export class CanvasEngine {
       if (!intersectsNode(renderNode, cullBounds)) continue;
       visibleNodes.push(renderNode);
     }
-    const compact = this.shouldUseCompactNodes(visibleNodes.length);
-    for (const node of visibleNodes) this.drawNode(node, compact);
-    for (const node of visibleNodes) this.drawNodeHeader(node, compact);
+    for (const node of visibleNodes) this.drawNode(node);
+    for (const node of visibleNodes) this.drawNodeHeader(node);
+    this.drawMarqueeSelection();
+    this.syncEmbedOverlays(visibleNodes, false);
     const renderedNodes = visibleNodes.length;
     this.lastRenderedNodeIds = visibleNodes.map((node) => node.id);
     this.lastRenderedNodes = renderedNodes;
@@ -857,6 +898,23 @@ export class CanvasEngine {
         this.drawLineGrid(axes, []);
         break;
     }
+    ctx.restore();
+    ctx.setLineDash([]);
+  }
+
+  private drawMarqueeSelection() {
+    if (this.drag?.mode !== 'marquee' || !this.drag.moved) return;
+    const rect = marqueeRect(this.drag.start, this.drag.current);
+    const { ctx, theme } = this;
+    ctx.save();
+    ctx.fillStyle = theme.selected;
+    ctx.globalAlpha = 0.12;
+    ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = theme.selected;
+    ctx.lineWidth = 1.5 / Math.max(this.camera.scale, MIN_SCALE);
+    ctx.setLineDash([6 / Math.max(this.camera.scale, MIN_SCALE), 4 / Math.max(this.camera.scale, MIN_SCALE)]);
+    ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
     ctx.restore();
     ctx.setLineDash([]);
   }
@@ -993,18 +1051,18 @@ export class CanvasEngine {
     ctx.restore();
   }
 
-  private drawNode(node: CanvasNode, compact: boolean) {
+  private drawNode(node: CanvasNode) {
     const { ctx } = this;
     const renderNode = this.renderNode(node);
     const theme = this.themeForNode(renderNode);
     const definition = nodeDefinitionFor(renderNode);
     const data = parseNodeData(renderNode);
-    const chrome = this.nodeChromeState(renderNode, compact);
+    const chrome = this.nodeChromeState(renderNode);
     const state = {
       selected: chrome.selected,
       primary: chrome.primary,
       hovered: chrome.hovered,
-      quality: compact ? 'compact' as const : 'normal' as const,
+      quality: 'normal' as const,
       portalPreview: this.portalPreviewState(renderNode),
     };
 
@@ -1033,10 +1091,10 @@ export class CanvasEngine {
     }
   }
 
-  private drawNodeHeader(node: CanvasNode, compact: boolean) {
+  private drawNodeHeader(node: CanvasNode) {
     const renderNode = this.renderNode(node);
     const theme = this.themeForNode(renderNode);
-    const state = this.nodeChromeState(renderNode, compact);
+    const state = this.nodeChromeState(renderNode);
     const definition = nodeDefinitionFor(renderNode);
     const label = describeNode(renderNode).label || definition.displayName;
     const rect = this.nodeHeaderRect(renderNode, theme, label);
@@ -1129,13 +1187,13 @@ export class CanvasEngine {
     };
   }
 
-  private nodeChromeState(node: CanvasNode, compact: boolean): NodeChromeState {
+  private nodeChromeState(node: CanvasNode): NodeChromeState {
     const selected = this.selectedNodeIds.has(node.id) || this.highlightNodeIds.has(node.id);
     return {
       selected,
       primary: node.id === this.primarySelectedNodeId,
       hovered: node.id === this.hoverNodeId,
-      compact,
+      compact: false,
     };
   }
 
@@ -1233,7 +1291,7 @@ export class CanvasEngine {
     if (selectedDragNode) {
       this.closeNodeInteraction();
       if (selectedDragNode.id !== this.primarySelectedNodeId) {
-        const mode = this.selectedNodeIds.has(selectedDragNode.id) || event.shiftKey || event.metaKey || event.ctrlKey ? 'add' : 'replace';
+        const mode = this.selectedNodeIds.has(selectedDragNode.id) || hasSelectionShortcutModifier(event) ? 'add' : 'replace';
         this.applyCommandPlan(this.planSelectNode(selectedDragNode.id, 'pointer', mode), false);
       }
       this.drag = {
@@ -1256,7 +1314,8 @@ export class CanvasEngine {
     const node = this.nodeAt(world);
 
     if (node) {
-      const immediateRegion = event.shiftKey || event.metaKey || event.ctrlKey ? null : this.interactionRegionAt(node, world);
+      const selectionModifier = hasSelectionShortcutModifier(event);
+      const immediateRegion = selectionModifier ? null : this.interactionRegionAt(node, world);
       if (immediateRegion?.activation === 'single') {
         if (!this.selectedNodeIds.has(node.id) || node.id !== this.primarySelectedNodeId) {
           this.executeCommand({ type: 'select-node', nodeId: node.id, mode: 'replace', source: 'pointer' });
@@ -1267,7 +1326,7 @@ export class CanvasEngine {
           return;
         }
       }
-      if (!event.shiftKey && !event.metaKey && !event.ctrlKey && this.selectedNodeIds.has(node.id) && this.isInsideContentPanArea(node, world)) {
+      if (!selectionModifier && this.selectedNodeIds.has(node.id) && this.isInsideContentPanArea(node, world)) {
         const nodeIds = this.nodeContentTargetIdsFor(node.id);
         if (nodeIds.length) {
           this.closeNodeInteraction();
@@ -1288,7 +1347,7 @@ export class CanvasEngine {
           return;
         }
       }
-      const mode = event.shiftKey || event.metaKey || event.ctrlKey ? 'toggle' : this.selectedNodeIds.has(node.id) ? 'add' : 'replace';
+      const mode = selectionModifier ? 'toggle' : this.selectedNodeIds.has(node.id) ? 'add' : 'replace';
       this.executeCommand({ type: 'select-node', nodeId: node.id, mode, source: 'pointer' });
       if (!this.selectedNodeIds.has(node.id)) {
         this.interaction = 'Pointer selection';
@@ -1297,6 +1356,26 @@ export class CanvasEngine {
         return;
       }
       this.interaction = 'Pointer selection';
+      this.markDirty();
+      this.emitStatus();
+      return;
+    }
+
+    if (event.shiftKey) {
+      this.drag = {
+        mode: 'marquee',
+        pointerId: event.pointerId,
+        sx: point.x,
+        sy: point.y,
+        start: world,
+        current: world,
+        moved: false,
+        initialSelection: this.selectionState(),
+      };
+      this.interaction = 'Select panes';
+      this.closeNodeInteraction();
+      this.capturePointer(event.pointerId);
+      this.canvas.style.cursor = 'crosshair';
       this.markDirty();
       this.emitStatus();
       return;
@@ -1355,6 +1434,14 @@ export class CanvasEngine {
       const plan = this.applyPreviewPlan(this.planCommand(command));
       this.drag.command = plan.operations.length ? command : null;
       this.drag.moved = plan.operations.length > 0;
+    } else if (this.drag?.mode === 'marquee') {
+      this.drag.current = world;
+      if (!this.drag.moved && Math.hypot(point.x - this.drag.sx, point.y - this.drag.sy) >= MARQUEE_DRAG_THRESHOLD) this.drag.moved = true;
+      if (this.drag.moved) {
+        this.applyCommandPlan(this.planCommand({ type: 'select-nodes', nodeIds: this.nodeIdsInsideMarquee(this.drag.start, this.drag.current), source: 'pointer' }), false);
+        this.canvas.style.cursor = 'crosshair';
+        this.markDirty();
+      }
     } else if (this.drag?.mode === 'pan') {
       this.camera.x = this.drag.camX + point.x - this.drag.sx;
       this.camera.y = this.drag.camY + point.y - this.drag.sy;
@@ -1603,10 +1690,6 @@ export class CanvasEngine {
     this.emitStatus();
   }
 
-  private shouldUseCompactNodes(visibleCount: number) {
-    return this.camera.scale < COMPACT_NODE_SCALE || visibleCount > COMPACT_NODE_COUNT;
-  }
-
   private renderNode(node: CanvasNode): CanvasNode {
     const preview = this.previewGeometries.get(node.id);
     const pan = this.previewContentPans.get(node.id);
@@ -1647,6 +1730,13 @@ export class CanvasEngine {
       }
     }
     return null;
+  }
+
+  private nodeIdsInsideMarquee(start: WorldPoint, current: WorldPoint): string[] {
+    const rect = marqueeRect(start, current);
+    return this.model.nodes
+      .filter((node) => this.isNodeVisible(node) && nodeInsideRect(this.renderNode(node), rect))
+      .map((node) => node.id);
   }
 
   private selectedResizeNodeAt(point: WorldPoint) {
@@ -1953,15 +2043,26 @@ export class CanvasEngine {
       } else if (drag.mode === 'resize' && drag.moved) {
         this.clearPreview();
         commandCommitted = drag.command ? this.executeCommand(drag.command) : false;
+      } else if (drag.mode === 'marquee' && drag.moved) {
+        commandCommitted = this.executeCommand({ type: 'select-nodes', nodeIds: this.nodeIdsInsideMarquee(drag.start, drag.current), source: 'pointer' });
+      } else if (drag.mode === 'marquee' && !drag.moved) {
+        this.interaction = 'Selection unchanged';
       } else if (drag.mode === 'pan' && drag.moved) {
         this.interaction = 'Pointer pan';
       } else if (drag.mode === 'pan' && !drag.moved) {
         commandCommitted = this.executeCommand({ type: 'clear-selection', source: 'pointer' });
       }
     } else {
-      if (drag.mode === 'pan') this.rollbackPan(drag);
-      else this.clearPreview();
-      this.interaction = 'Interaction canceled';
+      if (drag.mode === 'pan') {
+        this.rollbackPan(drag);
+        this.interaction = 'Interaction canceled';
+      } else if (drag.mode === 'marquee') {
+        this.applySelectionState(drag.initialSelection);
+        this.interaction = 'Selection canceled';
+      } else {
+        this.clearPreview();
+        this.interaction = 'Interaction canceled';
+      }
     }
 
     this.canvas.style.cursor = 'default';
@@ -2160,6 +2261,76 @@ export class CanvasEngine {
     return this.livePortalNodeIds.has(node.id) ? 'live' : 'none';
   }
 
+  private syncEmbedOverlays(visibleNodes: CanvasNode[], compact: boolean): void {
+    const layer = this.inlineLayer;
+    if (!layer || compact) {
+      this.disposeEmbedOverlays();
+      return;
+    }
+    const live = new Set<string>();
+    const portalRects = this.portalLayoutsFor(visibleNodes)
+      .filter((layout) => layout.visible && layout.childCanvasId)
+      .map((layout) => layout.screenRect);
+    for (const [index, node] of visibleNodes.entries()) {
+      if (this.activeNodeInteraction?.nodeId === node.id) continue;
+      const embed = embedOverlayForNode(node);
+      if (!embed) continue;
+      const theme = this.themeForNode(node);
+      const worldRect = this.nodeContentVisualRect(node, this.nodeContentRect(node, theme), theme);
+      const screenRect = this.worldToScreenRect(worldRect);
+      if (screenRect.w < 96 || screenRect.h < 64) continue;
+      if (this.embedOverlayWouldBreakStacking(screenRect, visibleNodes, index, portalRects)) continue;
+      live.add(node.id);
+      this.syncEmbedOverlaySlot(layer, node.id, embed, screenRect);
+    }
+    for (const [nodeId, slot] of this.embedOverlaySlots) {
+      if (live.has(nodeId)) continue;
+      slot.root.remove();
+      this.embedOverlaySlots.delete(nodeId);
+    }
+  }
+
+  private syncEmbedOverlaySlot(layer: HTMLDivElement, nodeId: string, embed: EmbedOverlayData, rect: ScreenRect): void {
+    let slot = this.embedOverlaySlots.get(nodeId);
+    if (!slot) {
+      const root = document.createElement('div');
+      root.className = 'node-embed-preview-mount';
+      root.dataset.nodeId = nodeId;
+      const frame = document.createElement('iframe');
+      frame.className = 'node-embed-preview-frame';
+      frame.loading = 'lazy';
+      frame.referrerPolicy = 'strict-origin-when-cross-origin';
+      frame.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+      frame.allowFullscreen = true;
+      frame.sandbox.add('allow-same-origin', 'allow-scripts', 'allow-popups', 'allow-forms');
+      root.append(frame);
+      layer.append(root);
+      slot = { root, frame, src: '' };
+      this.embedOverlaySlots.set(nodeId, slot);
+    }
+    slot.root.style.left = `${rect.x}px`;
+    slot.root.style.top = `${rect.y}px`;
+    slot.root.style.width = `${Math.max(1, rect.w)}px`;
+    slot.root.style.height = `${Math.max(1, rect.h)}px`;
+    slot.frame.title = embed.title;
+    if (slot.src !== embed.frameUrl) {
+      slot.src = embed.frameUrl;
+      slot.frame.src = embed.frameUrl;
+    }
+  }
+
+  private disposeEmbedOverlays(): void {
+    for (const slot of this.embedOverlaySlots.values()) slot.root.remove();
+    this.embedOverlaySlots.clear();
+  }
+
+  private embedOverlayWouldBreakStacking(rect: ScreenRect, visibleNodes: CanvasNode[], nodeIndex: number, portalRects: ScreenRect[]): boolean {
+    for (let index = nodeIndex + 1; index < visibleNodes.length; index += 1) {
+      if (screenRectsOverlap(rect, this.worldToScreenRect(visibleNodes[index]))) return true;
+    }
+    return portalRects.some((portalRect) => screenRectsOverlap(rect, portalRect));
+  }
+
   private routeNodeAction(nodeId: string, actionId: string, source: CanvasEditSource) {
     return this.onNodeAction?.(nodeId, actionId, source) ?? false;
   }
@@ -2294,6 +2465,28 @@ export class CanvasEngine {
 
 function cloneModel(model: CanvasModel): CanvasModel {
   return { schemaVersion: 2, nodes: model.nodes.map(cloneNode) };
+}
+
+type EmbedOverlayData = {
+  frameUrl: string;
+  title: string;
+};
+
+function embedOverlayForNode(node: CanvasNode): EmbedOverlayData | null {
+  if (node.type !== BuiltInNodeTypes.embed) return null;
+  const rawUrl = asString(node.data.url, '');
+  const normalized = normalizeEmbedUrl(rawUrl, { allowLocalHttp: allowLocalHttpForCurrentHost() });
+  if (!normalized) return null;
+  const title = asString(node.data.title, '') || embedTitleForUrl(normalized);
+  return {
+    frameUrl: embedFrameUrlForUrl(normalized),
+    title,
+  };
+}
+
+function allowLocalHttpForCurrentHost(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 }
 
 function cloneNode(node: CanvasNode): CanvasNode {
@@ -2523,12 +2716,28 @@ function uniqueNodeId(base: string, existingIds: Set<string>) {
   return candidate;
 }
 
+function marqueeRect(start: WorldPoint, current: WorldPoint): NodeGeometry {
+  const x0 = Math.min(start.x, current.x);
+  const y0 = Math.min(start.y, current.y);
+  const x1 = Math.max(start.x, current.x);
+  const y1 = Math.max(start.y, current.y);
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+function nodeInsideRect(node: CanvasNode, rect: NodeGeometry) {
+  return node.x >= rect.x && node.y >= rect.y && node.x + node.w <= rect.x + rect.w && node.y + node.h <= rect.y + rect.h;
+}
+
 function intersectsNode(node: CanvasNode, bounds: VisibleWorldBounds) {
   return !(node.x > bounds.x1 || node.x + node.w < bounds.x0 || node.y > bounds.y1 || node.y + node.h < bounds.y0);
 }
 
 function intersectsRect(rect: { x: number; y: number; w: number; h: number }, bounds: VisibleWorldBounds) {
   return !(rect.x > bounds.x1 || rect.x + rect.w < bounds.x0 || rect.y > bounds.y1 || rect.y + rect.h < bounds.y0);
+}
+
+function screenRectsOverlap(a: ScreenRect, b: ScreenRect) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
 function pointInRect(point: WorldPoint, rect: { x: number; y: number; w: number; h: number }) {
