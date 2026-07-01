@@ -142,25 +142,53 @@ For Canaster:
 
 This matches the current product goal: private/inaccessible shared links render the app/sign-in page, not a Daptin error page.
 
-## OG Images
+## Share Metadata
 
-Do not make workspace preview assets public by default.
+The routed action can derive share metadata from the existing `document.document_content` JSON. Do not add document metadata columns unless the JSON-backed action path proves insufficient.
 
 Why:
 
-- Current preview images are saved as workspace asset references.
-- Private workspaces may contain sensitive content.
-- Automatically using the preview asset as `og:image` would leak private workspace content if the asset permission is widened.
+- Canaster already stores the full `CanvasWorkspaceSnapshot` in `document_content`.
+- The snapshot already contains the root canvas title, root work items, and `history.present.appearance.previewImage`.
+- Daptin action attributes support `!` JavaScript expressions through Goja, including `JSON.parse`, `atob`, array operations, and defensive IIFEs.
 
-Current safe implementation:
+Current shape:
 
-- Server-rendered metadata uses a generic public Canaster OG image.
-- A future public-sharing flow can promote both the document row and its preview asset in one explicit operation.
+- `get_canaster_document_by_public_path` still returns the real `.document` row.
+- The same action also returns `.share_meta` through an `ACTIONRESPONSE`.
+- `index_with_og.html` reads `.share_meta.title`, `.share_meta.description`, `.share_meta.author`, `.share_meta.updated_at`, and `.share_meta.image_asset_id`.
+- The OG image URL is built as `%VITE_DAPTIN_ENDPOINT%/asset/asset/<image_asset_id>/file`.
+- If the snapshot lacks a preview asset id, the template falls back to `%VITE_CANASTER_OG_IMAGE_URL%`.
+
+Important Daptin source behavior:
+
+- `server/subsite/template_handler.go` merges every action response into the render input using `ResponseType` as the key.
+- `server/resource/handle_action.go` creates an `ACTIONRESPONSE` with `ResponseType == model.GetName()`.
+- Therefore `Type: share_meta` + `Method: ACTIONRESPONSE` becomes `.share_meta` in the Go template.
 
 What not to do:
 
-- Do not publish preview assets just because a user copied a link.
-- Do not parse `document_content` server-side unless that becomes an explicit Daptin action/server feature.
+- Do not duplicate title, description, date, or image fields into the document row while they can be derived from the stored snapshot.
+- Do not change asset permissions as part of metadata rendering. Public/private/share/group behavior belongs to the product sharing interface.
+
+2026-07-01 local verification:
+
+- Fresh disposable Daptin `v0.12.26` on `http://localhost:7336`.
+- Route: `http://localhost:7336/d/share-e2e-admin-483921/Metadata-E2E`.
+- Test document: `019f1c81-5720-7049-bcfa-927765fe614b`.
+- The saved `document_content` snapshot had root canvas title `Local OG Metadata Workspace`, root card `Quarterly launch plan`, note text `Share text should come from the saved document JSON.`, and `appearance.previewImage.assetId == 019f1c7e-0000-7000-8000-000000000001`.
+- Browser-rendered title: `Local OG Metadata Workspace | Canaster Local E2E`.
+- Browser-rendered description and `og:description`: `Local OG Metadata Workspace: Quarterly launch plan: Owner checklist, rollout risk, and follow-up timeline - Share text should come from the saved document JSON.`
+- Browser-rendered `og:image` and `twitter:image`: `http://localhost:7336/asset/asset/019f1c7e-0000-7000-8000-000000000001/file`.
+- Browser-rendered image dimensions: `1200` x `630`.
+- Browser-rendered dates normalized to ISO-8601, for example `2026-07-01T07:07:46.336Z`.
+- Browser-rendered author fields: `share-e2e-admin-483921`.
+
+Local CLI gotcha:
+
+- `daptin-cli execute document get_canaster_document_by_public_path ...` failed with `json: cannot unmarshal array into Go struct field DaptinActionResponse.Attributes of type map[string]interface {}` because the existing `.document` response has array attributes.
+- This is a CLI rendering limitation. The routed template path still works because `server/subsite/template_handler.go` consumes the internal action response slice directly.
+- Verify this route with Chrome/template rendering or improve `daptin-cli` to support array-valued action response attributes.
 
 ## Daptin CLI Gotchas
 

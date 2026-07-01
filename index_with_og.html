@@ -10,21 +10,37 @@
 
     <!-- Template-specific tags. Daptin renders these Go-template directives before serving /d/:username/:slug. -->
     <!-- {{if .document}} -->
-      <title>{{if .slug}}{{ .slug }}{{else}}{{ (index .document 0).document_name }}{{end}} | Canaster</title>
-      <meta name="description" content="Open this Canaster workspace to inspect, update, and organize work visually." />
+      <title>{{if .share_meta.title}}{{ .share_meta.title }}{{else}}{{if .slug}}{{ .slug }}{{else}}{{ (index .document 0).document_name }}{{end}}{{end}} | Canaster</title>
+      <meta name="description" content="{{if .share_meta.description}}{{ .share_meta.description }}{{else}}Open this Canaster workspace.{{end}}" />
+      <meta name="author" content="{{ .share_meta.author }}" />
       <meta name="robots" content="index,follow" />
       <link rel="canonical" href="%VITE_CANASTER_PUBLIC_ORIGIN%/d/{{ .username }}/{{ .slug }}" />
-      <meta property="og:type" content="website" />
+      <meta property="og:type" content="article" />
       <meta property="og:site_name" content="Canaster" />
-      <meta property="og:title" content="{{if .slug}}{{ .slug }}{{else}}{{ (index .document 0).document_name }}{{end}}" />
-      <meta property="og:description" content="Open this Canaster workspace to inspect, update, and organize work visually." />
+      <meta property="og:title" content="{{if .share_meta.title}}{{ .share_meta.title }}{{else}}{{if .slug}}{{ .slug }}{{else}}{{ (index .document 0).document_name }}{{end}}{{end}}" />
+      <meta property="og:description" content="{{if .share_meta.description}}{{ .share_meta.description }}{{else}}Open this Canaster workspace.{{end}}" />
       <meta property="og:url" content="%VITE_CANASTER_PUBLIC_ORIGIN%/d/{{ .username }}/{{ .slug }}" />
-      <meta property="og:image" content="%VITE_CANASTER_OG_IMAGE_URL%" />
-      <meta property="og:image:alt" content="Canaster workspace preview" />
+      <meta property="og:image" content="{{if .share_meta.image_asset_id}}%VITE_DAPTIN_ENDPOINT%/asset/asset/{{ .share_meta.image_asset_id }}/file{{else}}%VITE_CANASTER_OG_IMAGE_URL%{{end}}" />
+      <meta property="og:image:alt" content="{{if .share_meta.title}}{{ .share_meta.title }}{{else}}Canaster workspace{{end}} preview" />
+      <!-- {{if .share_meta.image_width}} -->
+        <meta property="og:image:width" content="{{ .share_meta.image_width }}" />
+      <!-- {{end}} -->
+      <!-- {{if .share_meta.image_height}} -->
+        <meta property="og:image:height" content="{{ .share_meta.image_height }}" />
+      <!-- {{end}} -->
+      <!-- {{if .share_meta.published_at}} -->
+        <meta property="article:published_time" content="{{ .share_meta.published_at }}" />
+      <!-- {{end}} -->
+      <!-- {{if .share_meta.updated_at}} -->
+        <meta property="article:modified_time" content="{{ .share_meta.updated_at }}" />
+      <!-- {{end}} -->
+      <!-- {{if .share_meta.author}} -->
+        <meta property="article:author" content="{{ .share_meta.author }}" />
+      <!-- {{end}} -->
       <meta name="twitter:card" content="summary_large_image" />
-      <meta name="twitter:title" content="{{if .slug}}{{ .slug }}{{else}}{{ (index .document 0).document_name }}{{end}}" />
-      <meta name="twitter:description" content="Open this Canaster workspace to inspect, update, and organize work visually." />
-      <meta name="twitter:image" content="%VITE_CANASTER_OG_IMAGE_URL%" />
+      <meta name="twitter:title" content="{{if .share_meta.title}}{{ .share_meta.title }}{{else}}{{if .slug}}{{ .slug }}{{else}}{{ (index .document 0).document_name }}{{end}}{{end}}" />
+      <meta name="twitter:description" content="{{if .share_meta.description}}{{ .share_meta.description }}{{else}}Open this Canaster workspace.{{end}}" />
+      <meta name="twitter:image" content="{{if .share_meta.image_asset_id}}%VITE_DAPTIN_ENDPOINT%/asset/asset/{{ .share_meta.image_asset_id }}/file{{else}}%VITE_CANASTER_OG_IMAGE_URL%{{end}}" />
     <!-- {{end}} -->
     <!-- {{if not .document}} -->
       <title>Canaster</title>
