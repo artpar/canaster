@@ -1,31 +1,26 @@
-import { asString } from '../../../core/nodeData';
+import { normalizeTextNodeData, type TextNodeData } from '../../../domain/textNodeData';
+import { DEFAULT_TEXT_STYLE } from '../../../domain/textStyle';
+import { drawStyledTextBlock } from '../../textStyle/drawStyledTextBlock';
+import { resolveTextStyleForTheme } from '../../textStyle/textStyleTheme';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
-import { createNodeDetailsEditor } from './createNodeDetailsEditor';
-import type { JsonObject } from '../../../core/nodePrimitives';
-import { drawNodeBodyLines, nodeLayout, wrapText } from '../nodeRendering';
+import { createTextNodeEditor } from './createTextNodeEditor';
 import { nodeEditInteractionRegion } from './nodeContentInteractionRegion';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
 
-type TextNodeData = {
-  text: string;
-} & JsonObject;
-
 export const textNodeDefinition: NodeDefinition<TextNodeData> = defineNodeType({
   ...nodeTypeSpecs.text,
   createDefaultData() {
-    return { text: '' };
+    return { text: '', style: DEFAULT_TEXT_STYLE };
   },
   parseData(raw) {
-    return { text: asString(raw.text, '') };
+    return normalizeTextNodeData(raw);
   },
   render({ ctx, data, theme, contentRect, state }) {
-    const layout = nodeLayout(theme);
     if (state.quality === 'compact' && !state.selected && !state.hovered) return;
 
     const text = data.text.trim() ? data.text : 'Empty note';
-    const lines = wrapText(ctx, text, Math.max(0, contentRect.w - layout.insetX * 2), Math.max(1, Math.floor(contentRect.h / layout.bodyLineHeight)));
-    drawNodeBodyLines(ctx, contentRect, lines, theme, { y: contentRect.y + layout.titleY });
+    drawStyledTextBlock(ctx, contentRect, text, resolveTextStyleForTheme(theme, data.style));
   },
   describe({ data }) {
     const label = clipPlainText(firstLine(data.text), 60) || 'Empty note';
@@ -42,16 +37,15 @@ export const textNodeDefinition: NodeDefinition<TextNodeData> = defineNodeType({
   },
   createInteraction(ctx) {
     if (ctx.region.id !== 'edit') return null;
-    return createNodeDetailsEditor<TextNodeData>({
+    return createTextNodeEditor({
       mount: ctx.mount,
-      className: 'node-inline-details-editor node-inline-text-editor',
-      title: 'Note',
-      fields: [
-        { id: 'text', label: 'Text', value: ctx.data.text, rows: 8 },
-      ],
+      data: {
+        ...ctx.data,
+        style: resolveTextStyleForTheme(ctx.theme, ctx.data.style),
+      },
+      theme: ctx.theme,
       commit: (nextData) => ctx.requestCommit(nextData),
       close: ctx.requestClose,
-      buildData: (values) => ({ text: asString(values.text, '') }),
     });
   },
 });

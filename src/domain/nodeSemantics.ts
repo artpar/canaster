@@ -8,6 +8,7 @@ import {
   cloneNodeData,
 } from '../core/nodeData';
 import { normalizeChecklistNodeData, parseChecklistItems } from './checklistNodeData';
+import { normalizeTextNodeData } from './textNodeData';
 import type {CanvasNode, JsonObject, NodeData} from './types';
 
 export type NodeActionDescriptor = {
@@ -85,7 +86,7 @@ export function normalizeNodeData(nodeType: string, raw: unknown): NodeData {
         aspectRatio: asEnum(data.aspectRatio, EMBED_ASPECT_RATIOS, '16:9'),
       };
     case 'text':
-      return {text: asString(data.text, '')};
+      return normalizeTextNodeData(data);
     default:
       return data;
   }

@@ -1,6 +1,9 @@
 export function prepareInlineEditorMount(mount: HTMLElement, className: string) {
   mount.classList.add('node-inline-editor');
-  mount.classList.add(className);
+  const classTokens = className.split(/\s+/).filter(Boolean);
+  for (const token of classTokens) {
+    mount.classList.add(token);
+  }
   mount.addEventListener('pointerdown', stopEvent);
   mount.addEventListener('dblclick', stopEvent);
   mount.addEventListener('wheel', stopEvent);

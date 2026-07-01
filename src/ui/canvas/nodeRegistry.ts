@@ -77,10 +77,12 @@ export type RegisteredNodeAddOption = NodeAddMenuMetadata & {
 };
 
 export function registeredNodeAddOptions(): RegisteredNodeAddOption[] {
-  return registeredNodeDefinitions().map((definition) => ({
-    type: definition.type,
-    ...definition.addMenu,
-  }));
+  return registeredNodeDefinitions()
+    .filter((definition) => definition.type !== cardNodeDefinition.type)
+    .map((definition) => ({
+      type: definition.type,
+      ...definition.addMenu,
+    }));
 }
 
 export function parseNodeData(node: CanvasNode) {

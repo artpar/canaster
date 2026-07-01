@@ -365,6 +365,10 @@ button {
   min-width: min(340px, calc(100vw - 28px));
 }
 
+.node-inline-text-editor {
+  min-width: min(460px, calc(100vw - 28px));
+}
+
 .node-details-editor-panel {
   display: grid;
   gap: var(--canaster-space-xs);
@@ -435,6 +439,73 @@ button {
 
 .node-details-editor-actions .primary:hover {
   background: var(--canaster-color-action-hover);
+}
+
+.text-style-panel {
+  display: grid;
+  gap: var(--canaster-space-xs);
+  padding-top: var(--canaster-space-xxs);
+}
+
+.text-style-panel-section {
+  display: grid;
+  gap: var(--canaster-space-xs);
+  min-width: 0;
+  margin: 0;
+  padding: var(--canaster-space-xs);
+  border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
+  border-radius: var(--canaster-radius-sm);
+}
+
+.text-style-panel-section legend {
+  padding: 0 var(--canaster-space-xxs);
+  color: var(--canaster-color-text-muted);
+  font-size: var(--canaster-font-micro-size);
+  line-height: var(--canaster-line-label);
+}
+
+.text-style-panel-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--canaster-space-xs);
+}
+
+.text-style-panel-field {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  color: var(--canaster-color-text-body);
+  font-size: var(--canaster-font-micro-size);
+  line-height: var(--canaster-line-label);
+}
+
+.text-style-panel-field select,
+.text-style-panel-field input {
+  width: 100%;
+  min-width: 0;
+  box-shadow: none;
+}
+
+.text-style-panel-field input[type='color'] {
+  padding: 3px;
+}
+
+.text-style-panel-checkbox {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  align-self: end;
+  min-height: var(--canaster-input-height);
+  padding: 0 var(--canaster-space-xs);
+  border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
+  border-radius: var(--canaster-radius-control);
+  background: var(--canaster-color-panel-muted);
+}
+
+.text-style-panel-checkbox input[type='checkbox'] {
+  width: 15px;
+  height: 15px;
+  min-width: 15px;
+  accent-color: var(--canaster-color-action-primary);
 }
 
 .image-picker-panel {

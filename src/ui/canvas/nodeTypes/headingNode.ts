@@ -1,11 +1,6 @@
-import {
-  HEADING_NODE_LEVELS,
-  headingNodeLevelLabel,
-  normalizeHeadingNodeData,
-  type HeadingNodeData,
-} from '../../../domain/headingNodeData';
+import { normalizeHeadingNodeData, type HeadingNodeData } from '../../../domain/headingNodeData';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
-import { drawNodeBodyLines, drawNodeMeta, nodeLayout, nodeText, wrapText } from '../nodeRendering';
+import { nodeLayout, nodeText, wrapText } from '../nodeRendering';
 import { createNodeDetailsEditor } from './createNodeDetailsEditor';
 import { nodeContentInteractionRegion } from './nodeContentInteractionRegion';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
@@ -14,7 +9,7 @@ import type { NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
 export const headingNodeDefinition: NodeDefinition<HeadingNodeData> = defineNodeType({
   ...nodeTypeSpecs.heading,
   createDefaultData() {
-    return { title: 'Heading', subtitle: '', level: 'section' };
+    return { title: 'Heading' };
   },
   parseData(raw) {
     return normalizeHeadingNodeData(raw);
@@ -24,29 +19,22 @@ export const headingNodeDefinition: NodeDefinition<HeadingNodeData> = defineNode
     const text = nodeText(theme);
     if (state.quality === 'compact' && !state.selected && !state.hovered) return;
 
-    drawNodeMeta(ctx, contentRect, headingNodeLevelLabel(data.level), theme, 0);
     ctx.fillStyle = theme.headerText;
-    ctx.font = data.level === 'section' ? text.title : text.titleSmall;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    const titleLines = wrapText(ctx, data.title || 'Heading', Math.max(0, contentRect.w - layout.insetX * 2), data.subtitle ? 2 : 3);
-    drawNodeBodyLines(ctx, contentRect, titleLines, theme, {
-      y: contentRect.y + layout.contentY,
-      color: theme.headerText,
-      font: data.level === 'section' ? text.title : text.titleSmall,
-      lineHeight: layout.bodyLineHeight,
-    });
-    if (data.subtitle) {
-      const subtitleY = contentRect.y + layout.contentY + Math.max(1, titleLines.length) * layout.bodyLineHeight;
-      const subtitleLines = wrapText(ctx, data.subtitle, Math.max(0, contentRect.w - layout.insetX * 2), 2);
-      drawNodeBodyLines(ctx, contentRect, subtitleLines, theme, { y: subtitleY, color: theme.bodyText });
+    ctx.font = text.title;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const titleLines = wrapText(ctx, data.title || 'Heading', Math.max(0, contentRect.w - layout.insetX * 2), 4);
+    const lineHeight = layout.bodyLineHeight;
+    const startY = contentRect.y + contentRect.h / 2 - Math.max(0, titleLines.length - 1) * lineHeight / 2;
+    for (const [index, line] of titleLines.entries()) {
+      ctx.fillText(line, contentRect.x + contentRect.w / 2, startY + index * lineHeight);
     }
   },
   describe({ data }) {
     return {
       label: data.title || 'Heading',
       roleDescription: 'Heading',
-      details: [headingNodeLevelLabel(data.level), data.subtitle].filter(Boolean),
+      details: [],
       state: [],
       actions: [],
     };
@@ -62,8 +50,6 @@ export const headingNodeDefinition: NodeDefinition<HeadingNodeData> = defineNode
       title: 'Heading',
       fields: [
         { id: 'title', label: 'Title', value: ctx.data.title },
-        { id: 'subtitle', label: 'Subtitle', value: ctx.data.subtitle, rows: 2 },
-        { id: 'level', label: 'Level', value: ctx.data.level, options: HEADING_NODE_LEVELS.map((value) => ({ value, label: headingNodeLevelLabel(value) })) },
       ],
       commit: (nextData) => ctx.requestCommit(nextData),
       close: ctx.requestClose,

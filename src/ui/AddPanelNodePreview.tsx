@@ -113,7 +113,7 @@ function previewDataForType(type: string): JsonObject {
     case BuiltInNodeTypes.text:
       return { text: 'Field notes\nFollow up' };
     case BuiltInNodeTypes.heading:
-      return { title: 'Site visit', subtitle: 'Today', level: 'section' };
+      return { title: 'Site visit' };
     case BuiltInNodeTypes.status:
       return { title: 'Permit', status: 'in-progress', owner: 'Asha', dueDate: '', detail: 'Waiting for signoff' };
     case BuiltInNodeTypes.contact:
