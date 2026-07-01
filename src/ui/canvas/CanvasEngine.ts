@@ -489,6 +489,8 @@ export class CanvasEngine {
         return this.planCreateNode(command.nodeType, command.source, command.at, command.data);
       case 'select-node':
         return this.planSelectNode(command.nodeId, command.source, command.mode ?? 'replace');
+      case 'select-all-nodes':
+        return this.planSelectAllNodes(command.source);
       case 'clear-selection':
         return this.planClearSelection(command.source);
       case 'move-selection':
@@ -551,6 +553,22 @@ export class CanvasEngine {
     return {
       operations: sameSelectionState(from, to) ? [] : [{ type: 'set-selection', from, to }],
       interaction: sourceInteraction(source, 'selection'),
+    };
+  }
+
+  private planSelectAllNodes(source: CanvasEditSource): CommandPlan {
+    const selectedNodeIds = this.model.nodes.filter((node) => this.isNodeVisible(node)).map((node) => node.id);
+    const from = this.selectionState();
+    const to = {
+      selectedNodeIds,
+      primarySelectedNodeId: selectedNodeIds[0] ?? null,
+      resizeMode: false,
+    };
+    const count = selectedNodeIds.length;
+    const selectedLabel = source === 'ai' ? 'AI selected' : 'Selected';
+    return {
+      operations: sameSelectionState(from, to) ? [] : [{ type: 'set-selection', from, to }],
+      interaction: count > 1 ? `${selectedLabel} ${count} panes` : count === 1 ? `${selectedLabel} pane` : 'Select all no panes',
     };
   }
 
@@ -1409,22 +1427,10 @@ export class CanvasEngine {
 
     if (event.key === 'Escape') {
       event.preventDefault();
-      if (this.activeNodeInteraction) {
-        this.closeNodeInteraction();
-        return;
-      }
       this.finishPointerInteraction(null, false);
       this.finishTouchGesture();
       this.touchPoints.clear();
-      if (this.resizeMode) {
-        this.resizeMode = false;
-        this.interaction = 'Keyboard resize ended';
-      } else {
-        this.executeCommand({ type: 'clear-selection', source: 'keyboard' });
-        return;
-      }
-      this.markDirty();
-      this.emitStatus();
+      this.executeCommand({ type: 'clear-selection', source: 'keyboard' });
       return;
     }
 
@@ -1450,6 +1456,12 @@ export class CanvasEngine {
     if (event.key === 'Delete' || event.key === 'Backspace') {
       event.preventDefault();
       this.executeCommand({ type: 'delete-selection', source: 'keyboard' });
+      return;
+    }
+
+    if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'a') {
+      event.preventDefault();
+      this.executeCommand({ type: 'select-all-nodes', source: 'keyboard' });
       return;
     }
 

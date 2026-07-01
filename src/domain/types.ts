@@ -34,6 +34,7 @@ export type CanvasArrangeLayout = 'grid' | 'rows' | 'columns' | 'list';
 export type CanvasCommand =
   | { type: 'create-node'; nodeType: NodeTypeId; source: CanvasEditSource; at?: WorldPoint; data?: NodeData }
   | { type: 'select-node'; nodeId: string; mode?: 'replace' | 'toggle' | 'add'; source: CanvasEditSource }
+  | { type: 'select-all-nodes'; source: CanvasEditSource }
   | { type: 'clear-selection'; source: CanvasEditSource }
   | { type: 'move-selection'; dx: number; dy: number; source: CanvasEditSource }
   | { type: 'resize-selection'; dw: number; dh: number; source: CanvasEditSource }
