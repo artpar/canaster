@@ -48,25 +48,25 @@ Tables:
   # These remain closed to guests; administrators get full table access through
   # their usergroup relation so daptin-cli can manage runtime rows.
   - TableName: action
-    Permission: 2085120
+    Permission: 2097151
     DefaultGroups:
       - Name: administrators
         Permission: 2097151
 
   - TableName: template
-    Permission: 2085120
+    Permission: 2097151
     DefaultGroups:
       - Name: administrators
         Permission: 2097151
 
   - TableName: site
-    Permission: 2085120
+    Permission: 2097151
     DefaultGroups:
       - Name: administrators
         Permission: 2097151
 
   - TableName: user_account_user_account_id_has_usergroup_usergroup_id
-    Permission: 2085120
+    Permission: 2097151
     DefaultGroups:
       - Name: administrators
         Permission: 2097151
