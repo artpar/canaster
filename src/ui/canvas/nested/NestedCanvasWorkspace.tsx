@@ -20,7 +20,6 @@ import { NativeNestedCanvasController, type CanvasViewportControlMenuState, type
 export type NestedCanvasWorkspaceProps = {
   initialCollection: CanvasDocumentCollection;
   theme: CanasterThemeId;
-  parentContextVisible?: boolean;
   animationEnabled?: boolean;
   fitOnFirstLoad?: boolean;
   storageKey?: string;
@@ -92,6 +91,7 @@ export type NestedCanvasWorkspaceHandle = {
   getWorkspaceSnapshot(): CanvasWorkspaceSnapshot;
   loadWorkspaceSnapshot(snapshot: CanvasWorkspaceSnapshot, interaction?: string): void;
   replaceWorkspaceSnapshot(snapshot: CanvasWorkspaceSnapshot, options?: { storageKey?: string; interaction?: string; persist?: boolean }): void;
+  setParentContextVisible(visible: boolean): void;
   setStorageKey(storageKey: string): void;
   flushWorkspaceSnapshot(): Promise<void>;
   captureActiveCanvasPreview(): Promise<CanvasWorkspacePreviewCapture | null>;
@@ -112,7 +112,6 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
   {
     initialCollection,
     theme,
-    parentContextVisible = true,
     fitOnFirstLoad = true,
     storageKey,
     viewportControlMenuState = null,
@@ -142,7 +141,6 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
       root: host,
       initialCollection: initialCollectionRef.current,
       theme,
-      parentContextVisible,
       fitOnFirstLoad,
       storageKey,
       onCollectionChange: (collection, changes) => callbacksRef.current.onCollectionChange?.(collection, changes),
@@ -169,10 +167,6 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
   }, [theme]);
 
   useEffect(() => {
-    controllerRef.current?.setParentContextVisible(parentContextVisible);
-  }, [parentContextVisible]);
-
-  useEffect(() => {
     controllerRef.current?.setViewportControlMenuState(viewportControlMenuState);
   }, [viewportControlMenuState]);
 
@@ -192,6 +186,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     getWorkspaceSnapshot: () => controllerRef.current?.getWorkspaceSnapshot() ?? createWorkspaceSnapshot(createWorkspaceHistory(initialCollection), null),
     loadWorkspaceSnapshot: (snapshot: CanvasWorkspaceSnapshot, interaction?: string) => controllerRef.current?.loadWorkspaceSnapshot(snapshot, interaction),
     replaceWorkspaceSnapshot: (snapshot: CanvasWorkspaceSnapshot, options?: { storageKey?: string; interaction?: string; persist?: boolean }) => controllerRef.current?.replaceWorkspaceSnapshot(snapshot, options),
+    setParentContextVisible: (visible: boolean) => controllerRef.current?.setParentContextVisible(visible),
     setStorageKey: (nextStorageKey: string) => controllerRef.current?.setStorageKey(nextStorageKey),
     flushWorkspaceSnapshot: () => controllerRef.current?.flushWorkspaceSnapshot() ?? Promise.resolve(),
     captureActiveCanvasPreview: () => controllerRef.current?.captureActiveCanvasPreview() ?? Promise.resolve(null),

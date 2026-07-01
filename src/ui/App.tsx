@@ -443,7 +443,6 @@ export function App() {
     const [sidePanelOpen, setSidePanelOpen] = useState(() => window.matchMedia('(min-width: 641px)').matches);
     const [workspaceToast, setWorkspaceToast] = useState<WorkspaceToast>(null);
     const [authStep, setAuthStep] = useState<AuthStep>('email');
-    const [parentContextVisible, setParentContextVisible] = useState(true);
     const [authEmail, setAuthEmail] = useState(
         () => emailFromStoredToken() || window.localStorage.getItem(DAPTIN_LAST_EMAIL_STORAGE_KEY) || '');
     const [authOtp, setAuthOtp] = useState('');
@@ -483,6 +482,7 @@ export function App() {
         storageReady           : false,
     }));
     const chromeStateRef = useRef(chromeState);
+    const parentContextVisible = chromeState.collection.view.parentContextVisible ?? true;
     const activeCanvasTheme = normalizeCanasterThemeId(canvasThemeId(
         chromeState.collection,
         chromeState.collection.activeCanvasId
@@ -1769,7 +1769,10 @@ export function App() {
                 }}
                 view={{
                     parentContextVisible,
-                    onToggleParentContext: () => setParentContextVisible((visible) => !visible)
+                    onToggleParentContext: () => {
+                        const current = chromeStateRef.current.collection.view.parentContextVisible ?? true;
+                        workspaceRef.current?.setParentContextVisible(!current);
+                    }
                 }}
                 exportMenu={{
                     buttonRef: exportMenuButtonRef,
@@ -1882,7 +1885,6 @@ export function App() {
                         ref={workspaceRef}
                         initialCollection={initialCollection}
                         theme={documentFallbackTheme}
-                        parentContextVisible={parentContextVisible}
                         fitOnFirstLoad={fitWorkspaceOnFirstLoad}
                         storageKey={workspaceStorageKey}
                         viewportControlMenuState={viewportControlMenuState}

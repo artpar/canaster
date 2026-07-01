@@ -16,14 +16,10 @@ import type { NodeAddMenuMetadata, NodeDefinition, NodeDescription, NodeHitTarge
 import { cardNodeDefinition } from './nodeTypes/cardNode';
 import { canvasNodeDefinition } from './nodeTypes/canvasNode';
 import { checkNodeDefinition } from './nodeTypes/checkNode';
-import { contactNodeDefinition } from './nodeTypes/contactNode';
-import { dateNodeDefinition } from './nodeTypes/dateNode';
 import { embedNodeDefinition } from './nodeTypes/embedNode';
-import { headingNodeDefinition } from './nodeTypes/headingNode';
 import { imageNodeDefinition } from './nodeTypes/imageNode';
 import { markdownNodeDefinition } from './nodeTypes/markdownNode';
 import { pdfNodeDefinition } from './nodeTypes/pdfNode';
-import { statusNodeDefinition } from './nodeTypes/statusNode';
 import { tableNodeDefinition } from './nodeTypes/tableNode';
 import { textNodeDefinition } from './nodeTypes/textNode';
 import { unknownNodeDefinition } from './nodeTypes/unknownNode';
@@ -31,10 +27,6 @@ import { unknownNodeDefinition } from './nodeTypes/unknownNode';
 const definitions = createRegistry([
   cardNodeDefinition,
   textNodeDefinition,
-  headingNodeDefinition,
-  statusNodeDefinition,
-  contactNodeDefinition,
-  dateNodeDefinition,
   tableNodeDefinition,
   imageNodeDefinition,
   canvasNodeDefinition,

@@ -46,6 +46,7 @@ export function cloneViewState(view: NestedCanvasViewState): NestedCanvasViewSta
         node: cloneNode(shape.node),
       })),
     },
+    parentContextVisible: view.parentContextVisible ?? true,
     deleteConfirmation: view.deleteConfirmation ? { ...view.deleteConfirmation, nodeIds: [...view.deleteConfirmation.nodeIds] } : null,
   };
 }
@@ -121,6 +122,7 @@ export function exportSerializableViewState(view: NestedCanvasViewState): Serial
     activeCanvasId: view.activeCanvasId,
     focusedEngineId: view.focusedEngineId,
     previewFocus: view.previewFocus ? { ...view.previewFocus } : null,
+    parentContextVisible: view.parentContextVisible ?? true,
     animationEnabled: view.animationEnabled,
   };
 }
@@ -138,6 +140,7 @@ export function applySerializableViewState(
     activeCanvasId: serializableView.activeCanvasId,
     focusedEngineId: serializableView.focusedEngineId,
     previewFocus: serializableView.previewFocus ? { ...serializableView.previewFocus } : null,
+    parentContextVisible: serializableView.parentContextVisible ?? true,
     animationEnabled: serializableView.animationEnabled,
     deleteConfirmation: null,
   };

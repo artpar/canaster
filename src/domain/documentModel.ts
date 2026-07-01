@@ -55,6 +55,7 @@ export function createInitialDocumentCollection(rootModel: CanvasModel, rootTitl
       previewFocus: null,
       stackPath: [],
       parentContext: { sourceCanvasId: null, sourcePortalNodeId: null, shapes: [] },
+      parentContextVisible: true,
       animationEnabled: true,
       deleteConfirmation: null,
     },
@@ -338,6 +339,13 @@ export function setSelectionForCanvas(collection: CanvasDocumentCollection, canv
 
 export function selectNodeInCanvas(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId, nodeId: string): CanvasDocumentCollection {
   return setSelectionForCanvas(collection, canvasId, { selectedNodeIds: [nodeId], primarySelectedNodeId: nodeId, resizeMode: false });
+}
+
+export function setParentContextVisible(collection: CanvasDocumentCollection, visible: boolean): CanvasDocumentCollection {
+  if ((collection.view.parentContextVisible ?? true) === visible) return collection;
+  const next = cloneDocumentCollection(collection);
+  next.view.parentContextVisible = visible;
+  return syncDerivedView(next);
 }
 
 export function deleteNodesAndDescendants(collection: CanvasDocumentCollection, canvasId: CanvasDocumentId, nodeIds: string[]): CanvasDocumentCollection {

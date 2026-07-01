@@ -112,14 +112,6 @@ function previewDataForType(type: string): JsonObject {
       return { title: 'Work item', detail: 'Next step and owner', accent: 'task' };
     case BuiltInNodeTypes.text:
       return { text: 'Field notes\nFollow up' };
-    case BuiltInNodeTypes.heading:
-      return { title: 'Site visit' };
-    case BuiltInNodeTypes.status:
-      return { title: 'Permit', status: 'in-progress', owner: 'Asha', dueDate: '', detail: 'Waiting for signoff' };
-    case BuiltInNodeTypes.contact:
-      return { name: 'Contact', role: 'Supervisor', organization: 'Site team', phone: '555-0142', email: '', note: '' };
-    case BuiltInNodeTypes.date:
-      return { title: 'Inspection', date: '2026-07-01', time: '09:30', place: 'North gate', note: '' };
     case BuiltInNodeTypes.table:
       return { title: 'Parts', columns: ['Item', 'Qty', 'State'], rows: [['Valve', '2', 'Ready'], ['Seal', '4', 'Need']] };
     case BuiltInNodeTypes.canvas:

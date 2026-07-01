@@ -8,6 +8,7 @@ import {
   selectionForCanvas,
   serializeCollectionViewState,
   setCameraForCanvas,
+  setParentContextVisible,
   setSelectionForCanvas,
   syncDerivedView,
 } from '../../../domain/documentModel';
@@ -71,7 +72,6 @@ export type NativeNestedCanvasControllerOptions = {
   root: HTMLElement;
   initialCollection: CanvasDocumentCollection;
   theme: CanasterThemeId;
-  parentContextVisible?: boolean;
   fitOnFirstLoad?: boolean;
   storageKey?: string;
   onCollectionChange?: (collection: CanvasDocumentCollection, changes: DocumentModelChange[]) => void;
@@ -196,13 +196,11 @@ export class NativeNestedCanvasController {
   private canvasModelChangeCount = 0;
   private controlOwnerKey = 'active';
   private viewportControlMenuState: CanvasViewportControlMenuState = null;
-  private parentContextVisible: boolean;
   private resizeObserver: ResizeObserver;
 
   constructor(options: NativeNestedCanvasControllerOptions) {
     this.root = options.root;
     this.theme = normalizeCanasterThemeId(options.theme);
-    this.parentContextVisible = options.parentContextVisible ?? true;
     this.fitOnFirstLoad = options.fitOnFirstLoad ?? true;
     this.storageKey = options.storageKey ?? DEFAULT_WORKSPACE_STORAGE_ID;
     this.onCollectionChange = options.onCollectionChange;
@@ -320,16 +318,20 @@ export class NativeNestedCanvasController {
   }
 
   setParentContextVisible(visible: boolean) {
-    if (this.parentContextVisible === visible) return;
+    const base = this.saveActiveViewport(this.collectionRef.current);
+    if ((base.view.parentContextVisible ?? true) === visible) return;
     const stageRect = rectToDomRect(this.root.getBoundingClientRect());
-    const previousLayout = this.normalizedActiveParentContextLayout(stageRect, this.parentContextVisible);
-    this.parentContextVisible = visible;
-    const nextLayout = this.normalizedActiveParentContextLayout(stageRect, this.parentContextVisible);
+    const previousLayout = this.normalizedActiveParentContextLayout(stageRect, base.view.parentContextVisible ?? true);
+    const nextCollection = setParentContextVisible(base, visible);
+    const nextLayout = this.normalizedActiveParentContextLayoutForCollection(nextCollection, stageRect, visible);
+    this.historyRef.current = replaceWorkspacePresent(this.historyRef.current, nextCollection);
+    this.collectionRef.current = this.historyRef.current.present;
     this.shiftActiveCameraForPaneLayoutChange(stageRect, previousLayout, nextLayout);
     this.layout();
     this.flushActiveCanvasRender();
     this.flushOverlayRender();
     this.scheduleOverlayRender();
+    if (this.storageReady) this.scheduleViewportSnapshotMirror();
     this.emitChromeState();
   }
 
@@ -944,7 +946,7 @@ export class NativeNestedCanvasController {
     const rect = this.root.getBoundingClientRect();
     const paneLayout = collection.view.paneLayouts[collection.activeCanvasId] ?? DEFAULT_PARENT_CONTEXT_PANE_LAYOUT;
     const hasParent = Boolean(collection.documents[collection.activeCanvasId]?.parentCanvasId);
-    const parentContextEnabled = hasParent && this.parentContextVisible;
+    const parentContextEnabled = hasParent && (collection.view.parentContextVisible ?? true);
     const normalized = parentContextEnabled ? normalizeParentContextPaneLayout(rectToDomRect(rect), paneLayout) : { left: 0, right: 0, top: 0, bottom: 0 };
     this.stage.style.gridTemplateColumns = `${normalized.left}px minmax(0, 1fr) ${normalized.right}px`;
     this.stage.style.gridTemplateRows = `${normalized.top}px minmax(0, 1fr) ${normalized.bottom}px`;
@@ -959,7 +961,10 @@ export class NativeNestedCanvasController {
   }
 
   private normalizedActiveParentContextLayout(stageRect: DOMRect, visible: boolean): ParentContextPaneLayout {
-    const collection = this.collectionRef.current;
+    return this.normalizedActiveParentContextLayoutForCollection(this.collectionRef.current, stageRect, visible);
+  }
+
+  private normalizedActiveParentContextLayoutForCollection(collection: CanvasDocumentCollection, stageRect: DOMRect, visible: boolean): ParentContextPaneLayout {
     const hasParent = Boolean(collection.documents[collection.activeCanvasId]?.parentCanvasId);
     if (!visible || !hasParent) return { left: 0, right: 0, top: 0, bottom: 0 };
     const paneLayout = collection.view.paneLayouts[collection.activeCanvasId] ?? DEFAULT_PARENT_CONTEXT_PANE_LAYOUT;

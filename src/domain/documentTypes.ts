@@ -54,6 +54,7 @@ export type SerializableNestedCanvasViewState = {
   activeCanvasId: CanvasDocumentId;
   focusedEngineId: EngineSlotId;
   previewFocus: PortalPreviewFocus | null;
+  parentContextVisible: boolean;
   animationEnabled: boolean;
 };
 
@@ -82,6 +83,7 @@ export type NestedCanvasViewState = {
   previewFocus: PortalPreviewFocus | null;
   stackPath: StackFrame[];
   parentContext: ParentContextFieldState;
+  parentContextVisible: boolean;
   animationEnabled: boolean;
   deleteConfirmation: DeleteConfirmationState | null;
 };
