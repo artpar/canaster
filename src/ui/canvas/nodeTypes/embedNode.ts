@@ -9,7 +9,7 @@ import {
 } from '../../../core/embedUrl';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import type { JsonObject } from '../../../core/nodePrimitives';
-import { prepareInlineEditorMount, stopEvent } from '../inlineEditorDom';
+import { createInlineNodeSurface } from './createInlineNodeSurface';
 import { nodeEditInteractionRegion } from './nodeContentInteractionRegion';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeContentRect, NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
@@ -76,63 +76,36 @@ function drawEmbedPreview(ctx: CanvasRenderingContext2D, rect: NodeContentRect, 
 }
 
 function createEmbedEditor(mount: HTMLElement, data: EmbedNodeData, commit: (nextData: EmbedNodeData) => void, close: () => void) {
-  prepareInlineEditorMount(mount, 'node-inline-embed-editor');
-  const panel = document.createElement('div');
-  panel.className = 'embed-editor-panel';
-  panel.addEventListener('pointerdown', stopEvent);
-  mount.append(panel);
+  let draftUrl = data.url;
+  const surface = createInlineNodeSurface({
+    mount,
+    className: 'node-inline-embed-editor',
+    initialData: readEmbedDraft(data, draftUrl),
+    readDraft: () => {
+      return readEmbedDraft(data, draftUrl);
+    },
+    commit,
+    close,
+    focus: (root) => root.querySelector<HTMLInputElement>('input')?.focus({ preventScroll: true }),
+  });
 
-  const form = document.createElement('form');
-  form.className = 'embed-editor-form';
+  const controls = document.createElement('div');
+  controls.className = 'node-inline-embed-controls';
   const input = document.createElement('input');
   input.type = 'url';
   input.value = data.url;
   input.placeholder = 'https://example.com';
   input.setAttribute('aria-label', 'Embed URL');
-  const save = document.createElement('button');
-  save.type = 'submit';
-  save.textContent = 'Save';
-  const done = document.createElement('button');
-  done.type = 'button';
-  done.textContent = 'Cancel';
-  form.append(input, save, done);
-
   const message = document.createElement('p');
   message.className = 'embed-editor-message';
   const preview = document.createElement('div');
   preview.className = 'embed-editor-preview';
-  panel.append(form, message, preview);
-
-  const commitInput = () => {
-    const normalized = normalizeEmbedUrl(input.value, { allowLocalHttp: allowLocalHttpForCurrentHost() });
-    if (!normalized) {
-      message.textContent = 'Use an HTTPS link.';
-      renderPreview(data.url);
-      return;
-    }
-    const title = data.title && data.title !== 'Web preview' ? data.title : embedTitleForUrl(normalized);
-    const nextData: EmbedNodeData = {
-      ...data,
-      url: normalized,
-      title,
-      provider: embedProviderForUrl(normalized),
-    };
-    commit(nextData);
-    close();
-  };
-
-  form.addEventListener('submit', (event) => {
-    event.preventDefault();
-    commitInput();
+  input.addEventListener('input', () => {
+    draftUrl = input.value;
+    renderPreview(draftUrl);
   });
-  form.addEventListener('keydown', (event) => {
-    event.stopPropagation();
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      close();
-    }
-  });
-  done.addEventListener('click', close);
+  controls.append(input, message);
+  surface.root.append(controls, preview);
 
   const renderPreview = (rawUrl: string) => {
     preview.replaceChildren();
@@ -155,12 +128,17 @@ function createEmbedEditor(mount: HTMLElement, data: EmbedNodeData, commit: (nex
   };
 
   renderPreview(data.url);
+  return surface.controller;
+}
+
+function readEmbedDraft(data: EmbedNodeData, draftUrl: string): EmbedNodeData {
+  const normalized = normalizeEmbedUrl(draftUrl, { allowLocalHttp: allowLocalHttpForCurrentHost() });
+  if (!normalized) return data;
   return {
-    focus() {
-      input.focus({ preventScroll: true });
-      input.select();
-    },
-    dispose() {},
+    ...data,
+    url: normalized,
+    title: data.title && data.title !== 'Web preview' ? data.title : embedTitleForUrl(normalized),
+    provider: embedProviderForUrl(normalized),
   };
 }
 

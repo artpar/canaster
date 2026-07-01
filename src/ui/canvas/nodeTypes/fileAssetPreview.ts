@@ -35,6 +35,7 @@ export function createFilePreviewShell(mount: HTMLElement, className: string, ti
   const closeButton = document.createElement('button');
   closeButton.type = 'button';
   closeButton.textContent = 'Close';
+  closeButton.setAttribute('aria-label', 'Close preview');
   header.append(heading, closeButton);
 
   const body = document.createElement('div');

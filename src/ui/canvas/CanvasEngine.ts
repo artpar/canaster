@@ -12,6 +12,7 @@ import {
 } from '../../core/nodeAppearance';
 import { canvasPortalViewportRect } from './nodeTypes/canvasNode';
 import { cachedAssetImage } from './imageAssets';
+import { createLiveNodeContentOverlay, hasLiveNodeContentOverlay, type LiveNodeContentOverlay } from './nodeTypes/liveNodeContentOverlay';
 import { createNodeInteraction, describeNode, hitTestNodeContent, nodeDefinitionFor, nodeDefinitionForType, nodeInteractionRegions, parseNodeData, portalInfoForNode, renderNodeContent } from './nodeRegistry';
 import { clipText, nodeText } from './nodeRendering';
 import type { NodeContentRect, NodeInteractionController, NodeInteractionRegion } from './nodeDefinition/nodeDefinitionTypes';
@@ -93,6 +94,15 @@ type SetModelOptions = {
   preserveInteraction?: boolean;
 };
 
+type FlushRenderOptions = {
+  forCapture?: boolean;
+};
+
+type RenderOptions = {
+  drawLiveNodeContentOnCanvas?: boolean;
+  syncDomOverlays?: boolean;
+};
+
 type InteractionHandleSizing = 'world' | 'screen-fixed';
 
 type VisibleWorldBounds = {
@@ -159,6 +169,11 @@ type EmbedOverlaySlot = {
   src: string;
 };
 
+type LiveNodeContentOverlaySlot = {
+  overlay: LiveNodeContentOverlay;
+  nodeType: string;
+};
+
 export type CanvasPngCapture = {
   blob: Blob;
   width: number;
@@ -223,6 +238,7 @@ export class CanvasEngine {
   private activeNodeInteraction: ActiveNodeInteraction | null = null;
   private nodeContentToolbarTarget: string | null = null;
   private embedOverlaySlots = new Map<string, EmbedOverlaySlot>();
+  private liveNodeContentOverlaySlots = new Map<string, LiveNodeContentOverlaySlot>();
 
   constructor(canvas: HTMLCanvasElement, options: EngineOptions = {}) {
     const ctx = canvas.getContext('2d');
@@ -288,6 +304,7 @@ export class CanvasEngine {
     if (this.statusFrame !== null) cancelAnimationFrame(this.statusFrame);
     if (this.throttleTimer !== null) window.clearTimeout(this.throttleTimer);
     this.closeNodeInteraction();
+    this.disposeLiveNodeContentOverlays();
     this.disposeEmbedOverlays();
     this.inlineLayer?.remove();
     this.resizeObserver.disconnect();
@@ -391,20 +408,24 @@ export class CanvasEngine {
     this.emitStatus();
   }
 
-  flushRender() {
+  flushRender(options: FlushRenderOptions = {}) {
     if (this.disposed) return;
     this.resize();
     this.frameQueued = false;
-    this.render();
+    this.render({
+      drawLiveNodeContentOnCanvas: options.forCapture === true,
+      syncDomOverlays: options.forCapture !== true,
+    });
     this.dirty = false;
   }
 
   capturePngBlob(): Promise<CanvasPngCapture> {
-    this.flushRender();
+    this.flushRender({ forCapture: true });
     const { canvas } = this;
     return new Promise((resolve, reject) => {
       try {
         canvas.toBlob((blob) => {
+          this.flushRender();
           if (!blob) {
             reject(new Error('Could not capture workspace preview'));
             return;
@@ -412,6 +433,7 @@ export class CanvasEngine {
           resolve({ blob, width: canvas.width, height: canvas.height });
         }, 'image/png');
       } catch (error) {
+        this.flushRender();
         reject(error);
       }
     });
@@ -456,6 +478,10 @@ export class CanvasEngine {
 
   zoomBy(factor: number) {
     this.zoomAt(this.viewW / 2, this.viewH / 2, factor);
+  }
+
+  hasClipboard() {
+    return this.clipboard.length > 0;
   }
 
   executeCommand(command: CanvasCommand) {
@@ -830,7 +856,7 @@ export class CanvasEngine {
     this.render();
   }
 
-  private render() {
+  private render(options: RenderOptions = {}) {
     const started = performance.now();
     const { ctx, canvas, theme, dpr, camera } = this;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -852,10 +878,16 @@ export class CanvasEngine {
       if (!intersectsNode(renderNode, cullBounds)) continue;
       visibleNodes.push(renderNode);
     }
-    for (const node of visibleNodes) this.drawNode(node);
+    const liveNodeContentOverlayNodeIds = options.drawLiveNodeContentOnCanvas === true ?
+      new Set<string>() :
+      this.liveNodeContentOverlayNodeIdsFor(visibleNodes, false);
+    for (const node of visibleNodes) this.drawNode(node, liveNodeContentOverlayNodeIds);
     for (const node of visibleNodes) this.drawNodeHeader(node);
     this.drawMarqueeSelection();
-    this.syncEmbedOverlays(visibleNodes, false);
+    if (options.syncDomOverlays !== false) {
+      this.syncLiveNodeContentOverlays(visibleNodes, false, liveNodeContentOverlayNodeIds);
+      this.syncEmbedOverlays(visibleNodes, false);
+    }
     const renderedNodes = visibleNodes.length;
     this.lastRenderedNodeIds = visibleNodes.map((node) => node.id);
     this.lastRenderedNodes = renderedNodes;
@@ -1051,7 +1083,7 @@ export class CanvasEngine {
     ctx.restore();
   }
 
-  private drawNode(node: CanvasNode) {
+  private drawNode(node: CanvasNode, liveNodeContentOverlayNodeIds: ReadonlySet<string>) {
     const { ctx } = this;
     const renderNode = this.renderNode(node);
     const theme = this.themeForNode(renderNode);
@@ -1068,23 +1100,25 @@ export class CanvasEngine {
 
     this.drawNodeShell(renderNode, chrome, theme);
     const contentRect = this.nodeContentRect(renderNode, theme);
-    ctx.save();
-    this.clipToNodeContent(renderNode, contentRect, theme);
-    this.applyNodeContentTransform(renderNode, contentRect);
-    const contentViewport = contentViewportForNode(renderNode);
-    renderNodeContent({
-      definition,
-      ctx,
-      node: renderNode,
-      data,
-      theme,
-      contentRect,
-      contentViewport,
-      visibleContentRect: this.visibleNodeContentRect(renderNode, contentRect, contentViewport),
-      state,
-      requestRender: () => this.markDirty(),
-    });
-    ctx.restore();
+    if (!liveNodeContentOverlayNodeIds.has(renderNode.id)) {
+      ctx.save();
+      this.clipToNodeContent(renderNode, contentRect, theme);
+      this.applyNodeContentTransform(renderNode, contentRect);
+      const contentViewport = contentViewportForNode(renderNode);
+      renderNodeContent({
+        definition,
+        ctx,
+        node: renderNode,
+        data,
+        theme,
+        contentRect,
+        contentViewport,
+        visibleContentRect: this.visibleNodeContentRect(renderNode, contentRect, contentViewport),
+        state,
+        requestRender: () => this.markDirty(),
+      });
+      ctx.restore();
+    }
     this.drawNodeBorder(renderNode, chrome, theme);
     if (state.selected) {
       this.drawResizeHandle(renderNode, theme);
@@ -1875,9 +1909,7 @@ export class CanvasEngine {
   private positionNodeInteraction() {
     const active = this.activeNodeInteraction;
     if (!active) return;
-    const node = this.model.nodes.find((candidate) => candidate.id === active.nodeId);
-    const regionRect = node && !isNodeChromeRegion(active.region) ? this.nodeContentVisualRect(node, active.region.rect, this.themeForNode(node)) : active.region.rect;
-    const rect = this.worldToScreenRect(regionRect);
+    const rect = this.worldToScreenRect(active.region.rect);
     active.mount.style.left = `${rect.x}px`;
     active.mount.style.top = `${rect.y}px`;
     active.mount.style.width = `${Math.max(1, rect.w)}px`;
@@ -2261,6 +2293,92 @@ export class CanvasEngine {
     return this.livePortalNodeIds.has(node.id) ? 'live' : 'none';
   }
 
+  private syncLiveNodeContentOverlays(visibleNodes: CanvasNode[], compact: boolean, liveNodeIds = this.liveNodeContentOverlayNodeIdsFor(visibleNodes, compact)): void {
+    const layer = this.inlineLayer;
+    if (!layer || compact) {
+      this.disposeLiveNodeContentOverlays();
+      return;
+    }
+    for (const node of visibleNodes) {
+      if (!liveNodeIds.has(node.id)) continue;
+      const theme = this.themeForNode(node);
+      const screenRect = this.worldToScreenRect(this.nodeContentRect(node, theme));
+      this.syncLiveNodeContentOverlaySlot(layer, node, theme, screenRect);
+    }
+    for (const [nodeId, slot] of this.liveNodeContentOverlaySlots) {
+      if (liveNodeIds.has(nodeId)) continue;
+      slot.overlay.dispose();
+      this.liveNodeContentOverlaySlots.delete(nodeId);
+    }
+  }
+
+  private liveNodeContentOverlayNodeIdsFor(visibleNodes: CanvasNode[], compact: boolean): Set<string> {
+    const live = new Set<string>();
+    if (!this.inlineLayer || compact) return live;
+    const portalRects = this.portalLayoutsFor(visibleNodes)
+      .filter((layout) => layout.visible && layout.childCanvasId)
+      .map((layout) => layout.screenRect);
+    for (const [index, node] of visibleNodes.entries()) {
+      if (!this.shouldUseLiveNodeContentOverlay(node)) continue;
+      const theme = this.themeForNode(node);
+      const screenRect = this.worldToScreenRect(this.nodeContentRect(node, theme));
+      if (screenRect.w < 96 || screenRect.h < 56) continue;
+      if (this.liveNodeContentOverlayWouldBreakStacking(screenRect, visibleNodes, index, portalRects)) continue;
+      live.add(node.id);
+    }
+    return live;
+  }
+
+  private syncLiveNodeContentOverlaySlot(layer: HTMLDivElement, node: CanvasNode, theme: CanvasTheme, rect: ScreenRect): void {
+    let slot = this.liveNodeContentOverlaySlots.get(node.id);
+    if (!slot || slot.nodeType !== node.type) {
+      slot?.overlay.dispose();
+      const overlay = createLiveNodeContentOverlay({
+        node,
+        theme,
+        commit: (nextData) => this.commitLiveNodeContentOverlay(node.id, nextData),
+      });
+      if (!overlay) return;
+      layer.append(overlay.root);
+      slot = { overlay, nodeType: node.type };
+      this.liveNodeContentOverlaySlots.set(node.id, slot);
+    }
+    slot.overlay.root.style.left = `${rect.x}px`;
+    slot.overlay.root.style.top = `${rect.y}px`;
+    slot.overlay.root.style.width = `${Math.max(1, rect.w)}px`;
+    slot.overlay.root.style.height = `${Math.max(1, rect.h)}px`;
+    slot.overlay.update(node);
+  }
+
+  private disposeLiveNodeContentOverlays(): void {
+    for (const slot of this.liveNodeContentOverlaySlots.values()) slot.overlay.dispose();
+    this.liveNodeContentOverlaySlots.clear();
+  }
+
+  private liveNodeContentOverlayWouldBreakStacking(rect: ScreenRect, visibleNodes: CanvasNode[], nodeIndex: number, portalRects: ScreenRect[]): boolean {
+    for (let index = nodeIndex + 1; index < visibleNodes.length; index += 1) {
+      if (screenRectsOverlap(rect, this.worldToScreenRect(visibleNodes[index]))) return true;
+    }
+    return portalRects.some((portalRect) => screenRectsOverlap(rect, portalRect));
+  }
+
+  private shouldUseLiveNodeContentOverlay(node: CanvasNode): boolean {
+    if (this.activeNodeInteraction?.nodeId === node.id) return false;
+    if (!this.onNodeDataChange) return false;
+    if (!hasLiveNodeContentOverlay(node)) return false;
+    const rect = this.worldToScreenRect(this.nodeContentRect(node, this.themeForNode(node)));
+    return rect.w >= 96 && rect.h >= 56;
+  }
+
+  private commitLiveNodeContentOverlay(nodeId: string, nextData: NodeData): void {
+    const current = this.model.nodes.find((candidate) => candidate.id === nodeId);
+    if (!current || sameNodeData(current.data, nextData)) return;
+    const committed = this.onNodeDataChange?.(nodeId, current.data, nextData, 'pointer') ?? false;
+    this.interaction = committed ? 'Edited panel' : 'Panel edit unchanged';
+    if (committed) this.markDirty();
+    this.emitStatus();
+  }
+
   private syncEmbedOverlays(visibleNodes: CanvasNode[], compact: boolean): void {
     const layer = this.inlineLayer;
     if (!layer || compact) {
@@ -2411,6 +2529,7 @@ export class CanvasEngine {
   }
 
   private canZoomNodeContent(node: CanvasNode): boolean {
+    if (hasLiveNodeContentOverlay(node)) return false;
     return node.type !== BuiltInNodeTypes.canvas && this.isNodeVisible(node);
   }
 
@@ -2487,6 +2606,10 @@ function embedOverlayForNode(node: CanvasNode): EmbedOverlayData | null {
 function allowLocalHttpForCurrentHost(): boolean {
   if (typeof window === 'undefined') return false;
   return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+}
+
+function sameNodeData(left: NodeData, right: NodeData): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function cloneNode(node: CanvasNode): CanvasNode {

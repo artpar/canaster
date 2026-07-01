@@ -3,7 +3,7 @@ import { hasUsableStoredToken, normalizeDaptinError } from '../../../infra/dapti
 import { asEnum, asNullableString, asString } from '../../../core/nodeData';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import { cachedAssetImage, cacheAssetImage } from '../imageAssets';
-import { prepareInlineEditorMount, stopEvent } from '../inlineEditorDom';
+import { createInlineNodeSurface } from './createInlineNodeSurface';
 import type { JsonObject } from '../../../core/nodePrimitives';
 import { drawPlaceholderIcon } from '../nodeRendering';
 import { nodeEditInteractionRegion } from './nodeContentInteractionRegion';
@@ -81,17 +81,22 @@ function imageFrame(contentRect: NodeContentRect, theme: CanvasTheme) {
 }
 
 function createImagePicker(mount: HTMLElement, data: ImageNodeData, commit: (nextData: ImageNodeData) => void, close: () => void) {
-  prepareInlineEditorMount(mount, 'node-inline-image-picker');
-  const panel = document.createElement('div');
-  panel.className = 'image-picker-panel';
-  panel.addEventListener('pointerdown', stopEvent);
-  mount.append(panel);
-
   let disposed = false;
   let assetIdDraft = data.assetId;
   let altDraft = data.alt;
+  let fitDraft = data.fit;
+  const surface = createInlineNodeSurface({
+    mount,
+    className: 'node-inline-image-editor',
+    initialData: { ...data, assetId: assetIdDraft, alt: altDraft, fit: fitDraft },
+    readDraft: () => ({ ...data, assetId: assetIdDraft, alt: altDraft, fit: fitDraft }),
+    commit,
+    close,
+    focus: (root) => root.querySelector<HTMLElement>('select, input, button')?.focus({ preventScroll: true }),
+  });
+
   const render = (state: { assets: CanasterAssetSummary[]; busy: boolean; message: string }) => {
-    panel.replaceChildren();
+    surface.root.replaceChildren();
     const actions = document.createElement('div');
     actions.className = 'image-picker-actions';
 
@@ -128,10 +133,31 @@ function createImagePicker(mount: HTMLElement, data: ImageNodeData, commit: (nex
       if (!altDraft && selectedName) {
         altDraft = selectedName;
       }
+      altInput.value = altDraft;
     });
 
     actions.append(uploadLabel, select);
-    panel.append(actions);
+    surface.root.append(actions);
+
+    const fitControls = document.createElement('div');
+    fitControls.className = 'node-inline-segmented image-picker-fit';
+    fitControls.setAttribute('role', 'toolbar');
+    fitControls.setAttribute('aria-label', 'Image fit');
+    for (const fit of IMAGE_FITS) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = fit === 'cover' ? 'Fill' : 'Fit';
+      button.setAttribute('aria-pressed', String(fitDraft === fit));
+      button.addEventListener('click', () => {
+        fitDraft = fit;
+        for (const item of fitControls.querySelectorAll<HTMLButtonElement>('button')) {
+          item.setAttribute('aria-pressed', String(item === button));
+        }
+      });
+      fitControls.append(button);
+    }
+    surface.root.append(fitControls);
+
     const altInput = document.createElement('input');
     altInput.className = 'image-picker-alt';
     altInput.type = 'text';
@@ -141,31 +167,13 @@ function createImagePicker(mount: HTMLElement, data: ImageNodeData, commit: (nex
     altInput.addEventListener('input', () => {
       altDraft = altInput.value;
     });
-    altInput.addEventListener('keydown', stopEvent);
-    panel.append(altInput);
+    surface.root.append(altInput);
     if (state.message) {
       const message = document.createElement('p');
       message.className = 'image-picker-message';
       message.textContent = state.message;
-      panel.append(message);
+      surface.root.append(message);
     }
-    const footer = document.createElement('div');
-    footer.className = 'node-details-editor-actions';
-    const cancel = document.createElement('button');
-    cancel.type = 'button';
-    cancel.textContent = 'Cancel';
-    cancel.addEventListener('click', close);
-    const save = document.createElement('button');
-    save.type = 'button';
-    save.className = 'primary';
-    save.textContent = 'Save';
-    save.disabled = state.busy;
-    save.addEventListener('click', () => {
-      commit({ ...data, assetId: assetIdDraft, alt: altDraft });
-      close();
-    });
-    footer.append(cancel, save);
-    panel.append(footer);
   };
 
   const setState = (state: { assets: CanasterAssetSummary[]; busy: boolean; message: string }) => {
@@ -179,8 +187,9 @@ function createImagePicker(mount: HTMLElement, data: ImageNodeData, commit: (nex
       const asset = await uploadImageAsset(file);
       const object = await loadAssetObject(asset.id);
       await cacheAssetImage(object.id, object.objectUrl);
-      commit({ ...data, assetId: asset.id, alt: altDraft || data.alt || cleanImageName(asset.name) });
-      close();
+      assetIdDraft = asset.id;
+      altDraft = altDraft || data.alt || cleanImageName(asset.name);
+      surface.commitAndClose();
     } catch (error) {
       setState({ assets: [], busy: false, message: imageErrorMessage(error, 'Could not upload image') });
     }
@@ -197,10 +206,11 @@ function createImagePicker(mount: HTMLElement, data: ImageNodeData, commit: (nex
 
   return {
     focus() {
-      panel.querySelector<HTMLElement>('select, input, button')?.focus({ preventScroll: true });
+      surface.controller.focus?.();
     },
     dispose() {
       disposed = true;
+      surface.controller.dispose();
     },
   };
 }

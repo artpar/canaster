@@ -3,8 +3,6 @@ import { DEFAULT_TEXT_STYLE } from '../../../domain/textStyle';
 import { drawStyledTextBlock } from '../../textStyle/drawStyledTextBlock';
 import { resolveTextStyleForTheme } from '../../textStyle/textStyleTheme';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
-import { createTextNodeEditor } from './createTextNodeEditor';
-import { nodeEditInteractionRegion } from './nodeContentInteractionRegion';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
 
@@ -31,22 +29,6 @@ export const textNodeDefinition: NodeDefinition<TextNodeData> = defineNodeType({
       state: [],
       actions: [],
     };
-  },
-  getInteractionRegions({ contentRect }) {
-    return nodeEditInteractionRegion(contentRect, 'pointer', 'edit note');
-  },
-  createInteraction(ctx) {
-    if (ctx.region.id !== 'edit') return null;
-    return createTextNodeEditor({
-      mount: ctx.mount,
-      data: {
-        ...ctx.data,
-        style: resolveTextStyleForTheme(ctx.theme, ctx.data.style),
-      },
-      theme: ctx.theme,
-      commit: (nextData) => ctx.requestCommit(nextData),
-      close: ctx.requestClose,
-    });
   },
 });
 

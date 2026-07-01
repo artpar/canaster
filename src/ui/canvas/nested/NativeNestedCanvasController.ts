@@ -251,6 +251,7 @@ export class NativeNestedCanvasController {
     this.root.addEventListener('dragover', this.handleFileDragOver);
     this.root.addEventListener('dragleave', this.handleFileDragLeave);
     this.root.addEventListener('drop', this.handleFileDrop);
+    this.root.addEventListener('keydown', this.handleClipboardKeyDown);
     this.root.addEventListener('paste', this.handleClipboardPaste);
 
     this.syncActiveViewportSlot();
@@ -279,6 +280,7 @@ export class NativeNestedCanvasController {
     this.root.removeEventListener('dragover', this.handleFileDragOver);
     this.root.removeEventListener('dragleave', this.handleFileDragLeave);
     this.root.removeEventListener('drop', this.handleFileDrop);
+    this.root.removeEventListener('keydown', this.handleClipboardKeyDown);
     this.root.removeEventListener('paste', this.handleClipboardPaste);
     this.resizeObserver.disconnect();
     this.activeEngine()?.dispose();
@@ -495,16 +497,37 @@ export class NativeNestedCanvasController {
     });
   };
 
+  private handleClipboardKeyDown = (event: KeyboardEvent) => {
+    if (event.defaultPrevented) return;
+    if (isEditableClipboardTarget(event.target)) return;
+    if (!hasMetaOrCtrlShortcutModifier(event) || event.shiftKey || event.altKey) return;
+
+    const key = event.key.toLowerCase();
+    if (key !== 'c' && key !== 'v') return;
+    const engine = this.clipboardEngineForTarget(event.target);
+    if (!engine) return;
+    if (key === 'v' && !engine.hasClipboard()) return;
+
+    const command: CanvasCommand = {
+      type: key === 'c' ? 'copy-selection' : 'paste-clipboard',
+      source: 'keyboard',
+    };
+    if (!engine.executeCommand(command)) return;
+    event.preventDefault();
+  };
+
   private handleClipboardPaste = (event: ClipboardEvent) => {
     if (event.defaultPrevented) return;
-    if (isEditablePasteTarget(event.target)) return;
-    const at = this.activeCanvasPasteWorldPoint();
+    if (isEditableClipboardTarget(event.target)) return;
+    const slot = this.clipboardSlotForTarget(event.target);
+    if (!slot) return;
+    const at = this.canvasPasteWorldPoint(slot);
     if (!at) return;
     const files = [...(event.clipboardData?.files ?? [])];
     if (files.length) {
       event.preventDefault();
       this.onFileDrop?.({
-        canvasId: this.collectionRef.current.activeCanvasId,
+        canvasId: slot.canvasId,
         at,
         files,
         source: 'paste',
@@ -515,7 +538,7 @@ export class NativeNestedCanvasController {
     const text = event.clipboardData?.getData('text/plain')?.trim() ?? '';
     if (!text) return;
     const consumed = this.onTextPaste?.({
-      canvasId: this.collectionRef.current.activeCanvasId,
+      canvasId: slot.canvasId,
       at,
       text,
     }) ?? false;
@@ -540,10 +563,17 @@ export class NativeNestedCanvasController {
     };
   }
 
-  private activeCanvasPasteWorldPoint(): WorldPoint | null {
-    const slot = this.activeSlot;
+  private clipboardSlotForTarget(target: EventTarget | null): CanvasViewportSlot | null {
+    return this.viewportSlotForTarget(target) ?? this.activeSlot;
+  }
+
+  private clipboardEngineForTarget(target: EventTarget | null) {
+    return this.clipboardSlotForTarget(target)?.engine ?? null;
+  }
+
+  private canvasPasteWorldPoint(slot: CanvasViewportSlot | null): WorldPoint | null {
     if (!slot) return null;
-    const cursor = this.status.cursorWorld;
+    const cursor = slot === this.activeSlot ? this.status.cursorWorld : null;
     if (cursor) return cursor;
     const rect = slot.canvas.getBoundingClientRect();
     const camera = slot.engine.getCamera();
@@ -1894,31 +1924,35 @@ function nextAnimationFrame(): Promise<void> {
 }
 
 async function captureViewportCanvases(viewport: HTMLElement, baseCanvas: HTMLCanvasElement, engines: CanvasViewportSlot['engine'][]) {
-  for (const engine of engines) engine.flushRender();
-  const baseRect = baseCanvas.getBoundingClientRect();
-  if (baseRect.width <= 0 || baseRect.height <= 0) throw new Error('Workspace preview is not ready yet');
-  const width = Math.max(1, baseCanvas.width || Math.round(baseRect.width * (window.devicePixelRatio || 1)));
-  const height = Math.max(1, baseCanvas.height || Math.round(baseRect.height * (window.devicePixelRatio || 1)));
-  const scaleX = width / baseRect.width;
-  const scaleY = height / baseRect.height;
-  const output = document.createElement('canvas');
-  output.width = width;
-  output.height = height;
-  const ctx = output.getContext('2d');
-  if (!ctx) throw new Error('Workspace preview canvas is unavailable');
-  ctx.clearRect(0, 0, width, height);
-  for (const canvas of viewportCanvasesInPaintOrder(viewport, baseRect)) {
-    const rect = canvas.getBoundingClientRect();
-    ctx.drawImage(
-      canvas,
-      (rect.left - baseRect.left) * scaleX,
-      (rect.top - baseRect.top) * scaleY,
-      rect.width * scaleX,
-      rect.height * scaleY,
-    );
+  for (const engine of engines) engine.flushRender({ forCapture: true });
+  try {
+    const baseRect = baseCanvas.getBoundingClientRect();
+    if (baseRect.width <= 0 || baseRect.height <= 0) throw new Error('Workspace preview is not ready yet');
+    const width = Math.max(1, baseCanvas.width || Math.round(baseRect.width * (window.devicePixelRatio || 1)));
+    const height = Math.max(1, baseCanvas.height || Math.round(baseRect.height * (window.devicePixelRatio || 1)));
+    const scaleX = width / baseRect.width;
+    const scaleY = height / baseRect.height;
+    const output = document.createElement('canvas');
+    output.width = width;
+    output.height = height;
+    const ctx = output.getContext('2d');
+    if (!ctx) throw new Error('Workspace preview canvas is unavailable');
+    ctx.clearRect(0, 0, width, height);
+    for (const canvas of viewportCanvasesInPaintOrder(viewport, baseRect)) {
+      const rect = canvas.getBoundingClientRect();
+      ctx.drawImage(
+        canvas,
+        (rect.left - baseRect.left) * scaleX,
+        (rect.top - baseRect.top) * scaleY,
+        rect.width * scaleX,
+        rect.height * scaleY,
+      );
+    }
+    const blob = await canvasToPngBlob(output);
+    return { blob, width, height };
+  } finally {
+    for (const engine of engines) engine.flushRender();
   }
-  const blob = await canvasToPngBlob(output);
-  return { blob, width, height };
 }
 
 function viewportCanvasesInPaintOrder(viewport: HTMLElement, baseRect: DOMRect): HTMLCanvasElement[] {
@@ -2047,8 +2081,9 @@ function hasWorkspaceSystemPaste(dataTransfer: DataTransfer | null): boolean {
   return Boolean(normalizeEmbedUrl(text, { allowLocalHttp: allowLocalHttpForCurrentHost() }));
 }
 
-function isEditablePasteTarget(target: EventTarget | null): boolean {
+function isEditableClipboardTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false;
+  if (target instanceof HTMLElement && target.isContentEditable) return true;
   return Boolean(target.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]'));
 }
 

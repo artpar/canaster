@@ -1,8 +1,6 @@
-import { MAX_TABLE_COLUMNS, normalizeTableNodeData, tableRowsFromText, type TableNodeData } from '../../../domain/tableNodeData';
+import { normalizeTableNodeData, type TableNodeData } from '../../../domain/tableNodeData';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import { clipText, drawNodeMeta, drawNodeTitle, nodeLayout, nodeText } from '../nodeRendering';
-import { createNodeDetailsEditor } from './createNodeDetailsEditor';
-import { nodeContentInteractionRegion } from './nodeContentInteractionRegion';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeContentRect, NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
 import type { CanvasTheme } from '../theme';
@@ -30,32 +28,6 @@ export const tableNodeDefinition: NodeDefinition<TableNodeData> = defineNodeType
       state: data.rows.length ? [] : ['No rows'],
       actions: [],
     };
-  },
-  getInteractionRegions({ contentRect }) {
-    return nodeContentInteractionRegion(contentRect, 'pointer', 'edit table');
-  },
-  createInteraction(ctx) {
-    if (ctx.region.id !== 'edit') return null;
-    return createNodeDetailsEditor<TableNodeData>({
-      mount: ctx.mount,
-      className: 'node-inline-details-editor node-inline-table-editor',
-      title: 'Table',
-      fields: [
-        { id: 'title', label: 'Title', value: ctx.data.title },
-        { id: 'columns', label: 'Columns', value: ctx.data.columns.join(', ') },
-        { id: 'rows', label: 'Rows', value: tableRowsText(ctx.data), rows: 6 },
-      ],
-      commit: (nextData) => ctx.requestCommit(nextData),
-      close: ctx.requestClose,
-      buildData: (values) => {
-        const columns = values.columns.split(',').map((column) => column.trim()).filter(Boolean).slice(0, MAX_TABLE_COLUMNS);
-        return normalizeTableNodeData({
-          title: values.title,
-          columns: columns.length ? columns : ['Item'],
-          rows: tableRowsFromText(values.rows, Math.max(1, columns.length || 1)),
-        });
-      },
-    });
   },
 });
 
@@ -99,8 +71,4 @@ function drawTableRow(ctx: CanvasRenderingContext2D, cells: readonly string[], x
     ctx.fillStyle = header ? theme.headerText : theme.bodyText;
     ctx.fillText(clipText(ctx, cells[index] || '', Math.max(0, columnWidth - 8)), cellX, y + Math.max(2, (rowHeight - 14) / 2));
   }
-}
-
-function tableRowsText(data: TableNodeData) {
-  return data.rows.map((row) => row.join(', ')).join('\n');
 }
