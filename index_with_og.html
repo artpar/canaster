@@ -37,10 +37,35 @@
       <!-- {{if .share_meta.author}} -->
         <meta property="article:author" content="{{ .share_meta.author }}" />
       <!-- {{end}} -->
+      <!-- {{range .share_meta.tags}} -->
+        <meta property="article:tag" content="{{ . }}" />
+      <!-- {{end}} -->
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content="{{if .share_meta.title}}{{ .share_meta.title }}{{else}}{{if .slug}}{{ .slug }}{{else}}{{ (index .document 0).document_name }}{{end}}{{end}}" />
       <meta name="twitter:description" content="{{if .share_meta.description}}{{ .share_meta.description }}{{else}}Open this Canaster workspace.{{end}}" />
       <meta name="twitter:image" content="{{if .share_meta.image_asset_id}}%VITE_DAPTIN_ENDPOINT%/asset/asset/{{ .share_meta.image_asset_id }}/file{{else}}%VITE_CANASTER_OG_IMAGE_URL%{{end}}" />
+      <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "CreativeWork",
+          "name": "{{if .share_meta.title}}{{ .share_meta.title }}{{else}}{{if .slug}}{{ .slug }}{{else}}{{ (index .document 0).document_name }}{{end}}{{end}}",
+          "description": "{{if .share_meta.description}}{{ .share_meta.description }}{{else}}Open this Canaster workspace.{{end}}",
+          "url": "%VITE_CANASTER_PUBLIC_ORIGIN%/d/{{ .username }}/{{ .slug }}",
+          "image": "{{if .share_meta.image_asset_id}}%VITE_DAPTIN_ENDPOINT%/asset/asset/{{ .share_meta.image_asset_id }}/file{{else}}%VITE_CANASTER_OG_IMAGE_URL%{{end}}",
+          "author": {
+            "@type": "Person",
+            "name": "{{ .share_meta.author }}"
+          },
+          "datePublished": "{{ .share_meta.published_at }}",
+          "dateModified": "{{ .share_meta.updated_at }}",
+          "keywords": [{{range $index, $tag := .share_meta.tags}}{{if $index}}, {{end}}"{{ $tag }}"{{end}}],
+          "isPartOf": {
+            "@type": "WebSite",
+            "name": "Canaster",
+            "url": "%VITE_CANASTER_PUBLIC_ORIGIN%"
+          }
+        }
+      </script>
     <!-- {{end}} -->
     <!-- {{if not .document}} -->
       <title>Canaster</title>

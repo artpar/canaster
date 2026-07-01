@@ -156,9 +156,11 @@ Current shape:
 
 - `get_canaster_document_by_public_path` still returns the real `.document` row.
 - The same action also returns `.share_meta` through an `ACTIONRESPONSE`.
-- `index_with_og.html` reads `.share_meta.title`, `.share_meta.description`, `.share_meta.author`, `.share_meta.updated_at`, and `.share_meta.image_asset_id`.
+- `index_with_og.html` reads `.share_meta.title`, `.share_meta.description`, `.share_meta.author`, `.share_meta.updated_at`, `.share_meta.image_asset_id`, and `.share_meta.tags`.
 - The OG image URL is built as `%VITE_DAPTIN_ENDPOINT%/asset/asset/<image_asset_id>/file`.
 - If the snapshot lacks a preview asset id, the template falls back to `%VITE_CANASTER_OG_IMAGE_URL%`.
+- Repeated `article:tag` tags and JSON-LD `keywords` come from root work item titles. The classic `<meta name="keywords">` tag is intentionally not emitted.
+- JSON-LD uses `CreativeWork` because a Canaster workspace is a practical saved document, not a blog post or marketing page.
 
 Important Daptin source behavior:
 
@@ -183,6 +185,15 @@ What not to do:
 - Browser-rendered image dimensions: `1200` x `630`.
 - Browser-rendered dates normalized to ISO-8601, for example `2026-07-01T07:07:46.336Z`.
 - Browser-rendered author fields: `share-e2e-admin-483921`.
+
+2026-07-01 tag and JSON-LD verification:
+
+- Fresh disposable Daptin `v0.12.26` on `http://localhost:7336`.
+- Route: `http://localhost:7336/d/share-e2e-admin-483921/Metadata-E2E`.
+- Test document: `019f1c96-0ca9-7958-a7f7-c109cc4728ad`.
+- Browser-rendered `article:tag` values: `Quarterly launch plan`, `Share text should come from the saved document JSON.`, `Launch readiness checklist`.
+- Browser `JSON.parse` of `script[type="application/ld+json"]` succeeded.
+- Parsed JSON-LD used `@type: CreativeWork`, `name: Local OG Metadata Workspace`, canonical route URL, preview asset image URL, ISO dates, author, and `keywords` matching the rendered tags.
 
 Local CLI gotcha:
 
