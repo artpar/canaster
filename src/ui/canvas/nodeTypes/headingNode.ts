@@ -55,7 +55,7 @@ export const headingNodeDefinition: NodeDefinition<HeadingNodeData> = defineNode
     return nodeContentInteractionRegion(contentRect, 'text', 'edit heading');
   },
   createInteraction(ctx) {
-    if (ctx.region.id !== 'details') return null;
+    if (ctx.region.id !== 'edit') return null;
     return createNodeDetailsEditor<HeadingNodeData>({
       mount: ctx.mount,
       className: 'node-inline-details-editor node-inline-heading-editor',
@@ -65,7 +65,7 @@ export const headingNodeDefinition: NodeDefinition<HeadingNodeData> = defineNode
         { id: 'subtitle', label: 'Subtitle', value: ctx.data.subtitle, rows: 2 },
         { id: 'level', label: 'Level', value: ctx.data.level, options: HEADING_NODE_LEVELS.map((value) => ({ value, label: headingNodeLevelLabel(value) })) },
       ],
-      commit: (nextData) => ctx.requestCommit(nextData, 'pointer'),
+      commit: (nextData) => ctx.requestCommit(nextData),
       close: ctx.requestClose,
       buildData: (values) => normalizeHeadingNodeData(values),
     });

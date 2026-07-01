@@ -38,7 +38,7 @@ export const dateNodeDefinition: NodeDefinition<DateNodeData> = defineNodeType({
     return nodeContentInteractionRegion(contentRect, 'pointer', 'edit date');
   },
   createInteraction(ctx) {
-    if (ctx.region.id !== 'details') return null;
+    if (ctx.region.id !== 'edit') return null;
     return createNodeDetailsEditor<DateNodeData>({
       mount: ctx.mount,
       className: 'node-inline-details-editor node-inline-date-editor',
@@ -50,7 +50,7 @@ export const dateNodeDefinition: NodeDefinition<DateNodeData> = defineNodeType({
         { id: 'place', label: 'Place', value: ctx.data.place },
         { id: 'note', label: 'Note', value: ctx.data.note, rows: 3 },
       ],
-      commit: (nextData) => ctx.requestCommit(nextData, 'pointer'),
+      commit: (nextData) => ctx.requestCommit(nextData),
       close: ctx.requestClose,
       buildData: (values) => normalizeDateNodeData(values),
     });

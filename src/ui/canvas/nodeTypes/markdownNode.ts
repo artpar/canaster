@@ -3,7 +3,7 @@ import { asString } from '../../../core/nodeData';
 import { cleanAssetTitle, workspaceAssetKindForFile } from '../../../core/workspaceAssetTypes';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import type { JsonObject } from '../../../core/nodePrimitives';
-import { drawNodeMeta, nodeLayout } from '../nodeRendering';
+import { drawNodeMeta } from '../nodeRendering';
 import { createFilePreviewShell, loadFileAssetFile, saveFileAsset } from './fileAssetPreview';
 import {
   drawMarkdownCanvasBlocks,
@@ -11,8 +11,9 @@ import {
   parseMarkdownCanvasBlocks,
   type MarkdownCanvasBlock,
 } from './markdownCanvasPreview';
+import { nodeEditInteractionRegion } from './nodeContentInteractionRegion';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
-import type { NodeContentRect, NodeDefinition, NodeInteractionRegion } from '../nodeDefinition/nodeDefinitionTypes';
+import type { NodeContentRect, NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
 import type { CanvasTheme } from '../theme';
 import { renderMarkdownHtml } from './renderMarkdownHtml';
 
@@ -53,12 +54,12 @@ export const markdownNodeDefinition: NodeDefinition<MarkdownNodeData> = defineNo
       actions: [],
     };
   },
-  getInteractionRegions({ contentRect, theme }) {
-    return markdownRegions(contentRect, theme);
+  getInteractionRegions({ contentRect }) {
+    return nodeEditInteractionRegion(contentRect, 'pointer', 'open Markdown preview');
   },
   createInteraction(ctx) {
-    if (ctx.region.id !== 'preview') return null;
-    return createMarkdownPreview(ctx.mount, ctx.data, (nextData) => ctx.requestCommit(nextData, 'pointer'), ctx.requestClose);
+    if (ctx.region.id !== 'edit') return null;
+    return createMarkdownPreview(ctx.mount, ctx.data, (nextData) => ctx.requestCommit(nextData), ctx.requestClose);
   },
   referencedAssetIds({ data }) {
     return data.assetId ? [data.assetId] : [];
@@ -82,27 +83,12 @@ function drawMarkdownPreview(
   drawMarkdownCanvasPreview(ctx, rect, markdownPreviewTextForCanvas(data), theme, visibleRect);
 }
 
-function markdownRegions(contentRect: NodeContentRect, theme: CanvasTheme): NodeInteractionRegion[] {
-  const layout = nodeLayout(theme);
-  return [{
-    id: 'preview',
-    rect: {
-      x: contentRect.x + layout.insetX,
-      y: contentRect.y,
-      w: Math.max(0, contentRect.w - layout.insetX * 2),
-      h: contentRect.h,
-    },
-    cursor: 'pointer',
-    label: 'open Markdown preview',
-  }];
-}
-
 function createMarkdownPreview(mount: HTMLElement, data: MarkdownNodeData, commit: (nextData: MarkdownNodeData) => void, close: () => void) {
   const shell = createFilePreviewShell(mount, 'node-inline-markdown-preview', data.title || 'Markdown');
   let disposed = false;
   shell.closeButton.addEventListener('click', close);
   if (!data.assetId) {
-    renderMarkdownAttach(shell.body, data, commit);
+    renderMarkdownAttach(shell.body, data, commit, close);
   } else {
     shell.setMessage('Loading Markdown');
     void loadFileAssetFile(data.assetId)
@@ -146,7 +132,7 @@ function openMarkdownLinksInNewTabs(root: HTMLElement) {
   });
 }
 
-function renderMarkdownAttach(body: HTMLElement, data: MarkdownNodeData, commit: (nextData: MarkdownNodeData) => void) {
+function renderMarkdownAttach(body: HTMLElement, data: MarkdownNodeData, commit: (nextData: MarkdownNodeData) => void, close: () => void) {
   body.replaceChildren();
   const panel = document.createElement('div');
   panel.className = 'file-attach-panel';
@@ -180,6 +166,7 @@ function renderMarkdownAttach(body: HTMLElement, data: MarkdownNodeData, commit:
           mime: asset.mime || file.type || 'text/markdown',
           markdownText: '',
         });
+        close();
       })
       .catch((error) => {
         input.disabled = false;

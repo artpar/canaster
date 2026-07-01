@@ -60,6 +60,7 @@ const NODE_HEADER_PAD_X = 8;
 const NODE_HEADER_HEIGHT = 22;
 const NODE_CONTENT_ZOOM_FACTOR = 1.22;
 const NODE_CONTENT_TOOLBAR_INSET = 8;
+const PRIMARY_NODE_EDIT_REGION_ID = 'edit';
 
 type DragState =
   | { mode: 'pan'; pointerId: number; sx: number; sy: number; camX: number; camY: number; moved: boolean }
@@ -1438,7 +1439,7 @@ export class CanvasEngine {
       event.preventDefault();
       const selected = this.selectedNode();
       if (selected) {
-        const region = this.interactionRegionsFor(selected)[0] ?? null;
+        const region = primaryInteractionRegion(this.interactionRegionsFor(selected));
         if (region && this.startNodeInteraction(selected, region, 'keyboard')) return;
       }
       const action = selected ? describeNode(selected).actions.find((candidate) => candidate.available && candidate.id === 'enter-child-canvas') : null;
@@ -1540,7 +1541,8 @@ export class CanvasEngine {
     if (node) {
       if (!this.selectedNodeIds.has(node.id)) this.executeCommand({ type: 'select-node', nodeId: node.id, mode: 'replace', source: 'pointer' });
       const renderNode = this.renderNode(node);
-      const region = this.interactionRegionAt(node, world) ?? (pointInRect(world, renderNode) ? this.interactionRegionsFor(node)[0] : null) ?? null;
+      const regions = this.interactionRegionsFor(node);
+      const region = this.interactionRegionAt(node, world) ?? (pointInRect(world, renderNode) ? primaryInteractionRegion(regions) : null);
       if (region && this.startNodeInteraction(node, region, 'pointer')) {
         event.preventDefault();
         return;
@@ -2460,6 +2462,10 @@ function sourceInteraction(source: CanvasEditSource, action: 'selection' | 'move
 
 function isNodeChromeRegion(region: NodeInteractionRegion): boolean {
   return region.id === 'title';
+}
+
+function primaryInteractionRegion(regions: NodeInteractionRegion[]): NodeInteractionRegion | null {
+  return regions.find((region) => region.id === PRIMARY_NODE_EDIT_REGION_ID) ?? regions[0] ?? null;
 }
 
 function intersectNodeContentRects(a: NodeContentRect, b: NodeContentRect): NodeContentRect {

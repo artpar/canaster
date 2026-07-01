@@ -1,11 +1,11 @@
 import { asEnum, asString } from '../../../core/nodeData';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
-import { createInlineTextarea, createInlineTextInput } from '../inlineEditorDom';
+import { createNodeDetailsEditor } from './createNodeDetailsEditor';
 import type { JsonObject } from '../../../core/nodePrimitives';
 import { drawAccentMark, drawNodeBodyLines, nodeLayout, wrapText } from '../nodeRendering';
+import { nodeEditInteractionRegion } from './nodeContentInteractionRegion';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
-import type { NodeDefinition, NodeContentRect, NodeInteractionRegion } from '../nodeDefinition/nodeDefinitionTypes';
-import type { CanvasTheme } from '../theme';
+import type { NodeContentRect, NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
 
 type CardAccent = 'task' | 'data' | 'system';
 type CardNodeData = {
@@ -56,55 +56,42 @@ export const cardNodeDefinition: NodeDefinition<CardNodeData> = defineNodeType({
       actions: [],
     };
   },
-  getInteractionRegions({ contentRect, theme }) {
-    return cardRegions(contentRect, theme);
+  getInteractionRegions({ contentRect }) {
+    return nodeEditInteractionRegion(contentRect, 'pointer', 'edit work item');
   },
   createInteraction(ctx) {
-    if (ctx.region.id === 'title') {
-      return createInlineTextInput({
-        mount: ctx.mount,
-        className: 'node-inline-card-title-editor',
-        value: ctx.data.title,
-        placeholder: 'Work item title',
-        ariaLabel: 'Edit work item title',
-        commit: (value) => ctx.requestCommit({ ...ctx.data, title: value }, 'pointer'),
-        close: ctx.requestClose,
-      });
-    }
-    if (ctx.region.id === 'detail') {
-      return createInlineTextarea({
-        mount: ctx.mount,
-        className: 'node-inline-card-detail-editor',
-        value: ctx.data.detail,
-        placeholder: 'Work item detail',
-        ariaLabel: 'Edit work item detail',
-        commit: (value) => ctx.requestCommit({ ...ctx.data, detail: value }, 'pointer'),
-        close: ctx.requestClose,
-      });
-    }
-    return null;
+    if (ctx.region.id !== 'edit') return null;
+    return createNodeDetailsEditor<CardNodeData>({
+      mount: ctx.mount,
+      className: 'node-inline-details-editor node-inline-card-editor',
+      title: 'Work item',
+      fields: [
+        { id: 'title', label: 'Title', value: ctx.data.title },
+        { id: 'detail', label: 'Detail', value: ctx.data.detail, rows: 4 },
+        { id: 'accent', label: 'Type', value: ctx.data.accent, options: CARD_ACCENTS.map((value) => ({ value, label: cardAccentLabel(value) })) },
+      ],
+      commit: (nextData) => ctx.requestCommit(nextData),
+      close: ctx.requestClose,
+      buildData: (values) => ({
+        title: asString(values.title, 'Untitled work item'),
+        detail: asString(values.detail, ''),
+        accent: asEnum(values.accent, CARD_ACCENTS, 'task'),
+      }),
+    });
   },
 });
 
-function cardRegions(contentRect: NodeContentRect, theme: CanvasTheme): NodeInteractionRegion[] {
-  const layout = nodeLayout(theme);
-  const detailTop = layout.accentHeight + Math.round(layout.labelLineHeight * 0.7);
-  return [
-    {
-      id: 'title',
-      rect: { x: contentRect.x + layout.insetX, y: contentRect.y, w: Math.max(0, contentRect.w - layout.insetX * 2), h: layout.titleHeight + Math.round(layout.labelLineHeight * 0.25) },
-      cursor: 'text',
-      label: 'work item title',
-    },
-    {
-      id: 'detail',
-      rect: { x: contentRect.x + layout.insetX, y: contentRect.y + detailTop, w: Math.max(0, contentRect.w - layout.insetX * 2), h: Math.max(layout.rowHeight, contentRect.h - detailTop) },
-      cursor: 'text',
-      label: 'work item detail',
-    },
-  ];
-}
-
 function cardDetailLineCapacity(rect: NodeContentRect, lineHeight: number) {
   return Math.max(0, Math.min(4, Math.floor(rect.h / lineHeight)));
+}
+
+function cardAccentLabel(accent: CardAccent) {
+  switch (accent) {
+    case 'task':
+      return 'Task';
+    case 'data':
+      return 'Data';
+    case 'system':
+      return 'System';
+  }
 }

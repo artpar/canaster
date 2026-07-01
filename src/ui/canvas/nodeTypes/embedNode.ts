@@ -10,8 +10,9 @@ import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import type { JsonObject } from '../../../core/nodePrimitives';
 import { drawNodeBodyLines, drawNodeMeta, nodeLayout, wrapText } from '../nodeRendering';
 import { prepareInlineEditorMount, stopEvent } from '../inlineEditorDom';
+import { nodeEditInteractionRegion } from './nodeContentInteractionRegion';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
-import type { NodeContentRect, NodeDefinition, NodeInteractionRegion } from '../nodeDefinition/nodeDefinitionTypes';
+import type { NodeContentRect, NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
 import type { CanvasTheme } from '../theme';
 
 type EmbedNodeData = {
@@ -53,16 +54,11 @@ export const embedNodeDefinition: NodeDefinition<EmbedNodeData> = defineNodeType
     };
   },
   getInteractionRegions({ contentRect }) {
-    return [{
-      id: 'preview',
-      rect: { ...contentRect },
-      cursor: 'pointer',
-      label: 'edit web preview',
-    }];
+    return nodeEditInteractionRegion(contentRect, 'pointer', 'edit web preview');
   },
   createInteraction(ctx) {
-    if (ctx.region.id !== 'preview') return null;
-    return createEmbedEditor(ctx.mount, ctx.data, (nextData) => ctx.requestCommit(nextData, 'pointer'), ctx.requestClose);
+    if (ctx.region.id !== 'edit') return null;
+    return createEmbedEditor(ctx.mount, ctx.data, (nextData) => ctx.requestCommit(nextData), ctx.requestClose);
   },
 });
 
@@ -112,7 +108,7 @@ function createEmbedEditor(mount: HTMLElement, data: EmbedNodeData, commit: (nex
   save.textContent = 'Save';
   const done = document.createElement('button');
   done.type = 'button';
-  done.textContent = 'Close';
+  done.textContent = 'Cancel';
   form.append(input, save, done);
 
   const message = document.createElement('p');
@@ -136,7 +132,7 @@ function createEmbedEditor(mount: HTMLElement, data: EmbedNodeData, commit: (nex
       provider: embedProviderForUrl(normalized),
     };
     commit(nextData);
-    renderPreview(normalized);
+    close();
   };
 
   form.addEventListener('submit', (event) => {

@@ -6,8 +6,9 @@ import { cachedAssetImage, cacheAssetImage } from '../imageAssets';
 import { prepareInlineEditorMount, stopEvent } from '../inlineEditorDom';
 import type { JsonObject } from '../../../core/nodePrimitives';
 import { drawPlaceholderIcon } from '../nodeRendering';
+import { nodeEditInteractionRegion } from './nodeContentInteractionRegion';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
-import type { NodeContentRect, NodeDefinition, NodeInteractionRegion } from '../nodeDefinition/nodeDefinitionTypes';
+import type { NodeContentRect, NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
 import type { CanvasTheme } from '../theme';
 
 const IMAGE_FITS = ['contain', 'cover'] as const;
@@ -57,22 +58,17 @@ export const imageNodeDefinition: NodeDefinition<ImageNodeData> = defineNodeType
       actions: [],
     };
   },
-  getInteractionRegions({ contentRect, theme }) {
-    return imageRegions(contentRect, theme);
+  getInteractionRegions({ contentRect }) {
+    return nodeEditInteractionRegion(contentRect, 'pointer', 'edit image');
   },
   createInteraction(ctx) {
-    if (ctx.region.id !== 'image-frame') return null;
-    return createImagePicker(ctx.mount, ctx.data, (nextData) => ctx.requestCommit(nextData, 'pointer'), ctx.requestClose);
+    if (ctx.region.id !== 'edit') return null;
+    return createImagePicker(ctx.mount, ctx.data, (nextData) => ctx.requestCommit(nextData), ctx.requestClose);
   },
   referencedAssetIds({ data }) {
     return data.assetId ? [data.assetId] : [];
   },
 });
-
-function imageRegions(contentRect: NodeContentRect, theme: CanvasTheme): NodeInteractionRegion[] {
-  const frame = imageFrame(contentRect, theme);
-  return [{ id: 'image-frame', rect: frame, cursor: 'pointer', label: 'image' }];
-}
 
 function imageFrame(contentRect: NodeContentRect, theme: CanvasTheme) {
   void theme;
@@ -92,6 +88,7 @@ function createImagePicker(mount: HTMLElement, data: ImageNodeData, commit: (nex
   mount.append(panel);
 
   let disposed = false;
+  let assetIdDraft = data.assetId;
   let altDraft = data.alt;
   const render = (state: { assets: CanasterAssetSummary[]; busy: boolean; message: string }) => {
     panel.replaceChildren();
@@ -124,11 +121,13 @@ function createImagePicker(mount: HTMLElement, data: ImageNodeData, commit: (nex
       option.textContent = asset.name;
       select.append(option);
     }
-    select.value = data.assetId ?? '';
+    select.value = assetIdDraft ?? '';
     select.addEventListener('change', () => {
       const selectedName = selectedAssetName(state.assets, select.value);
-      commit({ ...data, assetId: select.value || null, alt: altDraft || selectedName || data.alt });
-      close();
+      assetIdDraft = select.value || null;
+      if (!altDraft && selectedName) {
+        altDraft = selectedName;
+      }
     });
 
     actions.append(uploadLabel, select);
@@ -142,9 +141,6 @@ function createImagePicker(mount: HTMLElement, data: ImageNodeData, commit: (nex
     altInput.addEventListener('input', () => {
       altDraft = altInput.value;
     });
-    altInput.addEventListener('change', () => {
-      commit({ ...data, alt: altInput.value });
-    });
     altInput.addEventListener('keydown', stopEvent);
     panel.append(altInput);
     if (state.message) {
@@ -153,6 +149,23 @@ function createImagePicker(mount: HTMLElement, data: ImageNodeData, commit: (nex
       message.textContent = state.message;
       panel.append(message);
     }
+    const footer = document.createElement('div');
+    footer.className = 'node-details-editor-actions';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.textContent = 'Cancel';
+    cancel.addEventListener('click', close);
+    const save = document.createElement('button');
+    save.type = 'button';
+    save.className = 'primary';
+    save.textContent = 'Save';
+    save.disabled = state.busy;
+    save.addEventListener('click', () => {
+      commit({ ...data, assetId: assetIdDraft, alt: altDraft });
+      close();
+    });
+    footer.append(cancel, save);
+    panel.append(footer);
   };
 
   const setState = (state: { assets: CanasterAssetSummary[]; busy: boolean; message: string }) => {

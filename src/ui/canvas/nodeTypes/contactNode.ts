@@ -39,7 +39,7 @@ export const contactNodeDefinition: NodeDefinition<ContactNodeData> = defineNode
     return nodeContentInteractionRegion(contentRect, 'pointer', 'edit contact');
   },
   createInteraction(ctx) {
-    if (ctx.region.id !== 'details') return null;
+    if (ctx.region.id !== 'edit') return null;
     return createNodeDetailsEditor<ContactNodeData>({
       mount: ctx.mount,
       className: 'node-inline-details-editor node-inline-contact-editor',
@@ -52,7 +52,7 @@ export const contactNodeDefinition: NodeDefinition<ContactNodeData> = defineNode
         { id: 'email', label: 'Email', value: ctx.data.email, inputMode: 'email' },
         { id: 'note', label: 'Note', value: ctx.data.note, rows: 3 },
       ],
-      commit: (nextData) => ctx.requestCommit(nextData, 'pointer'),
+      commit: (nextData) => ctx.requestCommit(nextData),
       close: ctx.requestClose,
       buildData: (values) => normalizeContactNodeData(values),
     });

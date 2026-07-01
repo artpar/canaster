@@ -35,7 +35,7 @@ export const tableNodeDefinition: NodeDefinition<TableNodeData> = defineNodeType
     return nodeContentInteractionRegion(contentRect, 'pointer', 'edit table');
   },
   createInteraction(ctx) {
-    if (ctx.region.id !== 'details') return null;
+    if (ctx.region.id !== 'edit') return null;
     return createNodeDetailsEditor<TableNodeData>({
       mount: ctx.mount,
       className: 'node-inline-details-editor node-inline-table-editor',
@@ -45,7 +45,7 @@ export const tableNodeDefinition: NodeDefinition<TableNodeData> = defineNodeType
         { id: 'columns', label: 'Columns', value: ctx.data.columns.join(', ') },
         { id: 'rows', label: 'Rows', value: tableRowsText(ctx.data), rows: 6 },
       ],
-      commit: (nextData) => ctx.requestCommit(nextData, 'pointer'),
+      commit: (nextData) => ctx.requestCommit(nextData),
       close: ctx.requestClose,
       buildData: (values) => {
         const columns = values.columns.split(',').map((column) => column.trim()).filter(Boolean).slice(0, MAX_TABLE_COLUMNS);

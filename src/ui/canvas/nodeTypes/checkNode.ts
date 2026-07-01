@@ -8,8 +8,9 @@ import {
   type ChecklistNodeData,
 } from '../../../domain/checklistNodeData';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
-import { createInlineTextInput, prepareInlineEditorMount, stopEvent } from '../inlineEditorDom';
+import { prepareInlineEditorMount, stopEvent } from '../inlineEditorDom';
 import { clipText, drawNodeMeta, nodeLayout, nodeText } from '../nodeRendering';
+import { nodeEditInteractionRegion } from './nodeContentInteractionRegion';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeContentRect, NodeDefinition, NodeInteractionRegion } from '../nodeDefinition/nodeDefinitionTypes';
 import type { CanvasTheme } from '../theme';
@@ -75,14 +76,9 @@ export const checkNodeDefinition: NodeDefinition<ChecklistNodeData> = defineNode
   },
   createInteraction(ctx) {
     const { data, region } = ctx;
-    if (region.id === 'title') {
-      return createChecklistInput(ctx.mount, data.title, 'Edit checklist title', (value) => {
-        ctx.requestCommit({ ...data, title: value }, 'pointer');
-      }, ctx.requestClose);
-    }
-    if (region.id === 'items') {
+    if (region.id === 'edit') {
       return createChecklistListEditor(ctx.mount, data, (nextData) => {
-        ctx.requestCommit(nextData, 'pointer');
+        ctx.requestCommit(nextData);
       }, ctx.requestClose);
     }
     const checkedItemId = checkedItemRegionId(region.id);
@@ -102,20 +98,7 @@ function checklistRegions(contentRect: NodeContentRect, data: ChecklistNodeData,
   const layout = nodeLayout(theme);
   const metrics = checklistMetrics(layout);
   const itemsY = checklistItemsY(layout, data.items.length);
-  const regions: NodeInteractionRegion[] = [
-    {
-      id: 'title',
-      rect: { x: contentRect.x + layout.insetX, y: contentRect.y, w: Math.max(0, contentRect.w - layout.insetX * 2), h: layout.titleHeight + Math.round(layout.labelLineHeight * 0.15) },
-      cursor: 'text',
-      label: 'checklist title',
-    },
-    {
-      id: 'items',
-      rect: { x: contentRect.x + layout.insetX, y: contentRect.y + itemsY, w: Math.max(0, contentRect.w - layout.insetX * 2), h: Math.max(layout.rowHeight, contentRect.h - itemsY) },
-      cursor: 'pointer',
-      label: data.items.length ? 'edit checklist items' : 'add checklist item',
-    },
-  ];
+  const regions: NodeInteractionRegion[] = nodeEditInteractionRegion(contentRect, 'pointer', 'edit checklist');
   const rows = visibleRows(Math.max(0, contentRect.h - itemsY), layout);
   let y = contentRect.y + itemsY;
   for (const item of data.items.slice(0, rows)) {
@@ -151,7 +134,6 @@ function createChecklistListEditor(mount: HTMLElement, data: ChecklistNodeData, 
   let draft: ChecklistNodeData = { ...data, items: data.items.map((item) => ({ ...item })) };
   let addValue = '';
   let closed = false;
-  let saveOnDispose = true;
   let closeStarted = false;
 
   const closeWithMotion = () => {
@@ -162,14 +144,12 @@ function createChecklistListEditor(mount: HTMLElement, data: ChecklistNodeData, 
 
   const cancel = () => {
     if (closed) return;
-    saveOnDispose = false;
     closed = true;
     closeWithMotion();
   };
 
   const commitAndClose = () => {
     if (closed) return;
-    saveOnDispose = false;
     closed = true;
     commit(draft);
     closeWithMotion();
@@ -188,18 +168,21 @@ function createChecklistListEditor(mount: HTMLElement, data: ChecklistNodeData, 
     }
   });
 
-  panel.addEventListener('focusout', (event) => {
-    const nextTarget = event.relatedTarget;
-    if (nextTarget instanceof Node && panel.contains(nextTarget)) return;
-    requestAnimationFrame(() => {
-      const active = document.activeElement;
-      if (active instanceof Node && panel.contains(active)) return;
-      commitAndClose();
-    });
-  });
-
   const render = () => {
     panel.replaceChildren();
+    const titleField = document.createElement('label');
+    titleField.className = 'node-details-editor-field checklist-list-title-field';
+    const titleLabel = document.createElement('span');
+    titleLabel.textContent = 'Title';
+    const titleInput = document.createElement('input');
+    titleInput.type = 'text';
+    titleInput.value = draft.title;
+    titleInput.setAttribute('aria-label', 'Checklist title');
+    titleInput.addEventListener('input', () => {
+      draft = { ...draft, title: titleInput.value };
+    });
+    titleField.append(titleLabel, titleInput);
+
     const list = document.createElement('div');
     list.className = 'checklist-list-items';
     if (!draft.items.length) {
@@ -271,7 +254,7 @@ function createChecklistListEditor(mount: HTMLElement, data: ChecklistNodeData, 
     addRow.append(addInput, addButton);
     syncAddButton();
 
-    panel.append(createChecklistEditorHeader(draft), list, addRow);
+    panel.append(createChecklistEditorHeader(draft), titleField, list, addRow);
     if (draft.items.length >= MAX_CHECKLIST_ITEMS) {
       const limit = document.createElement('p');
       limit.className = 'checklist-list-message';
@@ -286,7 +269,7 @@ function createChecklistListEditor(mount: HTMLElement, data: ChecklistNodeData, 
     cancelButton.addEventListener('click', cancel);
     const doneButton = document.createElement('button');
     doneButton.type = 'button';
-    doneButton.textContent = 'Done';
+    doneButton.textContent = 'Save';
     doneButton.className = 'primary';
     doneButton.addEventListener('click', commitAndClose);
     actions.append(cancelButton, doneButton);
@@ -314,7 +297,6 @@ function createChecklistListEditor(mount: HTMLElement, data: ChecklistNodeData, 
       focusFirstEditorControl(panel);
     },
     dispose() {
-      if (!closed && saveOnDispose) commit(draft);
       closed = true;
     },
   };
@@ -414,18 +396,6 @@ function createChecklistEditorHeader(data: ChecklistNodeData) {
 
 function focusFirstEditorControl(panel: HTMLElement) {
   panel.querySelector<HTMLElement>('input[type="text"], input[type="checkbox"], button')?.focus({ preventScroll: true });
-}
-
-function createChecklistInput(mount: HTMLElement, value: string, label: string, commit: (value: string) => void, close: () => void) {
-  return createInlineTextInput({
-    mount,
-    className: 'node-inline-checklist-editor',
-    value,
-    placeholder: label,
-    ariaLabel: label,
-    commit,
-    close,
-  });
 }
 
 function visibleRows(height: number, layout: ReturnType<typeof nodeLayout>) {

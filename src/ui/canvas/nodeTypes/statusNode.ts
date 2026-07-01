@@ -58,7 +58,7 @@ export const statusNodeDefinition: NodeDefinition<StatusNodeData> = defineNodeTy
     return nodeContentInteractionRegion(contentRect, 'pointer', 'edit status');
   },
   createInteraction(ctx) {
-    if (ctx.region.id !== 'details') return null;
+    if (ctx.region.id !== 'edit') return null;
     return createNodeDetailsEditor<StatusNodeData>({
       mount: ctx.mount,
       className: 'node-inline-details-editor node-inline-status-editor',
@@ -70,7 +70,7 @@ export const statusNodeDefinition: NodeDefinition<StatusNodeData> = defineNodeTy
         { id: 'dueDate', label: 'Due date', value: ctx.data.dueDate, inputMode: 'date' },
         { id: 'detail', label: 'Detail', value: ctx.data.detail, rows: 3 },
       ],
-      commit: (nextData) => ctx.requestCommit(nextData, 'pointer'),
+      commit: (nextData) => ctx.requestCommit(nextData),
       close: ctx.requestClose,
       buildData: (values) => normalizeStatusNodeData(values),
     });

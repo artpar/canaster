@@ -38,6 +38,11 @@ export function createNodeDetailsEditor<TData>({
     if (event.key === 'Escape') {
       event.preventDefault();
       close();
+      return;
+    }
+    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+      event.preventDefault();
+      panel.requestSubmit();
     }
   });
   mount.append(panel);
@@ -69,7 +74,7 @@ export function createNodeDetailsEditor<TData>({
   save.textContent = 'Save';
   const cancel = document.createElement('button');
   cancel.type = 'button';
-  cancel.textContent = 'Close';
+  cancel.textContent = 'Cancel';
   cancel.addEventListener('click', close);
   actions.append(save, cancel);
   panel.append(actions);

@@ -3,10 +3,11 @@ import type { NodeContentViewport } from '../../../core/nodeAppearance';
 import { cleanAssetTitle, workspaceAssetKindForFile } from '../../../core/workspaceAssetTypes';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import type { JsonObject } from '../../../core/nodePrimitives';
-import { drawNodeMeta, nodeLayout } from '../nodeRendering';
+import { drawNodeMeta } from '../nodeRendering';
 import { createFilePreviewShell, loadFileAssetObject, saveFileAsset } from './fileAssetPreview';
+import { nodeEditInteractionRegion } from './nodeContentInteractionRegion';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
-import type { NodeContentRect, NodeDefinition, NodeInteractionRegion } from '../nodeDefinition/nodeDefinitionTypes';
+import type { NodeContentRect, NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
 import type { CanvasTheme } from '../theme';
 import { drawPdfCanvasPreview } from './pdfCanvasPreview';
 
@@ -44,12 +45,12 @@ export const pdfNodeDefinition: NodeDefinition<PdfNodeData> = defineNodeType({
       actions: [],
     };
   },
-  getInteractionRegions({ contentRect, theme }) {
-    return pdfRegions(contentRect, theme);
+  getInteractionRegions({ contentRect }) {
+    return nodeEditInteractionRegion(contentRect, 'pointer', 'open PDF preview');
   },
   createInteraction(ctx) {
-    if (ctx.region.id !== 'preview') return null;
-    return createPdfPreview(ctx.mount, ctx.data, (nextData) => ctx.requestCommit(nextData, 'pointer'), ctx.requestClose);
+    if (ctx.region.id !== 'edit') return null;
+    return createPdfPreview(ctx.mount, ctx.data, (nextData) => ctx.requestCommit(nextData), ctx.requestClose);
   },
   referencedAssetIds({ data }) {
     return data.assetId ? [data.assetId] : [];
@@ -69,27 +70,12 @@ function drawPdfPreview(
   drawPdfCanvasPreview(ctx, rect, data.assetId, data.fileName, theme, visibleRect, contentViewport, requestRender);
 }
 
-function pdfRegions(contentRect: NodeContentRect, theme: CanvasTheme): NodeInteractionRegion[] {
-  const layout = nodeLayout(theme);
-  return [{
-    id: 'preview',
-    rect: {
-      x: contentRect.x + layout.insetX,
-      y: contentRect.y,
-      w: Math.max(0, contentRect.w - layout.insetX * 2),
-      h: contentRect.h,
-    },
-    cursor: 'pointer',
-    label: 'open PDF preview',
-  }];
-}
-
 function createPdfPreview(mount: HTMLElement, data: PdfNodeData, commit: (nextData: PdfNodeData) => void, close: () => void) {
   const shell = createFilePreviewShell(mount, 'node-inline-pdf-preview', data.title || 'PDF');
   let disposed = false;
   shell.closeButton.addEventListener('click', close);
   if (!data.assetId) {
-    renderPdfAttach(shell.body, data, commit);
+    renderPdfAttach(shell.body, data, commit, close);
   } else {
     shell.setMessage('Loading PDF');
     void loadFileAssetObject(data.assetId)
@@ -122,7 +108,7 @@ function createPdfPreview(mount: HTMLElement, data: PdfNodeData, commit: (nextDa
   };
 }
 
-function renderPdfAttach(body: HTMLElement, data: PdfNodeData, commit: (nextData: PdfNodeData) => void) {
+function renderPdfAttach(body: HTMLElement, data: PdfNodeData, commit: (nextData: PdfNodeData) => void, close: () => void) {
   body.replaceChildren();
   const panel = document.createElement('div');
   panel.className = 'file-attach-panel';
@@ -155,6 +141,7 @@ function renderPdfAttach(body: HTMLElement, data: PdfNodeData, commit: (nextData
           fileName: asset.name || file.name || 'document.pdf',
           mime: asset.mime || file.type || 'application/pdf',
         });
+        close();
       })
       .catch((error) => {
         input.disabled = false;

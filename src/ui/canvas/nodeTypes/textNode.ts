@@ -1,8 +1,9 @@
 import { asString } from '../../../core/nodeData';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
-import { createInlineTextarea } from '../inlineEditorDom';
+import { createNodeDetailsEditor } from './createNodeDetailsEditor';
 import type { JsonObject } from '../../../core/nodePrimitives';
 import { drawNodeBodyLines, nodeLayout, wrapText } from '../nodeRendering';
+import { nodeEditInteractionRegion } from './nodeContentInteractionRegion';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
 
@@ -37,23 +38,20 @@ export const textNodeDefinition: NodeDefinition<TextNodeData> = defineNodeType({
     };
   },
   getInteractionRegions({ contentRect }) {
-    return [{
-      id: 'body',
-      rect: { ...contentRect },
-      cursor: 'text',
-      label: 'note',
-    }];
+    return nodeEditInteractionRegion(contentRect, 'pointer', 'edit note');
   },
   createInteraction(ctx) {
-    if (ctx.region.id !== 'body') return null;
-    return createInlineTextarea({
+    if (ctx.region.id !== 'edit') return null;
+    return createNodeDetailsEditor<TextNodeData>({
       mount: ctx.mount,
-      className: 'node-inline-text-editor',
-      value: ctx.data.text,
-      placeholder: 'Write note',
-      ariaLabel: 'Edit note',
-      commit: (value) => ctx.requestCommit({ ...ctx.data, text: value }, 'pointer'),
+      className: 'node-inline-details-editor node-inline-text-editor',
+      title: 'Note',
+      fields: [
+        { id: 'text', label: 'Text', value: ctx.data.text, rows: 8 },
+      ],
+      commit: (nextData) => ctx.requestCommit(nextData),
       close: ctx.requestClose,
+      buildData: (values) => ({ text: asString(values.text, '') }),
     });
   },
 });
