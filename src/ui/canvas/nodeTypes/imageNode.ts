@@ -85,6 +85,7 @@ function createImagePicker(mount: HTMLElement, data: ImageNodeData, commit: (nex
   let assetIdDraft = data.assetId;
   let altDraft = data.alt;
   let fitDraft = data.fit;
+  let directPickOpen = !data.assetId && hasUsableStoredToken();
   const surface = createInlineNodeSurface({
     mount,
     className: 'node-inline-image-editor',
@@ -92,26 +93,36 @@ function createImagePicker(mount: HTMLElement, data: ImageNodeData, commit: (nex
     readDraft: () => ({ ...data, assetId: assetIdDraft, alt: altDraft, fit: fitDraft }),
     commit,
     close,
-    focus: (root) => root.querySelector<HTMLElement>('select, input, button')?.focus({ preventScroll: true }),
+    focus: (root) => {
+      if (directPickOpen) return;
+      root.querySelector<HTMLElement>('select, input, button')?.focus({ preventScroll: true });
+    },
   });
 
   const render = (state: { assets: CanasterAssetSummary[]; busy: boolean; message: string }) => {
     surface.root.replaceChildren();
+    if (directPickOpen) {
+      const input = createUploadInput({ disabled: false, onPick: uploadSelectedImage, onCancel: close });
+      const message = document.createElement('p');
+      message.className = 'image-picker-message';
+      message.textContent = state.message || 'Choose an image from this device.';
+      surface.root.append(input, message);
+      input.click();
+      return;
+    }
+
     const actions = document.createElement('div');
     actions.className = 'image-picker-actions';
 
-    const uploadLabel = document.createElement('label');
-    uploadLabel.className = 'image-picker-upload';
-    uploadLabel.textContent = state.busy ? 'Working...' : 'Upload';
-    const uploadInput = document.createElement('input');
-    uploadInput.type = 'file';
-    uploadInput.accept = 'image/*';
-    uploadInput.disabled = state.busy || !hasUsableStoredToken();
-    uploadInput.addEventListener('change', () => {
-      void uploadSelectedImage(uploadInput.files?.[0] ?? null);
-      uploadInput.value = '';
+    const uploadInput = createUploadInput({ disabled: state.busy || !hasUsableStoredToken(), onPick: uploadSelectedImage });
+    const uploadButton = document.createElement('button');
+    uploadButton.type = 'button';
+    uploadButton.className = 'image-picker-upload';
+    uploadButton.textContent = state.busy ? 'Working...' : 'Upload';
+    uploadButton.disabled = uploadInput.disabled;
+    uploadButton.addEventListener('click', () => {
+      uploadInput.click();
     });
-    uploadLabel.append(uploadInput);
 
     const select = document.createElement('select');
     select.disabled = state.busy || !hasUsableStoredToken();
@@ -134,9 +145,10 @@ function createImagePicker(mount: HTMLElement, data: ImageNodeData, commit: (nex
         altDraft = selectedName;
       }
       altInput.value = altDraft;
+      surface.commitAndClose();
     });
 
-    actions.append(uploadLabel, select);
+    actions.append(uploadButton, select, uploadInput);
     surface.root.append(actions);
 
     const fitControls = document.createElement('div');
@@ -181,7 +193,11 @@ function createImagePicker(mount: HTMLElement, data: ImageNodeData, commit: (nex
   };
 
   async function uploadSelectedImage(file: File | null) {
-    if (!file) return;
+    if (!file) {
+      if (directPickOpen) close();
+      return;
+    }
+    directPickOpen = false;
     setState({ assets: [], busy: true, message: 'Uploading image' });
     try {
       const asset = await uploadImageAsset(file);
@@ -197,6 +213,8 @@ function createImagePicker(mount: HTMLElement, data: ImageNodeData, commit: (nex
 
   if (!hasUsableStoredToken()) {
     render({ assets: [], busy: false, message: 'Sign in to upload images.' });
+  } else if (directPickOpen) {
+    render({ assets: [], busy: false, message: 'Choose an image from this device.' });
   } else {
     render({ assets: [], busy: true, message: 'Loading images' });
     void listImageAssets()
@@ -213,6 +231,30 @@ function createImagePicker(mount: HTMLElement, data: ImageNodeData, commit: (nex
       surface.controller.dispose();
     },
   };
+}
+
+function createUploadInput({
+  disabled,
+  onPick,
+  onCancel,
+}: {
+  disabled: boolean;
+  onPick: (file: File | null) => void;
+  onCancel?: () => void;
+}) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.disabled = disabled;
+  input.className = 'image-picker-file-input';
+  input.addEventListener('change', () => {
+    onPick(input.files?.[0] ?? null);
+    input.value = '';
+  });
+  if (onCancel) {
+    input.addEventListener('cancel', onCancel);
+  }
+  return input;
 }
 
 function selectedAssetName(assets: CanasterAssetSummary[], assetId: string) {
