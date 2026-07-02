@@ -232,6 +232,7 @@ function createTextToolbar(config: {
       normalizeTextStyle({ ...current, preset: 'custom' }) :
       textStyleWithPreset(nextPreset, presetStyles[nextPreset]);
     applyStyle(nextStyle);
+    config.flush();
   });
   size.addEventListener('input', () => {
     if (!Number.isFinite(size.valueAsNumber)) return;
@@ -246,23 +247,34 @@ function createTextToolbar(config: {
   bold.addEventListener('click', () => {
     const style = normalizeTextStyle(config.readDraft().style);
     applyStyle(normalizeTextStyle({ ...style, fontWeight: style.fontWeight >= 600 ? 400 : 700, preset: 'custom' }));
+    config.flush();
     config.textarea.focus({ preventScroll: true });
   });
   italic.addEventListener('click', () => {
     const style = normalizeTextStyle(config.readDraft().style);
     applyStyle(normalizeTextStyle({ ...style, fontStyle: style.fontStyle === 'italic' ? 'normal' : 'italic', preset: 'custom' }));
+    config.flush();
     config.textarea.focus({ preventScroll: true });
   });
   underline.addEventListener('click', () => {
     const style = normalizeTextStyle(config.readDraft().style);
     applyStyle(normalizeTextStyle({ ...style, textDecoration: style.textDecoration === 'underline' ? 'none' : 'underline', preset: 'custom' }));
+    config.flush();
     config.textarea.focus({ preventScroll: true });
   });
   color.addEventListener('input', () => {
-    applyStyle(normalizeTextStyle({ ...config.readDraft().style, color: color.value, preset: 'custom' }));
+    applyTextColor(color.value);
+  });
+  color.addEventListener('change', () => {
+    applyTextColor(color.value);
+    config.flush();
   });
   fill.addEventListener('input', () => {
-    applyStyle(normalizeTextStyle({ ...config.readDraft().style, backgroundColor: fill.value, preset: 'custom' }));
+    applyFillColor(fill.value);
+  });
+  fill.addEventListener('change', () => {
+    applyFillColor(fill.value);
+    config.flush();
   });
   clearFill.addEventListener('click', () => {
     const style = normalizeTextStyle(config.readDraft().style);
@@ -271,11 +283,13 @@ function createTextToolbar(config: {
       backgroundColor: style.backgroundColor === 'transparent' ? fill.value : 'transparent',
       preset: 'custom',
     }));
+    config.flush();
     config.textarea.focus({ preventScroll: true });
   });
   for (const button of alignmentButtons) {
     button.addEventListener('click', () => {
       applyStyle(normalizeTextStyle({ ...config.readDraft().style, align: button.dataset.align as TextStyleAlignment, preset: 'custom' }));
+      config.flush();
       config.textarea.focus({ preventScroll: true });
     });
   }
@@ -315,6 +329,14 @@ function createTextToolbar(config: {
     config.writeDraft(nextStyle);
     sync(options);
     position();
+  }
+
+  function applyTextColor(value: string) {
+    applyStyle(normalizeTextStyle({ ...config.readDraft().style, color: value, preset: 'custom' }));
+  }
+
+  function applyFillColor(value: string) {
+    applyStyle(normalizeTextStyle({ ...config.readDraft().style, backgroundColor: value, preset: 'custom' }));
   }
 
   function sync(options: { preserveActiveSizeInput?: boolean } = {}) {

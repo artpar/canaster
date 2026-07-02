@@ -120,14 +120,25 @@ export function createTextStylePanel({ value, presetStyles = {}, onChange }: Tex
   );
 
   const emitChange = () => onChange?.(readControls(controls));
-  for (const control of Object.values(controls)) control.addEventListener('input', emitChange);
-  for (const control of Object.values(controls)) control.addEventListener('change', emitChange);
+  const emitManualChange = (event: Event) => {
+    if (event.currentTarget === controls.backgroundEnabled) {
+      controls.backgroundColor.disabled = !controls.backgroundEnabled.checked;
+    }
+    controls.preset.value = 'custom';
+    emitChange();
+  };
+  for (const control of Object.values(controls)) {
+    if (control === controls.preset) continue;
+    control.addEventListener('input', emitManualChange);
+    control.addEventListener('change', emitManualChange);
+  }
 
   controls.preset.addEventListener('change', () => {
     const preset = controls.preset.value as TextStylePreset;
     const presetStyle = presetStyles[preset];
-    if (!presetStyle || preset === 'custom') return;
-    writeControls(controls, { ...presetStyle, preset });
+    if (presetStyle && preset !== 'custom') {
+      writeControls(controls, { ...presetStyle, preset });
+    }
     emitChange();
   });
 
