@@ -114,7 +114,7 @@ Current production status as of 2026-06-24 15:29 IST:
 - Daptin logs show IMAPS server setup for `imap.canaster.in` on `:993`.
 - Daptin `cloud_store.name=canaster-mail`, reference `019edc18-5fe3-7370-be4f-ac76ded67a78`, points at `canaster-mail:canaster-daptin-storage` with credential `canaster-site` for cloud-store-backed raw `mail.mail` and `outbox.mail` bodies.
 - Daptin `cloud_store.name=assets`, id `4`, points at `canaster-assets:canaster-daptin-storage` with credential `canaster-site` for image panel uploads.
-- Daptin `world.permission(document)=1003811` and `world.permission(asset)=741632`, both with `world_schema_json.DefaultPermission=16256`. The 2026-07-01 intended usergroup relation state is `document.world_id -> users` permission `999424` and `asset.world_id -> users` permission `770048`. This gives signed-in users table-level create/update/delete where needed, preserves owner/private row reads, allows guests to read only rows explicitly made public by schema-managed visibility actions, keeps guest create/update/delete closed, and includes the `GuestExecute` bit required by Daptin routed-template document actions. The asset relation includes `GroupRead` only for normal-user model discovery.
+- Daptin `world.permission(document)=1003811` and `world.permission(asset)=741632`, both with `world_schema_json.DefaultPermission=16256`. The 2026-07-02 intended usergroup relation state is schema-managed through `Tables[].AccessGroups`: `document.world_id -> users` permission `999424` and `asset.world_id -> users` permission `770048`. This gives signed-in users table-level create/update/delete where needed, preserves owner/private row reads, allows guests to read only rows explicitly made public by schema-managed visibility actions, keeps guest create/update/delete closed, and includes the `GuestExecute` bit required by Daptin routed-template document actions. The asset relation includes `GroupRead` only for normal-user model discovery.
 - Production permission hardening on 2026-06-24 removed guest table access from sensitive system tables. `signin`, `signup`, `reset-password`, and `reset-password-verify` are not guest-executable. `request_canaster_email_otp` and `verify_canaster_email_otp` remain the only guest-executable auth actions. Daptin still serves `/api/world` and `/api/action` metadata to guests; do not store secrets in action schemas or world metadata.
 - VM outbound SMTP verification passed for `gmail-smtp-in.l.google.com:25` and `smtp.gmail.com:465`.
 - Public DNS is authoritative on Namecheap BasicDNS at `dns1.registrar-servers.com` and `dns2.registrar-servers.com`.
@@ -143,7 +143,7 @@ DNS cutover records for Namecheap:
 
 `deploy/daptin/Dockerfile` builds a thin Canaster Daptin image:
 
-- Base image: `daptin/daptin@sha256:da432637f648ab5e5e60a4b226a45a447c03d677f06ede0f9b7c0f63b3f6d7d6`, the `v0.12.26` release containing `daptin/daptin#232`, `daptin/daptin#233`, and `daptin/daptin#234` fixes.
+- Base image: `daptin/daptin@sha256:0f89ae3f6b0953d27eed3a0e582103a6582dbbe9aeafa05f3c8ff381ec451785`, the `v0.12.27` release containing the access-groups schema provisioning from `daptin/daptin#237` plus the earlier `daptin/daptin#232`, `daptin/daptin#233`, and `daptin/daptin#234` fixes.
 - Copies `daptin/schema_*.yaml` into `/opt/canaster/schema` for schema-managed email OTP auth actions
 - Uses `/opt/canaster/entrypoint.sh`
 - Reads `PORT` and `HTTPS_PORT`
@@ -764,6 +764,7 @@ Current production Daptin SMTP/IMAP state as of 2026-06-19:
 - Daptin `v0.12.23` fixes `daptin/daptin#228`: `process_outbox` now sends fresh message readers across MX retry attempts, so Gmail no longer receives empty SMTP DATA and rejects with missing `From`.
 - Daptin `v0.12.25` fixes `daptin/daptin#229`: `mail.send` supports `send_immediately: true` for cloud-store-backed `outbox.mail` by committing the outbox row, reloading it with the mail file hydrated, attempting SMTP delivery, and leaving retry metadata if the immediate attempt fails.
 - Daptin `v0.12.26` includes `daptin/daptin#233`, so `mail.send` creates its internal outbox row with a server-side admin context and no longer requires the switched end user to have `Refer` permission on the configured `mail_server` row. It also includes `daptin/daptin#234`, preserving built-in certificate columns when Canaster declares certificate table permissions.
+- Daptin `v0.12.27` includes `daptin/daptin#237`, so Canaster can declare table/action `AccessGroups` in schema instead of running post-deploy permission relation repairs for document, asset, and visibility action access.
 - The ignored local file `.tmp/daptin/prod-mail-login.env` stores the current `login@mail.canaster.in` mailbox credential for operational SMTP AUTH and IMAP smoke tests. OTP mail now uses the visible sender `login@canaster.in`; the mailbox credential can remain a server-auth operational account unless direct mailbox login for `login@canaster.in` is needed. Do not commit it.
 - `sync_mail_servers` and `process_outbox` both execute successfully as the production admin.
 

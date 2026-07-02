@@ -4,6 +4,9 @@ Actions:
     InstanceOptional: false
     Label: Make Canaster document private
     Permission: 2085120
+    AccessGroups:
+      - Name: users
+        Permission: 524288
     InFields: []
     OutFields:
       - Type: client.notify
@@ -27,6 +30,9 @@ Actions:
     InstanceOptional: false
     Label: Make Canaster document public
     Permission: 2085120
+    AccessGroups:
+      - Name: users
+        Permission: 524288
     InFields: []
     OutFields:
       - Type: client.notify
@@ -50,6 +56,9 @@ Actions:
     InstanceOptional: false
     Label: Make Canaster asset private
     Permission: 2085120
+    AccessGroups:
+      - Name: users
+        Permission: 524288
     InFields: []
     OutFields:
       - Type: client.notify
@@ -73,6 +82,9 @@ Actions:
     InstanceOptional: false
     Label: Make Canaster asset public
     Permission: 2085120
+    AccessGroups:
+      - Name: users
+        Permission: 524288
     InFields: []
     OutFields:
       - Type: client.notify

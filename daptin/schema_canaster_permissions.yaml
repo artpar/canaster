@@ -12,10 +12,16 @@ Tables:
   - TableName: document
     Permission: 1003811
     DefaultPermission: 16256
+    AccessGroups:
+      - Name: users
+        Permission: 999424
 
   - TableName: asset
     Permission: 741632
     DefaultPermission: 16256
+    AccessGroups:
+      - Name: users
+        Permission: 770048
 
   - TableName: mail
     Permission: 561408

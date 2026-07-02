@@ -29,8 +29,8 @@ The current persistence contract stays unchanged:
 - Private rows use `permission = 16256`.
 - Public-readable rows use `permission = 16259`.
 - Existing `makeDocumentPrivate` and `makeDocumentPublic` APIs remain available, but they call Daptin visibility actions rather than generic row updates.
-- The document and asset world rows need authenticated-user table access through `world.usergroup_id -> users` relations, not through per-row `DefaultGroups`.
-- The four visibility action rows also need `action.usergroup_id -> users` relations so normal signed-in users can execute the actions without granting `GuestExecute`.
+- The document and asset world rows declare authenticated-user table access through `Tables[].AccessGroups`, not through per-row `DefaultGroups`.
+- The four visibility action rows declare `Actions[].AccessGroups` so normal signed-in users can execute those specific actions without granting `GuestExecute`.
 - Do not add `DefaultGroups` to `document` or `asset`; those row-level group relations make private rows readable by the whole users group.
 
 ## UI Contract
