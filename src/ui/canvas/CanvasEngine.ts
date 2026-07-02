@@ -9,6 +9,7 @@ import {
   DEFAULT_NODE_CONTENT_SCALE,
   nodeAppearanceWithContentOffset,
   nodeAppearanceWithContentScale,
+  type NodeContentViewport,
 } from '../../core/nodeAppearance';
 import { canvasPortalViewportRect } from './nodeTypes/canvasNode';
 import { cachedAssetImage } from './imageAssets';
@@ -236,6 +237,7 @@ export class CanvasEngine {
   private highlightNodeIds = new Set<string>();
   private lastRenderedNodeIds: string[] = [];
   private activeNodeInteraction: ActiveNodeInteraction | null = null;
+  private liveNodeContentInteractionNodeId: string | null = null;
   private nodeContentToolbarTarget: string | null = null;
   private embedOverlaySlots = new Map<string, EmbedOverlaySlot>();
   private liveNodeContentOverlaySlots = new Map<string, LiveNodeContentOverlaySlot>();
@@ -1286,6 +1288,7 @@ export class CanvasEngine {
     if (!this.acceptsInput()) return;
     if (event.pointerType !== 'touch' && event.button !== 0) return;
     event.preventDefault();
+    this.closeLiveNodeContentOverlayInteraction();
     this.canvas.focus({ preventScroll: true });
     const point = this.eventPoint(event);
     if (event.pointerType === 'touch') {
@@ -1661,6 +1664,11 @@ export class CanvasEngine {
     const node = this.nodeAt(world);
     if (node) {
       if (!this.selectedNodeIds.has(node.id)) this.executeCommand({ type: 'select-node', nodeId: node.id, mode: 'replace', source: 'pointer' });
+      if (this.shouldEnterLiveNodeContentOverlayInteraction(node, world)) {
+        event.preventDefault();
+        this.enterLiveNodeContentOverlayInteraction(node.id);
+        return;
+      }
       const renderNode = this.renderNode(node);
       const regions = this.interactionRegionsFor(node);
       const region = this.interactionRegionAt(node, world) ?? (pointInRect(world, renderNode) ? primaryInteractionRegion(regions) : null);
@@ -1959,6 +1967,7 @@ export class CanvasEngine {
     this.primarySelectedNodeId = state.primarySelectedNodeId;
     this.resizeMode = state.resizeMode;
     this.reconcileNodeInteraction();
+    this.reconcileLiveNodeContentOverlayInteraction();
   }
 
   private reconcileSelection(selectedNodeIds: Set<string>, primarySelectedNodeId: string | null) {
@@ -2310,6 +2319,7 @@ export class CanvasEngine {
       slot.overlay.dispose();
       this.liveNodeContentOverlaySlots.delete(nodeId);
     }
+    this.reconcileLiveNodeContentOverlayInteraction(liveNodeIds);
   }
 
   private liveNodeContentOverlayNodeIdsFor(visibleNodes: CanvasNode[], compact: boolean): Set<string> {
@@ -2337,6 +2347,8 @@ export class CanvasEngine {
         node,
         theme,
         commit: (nextData) => this.commitLiveNodeContentOverlay(node.id, nextData),
+        select: () => this.selectLiveNodeContentOverlayNode(node.id),
+        close: () => this.closeLiveNodeContentOverlayInteraction(),
       });
       if (!overlay) return;
       layer.append(overlay.root);
@@ -2348,6 +2360,8 @@ export class CanvasEngine {
     slot.overlay.root.style.width = `${Math.max(1, rect.w)}px`;
     slot.overlay.root.style.height = `${Math.max(1, rect.h)}px`;
     slot.overlay.update(node);
+    slot.overlay.updateViewport(this.screenContentViewportForNode(node));
+    slot.overlay.setInteractive(this.liveNodeContentInteractionNodeId === node.id);
   }
 
   private disposeLiveNodeContentOverlays(): void {
@@ -2370,6 +2384,12 @@ export class CanvasEngine {
     return rect.w >= 96 && rect.h >= 56;
   }
 
+  private shouldEnterLiveNodeContentOverlayInteraction(node: CanvasNode, point: WorldPoint): boolean {
+    if (!this.liveNodeContentOverlaySlots.has(node.id)) return false;
+    const renderNode = this.renderNode(node);
+    return pointInRect(point, this.nodeContentRect(renderNode, this.themeForNode(renderNode)));
+  }
+
   private commitLiveNodeContentOverlay(nodeId: string, nextData: NodeData): void {
     const current = this.model.nodes.find((candidate) => candidate.id === nodeId);
     if (!current || sameNodeData(current.data, nextData)) return;
@@ -2377,6 +2397,51 @@ export class CanvasEngine {
     this.interaction = committed ? 'Edited panel' : 'Panel edit unchanged';
     if (committed) this.markDirty();
     this.emitStatus();
+  }
+
+  private selectLiveNodeContentOverlayNode(nodeId: string): void {
+    if (!this.acceptsInput()) return;
+    const mode = this.selectedNodeIds.has(nodeId) ? 'add' : 'replace';
+    this.executeCommand({ type: 'select-node', nodeId, mode, source: 'pointer' });
+  }
+
+  private enterLiveNodeContentOverlayInteraction(nodeId: string): void {
+    const overlay = this.liveNodeContentOverlaySlots.get(nodeId)?.overlay;
+    if (!overlay) return;
+    this.closeNodeInteraction();
+    this.liveNodeContentInteractionNodeId = nodeId;
+    overlay.setInteractive(true);
+    this.interaction = 'Editing panel';
+    this.markDirty();
+    this.syncNodeContentToolbar();
+    this.emitStatus();
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        this.liveNodeContentOverlaySlots.get(nodeId)?.overlay.focus();
+      });
+    });
+  }
+
+  private closeLiveNodeContentOverlayInteraction(): void {
+    const nodeId = this.liveNodeContentInteractionNodeId;
+    if (!nodeId) return;
+    const overlay = this.liveNodeContentOverlaySlots.get(nodeId)?.overlay;
+    overlay?.setInteractive(false);
+    if (overlay?.root.contains(document.activeElement)) this.canvas.focus({ preventScroll: true });
+    this.liveNodeContentInteractionNodeId = null;
+    this.syncNodeContentToolbar();
+    this.markDirty();
+    this.emitStatus();
+  }
+
+  private reconcileLiveNodeContentOverlayInteraction(liveNodeIds?: ReadonlySet<string>): void {
+    const nodeId = this.liveNodeContentInteractionNodeId;
+    if (!nodeId) return;
+    if (!this.selectedNodeIds.has(nodeId)) {
+      this.closeLiveNodeContentOverlayInteraction();
+      return;
+    }
+    if (liveNodeIds && !liveNodeIds.has(nodeId)) this.closeLiveNodeContentOverlayInteraction();
   }
 
   private syncEmbedOverlays(visibleNodes: CanvasNode[], compact: boolean): void {
@@ -2478,7 +2543,7 @@ export class CanvasEngine {
     if (!toolbar) return;
     const node = this.nodeContentToolbarNode();
     this.nodeContentToolbarTarget = node?.id ?? null;
-    if (!node || this.activeNodeInteraction) {
+    if (!node || this.activeNodeInteraction || this.liveNodeContentInteractionNodeId) {
       setCanvasViewportToolbarVisible(toolbar, false);
       toolbar.style.display = 'none';
       return;
@@ -2529,8 +2594,16 @@ export class CanvasEngine {
   }
 
   private canZoomNodeContent(node: CanvasNode): boolean {
-    if (hasLiveNodeContentOverlay(node)) return false;
     return node.type !== BuiltInNodeTypes.canvas && this.isNodeVisible(node);
+  }
+
+  private screenContentViewportForNode(node: CanvasNode): NodeContentViewport {
+    const viewport = contentViewportForNode(node);
+    return {
+      scale: viewport.scale,
+      offsetX: viewport.offsetX * this.camera.scale,
+      offsetY: viewport.offsetY * this.camera.scale,
+    };
   }
 
   private applyNodeContentTransform(node: CanvasNode, contentRect: NodeContentRect): void {

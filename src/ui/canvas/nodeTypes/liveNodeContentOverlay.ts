@@ -1,4 +1,6 @@
 import { asString } from '../../../core/nodeData';
+import type { NodeContentViewport } from '../../../core/nodeAppearance';
+import type { CanvasNode, NodeData } from '../../../core/nodePrimitives';
 import { CARD_ACCENTS, cardAccentLabel, normalizeCardNodeData, type CardNodeData } from '../../../domain/cardNodeData';
 import { BuiltInNodeTypes } from '../../../domain/BuiltInNodeTypes';
 import {
@@ -23,11 +25,13 @@ import {
 } from '../../../domain/textStyle';
 import { textStylePresetsForTheme } from '../../textStyle/textStyleTheme';
 import type { CanvasTheme } from '../theme';
-import type { CanvasNode, NodeData } from '../../../core/nodePrimitives';
 
 export type LiveNodeContentOverlay = {
   root: HTMLDivElement;
   update(node: CanvasNode): void;
+  updateViewport(viewport: NodeContentViewport): void;
+  setInteractive(interactive: boolean): void;
+  focus(): void;
   flush(): void;
   dispose(): void;
 };
@@ -36,6 +40,17 @@ type LiveNodeContentOverlayConfig = {
   node: CanvasNode;
   theme: CanvasTheme;
   commit: (nextData: NodeData) => void;
+  select: () => void;
+  close: () => void;
+};
+
+type LiveOverlayViewport = {
+  root: HTMLDivElement;
+  content: HTMLDivElement;
+  updateViewport(viewport: NodeContentViewport): void;
+  setInteractive(interactive: boolean): void;
+  focus(): void;
+  dispose(): void;
 };
 
 export function hasLiveNodeContentOverlay(node: CanvasNode) {
@@ -45,25 +60,26 @@ export function hasLiveNodeContentOverlay(node: CanvasNode) {
     node.type === BuiltInNodeTypes.check;
 }
 
-export function createLiveNodeContentOverlay({ node, theme, commit }: LiveNodeContentOverlayConfig): LiveNodeContentOverlay | null {
+export function createLiveNodeContentOverlay({ node, theme, commit, select, close }: LiveNodeContentOverlayConfig): LiveNodeContentOverlay | null {
   switch (node.type) {
     case BuiltInNodeTypes.card:
-      return createCardOverlay(node, commit);
+      return createCardOverlay(node, commit, select, close);
     case BuiltInNodeTypes.text:
-      return createTextOverlay(node, theme, commit);
+      return createTextOverlay(node, theme, commit, select, close);
     case BuiltInNodeTypes.table:
-      return createTableOverlay(node, commit);
+      return createTableOverlay(node, commit, select, close);
     case BuiltInNodeTypes.check:
-      return createChecklistOverlay(node, commit);
+      return createChecklistOverlay(node, commit, select, close);
     default:
       return null;
   }
 }
 
-function createCardOverlay(node: CanvasNode, commit: (nextData: NodeData) => void): LiveNodeContentOverlay {
+function createCardOverlay(node: CanvasNode, commit: (nextData: NodeData) => void, select: () => void, close: () => void): LiveNodeContentOverlay {
   let draft = normalizeCardNodeData(node.data);
   let committed = { ...draft };
-  const root = overlayRoot('node-live-card');
+  const viewport = createLiveOverlayViewport('node-live-card', select, close);
+  const { root, content } = viewport;
 
   const title = document.createElement('input');
   title.className = 'node-live-title';
@@ -104,7 +120,7 @@ function createCardOverlay(node: CanvasNode, commit: (nextData: NodeData) => voi
   root.addEventListener('focusout', (event) => {
     if (!root.contains(event.relatedTarget as Node | null)) flush();
   });
-  root.append(title, detail, accentControls);
+  content.append(title, detail, accentControls);
   sync();
 
   return {
@@ -115,10 +131,13 @@ function createCardOverlay(node: CanvasNode, commit: (nextData: NodeData) => voi
       committed = { ...draft };
       sync();
     },
+    updateViewport: viewport.updateViewport,
+    setInteractive: viewport.setInteractive,
+    focus: viewport.focus,
     flush,
     dispose() {
       flush();
-      root.remove();
+      viewport.dispose();
     },
   };
 
@@ -136,10 +155,11 @@ function createCardOverlay(node: CanvasNode, commit: (nextData: NodeData) => voi
   }
 }
 
-function createTextOverlay(node: CanvasNode, theme: CanvasTheme, commit: (nextData: NodeData) => void): LiveNodeContentOverlay {
+function createTextOverlay(node: CanvasNode, theme: CanvasTheme, commit: (nextData: NodeData) => void, select: () => void, close: () => void): LiveNodeContentOverlay {
   let draft = normalizeTextNodeData(node.data);
   let committed = normalizeTextNodeData(node.data);
-  const root = overlayRoot('node-live-text');
+  const viewport = createLiveOverlayViewport('node-live-text', select, close);
+  const { root, content } = viewport;
   const textarea = document.createElement('textarea');
   textarea.className = 'node-live-textarea';
   textarea.placeholder = 'Empty note';
@@ -154,6 +174,7 @@ function createTextOverlay(node: CanvasNode, theme: CanvasTheme, commit: (nextDa
       applyTextStyle(textarea, draft);
     },
     flush,
+    close,
   });
   textarea.addEventListener('input', () => {
     draft = normalizeTextNodeData({ ...draft, text: textarea.value });
@@ -164,7 +185,8 @@ function createTextOverlay(node: CanvasNode, theme: CanvasTheme, commit: (nextDa
     flush();
     toolbar.hide();
   });
-  root.append(textarea, toolbar.element);
+  content.append(textarea);
+  root.append(toolbar.element);
   sync();
   window.addEventListener('resize', toolbar.position);
 
@@ -177,11 +199,14 @@ function createTextOverlay(node: CanvasNode, theme: CanvasTheme, commit: (nextDa
       sync();
       toolbar.sync();
     },
+    updateViewport: viewport.updateViewport,
+    setInteractive: viewport.setInteractive,
+    focus: viewport.focus,
     flush,
     dispose() {
       flush();
       window.removeEventListener('resize', toolbar.position);
-      root.remove();
+      viewport.dispose();
     },
   };
 
@@ -207,6 +232,7 @@ function createTextToolbar(config: {
   readDraft: () => TextNodeData;
   writeDraft: (nextStyle: TextStyle) => void;
   flush: () => void;
+  close: () => void;
 }) {
   const presetStyles = textStylePresetsForTheme(config.theme);
   const toolbar = document.createElement('div');
@@ -309,7 +335,12 @@ function createTextToolbar(config: {
     wrapToolbarControl('Fill', fill),
   );
   toolbar.addEventListener('pointerdown', (event) => event.stopPropagation());
-  toolbar.addEventListener('keydown', (event) => event.stopPropagation());
+  toolbar.addEventListener('keydown', (event) => {
+    event.stopPropagation();
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    config.close();
+  });
   sync();
 
   return {
@@ -369,10 +400,11 @@ function createTextToolbar(config: {
   }
 }
 
-function createTableOverlay(node: CanvasNode, commit: (nextData: NodeData) => void): LiveNodeContentOverlay {
+function createTableOverlay(node: CanvasNode, commit: (nextData: NodeData) => void, select: () => void, close: () => void): LiveNodeContentOverlay {
   let draft = normalizeTableNodeData(node.data);
   let committed = committedTableData(draft);
-  const root = overlayRoot('node-live-table');
+  const viewport = createLiveOverlayViewport('node-live-table', select, close);
+  const { root, content } = viewport;
 
   const title = document.createElement('input');
   title.className = 'node-live-title';
@@ -416,7 +448,7 @@ function createTableOverlay(node: CanvasNode, commit: (nextData: NodeData) => vo
   root.addEventListener('focusout', (event) => {
     if (!root.contains(event.relatedTarget as Node | null)) flush();
   });
-  root.append(title, grid, toolbar);
+  content.append(title, grid, toolbar);
   sync();
 
   return {
@@ -427,10 +459,13 @@ function createTableOverlay(node: CanvasNode, commit: (nextData: NodeData) => vo
       committed = committedTableData(draft);
       sync();
     },
+    updateViewport: viewport.updateViewport,
+    setInteractive: viewport.setInteractive,
+    focus: viewport.focus,
     flush,
     dispose() {
       flush();
-      root.remove();
+      viewport.dispose();
     },
   };
 
@@ -510,11 +545,12 @@ function createTableOverlay(node: CanvasNode, commit: (nextData: NodeData) => vo
   }
 }
 
-function createChecklistOverlay(node: CanvasNode, commit: (nextData: NodeData) => void): LiveNodeContentOverlay {
+function createChecklistOverlay(node: CanvasNode, commit: (nextData: NodeData) => void, select: () => void, close: () => void): LiveNodeContentOverlay {
   let draft = cloneChecklistData(normalizeChecklistNodeData(node.data));
   let committed = cloneChecklistData(draft);
   let addValue = '';
-  const root = overlayRoot('node-live-checklist');
+  const viewport = createLiveOverlayViewport('node-live-checklist', select, close);
+  const { root, content } = viewport;
 
   const title = document.createElement('input');
   title.className = 'node-live-title';
@@ -563,7 +599,7 @@ function createChecklistOverlay(node: CanvasNode, commit: (nextData: NodeData) =
   root.addEventListener('focusout', (event) => {
     if (!root.contains(event.relatedTarget as Node | null)) flush();
   });
-  root.append(title, summary, list, addRow);
+  content.append(title, summary, list, addRow);
   sync();
 
   return {
@@ -574,10 +610,13 @@ function createChecklistOverlay(node: CanvasNode, commit: (nextData: NodeData) =
       committed = cloneChecklistData(draft);
       sync();
     },
+    updateViewport: viewport.updateViewport,
+    setInteractive: viewport.setInteractive,
+    focus: viewport.focus,
     flush,
     dispose() {
       flush();
-      root.remove();
+      viewport.dispose();
     },
   };
 
@@ -665,14 +704,56 @@ function createChecklistOverlay(node: CanvasNode, commit: (nextData: NodeData) =
   }
 }
 
-function overlayRoot(className: string) {
+function createLiveOverlayViewport(className: string, select: () => void, close: () => void): LiveOverlayViewport {
   const root = document.createElement('div');
   root.className = `node-live-content-mount ${className}`;
-  root.addEventListener('pointerdown', (event) => event.stopPropagation());
+  root.dataset.interactive = 'false';
+  root.style.pointerEvents = 'none';
+  const content = document.createElement('div');
+  content.className = 'node-live-content-body';
+  root.append(content);
+  root.addEventListener('pointerdown', (event) => {
+    select();
+    event.stopPropagation();
+  });
   root.addEventListener('dblclick', (event) => event.stopPropagation());
   root.addEventListener('wheel', (event) => event.stopPropagation());
-  root.addEventListener('keydown', (event) => event.stopPropagation());
-  return root;
+  root.addEventListener('keydown', (event) => {
+    event.stopPropagation();
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    close();
+  });
+  root.addEventListener('focusout', (event) => {
+    if (event.relatedTarget instanceof Node && root.contains(event.relatedTarget)) return;
+    window.setTimeout(() => {
+      if (!root.contains(document.activeElement)) close();
+    });
+  });
+  return {
+    root,
+    content,
+    updateViewport(viewport) {
+      content.style.transformOrigin = '50% 50%';
+      if (viewport.scale === 1 && viewport.offsetX === 0 && viewport.offsetY === 0) {
+        content.style.transform = '';
+        content.style.willChange = '';
+      } else {
+        content.style.transform = `translate(${viewport.offsetX}px, ${viewport.offsetY}px) scale(${viewport.scale})`;
+        content.style.willChange = 'transform';
+      }
+    },
+    setInteractive(interactive) {
+      root.dataset.interactive = String(interactive);
+      root.style.pointerEvents = interactive ? 'auto' : 'none';
+    },
+    focus() {
+      root.querySelector<HTMLElement>('textarea, input, select, button, [tabindex]:not([tabindex="-1"])')?.focus({ preventScroll: true });
+    },
+    dispose() {
+      root.remove();
+    },
+  };
 }
 
 function applyTextStyle(textarea: HTMLTextAreaElement, data: TextNodeData) {
