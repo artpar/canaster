@@ -10,7 +10,7 @@ const daptinCliSourceDir = process.env.DAPTIN_CLI_SOURCE_DIR || '/Users/artpar/w
 const daptinCli = process.env.DAPTIN_CLI || '/Users/artpar/workspace/code/github.com/daptin/daptin-cli/out/bin/daptin-cli';
 const daptinBinary = process.env.DAPTIN_BINARY || '';
 const smokeRuntime = process.env.DAPTIN_SMOKE_RUNTIME || 'docker';
-const daptinDockerImage = process.env.DAPTIN_DOCKER_IMAGE || 'daptin/daptin:v0.12.27';
+const daptinDockerImage = process.env.DAPTIN_DOCKER_IMAGE || 'daptin/daptin:v0.12.28';
 const smokeDbType = process.env.DAPTIN_SMOKE_DB_TYPE || 'sqlite3';
 const smokeDbConnectionString = process.env.DAPTIN_SMOKE_DB_CONNECTION_STRING || '';
 const smokeEndpoint = process.env.DAPTIN_SMOKE_ENDPOINT || '';
@@ -24,6 +24,7 @@ const ASSET_TABLE_PERMISSION = 741632;
 const ASSET_USERS_RELATION_PERMISSION = 770048;
 const ACTION_USERS_RELATION_PERMISSION = 524288;
 const LOCKED_ACTION_PERMISSION = 2085120;
+const PUBLIC_ROUTE_ACTION_PERMISSION = 2085152;
 const MAIL_OWNER_REFER_PERMISSION = 569633;
 const WORLD_USERGROUP_RELATION_PERMISSION = 638976;
 const USER_ACCOUNT_AUTH_PERMISSION = 561440;
@@ -437,6 +438,16 @@ async function assertVisibilityActionUsersRelations({ authenticatedClient, baseU
   }
 }
 
+async function assertPublicRouteActionPermission({ authenticatedClient }) {
+  const actionsBody = await authenticatedClient.jsonApi.findAll('action', { page: { size: 500 } });
+  const actionRow = (actionsBody.data ?? []).find((row) => rowAttr(row, 'action_name') === 'get_canaster_document_by_public_path');
+  assert(actionRow, 'get_canaster_document_by_public_path action is missing');
+  assert(
+    rowAttr(actionRow, 'permission') === PUBLIC_ROUTE_ACTION_PERMISSION,
+    `get_canaster_document_by_public_path action permission mismatch: expected ${PUBLIC_ROUTE_ACTION_PERMISSION}, got ${rowAttr(actionRow, 'permission')}`,
+  );
+}
+
 async function assertCanasterOtpMailServerReferPath(baseUrl) {
   const email = `canaster-smoke-${Date.now()}@example.com`;
   const { response, body } = await request(baseUrl, '/action/user_account/request_canaster_email_otp', {
@@ -634,6 +645,9 @@ async function main() {
       authenticatedClient,
       baseUrl,
       token,
+    });
+    await assertPublicRouteActionPermission({
+      authenticatedClient,
     });
     const assetsCloudStoreRef = await ensureAssetsCloudStore({
       authenticatedClient,

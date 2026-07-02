@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
-const daptinImage = process.env.DAPTIN_LIVE_E2E_IMAGE || 'daptin/daptin:v0.12.27';
+const daptinImage = process.env.DAPTIN_LIVE_E2E_IMAGE || 'daptin/daptin:v0.12.28';
 const keepRuntime = process.env.DAPTIN_LIVE_E2E_KEEP === 'true';
 const starterRaw = JSON.parse(await readFile('src/catalog/service-business-atlas.json', 'utf8'));
 

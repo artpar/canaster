@@ -50,7 +50,7 @@ jobs:
           echo "DAPTIN_CLI=$HOME/go/bin/daptin-cli" >> "$GITHUB_ENV"
       - name: Smoke Canaster schema against Daptin
         env:
-          DAPTIN_DOCKER_IMAGE: daptin/daptin:v0.12.27
+          DAPTIN_DOCKER_IMAGE: daptin/daptin:v0.12.28
           DAPTIN_SMOKE_RUNTIME: docker
           DAPTIN_SMOKE_DB_TYPE: postgres
           DAPTIN_SMOKE_DB_CONNECTION_STRING: host=host.docker.internal port=5432 user=canaster password=canaster dbname=canaster sslmode=disable

@@ -326,13 +326,13 @@ action.permission: 2085152
 world.permission(document): 1003811
 ```
 
-Historical local gotcha on Daptin `v0.12.26`: the fresh schema import created `get_canaster_document_by_public_path` with permission `2085120` even though `schema_canaster_share.yaml` says `2085152`. The disposable e2e was repaired with:
+Historical local gotcha on Daptin `v0.12.26` and `v0.12.27`: fresh schema import initially created `get_canaster_document_by_public_path` with the schema-declared permission, but `become_an_administrator` then downgraded explicit action permissions to `2085120`. The disposable e2e was repaired with:
 
 ```bash
 daptin-cli --config .tmp/daptin/share-e2e-cli.yaml update action 019f19a6-f2ac-71f5-b810-5b433e617153 permission=2085152
 ```
 
-Daptin `v0.12.27` adds schema-managed `AccessGroups` for table and action usergroup relations, but CI still reproduced the routed-template action permission mismatch on a fresh database. Keep this verification after production schema deploy too. A route can exist and still render without `.document` if the action row is missing `GuestExecute`.
+Daptin `v0.12.28` preserves explicit schema action permissions during `become_an_administrator`, and Canaster smoke now checks the routed-template action remains `2085152` after bootstrap. Keep this verification after production schema deploy too. A route can exist and still render without `.document` if the action row is missing `GuestExecute`.
 
 6. Upload the local share HTML fixture:
 
