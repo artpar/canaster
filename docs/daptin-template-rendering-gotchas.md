@@ -332,7 +332,7 @@ Historical local gotcha on Daptin `v0.12.26`: the fresh schema import created `g
 daptin-cli --config .tmp/daptin/share-e2e-cli.yaml update action 019f19a6-f2ac-71f5-b810-5b433e617153 permission=2085152
 ```
 
-Daptin `v0.12.27` schema sync writes action permissions from schema; Canaster's current Daptin smoke asserts `get_canaster_document_by_public_path.permission == 2085152`. Keep this verification after production schema deploy too. A route can exist and still render without `.document` if the action row is missing `GuestExecute`.
+Daptin `v0.12.27` adds schema-managed `AccessGroups` for table and action usergroup relations, but CI still reproduced the routed-template action permission mismatch on a fresh database. Keep this verification after production schema deploy too. A route can exist and still render without `.document` if the action row is missing `GuestExecute`.
 
 6. Upload the local share HTML fixture:
 

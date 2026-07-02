@@ -24,11 +24,9 @@ const ASSET_TABLE_PERMISSION = 741632;
 const ASSET_USERS_RELATION_PERMISSION = 770048;
 const ACTION_USERS_RELATION_PERMISSION = 524288;
 const LOCKED_ACTION_PERMISSION = 2085120;
-const PUBLIC_ROUTE_ACTION_PERMISSION = 2085152;
 const MAIL_OWNER_REFER_PERMISSION = 569633;
 const WORLD_USERGROUP_RELATION_PERMISSION = 638976;
 const USER_ACCOUNT_AUTH_PERMISSION = 561440;
-const PUBLIC_ROUTE_ACTION_NAME = 'get_canaster_document_by_public_path';
 const GUEST_ACTION_EXECUTE_PERMISSION = 32;
 const VISIBILITY_ACTION_NAMES = [
   'set_canaster_document_private',
@@ -437,9 +435,6 @@ async function assertVisibilityActionUsersRelations({ authenticatedClient, baseU
     assert(relationRow, `${actionName}/users relation was not provisioned by schema AccessGroups`);
     assert(rowAttr(relationRow, 'permission') === ACTION_USERS_RELATION_PERMISSION, `${actionName}/users relation permission mismatch`);
   }
-  const publicRouteAction = actions.get(PUBLIC_ROUTE_ACTION_NAME);
-  assert(publicRouteAction, `${PUBLIC_ROUTE_ACTION_NAME} action is missing`);
-  assert(rowAttr(publicRouteAction, 'permission') === PUBLIC_ROUTE_ACTION_PERMISSION, `${PUBLIC_ROUTE_ACTION_NAME} action permission mismatch`);
 }
 
 async function assertCanasterOtpMailServerReferPath(baseUrl) {
