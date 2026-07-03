@@ -20,6 +20,10 @@ export function clearCachedAssetImage(assetId: string): void {
   imageCache.delete(assetId);
 }
 
+export function clearCachedAssetImages(): void {
+  imageCache.clear();
+}
+
 export function hasCachedAssetImage(assetId: string): boolean {
   return imageCache.has(assetId);
 }

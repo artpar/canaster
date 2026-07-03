@@ -26,13 +26,18 @@ import {
     isLocalAssetId,
     loadLocalAssetFile,
     loadLocalAssetObject,
+    releaseLocalAssetObjectUrl,
+    releaseLocalAssetObjectUrls,
     saveLocalAsset,
+    type LocalAssetSummary,
     type LocalAssetObject
 } from '../infra/browser/localAssets';
 import {
     loadAssetFile,
     loadAssetObject,
     listImageAssets,
+    releaseAssetObjectUrl,
+    releaseAssetObjectUrls,
     setAssetVisibility as setDaptinAssetVisibility,
     uploadImageAsset,
     uploadWorkspaceAsset
@@ -40,8 +45,14 @@ import {
 import {hasUsableStoredToken, normalizeDaptinError} from '../infra/daptin/daptinClient';
 import {
     cacheAssetImage,
+    clearCachedAssetImage,
+    clearCachedAssetImages,
     hasCachedAssetImage
 } from './canvas/imageAssets';
+import {
+    releasePdfCanvasPreviewAsset,
+    releasePdfCanvasPreviewCache
+} from './canvas/nodeTypes/pdfCanvasPreview';
 import type {
     CanasterAssetRecord,
     CanasterLoadedAsset,
@@ -51,7 +62,10 @@ import type {
     NestedCanvasWorkspaceHandle,
     WorkspaceFileDropRequest
 } from './canvas/nested/NestedCanvasWorkspace';
-import {referencedAssetIdsForNode} from './canvas/nodeRegistry';
+import {
+    imageAssetIdsForCollection,
+    referencedAssetIdsForCollection
+} from '../domain/workspaceAssetReferences';
 import type {WorkspacePreviewCapture} from './useWorkspaceExport';
 import {
     isRecord,
@@ -60,7 +74,7 @@ import {
 
 type SyncStatusSetter = (value: SyncStatus | ((current: SyncStatus) => SyncStatus)) => void;
 
-type StoredWorkspaceAsset = CanasterLoadedAsset;
+type StoredWorkspaceAsset = CanasterAssetRecord;
 
 type FileNodeCreateRequest = {
     nodeType: string;
@@ -84,6 +98,7 @@ export function useWorkspaceAssets(input: {
         workspaceRef,
     } = input;
     const activeDocumentIdRef = useRef(activeDocumentId);
+    const referencedAssetIdsRef = useRef(new Set(referencedAssetIdsForCollection(collection)));
     const signedInRef = useRef(signedIn);
     activeDocumentIdRef.current = activeDocumentId;
     signedInRef.current = signedIn;
@@ -101,7 +116,7 @@ export function useWorkspaceAssets(input: {
             },
             async storeImageFile(file) {
                 if (!isImageAssetMime(file.type)) throw new Error('Choose an image file.');
-                return storeWorkspaceAsset(file, shouldStoreOnline());
+                return storeWorkspaceLoadedAsset(file, shouldStoreOnline());
             },
             async listImageAssets() {
                 if (!canChooseSavedImages()) return [];
@@ -110,8 +125,9 @@ export function useWorkspaceAssets(input: {
             async setAssetVisibility(assetId, visibility) {
                 if (isLocalAssetId(assetId)) throw new Error('Save online before changing file visibility.');
                 await setDaptinAssetVisibility(assetId, visibility);
-                return loadAssetObject(assetId);
+                return loadAssetSummary(assetId);
             },
+            releaseAssetObjectUrl: releaseWorkspaceAssetObjectUrl,
             assetErrorMessage(error, fallback) {
                 const apiError = normalizeDaptinError(error, fallback);
                 if (apiError.kind === 'session' || apiError.kind === 'permission') return 'Sign in to use saved files.';
@@ -121,13 +137,19 @@ export function useWorkspaceAssets(input: {
     }, []);
 
     useEffect(() => {
-        const assetIds = imageAssetIdsInCollection(collection).filter(
+        const assetIds = imageAssetIdsForCollection(collection).filter(
             (assetId) => !hasCachedAssetImage(assetId) && (isLocalAssetId(assetId) || (signedIn && hasUsableStoredToken())));
         if (!assetIds.length) return;
         let canceled = false;
         for (const assetId of assetIds) {
             void loadWorkspaceAssetObject(assetId)
-                .then((asset) => cacheAssetImage(asset.id, asset.objectUrl))
+                .then(async (asset) => {
+                    try {
+                        await cacheAssetImage(asset.id, asset.objectUrl);
+                    } finally {
+                        releaseWorkspaceAssetObjectUrl(asset.id);
+                    }
+                })
                 .then(() => {
                     if (!canceled) workspaceRef.current?.refreshActiveCanvas();
                 })
@@ -137,6 +159,19 @@ export function useWorkspaceAssets(input: {
             canceled = true;
         };
     }, [collection, signedIn, workspaceRef]);
+
+    useEffect(() => {
+        const previous = referencedAssetIdsRef.current;
+        const next = new Set(referencedAssetIdsForCollection(collection));
+        for (const assetId of previous) {
+            if (!next.has(assetId)) releaseWorkspaceAssetRuntimeResources(assetId);
+        }
+        referencedAssetIdsRef.current = next;
+    }, [collection]);
+
+    useEffect(() => () => {
+        releaseWorkspaceRuntimeResources();
+    }, []);
 
     const handleWorkspaceFileDrop = useCallback(async (request: WorkspaceFileDropRequest) => {
         if (request.canvasId !== (workspaceRef.current?.collection().activeCanvasId ?? collection.activeCanvasId)) return;
@@ -150,8 +185,16 @@ export function useWorkspaceAssets(input: {
         try {
             const storeOnline = Boolean(activeDocumentId && signedIn && hasUsableStoredToken());
             for (const [index, file] of supportedFiles.entries()) {
-                const asset = await storeWorkspaceAsset(file, storeOnline);
-                if (isImageAssetMime(asset.mime)) await cacheAssetImage(asset.id, asset.objectUrl);
+                const asset = isImageAssetMime(file.type)
+                    ? await storeWorkspaceLoadedAsset(file, storeOnline)
+                    : await storeWorkspaceAsset(file, storeOnline);
+                if (isLoadedAsset(asset)) {
+                    try {
+                        await cacheAssetImage(asset.id, asset.objectUrl);
+                    } finally {
+                        releaseWorkspaceAssetObjectUrl(asset.id);
+                    }
+                }
                 if (workspaceRef.current?.collection().activeCanvasId !== request.canvasId) {
                     setSyncMessage('File add cancelled because the view changed.');
                     return;
@@ -178,22 +221,33 @@ export function useWorkspaceAssets(input: {
 
 export async function storeWorkspaceAsset(file: File, online: boolean): Promise<StoredWorkspaceAsset> {
     if (online) {
-        const asset = await uploadWorkspaceAsset(file);
-        return loadAssetObject(asset.id);
+        return uploadWorkspaceAsset(file);
     }
     const asset = await saveLocalAsset(file);
-    return localLoadedAsset(await loadLocalAssetObject(asset.id));
+    return localAssetRecord(asset);
+}
+
+async function storeWorkspaceLoadedAsset(file: File, online: boolean): Promise<CanasterLoadedAsset> {
+    const asset = await storeWorkspaceAsset(file, online);
+    return loadWorkspaceAssetObject(asset.id);
 }
 
 async function loadWorkspaceAssetObject(assetId: string): Promise<CanasterLoadedAsset> {
     return isLocalAssetId(assetId) ? localLoadedAsset(await loadLocalAssetObject(assetId)) : loadAssetObject(assetId);
 }
 
+async function loadAssetSummary(assetId: string): Promise<CanasterAssetRecord> {
+    const asset = await loadAssetObject(assetId);
+    releaseAssetObjectUrl(asset.id);
+    const { objectUrl: _objectUrl, ...record } = asset;
+    return record;
+}
+
 async function loadWorkspaceAssetFile(assetId: string): Promise<File> {
     return isLocalAssetId(assetId) ? loadLocalAssetFile(assetId) : loadAssetFile(assetId);
 }
 
-function localLoadedAsset(asset: LocalAssetObject): CanasterLoadedAsset {
+function localAssetRecord(asset: LocalAssetSummary): CanasterAssetRecord {
     const record: CanasterAssetRecord = {
         source: 'local',
         id: asset.id,
@@ -207,7 +261,39 @@ function localLoadedAsset(asset: LocalAssetObject): CanasterLoadedAsset {
         file: null,
         urls: {},
     };
-    return {...record, objectUrl: asset.objectUrl};
+    return record;
+}
+
+function localLoadedAsset(asset: LocalAssetObject): CanasterLoadedAsset {
+    return {...localAssetRecord(asset), objectUrl: asset.objectUrl};
+}
+
+function isLoadedAsset(asset: CanasterAssetRecord): asset is CanasterLoadedAsset {
+    return typeof (asset as { objectUrl?: unknown }).objectUrl === 'string';
+}
+
+export function releaseWorkspaceAssetObjectUrl(assetId: string): void {
+    if (isLocalAssetId(assetId)) {
+        releaseLocalAssetObjectUrl(assetId);
+        return;
+    }
+    releaseAssetObjectUrl(assetId);
+}
+
+export function releaseWorkspaceAssetObjectUrls(): void {
+    releaseAssetObjectUrls();
+    releaseLocalAssetObjectUrls();
+}
+
+export function releaseWorkspaceAssetRuntimeResources(assetId: string): void {
+    releasePdfCanvasPreviewAsset(assetId);
+    clearCachedAssetImage(assetId);
+}
+
+export function releaseWorkspaceRuntimeResources(): void {
+    releasePdfCanvasPreviewCache();
+    clearCachedAssetImages();
+    releaseWorkspaceAssetObjectUrls();
 }
 
 export async function uploadWorkspacePreviewImage(capture: WorkspacePreviewCapture, documentTitle: string): Promise<CanvasWorkspacePreviewImage> {
@@ -273,33 +359,6 @@ function offsetDropPoint(point: WorldPoint, index: number): WorldPoint {
     return { x: point.x + offset, y: point.y + offset };
 }
 
-function imageAssetIdsInCollection(collection: CanvasDocumentCollection): string[] {
-    const ids = new Set<string>();
-    for (const document of Object.values(collection.documents)) {
-        const backgroundAssetId = document.appearance?.backgroundImage?.assetId;
-        if (backgroundAssetId) ids.add(backgroundAssetId);
-        for (const node of document.model.nodes) {
-            if (node.type !== BuiltInNodeTypes.image) continue;
-            for (const assetId of referencedAssetIdsForNode(node)) ids.add(assetId);
-        }
-    }
-    return [...ids];
-}
-
-function assetIdsInCollection(collection: CanvasDocumentCollection): string[] {
-    const ids = new Set<string>();
-    const previewAssetId = collection.appearance?.previewImage?.assetId;
-    if (previewAssetId) ids.add(previewAssetId);
-    for (const document of Object.values(collection.documents)) {
-        const backgroundAssetId = document.appearance?.backgroundImage?.assetId;
-        if (backgroundAssetId) ids.add(backgroundAssetId);
-        for (const node of document.model.nodes) {
-            for (const assetId of referencedAssetIdsForNode(node)) ids.add(assetId);
-        }
-    }
-    return [...ids];
-}
-
 export async function promoteLocalAssetsForOnlineSave(
     snapshot: CanvasWorkspaceSnapshot
 ): Promise<{ snapshot: CanvasWorkspaceSnapshot; changed: boolean }> {
@@ -320,7 +379,7 @@ export async function promoteLocalAssetsForOnlineSave(
 function localAssetIdsInSnapshot(snapshot: CanvasWorkspaceSnapshot): string[] {
     const ids = new Set<string>();
     for (const collection of collectionsInSnapshot(snapshot)) {
-        for (const assetId of assetIdsInCollection(collection)) {
+        for (const assetId of referencedAssetIdsForCollection(collection)) {
             if (isLocalAssetId(assetId)) ids.add(assetId);
         }
     }

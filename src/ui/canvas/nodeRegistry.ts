@@ -1,5 +1,5 @@
 import { cloneNodeData } from '../../core/nodeData';
-import { registeredSemanticDefinitions, semanticDefinitionForType } from '../../domain/nodeDefinitions/nodeSemanticRegistry';
+import { referencedAssetIdsForSemanticNode, registeredSemanticDefinitions, semanticDefinitionForType } from '../../domain/nodeDefinitions/nodeSemanticRegistry';
 import type { CanvasNode, NodeData } from '../../core/nodePrimitives';
 import {
   safeDescribeNodeContent,
@@ -159,11 +159,5 @@ export function stripNodeForPaste(node: CanvasNode): CanvasNode {
 }
 
 export function referencedAssetIdsForNode(node: CanvasNode): string[] {
-  const definition = nodeDefinitionFor(node);
-  const data = safeParseNodeData(definition, node);
-  try {
-    return definition.referencedAssetIds?.({ node: node as CanvasNode & { data: NodeData }, data }) ?? [];
-  } catch {
-    return [];
-  }
+  return referencedAssetIdsForSemanticNode(node);
 }

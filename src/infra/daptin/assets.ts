@@ -122,7 +122,7 @@ const SET_ASSET_PUBLIC_ACTION = 'set_canaster_asset_public';
 const PRIVATE_ASSET_PERMISSION = 16256;
 const PUBLIC_ASSET_PERMISSION = 16259;
 const modelLoad = { promise: null as Promise<void> | null };
-const objectUrls = new Map<string, string>();
+const objectUrls = new Map<string, { url: string; refCount: number }>();
 
 export async function uploadWorkspaceAsset(file: File): Promise<CanasterAssetSummary> {
   if (!isSupportedWorkspaceAssetFile(file)) throw new Error('Choose an image, PDF, or Markdown file.');
@@ -190,8 +190,17 @@ export async function loadAssetFile(assetRef: string): Promise<File> {
 }
 
 export function releaseAssetObjectUrls(): void {
-  for (const url of objectUrls.values()) URL.revokeObjectURL(url);
+  for (const entry of objectUrls.values()) URL.revokeObjectURL(entry.url);
   objectUrls.clear();
+}
+
+export function releaseAssetObjectUrl(assetRef: string): void {
+  const entry = objectUrls.get(assetRef);
+  if (!entry) return;
+  entry.refCount -= 1;
+  if (entry.refCount > 0) return;
+  URL.revokeObjectURL(entry.url);
+  objectUrls.delete(assetRef);
 }
 
 export async function setAssetVisibility(assetRef: string, visibility: AssetVisibility): Promise<void> {
@@ -249,9 +258,12 @@ function assetFileUrl(assetRef: string): string {
 
 function objectUrlForAsset(assetRef: string, blob: Blob): { objectUrl: string } {
   const previous = objectUrls.get(assetRef);
-  if (previous) URL.revokeObjectURL(previous);
+  if (previous) {
+    previous.refCount += 1;
+    return { objectUrl: previous.url };
+  }
   const objectUrl = URL.createObjectURL(blob);
-  objectUrls.set(assetRef, objectUrl);
+  objectUrls.set(assetRef, { url: objectUrl, refCount: 1 });
   return { objectUrl };
 }
 

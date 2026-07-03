@@ -172,7 +172,11 @@ function createImagePicker(mount: HTMLElement, data: ImageNodeData, nodeAssetSer
     setState({ assets: [], busy: true, message: 'Uploading image' });
     try {
       const asset = await nodeAssetService.storeImageFile(file);
-      await cacheAssetImage(asset.id, asset.objectUrl);
+      try {
+        await cacheAssetImage(asset.id, asset.objectUrl);
+      } finally {
+        nodeAssetService.releaseAssetObjectUrl(asset.id);
+      }
       assetIdDraft = asset.id;
       altDraft = altDraft || data.alt || cleanImageName(asset.name);
       surface.commitAndClose();

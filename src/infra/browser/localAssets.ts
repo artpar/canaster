@@ -23,7 +23,7 @@ type StoredLocalAsset = {
 
 const DATABASE_NAME = 'canway-local-assets';
 const LOCAL_ASSET_PREFIX = 'local:';
-const objectUrls = new Map<string, string>();
+const objectUrls = new Map<string, { url: string; refCount: number }>();
 
 class CanwayLocalAssetDatabase extends Dexie {
   assets!: Table<StoredLocalAsset, string>;
@@ -67,9 +67,12 @@ export async function loadLocalAssetObject(assetId: string): Promise<LocalAssetO
   const record = await db.assets.get(assetId);
   if (!record || record.schemaVersion !== 1) throw new Error('Local file was not found on this device.');
   const previous = objectUrls.get(assetId);
-  if (previous) URL.revokeObjectURL(previous);
+  if (previous) {
+    previous.refCount += 1;
+    return { ...summaryFromRecord(record), objectUrl: previous.url };
+  }
   const objectUrl = URL.createObjectURL(record.blob);
-  objectUrls.set(assetId, objectUrl);
+  objectUrls.set(assetId, { url: objectUrl, refCount: 1 });
   return { ...summaryFromRecord(record), objectUrl };
 }
 
@@ -80,8 +83,17 @@ export async function loadLocalAssetFile(assetId: string): Promise<File> {
 }
 
 export function releaseLocalAssetObjectUrls(): void {
-  for (const url of objectUrls.values()) URL.revokeObjectURL(url);
+  for (const entry of objectUrls.values()) URL.revokeObjectURL(entry.url);
   objectUrls.clear();
+}
+
+export function releaseLocalAssetObjectUrl(assetId: string): void {
+  const entry = objectUrls.get(assetId);
+  if (!entry) return;
+  entry.refCount -= 1;
+  if (entry.refCount > 0) return;
+  URL.revokeObjectURL(entry.url);
+  objectUrls.delete(assetId);
 }
 
 function assetToken(): string {

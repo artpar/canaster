@@ -39,4 +39,7 @@ export const imageNodeSemanticDefinition: NodeSemanticDefinition<ImageNodeData> 
       actions: [],
     };
   },
+  referencedAssetIds({ data }) {
+    return data.assetId ? [data.assetId] : [];
+  },
 };

@@ -53,10 +53,11 @@ export type CanvasNodeAssetService = {
   canChooseSavedImages(): boolean;
   loadAssetObject(assetId: string): Promise<CanasterLoadedAsset>;
   loadAssetFile(assetId: string): Promise<File>;
-  storeWorkspaceFile(file: File): Promise<CanasterLoadedAsset>;
+  storeWorkspaceFile(file: File): Promise<CanasterAssetRecord>;
   storeImageFile(file: File): Promise<CanasterLoadedAsset>;
   listImageAssets(): Promise<CanasterAssetRecord[]>;
   setAssetVisibility?(assetId: string, visibility: 'private' | 'public'): Promise<CanasterAssetRecord>;
+  releaseAssetObjectUrl(assetId: string): void;
   assetErrorMessage(error: unknown, fallback: string): string;
 };
 
@@ -68,6 +69,7 @@ export const unavailableCanvasNodeAssetService: CanvasNodeAssetService = {
   storeWorkspaceFile: () => Promise.reject(new Error('File assets are unavailable in this view.')),
   storeImageFile: () => Promise.reject(new Error('File assets are unavailable in this view.')),
   listImageAssets: () => Promise.resolve([]),
+  releaseAssetObjectUrl: () => undefined,
   assetErrorMessage(error, fallback) {
     return error instanceof Error ? error.message : fallback;
   },

@@ -49,6 +49,7 @@ function drawPdfPreview(
 function createPdfPreview(mount: HTMLElement, data: PdfNodeData, nodeAssetService: CanvasNodeAssetService, commit: (nextData: PdfNodeData) => void, close: () => void) {
   const shell = createFilePreviewShell(mount, 'node-inline-pdf-preview', data.title || 'PDF');
   let disposed = false;
+  let loadedObjectUrlAssetId: string | null = null;
   shell.closeButton.addEventListener('click', close);
   if (!data.assetId) {
     renderPdfAttach(shell.body, data, nodeAssetService, commit, close);
@@ -56,7 +57,11 @@ function createPdfPreview(mount: HTMLElement, data: PdfNodeData, nodeAssetServic
     shell.setMessage('Loading PDF');
     void nodeAssetService.loadAssetObject(data.assetId)
       .then((asset) => {
-        if (disposed) return;
+        if (disposed) {
+          nodeAssetService.releaseAssetObjectUrl(asset.id);
+          return;
+        }
+        loadedObjectUrlAssetId = asset.id;
         shell.body.replaceChildren();
         const iframe = document.createElement('iframe');
         iframe.className = 'file-preview-frame';
@@ -80,6 +85,10 @@ function createPdfPreview(mount: HTMLElement, data: PdfNodeData, nodeAssetServic
     },
     dispose() {
       disposed = true;
+      if (loadedObjectUrlAssetId) {
+        nodeAssetService.releaseAssetObjectUrl(loadedObjectUrlAssetId);
+        loadedObjectUrlAssetId = null;
+      }
     },
   };
 }

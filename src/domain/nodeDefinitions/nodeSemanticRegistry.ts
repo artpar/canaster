@@ -80,6 +80,16 @@ export function stripSemanticNodeForPaste(node: CanvasNode): CanvasNode {
   }
 }
 
+export function referencedAssetIdsForSemanticNode(node: CanvasNode): string[] {
+  const definition = semanticDefinitionForNode(node);
+  const data = safeParseSemanticData(definition, node);
+  try {
+    return definition.referencedAssetIds?.({ node: node as CanvasNode & { data: NodeData }, data }) ?? [];
+  } catch {
+    return [];
+  }
+}
+
 function createRegistry(items: NodeSemanticDefinition[]) {
   const map = new Map<string, NodeSemanticDefinition>();
   for (const definition of items) {

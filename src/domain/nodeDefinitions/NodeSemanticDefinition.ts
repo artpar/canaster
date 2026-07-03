@@ -36,6 +36,7 @@ export type NodeSemanticDefinition<TData extends NodeData = NodeData> = {
   createDefaultData(): TData;
   parseData(raw: JsonObject): TData;
   describe(context: NodeSemanticContext<TData>): NodeDescription;
+  referencedAssetIds?(context: NodeSemanticContext<TData>): string[];
   portalInfo?(context: NodeSemanticContext<TData>): NodePortalInfo | null;
   createPortalData?(info: NodePortalInfo): TData;
   updatePortalSummary?(context: NodeSemanticContext<TData>, summary: NodePortalSummary): TData;

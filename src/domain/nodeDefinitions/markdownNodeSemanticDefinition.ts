@@ -38,4 +38,7 @@ export const markdownNodeSemanticDefinition: NodeSemanticDefinition<MarkdownNode
       actions: [],
     };
   },
+  referencedAssetIds({ data }) {
+    return data.assetId ? [data.assetId] : [];
+  },
 };

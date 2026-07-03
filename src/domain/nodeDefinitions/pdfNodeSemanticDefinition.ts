@@ -34,4 +34,7 @@ export const pdfNodeSemanticDefinition: NodeSemanticDefinition<PdfNodeData> = {
       actions: [],
     };
   },
+  referencedAssetIds({ data }) {
+    return data.assetId ? [data.assetId] : [];
+  },
 };
