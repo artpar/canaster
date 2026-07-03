@@ -1,4 +1,5 @@
-import { normalizeCardNodeData, type CardNodeData } from '../../../domain/cardNodeData';
+import { cardNodeSemanticDefinition } from '../../../domain/nodeDefinitions/cardNodeSemanticDefinition';
+import type { CardNodeData } from '../../../domain/cardNodeData';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import { drawAccentMark, drawNodeBodyLines, nodeLayout, wrapText } from '../nodeRendering';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
@@ -6,12 +7,8 @@ import type { NodeContentRect, NodeDefinition } from '../nodeDefinition/nodeDefi
 
 export const cardNodeDefinition: NodeDefinition<CardNodeData> = defineNodeType({
   ...nodeTypeSpecs.card,
-  createDefaultData() {
-    return { title: 'Untitled work item', detail: '', accent: 'task' };
-  },
-  parseData(raw) {
-    return normalizeCardNodeData(raw);
-  },
+  createDefaultData: cardNodeSemanticDefinition.createDefaultData,
+  parseData: cardNodeSemanticDefinition.parseData,
   render({ ctx, data, theme, contentRect, state }) {
     const layout = nodeLayout(theme);
     const accent = theme.kind[data.accent];
@@ -29,17 +26,7 @@ export const cardNodeDefinition: NodeDefinition<CardNodeData> = defineNodeType({
     const lines = wrapText(ctx, data.detail, Math.max(0, detailRect.w), cardDetailLineCapacity(detailRect, layout.bodyLineHeight));
     drawNodeBodyLines(ctx, detailRect, lines, theme, { x: detailRect.x, y: detailRect.y });
   },
-  describe({ data }) {
-    return {
-      label: data.title || 'Untitled work item',
-      roleDescription: 'Work item',
-      details: [
-        data.detail,
-      ].filter(Boolean),
-      state: [],
-      actions: [],
-    };
-  },
+  describe: cardNodeSemanticDefinition.describe,
 });
 
 function cardDetailLineCapacity(rect: NodeContentRect, lineHeight: number) {

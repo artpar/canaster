@@ -1,57 +1,26 @@
-import { asEnum, asString } from '../../../core/nodeData';
 import {
-  embedProviderForUrl,
   embedFrameUrlForUrl,
   embedTitleForUrl,
   normalizeEmbedUrl,
-  type EmbedAspectRatio,
-  type EmbedProvider,
 } from '../../../core/embedUrl';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
-import type { JsonObject } from '../../../core/nodePrimitives';
+import { describeEmbedNodeData, embedNodeDataForUrl, embedNodeSemanticDefinition, type EmbedNodeData } from '../../../domain/nodeDefinitions/embedNodeSemanticDefinition';
 import { createInlineNodeSurface } from './createInlineNodeSurface';
 import { nodeEditInteractionRegion } from './nodeContentInteractionRegion';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeContentRect, NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
 import type { CanvasTheme } from '../theme';
 
-type EmbedNodeData = {
-  url: string;
-  title: string;
-  provider: EmbedProvider;
-  aspectRatio: EmbedAspectRatio;
-} & JsonObject;
-
-const EMBED_ASPECT_RATIOS: readonly EmbedAspectRatio[] = ['16:9', '4:3', 'auto'];
-const EMBED_PROVIDERS: readonly EmbedProvider[] = ['web', 'video', 'map', 'doc'];
-
 export const embedNodeDefinition: NodeDefinition<EmbedNodeData> = defineNodeType({
   ...nodeTypeSpecs.embed,
-  createDefaultData() {
-    return { url: '', title: 'Web preview', provider: 'web', aspectRatio: '16:9' };
-  },
-  parseData(raw) {
-    const url = asString(raw.url, '');
-    return {
-      url,
-      title: asString(raw.title, url ? embedTitleForUrl(url) : 'Web preview'),
-      provider: asEnum(raw.provider, EMBED_PROVIDERS, 'web'),
-      aspectRatio: asEnum(raw.aspectRatio, EMBED_ASPECT_RATIOS, '16:9'),
-    };
-  },
+  createDefaultData: embedNodeSemanticDefinition.createDefaultData,
+  parseData: embedNodeSemanticDefinition.parseData,
   render({ ctx, data, theme, contentRect, state }) {
     if (state.quality === 'compact' && !state.selected && !state.hovered) return;
     drawEmbedPreview(ctx, contentRect, data, theme);
   },
   describe({ data }) {
-    const normalized = normalizeEmbedUrl(data.url, { allowLocalHttp: allowLocalHttpForCurrentHost() });
-    return {
-      label: data.title || (normalized ? embedTitleForUrl(normalized) : 'Web preview'),
-      roleDescription: 'Web preview',
-      details: [normalized ? embedTitleForUrl(normalized) : 'No web link'],
-      state: normalized ? [] : ['Needs a safe HTTPS link'],
-      actions: [],
-    };
+    return describeEmbedNodeData(data, { allowLocalHttp: allowLocalHttpForCurrentHost() });
   },
   getInteractionRegions({ contentRect }) {
     return nodeEditInteractionRegion(contentRect, 'pointer', 'edit web preview');
@@ -132,14 +101,7 @@ function createEmbedEditor(mount: HTMLElement, data: EmbedNodeData, commit: (nex
 }
 
 function readEmbedDraft(data: EmbedNodeData, draftUrl: string): EmbedNodeData {
-  const normalized = normalizeEmbedUrl(draftUrl, { allowLocalHttp: allowLocalHttpForCurrentHost() });
-  if (!normalized) return data;
-  return {
-    ...data,
-    url: normalized,
-    title: data.title && data.title !== 'Web preview' ? data.title : embedTitleForUrl(normalized),
-    provider: embedProviderForUrl(normalized),
-  };
+  return embedNodeDataForUrl(data, draftUrl, { allowLocalHttp: allowLocalHttpForCurrentHost() });
 }
 
 function allowLocalHttpForCurrentHost(): boolean {

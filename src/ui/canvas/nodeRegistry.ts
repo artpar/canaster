@@ -1,4 +1,5 @@
 import { cloneNodeData } from '../../core/nodeData';
+import { registeredSemanticDefinitions, semanticDefinitionForType } from '../../domain/nodeDefinitions/nodeSemanticRegistry';
 import type { CanvasNode, NodeData } from '../../core/nodePrimitives';
 import {
   safeDescribeNodeContent,
@@ -49,7 +50,17 @@ function createRegistry(items: NodeDefinition[]) {
     if (map.has(definition.type)) throw new Error(`Duplicate node type: ${definition.type}`);
     map.set(definition.type, definition);
   }
+  assertSemanticParity(map);
   return map;
+}
+
+function assertSemanticParity(definitions: ReadonlyMap<string, NodeDefinition>) {
+  for (const definition of definitions.values()) {
+    if (!semanticDefinitionForType(definition.type)) throw new Error(`Node type ${definition.type} is missing domain semantics`);
+  }
+  for (const semanticDefinition of registeredSemanticDefinitions()) {
+    if (!definitions.has(semanticDefinition.type)) throw new Error(`Domain node semantics ${semanticDefinition.type} is missing a canvas node definition`);
+  }
 }
 
 export function nodeDefinitionFor(node: CanvasNode): NodeDefinition {

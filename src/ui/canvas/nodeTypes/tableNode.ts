@@ -1,4 +1,5 @@
-import { normalizeTableNodeData, type TableNodeData } from '../../../domain/tableNodeData';
+import { tableNodeSemanticDefinition } from '../../../domain/nodeDefinitions/tableNodeSemanticDefinition';
+import type { TableNodeData } from '../../../domain/tableNodeData';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import { clipText, drawNodeMeta, drawNodeTitle, nodeLayout, nodeText } from '../nodeRendering';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
@@ -7,12 +8,8 @@ import type { CanvasTheme } from '../theme';
 
 export const tableNodeDefinition: NodeDefinition<TableNodeData> = defineNodeType({
   ...nodeTypeSpecs.table,
-  createDefaultData() {
-    return { title: 'Table', columns: ['Item', 'Owner', 'Status'], rows: [] };
-  },
-  parseData(raw) {
-    return normalizeTableNodeData(raw);
-  },
+  createDefaultData: tableNodeSemanticDefinition.createDefaultData,
+  parseData: tableNodeSemanticDefinition.parseData,
   render({ ctx, data, theme, contentRect, state }) {
     if (state.quality === 'compact' && !state.selected && !state.hovered) return;
 
@@ -20,15 +17,7 @@ export const tableNodeDefinition: NodeDefinition<TableNodeData> = defineNodeType
     drawNodeMeta(ctx, contentRect, `${data.rows.length} row${data.rows.length === 1 ? '' : 's'}`, theme);
     drawTablePreview(ctx, contentRect, data, theme);
   },
-  describe({ data }) {
-    return {
-      label: data.title || 'Table',
-      roleDescription: 'Table',
-      details: [`${data.columns.length} columns`, `${data.rows.length} rows`],
-      state: data.rows.length ? [] : ['No rows'],
-      actions: [],
-    };
-  },
+  describe: tableNodeSemanticDefinition.describe,
 });
 
 function drawTablePreview(ctx: CanvasRenderingContext2D, rect: NodeContentRect, data: TableNodeData, theme: CanvasTheme) {

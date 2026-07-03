@@ -1,4 +1,5 @@
-import { normalizeChecklistNodeData, type ChecklistNodeData } from '../../../domain/checklistNodeData';
+import { checkNodeSemanticDefinition } from '../../../domain/nodeDefinitions/checkNodeSemanticDefinition';
+import type { ChecklistNodeData } from '../../../domain/checklistNodeData';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import { clipText, drawNodeMeta, nodeLayout, nodeText } from '../nodeRendering';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
@@ -7,12 +8,8 @@ import type { CanvasTheme } from '../theme';
 
 export const checkNodeDefinition: NodeDefinition<ChecklistNodeData> = defineNodeType({
   ...nodeTypeSpecs.check,
-  createDefaultData() {
-    return { title: 'Checklist', items: [] };
-  },
-  parseData(raw) {
-    return normalizeChecklistNodeData(raw);
-  },
+  createDefaultData: checkNodeSemanticDefinition.createDefaultData,
+  parseData: checkNodeSemanticDefinition.parseData,
   render({ ctx, data, theme, contentRect, state }) {
     const text = nodeText(theme);
     const layout = nodeLayout(theme);
@@ -50,17 +47,7 @@ export const checkNodeDefinition: NodeDefinition<ChecklistNodeData> = defineNode
       ctx.fillText(clipText(ctx, overflowLabel, Math.max(0, contentRect.w - layout.insetX * 2)), contentRect.x + layout.insetX, contentRect.y + Math.max(0, contentRect.h - layout.labelLineHeight));
     }
   },
-  describe({ data }) {
-    const done = data.items.filter((item) => item.checked).length;
-    const total = data.items.length;
-    return {
-      label: data.title || 'Checklist',
-      roleDescription: 'Checklist',
-      details: [total ? `${done} of ${total} done` : 'No checklist items'],
-      state: [],
-      actions: [],
-    };
-  },
+  describe: checkNodeSemanticDefinition.describe,
 });
 
 function visibleRows(height: number, layout: ReturnType<typeof nodeLayout>) {

@@ -1,8 +1,6 @@
-import { boundedMarkdownNodeText } from '../../../core/boundedMarkdownNodeText';
-import { asString } from '../../../core/nodeData';
 import { cleanAssetTitle, workspaceAssetKindForFile } from '../../../core/workspaceAssetTypes';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
-import type { JsonObject } from '../../../core/nodePrimitives';
+import { markdownNodeSemanticDefinition, type MarkdownNodeData } from '../../../domain/nodeDefinitions/markdownNodeSemanticDefinition';
 import { drawNodeMeta } from '../nodeRendering';
 import { createFilePreviewShell, loadFileAssetFile, saveFileAsset } from './fileAssetPreview';
 import {
@@ -17,43 +15,15 @@ import type { NodeContentRect, NodeDefinition } from '../nodeDefinition/nodeDefi
 import type { CanvasTheme } from '../theme';
 import { renderMarkdownHtml } from './renderMarkdownHtml';
 
-type MarkdownNodeData = {
-  assetId: string;
-  title: string;
-  fileName: string;
-  mime: string;
-  markdownText: string;
-} & JsonObject;
-
 export const markdownNodeDefinition: NodeDefinition<MarkdownNodeData> = defineNodeType({
   ...nodeTypeSpecs.md,
-  createDefaultData() {
-    return { assetId: '', title: 'Markdown', fileName: '', mime: 'text/markdown', markdownText: '' };
-  },
-  parseData(raw) {
-    const assetId = asString(raw.assetId, '');
-    const fileName = asString(raw.fileName, '');
-    return {
-      assetId,
-      title: asString(raw.title, cleanAssetTitle(fileName, 'Markdown')),
-      fileName,
-      mime: asString(raw.mime, 'text/markdown'),
-      markdownText: assetId ? '' : boundedMarkdownNodeText(asString(raw.markdownText, '')),
-    };
-  },
+  createDefaultData: markdownNodeSemanticDefinition.createDefaultData,
+  parseData: markdownNodeSemanticDefinition.parseData,
   render({ ctx, data, theme, contentRect, visibleContentRect, requestRender, state }) {
     if (state.quality === 'compact' && !state.selected && !state.hovered) return;
     drawMarkdownPreview(ctx, contentRect, visibleContentRect, data, theme, requestRender);
   },
-  describe({ data }) {
-    return {
-      label: data.title || cleanAssetTitle(data.fileName, 'Markdown'),
-      roleDescription: 'Markdown document',
-      details: [data.assetId ? data.fileName || 'Markdown file' : 'No Markdown file'],
-      state: [],
-      actions: [],
-    };
-  },
+  describe: markdownNodeSemanticDefinition.describe,
   getInteractionRegions({ contentRect }) {
     return nodeEditInteractionRegion(contentRect, 'pointer', 'open Markdown preview');
   },

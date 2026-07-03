@@ -1,30 +1,15 @@
-import { asNullableString, asNumber, asString } from '../../../core/nodeData';
+import { canvasNodeSemanticDefinition, type CanvasPortalNodeData } from '../../../domain/nodeDefinitions/canvasNodeSemanticDefinition';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
-import type { JsonObject } from '../../../core/nodePrimitives';
 import { nodeLayout } from '../nodeRendering';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeContentRect, NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
-
-type CanvasPortalNodeData = {
-  childCanvasId: string | null;
-  title: string;
-  nodeCount: number;
-} & JsonObject;
 
 const PORTAL_CHROME_GUTTER = 4;
 
 export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = defineNodeType({
   ...nodeTypeSpecs.canvas,
-  createDefaultData() {
-    return { childCanvasId: null, title: 'View', nodeCount: 0 };
-  },
-  parseData(raw) {
-    return {
-      childCanvasId: asNullableString(raw.childCanvasId),
-      title: asString(raw.title, 'View'),
-      nodeCount: Math.max(0, Math.floor(asNumber(raw.nodeCount, 0))),
-    };
-  },
+  createDefaultData: canvasNodeSemanticDefinition.createDefaultData,
+  parseData: canvasNodeSemanticDefinition.parseData,
   render({ ctx, data, theme, contentRect, state }) {
     if (state.quality === 'compact' && !state.selected && !state.hovered) return;
 
@@ -42,49 +27,11 @@ export const canvasNodeDefinition: NodeDefinition<CanvasPortalNodeData> = define
     }
     return { type: 'body' };
   },
-  describe({ data }) {
-    return {
-      label: data.title || 'View inside',
-      roleDescription: 'View inside',
-      details: [data.childCanvasId ? `${data.nodeCount} item${data.nodeCount === 1 ? '' : 's'} inside` : 'No view inside'],
-      state: [],
-      actions: data.childCanvasId
-        ? [
-            { id: 'enter-child-canvas', label: 'Open view', available: true },
-            { id: 'focus-portal-preview', label: 'Preview here', available: true },
-          ]
-        : [{ id: 'create-child-canvas', label: 'Add view inside', available: true }],
-    };
-  },
-  portalInfo({ data }) {
-    return {
-      childCanvasId: data.childCanvasId,
-      title: data.title,
-      nodeCount: data.nodeCount,
-    };
-  },
-  createPortalData(info) {
-    return {
-      childCanvasId: info.childCanvasId,
-      title: info.title,
-      nodeCount: info.nodeCount,
-    };
-  },
-  updatePortalSummary({ data }, summary) {
-    if (data.title === summary.title && data.nodeCount === summary.nodeCount) return data;
-    return { ...data, title: summary.title, nodeCount: summary.nodeCount };
-  },
-  stripForPaste({ node, data }) {
-    return {
-      ...node,
-      data: {
-        ...data,
-        childCanvasId: null,
-        nodeCount: 0,
-        title: `${data.title || 'Canvas'} copy`,
-      },
-    };
-  },
+  describe: canvasNodeSemanticDefinition.describe,
+  portalInfo: canvasNodeSemanticDefinition.portalInfo,
+  createPortalData: canvasNodeSemanticDefinition.createPortalData,
+  updatePortalSummary: canvasNodeSemanticDefinition.updatePortalSummary,
+  stripForPaste: canvasNodeSemanticDefinition.stripForPaste,
 });
 
 export function canvasPortalViewportRect(contentRect: NodeContentRect, theme?: Parameters<typeof nodeLayout>[0]): NodeContentRect {

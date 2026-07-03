@@ -1,8 +1,7 @@
-import { asString } from '../../../core/nodeData';
 import type { NodeContentViewport } from '../../../core/nodeAppearance';
 import { cleanAssetTitle, workspaceAssetKindForFile } from '../../../core/workspaceAssetTypes';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
-import type { JsonObject } from '../../../core/nodePrimitives';
+import { pdfNodeSemanticDefinition, type PdfNodeData } from '../../../domain/nodeDefinitions/pdfNodeSemanticDefinition';
 import { drawNodeMeta } from '../nodeRendering';
 import { createFilePreviewShell, loadFileAssetObject, saveFileAsset } from './fileAssetPreview';
 import { nodeEditInteractionRegion } from './nodeContentInteractionRegion';
@@ -11,40 +10,15 @@ import type { NodeContentRect, NodeDefinition } from '../nodeDefinition/nodeDefi
 import type { CanvasTheme } from '../theme';
 import { drawPdfCanvasPreview } from './pdfCanvasPreview';
 
-type PdfNodeData = {
-  assetId: string;
-  title: string;
-  fileName: string;
-  mime: string;
-} & JsonObject;
-
 export const pdfNodeDefinition: NodeDefinition<PdfNodeData> = defineNodeType({
   ...nodeTypeSpecs.pdf,
-  createDefaultData() {
-    return { assetId: '', title: 'PDF', fileName: '', mime: 'application/pdf' };
-  },
-  parseData(raw) {
-    const fileName = asString(raw.fileName, '');
-    return {
-      assetId: asString(raw.assetId, ''),
-      title: asString(raw.title, cleanAssetTitle(fileName, 'PDF')),
-      fileName,
-      mime: asString(raw.mime, 'application/pdf'),
-    };
-  },
+  createDefaultData: pdfNodeSemanticDefinition.createDefaultData,
+  parseData: pdfNodeSemanticDefinition.parseData,
   render({ ctx, data, theme, contentRect, visibleContentRect, contentViewport, requestRender, state }) {
     if (state.quality === 'compact' && !state.selected && !state.hovered) return;
     drawPdfPreview(ctx, contentRect, visibleContentRect, contentViewport, data, theme, requestRender);
   },
-  describe({ data }) {
-    return {
-      label: data.title || cleanAssetTitle(data.fileName, 'PDF'),
-      roleDescription: 'PDF document',
-      details: [data.assetId ? data.fileName || 'PDF file' : 'No PDF file'],
-      state: [],
-      actions: [],
-    };
-  },
+  describe: pdfNodeSemanticDefinition.describe,
   getInteractionRegions({ contentRect }) {
     return nodeEditInteractionRegion(contentRect, 'pointer', 'open PDF preview');
   },

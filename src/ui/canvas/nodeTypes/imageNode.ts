@@ -1,38 +1,21 @@
 import { listImageAssets, loadAssetObject, uploadImageAsset, type CanasterAssetSummary } from '../../../infra/daptin/assets';
 import { hasUsableStoredToken, normalizeDaptinError } from '../../../infra/daptin/daptinClient';
-import { asEnum, asNullableString, asString } from '../../../core/nodeData';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import { cachedAssetImage, cacheAssetImage } from '../imageAssets';
 import { createInlineNodeSurface } from './createInlineNodeSurface';
-import type { JsonObject } from '../../../core/nodePrimitives';
+import { imageNodeSemanticDefinition, type ImageNodeData } from '../../../domain/nodeDefinitions/imageNodeSemanticDefinition';
 import { drawPlaceholderIcon } from '../nodeRendering';
 import { nodeEditInteractionRegion } from './nodeContentInteractionRegion';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeContentRect, NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
 import type { CanvasTheme } from '../theme';
 
-const IMAGE_FITS = ['contain', 'cover'] as const;
-type ImageFit = (typeof IMAGE_FITS)[number];
-type ImageNodeData = {
-  assetId: string | null;
-  alt: string;
-  fit: ImageFit;
-  caption?: string;
-} & JsonObject;
+const IMAGE_FITS: readonly ImageNodeData['fit'][] = ['contain', 'cover'];
 
 export const imageNodeDefinition: NodeDefinition<ImageNodeData> = defineNodeType<ImageNodeData>({
   ...nodeTypeSpecs.image,
-  createDefaultData() {
-    return { assetId: null, alt: '', fit: 'cover', caption: '' };
-  },
-  parseData(raw) {
-    return {
-      assetId: asNullableString(raw.assetId),
-      alt: asString(raw.alt, ''),
-      fit: asEnum(raw.fit, IMAGE_FITS, 'cover'),
-      caption: asString(raw.caption, ''),
-    };
-  },
+  createDefaultData: imageNodeSemanticDefinition.createDefaultData,
+  parseData: imageNodeSemanticDefinition.parseData,
   render({ ctx, data, theme, contentRect, state }) {
     ctx.fillStyle = theme.mutedText;
 
@@ -46,18 +29,7 @@ export const imageNodeDefinition: NodeDefinition<ImageNodeData> = defineNodeType
       drawPlaceholderIcon(ctx, frame, data.assetId ? 'LOADING' : 'IMAGE', theme);
     }
   },
-  describe({ data }) {
-    return {
-      label: data.alt || 'Image',
-      roleDescription: 'Image',
-      details: [
-        data.assetId ? 'Image added' : 'No image source',
-        data.fit === 'cover' ? 'Fills the frame' : 'Fits inside the frame',
-      ],
-      state: [],
-      actions: [],
-    };
-  },
+  describe: imageNodeSemanticDefinition.describe,
   getInteractionRegions({ contentRect }) {
     return nodeEditInteractionRegion(contentRect, 'pointer', 'edit image');
   },
