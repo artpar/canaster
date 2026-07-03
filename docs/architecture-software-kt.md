@@ -1,45 +1,60 @@
-# Canway Architecture And Software KT
+# Canaster Architecture And Software KT
 
-Date: 2026-06-15
+Date: 2026-07-03
 
-Purpose: this document is the continuity handoff for future Canway development. It captures the live architecture, ownership boundaries, edit contracts, verification gates, and known limits that should guide ongoing work.
+Purpose: this document is the current continuity handoff for Canaster architecture, ownership boundaries, persistence contracts, edit contracts, verification expectations, and known limits. It replaces older Canway-era architecture notes that described a canvas-only app with no backend.
+
+## Product Frame
+
+Canaster is a nested visual canvas workspace for practical operational documents. The frontend owns the canvas, workspace, view navigation, panels, and interaction experience. Daptin owns the backend boundary for account sessions, saved documents, asset storage, visibility actions, and live transport.
+
+Use product language in user-facing surfaces and docs:
+
+- workspace
+- document
+- view
+- panel
+- work item
+- save
+- open
+- account
+
+Do not describe Canaster as a developer diagramming tool, BI dashboard, generic whiteboard, database UI, or novelty mind-map app.
 
 ## Current Verdict
 
-Canway is reliable enough at the canvas-foundation layer, but it is not product-complete.
-
 What is solid now:
 
-- React/Vite app shell with a custom 2D canvas engine.
-- Model-backed nodes rendered on canvas.
-- Pointer, keyboard, nonvisual, and future AI edits share the same command planning path.
-- Pointer preview is render-only geometry derived from command plans; it does not mutate committed model geometry.
-- Pointer group drag preserves multi-selection and moves selected nodes together.
-- Native nested-canvas runtime owns recursive canvas layout outside React.
-- Deterministic nested fixture generation covers the large recursive workspace shape.
+- The source tree has explicit `core`, `domain`, `app`, `infra`, and `ui` layers.
+- `src/domain` currently has no imports from `src/infra`.
+- The saved-document adapter uses Daptin's built-in `document` model instead of creating a parallel workspace table.
+- Workspace data persists as a Canaster workspace snapshot in Daptin `document.document_content`.
+- Local draft persistence exists through browser storage.
+- The UI supports account sign-in, save online, open saved documents, document visibility, assets, live state, nested canvas navigation, and a starter workspace.
+- The canvas model has a shared command/model-change path for pointer, keyboard, nonvisual, and agent-oriented edits.
 
-What is not complete:
+What is not yet clean:
 
-- No backend, persistence, routing, collaboration, export, auth, or product domain model.
-- No ER diagram or database architecture is relevant to this repo today.
-- Real-device iOS Safari and Android Chrome touch behavior is still unverified.
-- Product-specific accessibility semantics are not defined beyond the current generic node access panel.
+- `src/app/agentBridge/CanasterAgentBridge.ts` currently imports concrete infra and UI modules directly.
+- `src/ui/App.tsx` is still a large composition shell that owns too many workflows.
+- Some UI node type modules reach directly into Daptin/browser asset infra.
+- The nested workspace/controller contract has a type-level cycle.
+- Verification tooling is stale around old fixture/profile scripts and must not be treated as a current gate.
+- Some legacy Canway storage/debug names remain for compatibility or cleanup.
 
 ## Source Map
 
-Primary authored files:
+Primary authored source:
 
-- `src/App.tsx`: React shell, document loading, toolbar, node access panel, status bar, theme state.
-- `src/catalog/service-business-atlas.json`: static starter document used for new local workspaces.
-- `src/catalog/starterCatalog.ts`: starter catalog adapter that hydrates static document data for runtime use.
-- `src/engine/CanvasEngine.ts`: canvas rendering, camera, selection, command planning, command execution, pointer/keyboard/touch interaction, lifecycle cleanup.
-- `src/engine/nested/NativeNestedCanvasController.ts`: native DOM/canvas controller for recursive nested-canvas rendering, overlay reuse, parent-context panes, storage, and debug hooks.
-- `scripts/generate-nested-grid-fixture.mjs`: deterministic deep nested workspace fixture generator.
-- `scripts/profile-nested-grid-fixture.mjs`: Chrome/CDP profiling harness for the generated nested workspace against a running dev server.
-- `src/engine/types.ts`: public model, command, operation, model-change, status, and engine option types.
-- `src/engine/theme.ts`: canvas render colors.
-- `src/styles.css`: app layout, overlays, toolbar, node access panel, status bar.
-- `docs/README.md`: docs entry point and current status index.
+- `src/core/`: pure utilities, primitives, and small normalization helpers that do not know about product workflows, Daptin, React, DOM, or browser storage.
+- `src/domain/`: pure workspace/document model, command semantics, view state, node data normalization, node semantic definitions, and history helpers. This layer must not import `src/infra`.
+- `src/app/`: use-case and orchestration code that is not React UI and not concrete backend implementation. Current examples are starter workspace catalog code and the agent access/protocol bridge.
+- `src/infra/browser/`: browser-owned persistence and URL state such as IndexedDB/localStorage workspace snapshots, local asset storage, and workspace URL serialization.
+- `src/infra/daptin/`: Daptin client/session handling, document persistence, asset storage, visibility actions, and live transport.
+- `src/ui/`: React components, panels, toolbar, canvas engine, nested canvas runtime, node rendering, node editors, theme system, and DOM interaction handlers.
+- `src/app/starterWorkspace/catalog/service-business-atlas.json`: the authored starter workspace data used for new local workspaces.
+- `docs/`: current architecture, product journey, implementation, audit, and historical reports.
+- `daptin/` and `deploy/daptin/`: Daptin backend configuration and deployment material.
 
 Generated or installed output:
 
@@ -48,306 +63,395 @@ Generated or installed output:
 
 Do not treat generated output as source ownership.
 
-## Runtime Architecture
+## Layer Ownership Rules
 
-React owns durable app state:
+### `src/core`
 
-- committed `CanvasModel`;
-- last committed `CanvasModelChange`;
-- selected theme;
-- latest viewport/status snapshot mirrored from the engine;
-- node access panel open/closed state.
+`core` contains pure reusable primitives and helpers. It may be used by every other layer.
 
-`CanvasEngine` owns immediate canvas runtime state:
+Allowed:
 
-- private cloned model;
-- theme;
-- camera;
-- selection and primary selection;
-- hover and cursor state;
-- active drag/pan/resize state;
-- render-only preview geometries;
-- touch points and two-finger gesture state;
-- internal clipboard and paste counter;
-- DPR, viewport size, render scheduling, and status scheduling.
+- JSON/data normalization helpers.
+- slug and filename helpers.
+- primitive node/asset/canvas appearance types.
+- small functions with no product workflow ownership.
 
-The DOM/canvas owns:
+Not allowed:
 
-- canvas bitmap size;
-- pointer, keyboard, wheel, focus, blur, and resize events;
-- `data-dpr`, `data-rendered-nodes`, and `data-total-nodes` probe counters.
+- React, DOM, browser storage, Daptin, HTTP, filesystem, or account/session code.
+- Product orchestration.
 
-React and the engine communicate through:
+### `src/domain`
 
-- `new CanvasEngine(canvas, { onStatus, onModelChange })`;
-- `engine.setModel(model, { preserveInteraction: true })`;
-- `engine.setTheme(theme)`;
-- `engine.executeCommand(command)`;
-- camera methods: `fit`, `resetZoom`, `zoomBy`.
+`domain` contains pure business/model logic. It owns Canaster's workspace/document semantics, not backend persistence.
 
-## Command/Edit Contract
+Allowed:
 
-All committed edits must enter through `CanvasEngine.executeCommand(command)`.
+- canvas/document model types;
+- document commands and model changes;
+- nested document/view state;
+- node semantic definitions;
+- workspace history and snapshot hydration;
+- pure layout and normalization logic.
 
-Command types:
+Not allowed:
 
-- `select-node`
-- `clear-selection`
-- `move-selection`
-- `resize-primary`
-- `delete-selection`
-- `copy-selection`
-- `paste-clipboard`
+- imports from `src/infra`;
+- direct Daptin, HTTP, IndexedDB, localStorage, DOM, React, or filesystem access;
+- account/session handling;
+- UI panels, CSS, canvas drawing, or event listeners.
 
-Edit sources:
+The hard rule: `domain` cannot import `infra`.
 
-- `pointer`
-- `keyboard`
-- `nonvisual`
-- `ai`
+### `src/app`
 
-The source is metadata and should not create separate edit semantics. If a command behaves differently by source, that must be a deliberate UX rule, not a separate mutation path.
+`app` coordinates use cases and protocols. It may depend on `core` and `domain`. When it needs persistence, browser URL state, live transport, or UI behavior, the maintainable shape is an explicit port injected from the composition boundary.
 
-The engine plans commands into `CanvasOperation[]` before mutation. Operations are the local abstraction for deterministic model updates:
+Allowed:
 
-- `set-selection`
-- `set-node-geometry`
-- `delete-nodes`
-- `create-nodes`
-- `set-paste-counter`
-- `set-clipboard`
+- starter workspace catalog hydration;
+- protocol definitions;
+- use-case orchestration that can be tested without React or Daptin when ports are supplied.
 
-Do not add direct geometry mutation paths for pointer, keyboard, nonvisual, or AI edits. Extend the command and operation model instead.
+Current debt:
 
-## Preview Contract
+- `src/app/agentBridge/CanasterAgentBridge.ts` imports `src/infra/daptin/daptinLive`, `src/infra/browser/workspaceUrlLocation`, `src/ui/canvas/nested/NestedCanvasWorkspace`, and `src/ui/canvas/nodeRegistry`.
 
-Pointer drag and resize preview must not mutate committed model geometry.
+What not to add:
 
-Current flow:
+- more concrete `ui` or `infra` imports in app orchestration;
+- Daptin or browser details in protocol logic;
+- React handles as the long-term app contract.
 
-1. Pointer movement builds the same `CanvasCommand` that commit would use.
-2. The command is planned with `planCommand`.
-3. The preview path stores render-only geometries from `set-node-geometry` operations.
-4. Render uses `renderNode(node)` to overlay preview geometry.
-5. Pointer-up clears preview geometry and commits through `executeCommand`.
-6. Pointer cancel/lost capture/window blur clears preview geometry; pan rollback restores only camera state.
+### `src/infra`
 
-This is important because future undo/redo, collaboration, replay, and AI editing need a clean distinction between preview state and committed model state.
+`infra` owns concrete external systems and browser persistence.
 
-## Selection And Editing Semantics
+Allowed:
 
-Selection:
+- Daptin client/session/document/asset/live adapters;
+- Daptin action invocation wrappers;
+- browser IndexedDB/localStorage storage;
+- URL serialization and browser-owned workspace location state;
+- third-party API integration code.
 
-- Normal pointer click on an unselected node replaces selection.
-- Normal pointer down on an already selected node preserves selection for drag.
-- Shift/Cmd/Ctrl pointer click toggles node selection.
-- Nonvisual node buttons support replace and toggle selection.
-- Primary selection is the resize target.
+Not allowed:
 
-Movement:
+- product UI decisions;
+- direct domain mutation outside domain helpers;
+- new app-owned persistence models that duplicate Daptin built-ins without an explicit architecture decision.
 
-- `move-selection` applies to all selected nodes.
-- Pointer group drag must preserve selected node ids and emit one `node-move` with all moved ids.
-- Keyboard arrows move selected nodes by `32` world units.
-- Shift plus arrow moves by `128` world units.
+### `src/ui`
 
-Resize:
+`ui` owns React, DOM, canvas drawing, panels, menus, theme application, interaction handlers, and user-visible workflow composition.
 
-- `resize-primary` applies only to the primary selected node.
-- Keyboard `r` toggles resize mode.
-- Arrow keys resize width/height in resize mode.
+Allowed:
 
-Clipboard:
+- React components;
+- canvas engine and nested canvas runtime;
+- node rendering and editing surfaces;
+- account/document panels;
+- toolbar and drawer behavior;
+- UI composition of app and infra adapters.
 
-- Clipboard is engine-internal only.
-- No system clipboard API is claimed.
-- Paste creates collision-free ids and selects pasted nodes.
+Not allowed:
 
-Delete:
+- pure business rules that belong in `domain`;
+- new backend access rules hidden inside rendering code;
+- user-facing Daptin implementation details.
 
-- Delete/Backspace or nonvisual delete removes the selected node/group and clears selection.
+## Persistence Boundary
 
-Snap:
+Canaster has two persistence modes:
 
-- The editing grid is `32` world units.
-- Pointer, keyboard, nonvisual, AI, and paste movement/resize must snap through the same planning logic.
-- Zero-delta pointer interactions must not force old unsnapped nodes onto the grid.
+1. Local draft persistence on the user's device.
+2. Online saved-document persistence through Daptin.
 
-## Rendering And Performance Shape
+### Local Drafts
 
-Rendering uses one 2D canvas.
+Local drafts are stored by browser infra:
 
-Current rendering behavior:
+- `src/infra/browser/workspaceStorage.ts`
+- `src/infra/browser/localAssets.ts`
 
-- Canvas bitmap is sized from CSS size and capped DPR, with max DPR `2`.
-- Camera transform is applied once for node drawing.
-- Grid is drawn in screen space and skipped when too dense.
-- Nodes are culled against visible world bounds plus a screen-space margin.
-- Compact node rendering is used when zoomed far out or many nodes are visible.
-- Selection and hover states affect strokes/shadows.
-- Primary selected node shows a resize handle.
+Local storage is for device-local continuity and offline-friendly draft behavior. It is not the canonical online document model.
 
-The current probe covers 1,000 and 2,000 visible simple nodes. This does not prove future performance for rich product nodes, edges, labels, minimaps, export, or layout engines.
+Legacy Canway storage names still exist in some browser storage keys and debug names. Treat those names as compatibility surface until a deliberate migration exists.
 
-## Accessibility And Nonvisual Contract
+### Daptin Documents
 
-The canvas itself is focusable and labeled.
+Online workspaces are saved as Daptin built-in `document` rows through `src/infra/daptin/canasterDocuments.ts`.
 
-The node access panel provides the current generic nonvisual layer:
+Current contract:
 
-- semantic node list;
-- node labels, kind, position, size, detail, and selection state;
-- selection/toggle buttons;
-- edit command buttons;
-- status live region.
+- The actual workspace snapshot is stored in `document.document_content`.
+- Canaster document files use JSON content.
+- `document.document_path` and `document.document_name` identify the stored file object.
+- The adapter hydrates loaded content back into the domain workspace snapshot shape.
+- Do not create a separate workspace table for the current document persistence path.
+- Do not add `document_acl`, `owner_id`, `visibility`, `share_token`, or invite tables unless a new architecture decision explicitly supersedes the current Daptin boundary.
 
-This is not a final product accessibility model. A product-level accessibility model must define object semantics, relationships, actions, names, descriptions, and expected assistive-technology workflows.
+Why this matters:
 
-Do not fake accessibility with hidden text that cannot operate the same model. Nonvisual controls must call the same engine command path.
+Daptin already owns document storage. Adding another workspace table or duplicating document metadata would create migration, access-control, and compatibility costs without solving the current product contract.
 
-## Touch And Pointer Contract
+### Document Visibility
 
-Current automated coverage:
+Document visibility is not stored in `document_content`.
 
-- pointer drag/resize/pan;
-- plain wheel/trackpad pan;
-- Shift-wheel horizontal pan;
-- Ctrl/Cmd-wheel cursor-anchored zoom;
-- pointer cancel;
-- lost pointer capture;
-- window blur;
-- touch pointer ownership;
-- two-finger pan;
-- pinch zoom;
-- second-touch rollback during node drag/resize;
-- gesture cancellation cleanup.
+Current contract:
 
-Current unresolved gap:
+- Visibility is backed by Daptin row permission on the built-in `document` row.
+- The browser calls schema-managed Daptin actions for visibility changes.
+- `set_canaster_document_private` sets private document permissions.
+- `set_canaster_document_public` sets public-readable document permissions.
+- The UI exposes Private/Public only for saved online documents.
+- Group sharing remains deferred.
 
-- real iOS Safari and Android Chrome hardware behavior is not verified.
+See `docs/document-visibility-implementation.md` for the detailed visibility contract.
 
-Do not claim mobile production readiness until physical device evidence exists.
+What not to do:
+
+- Do not store visibility, owner, members, or group ids inside the workspace snapshot.
+- Do not use generic JSON:API row updates to patch `permission`.
+- Do not expose a Shared state until group membership and group-row permissions have a supported adapter and product journey.
+
+### Assets
+
+Assets are split across local and Daptin-backed paths:
+
+- Daptin assets: `src/infra/daptin/assets.ts`
+- Local assets: `src/infra/browser/localAssets.ts`
+- asset-related pure helpers: `src/core/workspaceAssetTypes.ts` and `src/core/workspacePreviewAssetFileName.ts`
+
+Current contract:
+
+- Signed-in online asset flows use Daptin `asset`.
+- Local draft asset flows may use browser storage.
+- Nodes store asset references in node data; the asset bytes are outside the workspace snapshot.
+- Visibility actions exist for Daptin assets.
+
+Current debt:
+
+- Some node type files import Daptin/local asset infra directly. The cleaner direction is an injected asset service at the app/UI boundary.
+
+What not to do:
+
+- Do not embed large file bytes directly into workspace snapshots.
+- Do not invent asset wrapper tables before proving Daptin `asset` is insufficient.
+
+### Account And Session
+
+Account/session behavior belongs to the Daptin infra boundary and UI composition:
+
+- `src/infra/daptin/daptinClient.ts` owns Daptin client setup, token storage, endpoint selection, token expiry checks, and session cleanup.
+- `src/infra/daptin/canasterDocuments.ts` exposes sign-in, verification, sign-out, document list/load/save/create, and visibility operations.
+- Account UI belongs in `src/ui`.
+
+What not to do:
+
+- Do not place tokens or Daptin auth state in `domain`.
+- Do not use product UI copy that exposes backend implementation names.
+
+## Live Transport And Agent Boundary
+
+Daptin live transport is implemented in `src/infra/daptin/daptinLive.ts`.
+
+The agent protocol is defined under `src/app/agentBridge/` and `src/app/agentAccess/`.
+
+Current contract:
+
+- Agent messages operate against the currently open saved document/page context.
+- Agent requests must go through the same workspace/document mutation semantics as other edit sources.
+- Agent-facing operations must not invent separate model mutation paths.
+
+Current debt:
+
+- `CanasterAgentBridge.ts` currently connects directly to Daptin live and knows about concrete UI workspace handles and node registry functions.
+
+Target direction:
+
+- `app` defines protocol/use-case logic.
+- `infra` supplies live transport.
+- `ui` supplies workspace command and view-state adapters.
+- Composition wires those pieces together without app importing concrete UI or Daptin modules directly.
+
+Security note:
+
+The current agent access flow generates URLs/commands containing bearer access. Do not expand that pattern without a scoped and expiring capability model or an explicit product/security decision.
+
+## Canvas And Edit Contract
+
+The canvas runtime lives in `src/ui/canvas/`.
+
+Important files:
+
+- `src/ui/canvas/CanvasEngine.ts`: main canvas runtime for rendering, input, command execution glue, overlays, and interaction state.
+- `src/ui/canvas/nested/NativeNestedCanvasController.ts`: native nested canvas controller for recursive workspace layout, portal slots, storage handoff, and debug hooks.
+- `src/ui/canvas/nested/NestedCanvasWorkspace.tsx`: React workspace wrapper and composition surface for the nested runtime.
+- `src/domain/documentCommands.ts`: pure document command application and model-change semantics.
+- `src/domain/documentModel.ts`: pure document/workspace model helpers.
+- `src/domain/documentTypes.ts`: document/workspace snapshot and command types.
+- `src/domain/types.ts`: canvas model and engine-facing pure types.
+
+Committed edit invariant:
+
+All committed edits must enter through the shared command/model-change path. Pointer, keyboard, nonvisual, and agent edit sources may differ in how they are initiated, but they must not fork separate mutation semantics.
+
+Preview invariant:
+
+Pointer drag and resize preview must remain render-only. Preview geometry must not mutate committed model geometry before commit.
+
+Why this matters:
+
+Undo/redo, save/load, local persistence, live sync, agent operations, accessibility controls, and replayable changes all depend on a clean split between transient interaction state and committed workspace state.
+
+What not to do:
+
+- Do not mutate node geometry directly from event handlers for committed edits.
+- Do not add separate pointer-only, keyboard-only, nonvisual-only, or agent-only mutation paths.
+- Do not store transient preview geometry in saved workspace snapshots.
+- Do not put Daptin/account behavior inside `domain` model functions.
+
+## Nested Workspace Contract
+
+Canaster documents contain multiple views/canvases linked by portal nodes. The user moves between parent and child contexts while keeping orientation.
+
+Current runtime ownership:
+
+- React owns high-level workspace composition.
+- `NativeNestedCanvasController` owns immediate nested canvas layout, portal slots, parent context panes, live/dormant engine slots, storage handoff, and DOM/canvas lifecycle.
+- Domain helpers own pure document collection, parent/child, view state, and snapshot logic.
+
+Current debt:
+
+- `NestedCanvasWorkspace.tsx` imports `NativeNestedCanvasController`.
+- `NativeNestedCanvasController.ts` imports request/state types from `NestedCanvasWorkspace.tsx`.
+- This is currently type-level on one side, but it should be broken by moving shared contract types into a dedicated module.
+
+What not to do:
+
+- Do not create a value import cycle between the React workspace and the native controller.
+- Do not move DOM/canvas lifecycle concerns into `domain`.
+
+## UI Composition Contract
+
+The UI layer is allowed to compose product workflows, but it should not hide backend access rules or pure business rules inside rendering code.
+
+Important files:
+
+- `src/ui/App.tsx`: current app composition shell. It owns account, document, save/open, live, menu, export, agent, asset, and nested workspace wiring today.
+- `src/ui/HeaderToolbar.tsx`: top command bar.
+- `src/ui/SidePanel.tsx`, `src/ui/DocumentsPanel.tsx`, `src/ui/AccountPopover.tsx`: account/document/work-item surfaces.
+- `src/ui/canvas/nodeTypes/*`: concrete node rendering/editing modules.
+- `src/ui/theme/*`: theme definitions and providers.
+
+Current debt:
+
+- `App.tsx` is too broad and should be split by workflow.
+- Node type modules should not accumulate more direct Daptin/browser persistence decisions.
+
+Target direction:
+
+- Keep `App.tsx` as the composition shell.
+- Extract document lifecycle, account/session, live connection, asset workflow, export workflow, and agent access into focused hooks/use-cases.
+- Inject asset and live/document adapters rather than importing infra from deep rendering modules.
+
+## Daptin Backend Operation Rules
+
+For local development and agent work, Daptin backend operations must use the supported boundary:
+
+- Prefer the running Canaster app UI for user-account document flows.
+- Use `daptin-cli` for non-UI Daptin backend operations.
+- Do not use direct SQL, `curl`, inline Node.js, browser `fetch` snippets, custom HTTP scripts, or one-off command probes to interact with a Daptin backend.
+- Do not perform production auth or credential-validity checks without explicit approval for the exact `daptin-cli` command.
+
+Repository note:
+
+Some older scripts still use direct HTTP or `curl`. They are stale against the current operation rules and must not be treated as the approved maintenance path.
 
 ## Verification Gate
 
-Run this before saying a foundation change is complete:
+Current rule-compliant local static checks:
 
 ```bash
-npm run build
+npm exec tsc -- --noEmit
 npm audit --omit=dev
-npm run fixture:nested
 git diff --check
 ```
 
-What the gate proves:
+Do not run `npm run build` in the current local agent workflow. The build script exists in `package.json`, but the active repository instructions forbid running it.
 
-- TypeScript compiles and Vite builds.
+Do not advertise or rely on these old missing gates:
+
+- `npm run fixture:nested`
+- `npm run profile:nested`
+- old `src/engine/*` fixture/profile scripts
+
+What the current static gate proves:
+
+- TypeScript type checking passes.
 - Production dependency audit has no known vulnerabilities.
-- Nested fixture generation produces the deterministic 820-document recursive workspace.
-- No whitespace/conflict-marker diff problems.
+- The diff has no whitespace/conflict-marker problems.
 
-What the gate does not prove:
+What the current static gate does not prove:
 
-- Safari/Firefox parity.
-- Real-device touch behavior.
-- Product-complete accessibility.
-- Future backend/persistence/collaboration correctness.
-- Performance of future product-specific graph shapes.
+- browser interaction correctness;
+- real-device touch behavior;
+- Daptin integration correctness;
+- live transport correctness;
+- asset upload/download correctness;
+- product-complete accessibility;
+- performance of large or asset-heavy workspaces.
 
-## Probe Maintenance Rules
+Verification debt:
 
-When changing canvas behavior, update the probe in the same change.
+The repo needs a new rule-compliant interaction and integration verification path that matches the current source tree and Daptin operation rules.
 
-Add or update probe coverage when touching:
+## Known Limits And Current Technical Debt
 
-- command planning;
-- operation application;
-- selection semantics;
-- drag/resize preview;
-- wheel/trackpad pan and modifier-wheel zoom;
-- pointer cancel/lost capture/blur behavior;
-- keyboard editing;
-- nonvisual controls;
-- copy/paste/delete;
-- snap behavior;
-- touch/gesture policy;
-- lifecycle cleanup;
-- large-model rendering.
+Keep these visible until fixed:
 
-The probe should assert behavior, not just log it.
-
-Critical existing assertions to preserve:
-
-- selection does not emit model changes;
-- no-op edits do not emit model changes;
-- real drag/resize emit exactly once;
-- pointer group drag preserves multi-selection and moves all selected nodes;
-- preview does not mutate committed model;
-- cancellation clears preview or rolls back pan;
-- listeners are balanced after dispose;
-- 1,000/2,000 node render probes remain coherent.
-
-## How To Extend The Engine
-
-For a new edit action:
-
-1. Add a typed `CanvasCommand` in `src/engine/types.ts`.
-2. Add any required `CanvasOperation` type.
-3. Implement planning in `CanvasEngine.planCommand`.
-4. Apply the operation in `CanvasEngine.applyOperations`.
-5. Emit a precise `CanvasModelChange` only for committed model changes.
-6. Route pointer/keyboard/nonvisual/AI entry points through `executeCommand`.
-7. Extend `scripts/generate-nested-grid-fixture.mjs` or `scripts/profile-nested-grid-fixture.mjs` when the recursive runtime contract changes.
-8. Update this KT doc or the current status report if the contract changes.
-
-Do not:
-
-- mutate nodes directly from event handlers for committed edits;
-- fork separate pointer/keyboard/nonvisual/AI mutation paths;
-- use preview mutation as committed state;
-- add fallback/legacy paths;
-- hide known gaps in docs;
-- update historical reports as if they were the latest contract unless they are explicitly current.
-
-## Current Known Limits
-
-These are known and should remain explicit:
-
-- The app is a generic canvas foundation, not a product-complete application.
-- Real-device touch is blocked until hardware testing is available.
-- Product object semantics are not defined.
-- The internal clipboard is not the OS clipboard.
-- There is no undo/redo stack yet, even though the operation model is a good base for it.
-- There is no persistence or external model synchronization.
-- Cross-browser coverage is not complete.
+- `CanasterAgentBridge.ts` crosses app/ui/infra boundaries.
+- `App.tsx` is too large and owns too many workflows.
+- Some node type modules import asset infra directly.
+- The nested workspace/controller type cycle should be broken.
+- PDF and asset object URL cache lifecycle needs explicit cleanup.
+- Legacy Canway names remain in storage/debug surfaces.
+- Some Daptin smoke/check scripts conflict with current backend operation rules.
+- Historical docs and audit reports may describe old source paths or fixed issues.
 
 ## Development Workflow
 
 Recommended loop:
 
-1. Read `docs/README.md` and this KT document.
+1. Read `PRODUCT.md`, `DESIGN.md`, `docs/canaster-user-journeys.md`, and this document before changing product behavior or UI.
 2. Inspect live source before relying on historical reports.
-3. Make the smallest coherent code change in the owner file.
-4. Add or update probe assertions for the changed behavior.
-5. Run the full verification gate.
-6. Update docs if the architecture or contract changed.
-7. Commit only scoped source/probe/doc changes.
+3. Identify the owning layer before editing.
+4. Preserve public APIs unless explicitly marked movable.
+5. Keep domain pure and free of infra imports.
+6. Make the smallest coherent change that respects the existing persistence contract.
+7. Run rule-compliant verification.
+8. Update current docs when an architecture contract changes.
 
-Commit style used in this repo so far is short imperative messages, for example:
+What not to do:
 
-- `Fix canvas preview rollback repaint`
-- `Harden canvas pointer preview and group drag`
+- Do not invent a cleaner persistence model before proving the current Daptin primitive is insufficient.
+- Do not add backend tables, metadata columns, or wrapper objects without an explicit architecture decision.
+- Do not move public APIs casually.
+- Do not use stale historical docs as current architecture.
+- Do not hide known gaps in completion reports.
 
 ## Fast Orientation For Future Agents
 
-If you are resuming work cold:
+If resuming work cold:
 
 1. Check `git status --short --branch`.
-2. Read `docs/README.md`.
-3. Read this file.
-4. Read `src/engine/types.ts`.
-5. Read `CanvasEngine.executeCommand`, `planCommand`, `applyOperations`, pointer handlers, and keyboard handler.
-6. Read `src/engine/nested/NativeNestedCanvasController.ts` around recursive rendering or parent-context behavior you are touching.
-7. Run `npm run build` and `npm run fixture:nested` after changes.
+2. Read `PRODUCT.md`.
+3. Read `DESIGN.md`.
+4. Read `docs/canaster-user-journeys.md`.
+5. Read this file.
+6. Inspect the owning source files for the task.
+7. Run only rule-compliant checks after changes.
 
-The main architectural rule is simple: one command/operation path for all committed edits, with render-only preview for pointer interactions.
+The main architectural rule is simple: preserve the existing Canaster/Daptin boundary, keep `domain` pure, and route committed workspace edits through the shared command/model-change path.
