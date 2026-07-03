@@ -670,7 +670,10 @@ export class NativeNestedCanvasController {
     apply: (slot: CanvasViewportSlot) => void,
   ): number {
     if (!recursive) {
+      this.cancelInitialOverlayFitForViewport(slot);
+      slot.engine.flushRender();
       apply(slot);
+      slot.engine.flushRender();
       if (slot === this.activeSlot) this.persistViewportFromActiveEngine();
       return 1;
     }
@@ -683,6 +686,7 @@ export class NativeNestedCanvasController {
       const current = queue[index];
       if (!this.viewportControlSlotExists(current)) continue;
       this.cancelInitialOverlayFitForViewport(current);
+      current.engine.flushRender();
       apply(current);
       affected += 1;
       activeAffected = activeAffected || current === this.activeSlot;
@@ -1776,10 +1780,9 @@ export class NativeNestedCanvasController {
     if (this.collectionRef.current.activeCanvasId !== this.collectionRef.current.rootCanvasId) return;
     this.didAutoFitInitialView = true;
     requestAnimationFrame(() => {
-      const engine = this.activeEngine();
-      if (this.disposed || !engine) return;
-      engine.fit();
-      this.persistViewportFromActiveEngine();
+      const slot = this.activeSlot;
+      if (this.disposed || !slot) return;
+      this.applyViewportControl(slot, true, (target) => target.engine.fit(target.mode === 'active' ? undefined : 16));
       this.setStatus({ ...this.status, interaction: 'Fit view' });
     });
   }
