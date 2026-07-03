@@ -2,7 +2,7 @@
 
 Current status: **usable nested canvas workspace with Daptin-backed document persistence, but with known architecture and verification debt**.
 
-Use this file as the docs map. The top-level contract files stay at stable paths because repo instructions name them directly. Supporting docs are grouped by current evidence, Daptin evidence, history, prompts, and fixtures.
+Use this file as the docs map. The top-level contract files stay at stable paths because repo instructions name them directly. Supporting docs are grouped by current evidence, Daptin evidence, history, and historical task briefs.
 
 ## Read First
 
@@ -44,34 +44,14 @@ These files are useful for provenance, but may describe old Canway paths, remove
 - `history/canvas-foundation-remaining-reliability-report.md`
 - `history/canvas-keyboard-touch-performance-completion-report.md`
 - `history/canway-technical-dents-audit-report.md`
+- `history/historical-task-briefs.md`
 - `history/nested-canvas-ux-plan.md`
 - `history/nonvisual-touch-editing-completion-report.md`
 - `history/product-complete-remaining-dents-report.md`
 
-## Prompt Archive
-
-These files are execution prompts. They are not current product, architecture, or verification contracts unless a current contract document explicitly says so.
-
-- `prompts/audit-canvas-engine-reliability-prompt.md`
-- `prompts/automate-and-close-canvas-foundation-gaps-goal-prompt.md`
-- `prompts/find-all-canvas-engine-reliability-issues-prompt.md`
-- `prompts/find-all-canvas-foundation-dents-goal-prompt.md`
-- `prompts/find-all-remaining-technical-dents-goal-prompt.md`
-- `prompts/find-product-complete-remaining-dents-goal-prompt.md`
-- `prompts/find-remaining-canvas-foundation-reliability-issues-goal-prompt.md`
-- `prompts/finish-recursive-infinite-nested-canvas-goal-prompt.md`
-- `prompts/fix-canvas-engine-foundation-prompt.md`
-- `prompts/implement-daptin-document-persistence-goal-prompt.md`
-- `prompts/perfect-canvas-keyboard-touch-performance-goal-prompt.md`
-- `prompts/perfect-nonvisual-touch-editing-goal-prompt.md`
-
-## Fixtures
-
-- `fixtures/nested-3x3-4-level-workspace.json` - nested workspace fixture data.
-
 ## What Not To Infer
 
-- Do not treat old goal prompts as implementation sequence.
+- Do not treat historical task briefs as implementation sequence.
 - Do not restore removed smoke scripts or probes because a historical doc mentions them.
 - Do not treat `verify:fast` or `verify:static` as Daptin integration proof.
 - Do not use stale Canway source paths when current docs point to `src/core`, `src/domain`, `src/app`, `src/infra`, and `src/ui`.

@@ -152,7 +152,7 @@ rg -n "CanvasEngine|setModel|onModelChange|onStatus|sampleModel|ViewportStatus|C
 rg -n "addEventListener|removeEventListener|requestAnimationFrame|cancelAnimationFrame|ResizeObserver|setPointerCapture|releasePointerCapture|PointerEvent|WheelEvent|KeyboardEvent" src docs scripts
 rg -n "tabIndex|aria-|role=|focus|blur|statusbar|button|canvas|touch-action|pointerType|pointerId|lostpointercapture|pointercancel|wheel|dblclick" src docs scripts
 rg -n "TODO|FIXME|hack|ts-ignore|eslint-disable|as unknown|any|throw new Error|console\\." src docs scripts
-rg -n "express|server|api|database|sqlite|postgres|schema|auth|fetch|localStorage|indexedDB|ER diagram|entity relationship" src scripts package.json docs/prompts/find-all-remaining-technical-dents-goal-prompt.md
+rg -n "express|server|api|database|sqlite|postgres|schema|auth|fetch|localStorage|indexedDB|ER diagram|entity relationship" src scripts package.json docs/history/historical-task-briefs.md
 ```
 
 Findings:

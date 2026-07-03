@@ -176,7 +176,7 @@ The temporary Vite dev server used for browser E2E was stopped after verificatio
 - `deploy/daptin/Dockerfile`
 - `docs/daptin/daptin-backend-groundwork.md`
 - `docs/daptin/daptin-canaster-architecture-plan.md`
-- `docs/prompts/implement-daptin-document-persistence-goal-prompt.md`
+- `docs/history/historical-task-briefs.md`
 - `daptin/schema_canaster.yaml` removed
 
 ## Remaining Follow-Ups
