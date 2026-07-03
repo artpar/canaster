@@ -1,7 +1,9 @@
 import {
     type MutableRefObject,
     useCallback,
-    useEffect
+    useEffect,
+    useMemo,
+    useRef
 } from 'react';
 import {
     cleanAssetTitle,
@@ -24,18 +26,27 @@ import {
     isLocalAssetId,
     loadLocalAssetFile,
     loadLocalAssetObject,
-    saveLocalAsset
+    saveLocalAsset,
+    type LocalAssetObject
 } from '../infra/browser/localAssets';
 import {
+    loadAssetFile,
     loadAssetObject,
+    listImageAssets,
+    setAssetVisibility as setDaptinAssetVisibility,
     uploadImageAsset,
     uploadWorkspaceAsset
 } from '../infra/daptin/assets';
-import {hasUsableStoredToken} from '../infra/daptin/daptinClient';
+import {hasUsableStoredToken, normalizeDaptinError} from '../infra/daptin/daptinClient';
 import {
     cacheAssetImage,
     hasCachedAssetImage
 } from './canvas/imageAssets';
+import type {
+    CanasterAssetRecord,
+    CanasterLoadedAsset,
+    CanvasNodeAssetService
+} from './canvas/nodeAssetService';
 import type {
     NestedCanvasWorkspaceHandle,
     WorkspaceFileDropRequest
@@ -49,12 +60,7 @@ import {
 
 type SyncStatusSetter = (value: SyncStatus | ((current: SyncStatus) => SyncStatus)) => void;
 
-type StoredWorkspaceAsset = {
-    id: string;
-    name: string;
-    mime: string;
-    objectUrl: string;
-};
+type StoredWorkspaceAsset = CanasterLoadedAsset;
 
 type FileNodeCreateRequest = {
     nodeType: string;
@@ -77,6 +83,42 @@ export function useWorkspaceAssets(input: {
         signedIn,
         workspaceRef,
     } = input;
+    const activeDocumentIdRef = useRef(activeDocumentId);
+    const signedInRef = useRef(signedIn);
+    activeDocumentIdRef.current = activeDocumentId;
+    signedInRef.current = signedIn;
+
+    const nodeAssetService = useMemo<CanvasNodeAssetService>(() => {
+        const shouldStoreOnline = () => Boolean(activeDocumentIdRef.current && signedInRef.current && hasUsableStoredToken());
+        const canChooseSavedImages = () => Boolean(activeDocumentIdRef.current && signedInRef.current && hasUsableStoredToken());
+        return {
+            canStoreFiles: () => true,
+            canChooseSavedImages,
+            loadAssetObject: loadWorkspaceAssetObject,
+            loadAssetFile: loadWorkspaceAssetFile,
+            async storeWorkspaceFile(file) {
+                return storeWorkspaceAsset(file, shouldStoreOnline());
+            },
+            async storeImageFile(file) {
+                if (!isImageAssetMime(file.type)) throw new Error('Choose an image file.');
+                return storeWorkspaceAsset(file, shouldStoreOnline());
+            },
+            async listImageAssets() {
+                if (!canChooseSavedImages()) return [];
+                return listImageAssets();
+            },
+            async setAssetVisibility(assetId, visibility) {
+                if (isLocalAssetId(assetId)) throw new Error('Save online before changing file visibility.');
+                await setDaptinAssetVisibility(assetId, visibility);
+                return loadAssetObject(assetId);
+            },
+            assetErrorMessage(error, fallback) {
+                const apiError = normalizeDaptinError(error, fallback);
+                if (apiError.kind === 'session' || apiError.kind === 'permission') return 'Sign in to use saved files.';
+                return error instanceof Error ? error.message : fallback;
+            },
+        };
+    }, []);
 
     useEffect(() => {
         const assetIds = imageAssetIdsInCollection(collection).filter(
@@ -84,8 +126,7 @@ export function useWorkspaceAssets(input: {
         if (!assetIds.length) return;
         let canceled = false;
         for (const assetId of assetIds) {
-            const loadObject = isLocalAssetId(assetId) ? loadLocalAssetObject(assetId) : loadAssetObject(assetId);
-            void loadObject
+            void loadWorkspaceAssetObject(assetId)
                 .then((asset) => cacheAssetImage(asset.id, asset.objectUrl))
                 .then(() => {
                     if (!canceled) workspaceRef.current?.refreshActiveCanvas();
@@ -132,7 +173,7 @@ export function useWorkspaceAssets(input: {
         }
     }, [activeDocumentId, collection.activeCanvasId, setSyncMessage, setSyncStatus, signedIn, workspaceRef]);
 
-    return {handleWorkspaceFileDrop};
+    return {handleWorkspaceFileDrop, nodeAssetService};
 }
 
 export async function storeWorkspaceAsset(file: File, online: boolean): Promise<StoredWorkspaceAsset> {
@@ -141,7 +182,32 @@ export async function storeWorkspaceAsset(file: File, online: boolean): Promise<
         return loadAssetObject(asset.id);
     }
     const asset = await saveLocalAsset(file);
-    return loadLocalAssetObject(asset.id);
+    return localLoadedAsset(await loadLocalAssetObject(asset.id));
+}
+
+async function loadWorkspaceAssetObject(assetId: string): Promise<CanasterLoadedAsset> {
+    return isLocalAssetId(assetId) ? localLoadedAsset(await loadLocalAssetObject(assetId)) : loadAssetObject(assetId);
+}
+
+async function loadWorkspaceAssetFile(assetId: string): Promise<File> {
+    return isLocalAssetId(assetId) ? loadLocalAssetFile(assetId) : loadAssetFile(assetId);
+}
+
+function localLoadedAsset(asset: LocalAssetObject): CanasterLoadedAsset {
+    const record: CanasterAssetRecord = {
+        source: 'local',
+        id: asset.id,
+        assetId: asset.id,
+        name: asset.name,
+        mime: asset.mime,
+        createdAt: asset.updatedAt,
+        updatedAt: asset.updatedAt,
+        visibility: 'private',
+        daptin: null,
+        file: null,
+        urls: {},
+    };
+    return {...record, objectUrl: asset.objectUrl};
 }
 
 export async function uploadWorkspacePreviewImage(capture: WorkspacePreviewCapture, documentTitle: string): Promise<CanvasWorkspacePreviewImage> {

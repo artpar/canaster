@@ -50,6 +50,7 @@ import {
 import { normalizeEmbedUrl } from '../../../core/embedUrl';
 import { DEFAULT_WORKSPACE_STORAGE_ID, loadWorkspaceSnapshot, loadWorkspaceSnapshotMirror, saveWorkspaceSnapshot, saveWorkspaceSnapshotMirror } from '../../../infra/browser/workspaceStorage';
 import { ACTIVE_ENGINE_FRAME_BUDGET_MS, livePortalSlotsFor, MAX_LIVE_PORTAL_PREVIEWS, MAX_TOTAL_ENGINES } from './engineSlots';
+import type { CanvasEngineOptions } from '../CanvasEngineOptions';
 import { createCanvasViewportSlot, type CanvasViewportControl, type CanvasViewportControlEvent, type CanvasViewportSlot } from './createCanvasViewportSlot';
 import { setCanvasViewportToolbarControlExpanded, setCanvasViewportToolbarVisible } from './createCanvasViewportToolbar';
 import {
@@ -67,12 +68,14 @@ import type { WorkspaceUrlPaneCamera, WorkspaceUrlState } from '../../../infra/b
 import {hasMetaOrCtrlShortcutModifier} from '../../KeyboardShortcuts';
 import type {CanasterThemeId} from '../../theme/CanasterTheme';
 import {normalizeCanasterThemeId} from '../../theme/CanasterThemeRegistry';
+import type { CanvasNodeAssetService } from '../nodeAssetService';
 
 export type NativeNestedCanvasControllerOptions = {
   root: HTMLElement;
   initialCollection: CanvasDocumentCollection;
   theme: CanasterThemeId;
   fitOnFirstLoad?: boolean;
+  nodeAssetService?: CanvasNodeAssetService;
   storageKey?: string;
   onCollectionChange?: (collection: CanvasDocumentCollection, changes: DocumentModelChange[]) => void;
   onChromeStateChange?: (state: NestedCanvasWorkspaceChromeState) => void;
@@ -162,6 +165,7 @@ export class NativeNestedCanvasController {
   private readonly onCanvasThemeMenuRequest?: (request: CanvasThemeMenuRequest) => void;
   private readonly onFileDrop?: (request: WorkspaceFileDropRequest) => void;
   private readonly onTextPaste?: (request: WorkspaceTextPasteRequest) => boolean;
+  private readonly nodeAssetService?: CanvasNodeAssetService;
   private readonly historyRef: { current: CanvasWorkspaceHistory };
   private readonly collectionRef: { current: CanvasDocumentCollection };
   private readonly lastModelChangeRef: { current: DocumentModelChange | null } = { current: null };
@@ -211,6 +215,7 @@ export class NativeNestedCanvasController {
     this.onCanvasThemeMenuRequest = options.onCanvasThemeMenuRequest;
     this.onFileDrop = options.onFileDrop;
     this.onTextPaste = options.onTextPaste;
+    this.nodeAssetService = options.nodeAssetService;
     this.historyRef = { current: createWorkspaceHistory(options.initialCollection) };
     this.collectionRef = { current: this.historyRef.current.present };
 
@@ -917,11 +922,12 @@ export class NativeNestedCanvasController {
       onPortalLayout?: EngineOptions['onPortalLayout'];
       onStatus?: EngineOptions['onStatus'];
     },
-  ): EngineOptions {
+  ): CanvasEngineOptions {
     const { beforeCommandSelection, ...engineOptions } = options;
     const canvasId = () => typeof canvasIdForEngine === 'function' ? canvasIdForEngine() : canvasIdForEngine;
     return {
       ...engineOptions,
+      nodeAssetService: this.nodeAssetService,
       onNodeAction: engineOptions.onNodeAction ?? ((nodeId, actionId, source) => {
         this.executeDocumentCommand({ type: 'execute-node-action', canvasId: canvasId(), nodeId, actionId, source });
         return true;

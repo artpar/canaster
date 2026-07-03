@@ -4,10 +4,37 @@ import { getDaptinClient, getDaptinEndpoint, getToken, normalizeDaptinError, req
 import { daptinActionFailureMessage } from './daptinActionFailureMessage';
 
 export type CanasterAssetSummary = {
+  source: 'daptin';
   id: string;
+  assetId: string;
   name: string;
   mime: string;
+  createdAt: string | null;
   updatedAt: string | null;
+  visibility: AssetVisibility | 'shared' | 'unknown';
+  daptin: {
+    referenceId: string;
+    createdAt: string | null;
+    updatedAt: string | null;
+    ownerUserAccountId: string | null;
+    permission: number | null;
+    version: number | null;
+    userGroups: DaptinUserGroupAccess[];
+  };
+  file: {
+    table: 'asset';
+    column: 'file';
+    cloudStoreNamespace: 'assets';
+    keyName: 'img';
+    size: number | null;
+    md5: string | null;
+    path: string | null;
+    src: string | null;
+  };
+  urls: {
+    assetUrl: string;
+    publicAssetUrl?: string;
+  };
 };
 
 export type CanasterAssetObject = CanasterAssetSummary & {
@@ -16,15 +43,30 @@ export type CanasterAssetObject = CanasterAssetSummary & {
 
 export type AssetVisibility = 'private' | 'public';
 
+type DaptinUserGroupAccess = {
+  id?: string;
+  referenceId: string;
+  relationReferenceId?: string;
+  permission?: number | null;
+  name?: string;
+};
+
 type DaptinAssetAttributes = {
   name?: string;
   mime?: string;
-  file?: string | DaptinBlobFileObject[];
+  file?: string | DaptinBlobFileObject[] | DaptinStoredFileObject[];
   permission?: number;
+  created_at?: string;
+  createdAt?: string;
   updated_at?: string;
   updatedAt?: string;
+  user_account_id?: string;
+  userAccountId?: string;
   reference_id?: string;
   referenceId?: string;
+  version?: number;
+  usergroup_id?: DaptinRelationList | DaptinRelationData[];
+  usergroupId?: DaptinRelationList | DaptinRelationData[];
 };
 
 type DaptinAssetRow = {
@@ -32,17 +74,53 @@ type DaptinAssetRow = {
   reference_id?: string;
   referenceId?: string;
   attributes?: DaptinAssetAttributes;
+  relationships?: {
+    usergroup_id?: DaptinRelationList | DaptinRelationData[];
+    usergroupId?: DaptinRelationList | DaptinRelationData[];
+    [key: string]: unknown;
+  };
 } & DaptinAssetAttributes;
 
 type DaptinBlobFileObject = {
   name: string;
   file: string;
   type: string;
+  path?: string;
+};
+
+type DaptinStoredFileObject = {
+  name?: string;
+  type?: string;
+  size?: number;
+  md5?: string;
+  path?: string;
+  src?: string;
+};
+
+type DaptinRelationData = {
+  id?: string;
+  type?: string;
+  reference_id?: string;
+  relation_reference_id?: string;
+  permission?: number;
+  name?: string;
+  attributes?: {
+    reference_id?: string;
+    relation_reference_id?: string;
+    permission?: number;
+    name?: string;
+  };
+};
+
+type DaptinRelationList = {
+  data?: DaptinRelationData | DaptinRelationData[] | null;
 };
 
 const ASSET_TABLE = 'asset';
 const SET_ASSET_PRIVATE_ACTION = 'set_canaster_asset_private';
 const SET_ASSET_PUBLIC_ACTION = 'set_canaster_asset_public';
+const PRIVATE_ASSET_PERMISSION = 16256;
+const PUBLIC_ASSET_PERMISSION = 16259;
 const modelLoad = { promise: null as Promise<void> | null };
 const objectUrls = new Map<string, string>();
 
@@ -199,14 +277,95 @@ function rowAttr(row: DaptinAssetRow, key: keyof DaptinAssetAttributes): unknown
 }
 
 function summaryFromRow(row: DaptinAssetRow, explicitId = assetId(row)): CanasterAssetSummary {
+  const permission = numberOrNull(rowAttr(row, 'permission'));
+  const file = fileMetadataFromRow(row);
   return {
+    source: 'daptin',
     id: explicitId,
+    assetId: explicitId,
     name: String(rowAttr(row, 'name') ?? 'File'),
     mime: String(rowAttr(row, 'mime') ?? ''),
+    createdAt: stringOrNull(rowAttr(row, 'created_at') ?? rowAttr(row, 'createdAt')),
     updatedAt: stringOrNull(rowAttr(row, 'updated_at') ?? rowAttr(row, 'updatedAt')),
+    visibility: visibilityFromPermission(permission),
+    daptin: {
+      referenceId: explicitId,
+      createdAt: stringOrNull(rowAttr(row, 'created_at') ?? rowAttr(row, 'createdAt')),
+      updatedAt: stringOrNull(rowAttr(row, 'updated_at') ?? rowAttr(row, 'updatedAt')),
+      ownerUserAccountId: stringOrNull(rowAttr(row, 'user_account_id') ?? rowAttr(row, 'userAccountId')),
+      permission,
+      version: numberOrNull(rowAttr(row, 'version')),
+      userGroups: userGroupsFromRow(row),
+    },
+    file: {
+      table: ASSET_TABLE,
+      column: 'file',
+      cloudStoreNamespace: 'assets',
+      keyName: 'img',
+      size: numberOrNull(file?.size),
+      md5: stringOrNull(file?.md5),
+      path: stringOrNull(file?.path),
+      src: stringOrNull(file?.src ?? file?.name),
+    },
+    urls: {
+      assetUrl: assetFileUrl(explicitId),
+      ...(permission === PUBLIC_ASSET_PERMISSION ? { publicAssetUrl: assetFileUrl(explicitId) } : {}),
+    },
   };
 }
 
 function stringOrNull(value: unknown): string | null {
   return typeof value === 'string' && value ? value : null;
+}
+
+function numberOrNull(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function visibilityFromPermission(permission: number | null): AssetVisibility | 'shared' | 'unknown' {
+  if (permission === PRIVATE_ASSET_PERMISSION) return 'private';
+  if (permission === PUBLIC_ASSET_PERMISSION) return 'public';
+  if (permission !== null && (permission & (1 << 15))) return 'shared';
+  return 'unknown';
+}
+
+function fileMetadataFromRow(row: DaptinAssetRow): DaptinStoredFileObject | null {
+  const raw = rowAttr(row, 'file');
+  const files = typeof raw === 'string' ? parseFileMetadata(raw) : raw;
+  return Array.isArray(files) && files[0] && typeof files[0] === 'object' ? files[0] as DaptinStoredFileObject : null;
+}
+
+function parseFileMetadata(value: string): DaptinStoredFileObject[] {
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed as DaptinStoredFileObject[] : [];
+  } catch {
+    return [];
+  }
+}
+
+function userGroupsFromRow(row: DaptinAssetRow): DaptinUserGroupAccess[] {
+  const relation = row.relationships?.usergroup_id ?? row.relationships?.usergroupId ?? rowAttr(row, 'usergroup_id') ?? rowAttr(row, 'usergroupId');
+  if (!relation || typeof relation !== 'object') return [];
+  const relationData = (relation as DaptinRelationList).data;
+  const groups = Array.isArray(relation)
+    ? relation
+    : Array.isArray(relationData)
+      ? relationData
+      : relationData
+        ? [relationData]
+        : [];
+  return groups.map((group) => {
+    const referenceId = String(group.attributes?.reference_id ?? group.reference_id ?? group.id ?? '');
+    const relationReferenceId = group.attributes?.relation_reference_id ?? group.relation_reference_id;
+    const permission = group.attributes?.permission ?? group.permission;
+    const name = group.attributes?.name ?? group.name;
+    return {
+      ...(group.id ? { id: group.id } : {}),
+      referenceId,
+      ...(relationReferenceId ? { relationReferenceId: String(relationReferenceId) } : {}),
+      ...(typeof permission === 'number' ? { permission } : {}),
+      ...(name ? { name: String(name) } : {}),
+    };
+  }).filter((group) => group.referenceId);
 }

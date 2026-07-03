@@ -4,6 +4,7 @@ import type { CanvasNode, JsonObject } from '../core/nodePrimitives';
 import { BuiltInNodeTypes } from '../domain/types';
 import { canvasThemeFor } from './canvas/theme';
 import { nodeDefinitionForType, parseNodeData, renderNodeContent } from './canvas/nodeRegistry';
+import { unavailableCanvasNodeAssetService } from './canvas/nodeAssetService';
 import type { CanvasTheme } from './canvas/theme';
 import type { NodeContentRect } from './canvas/nodeDefinition/nodeDefinitionTypes';
 import { DEFAULT_CANASTER_THEME_ID } from './theme/CanasterThemeRegistry';
@@ -87,6 +88,7 @@ function renderAddPanelNodePreview(canvas: HTMLCanvasElement, type: string, widt
       quality: 'normal',
       portalPreview: 'none',
     },
+    nodeAssetService: unavailableCanvasNodeAssetService,
     requestRender: () => renderAddPanelNodePreview(canvas, type, width, height),
   });
   ctx.restore();

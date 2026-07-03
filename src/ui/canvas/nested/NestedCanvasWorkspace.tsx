@@ -15,6 +15,7 @@ import type {
 import { createWorkspaceHistory, createWorkspaceSnapshot } from '../../../domain/workspaceHistory';
 import type { WorkspaceUrlState } from '../../../infra/browser/workspaceUrlLocation';
 import type {CanasterThemeId} from '../../theme/CanasterTheme';
+import type { CanvasNodeAssetService } from '../nodeAssetService';
 import { NativeNestedCanvasController, type CanvasViewportControlMenuState, type CanvasWorkspacePreviewCapture } from './NativeNestedCanvasController';
 
 export type NestedCanvasWorkspaceProps = {
@@ -22,6 +23,7 @@ export type NestedCanvasWorkspaceProps = {
   theme: CanasterThemeId;
   animationEnabled?: boolean;
   fitOnFirstLoad?: boolean;
+  nodeAssetService?: CanvasNodeAssetService;
   storageKey?: string;
   viewportControlMenuState?: CanvasViewportControlMenuState;
   onCollectionChange?: (collection: CanvasDocumentCollection, changes: DocumentModelChange[]) => void;
@@ -113,6 +115,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     initialCollection,
     theme,
     fitOnFirstLoad = true,
+    nodeAssetService,
     storageKey,
     viewportControlMenuState = null,
     onCollectionChange,
@@ -142,6 +145,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
       initialCollection: initialCollectionRef.current,
       theme,
       fitOnFirstLoad,
+      nodeAssetService,
       storageKey,
       onCollectionChange: (collection, changes) => callbacksRef.current.onCollectionChange?.(collection, changes),
       onChromeStateChange: (state) => callbacksRef.current.onChromeStateChange?.(state),
@@ -156,7 +160,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
       controller.dispose();
       controllerRef.current = null;
     };
-  }, [fitOnFirstLoad]);
+  }, [fitOnFirstLoad, nodeAssetService]);
 
   useEffect(() => {
     if (storageKey) controllerRef.current?.setStorageKey(storageKey);

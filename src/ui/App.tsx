@@ -484,7 +484,7 @@ export function App() {
         setSyncStatus,
         workspaceRef,
     });
-    const {handleWorkspaceFileDrop} = useWorkspaceAssets({
+    const {handleWorkspaceFileDrop, nodeAssetService} = useWorkspaceAssets({
         activeDocumentId,
         collection: chromeState.collection,
         setSyncMessage,
@@ -1583,6 +1583,7 @@ export function App() {
                         initialCollection={initialCollection}
                         theme={documentFallbackTheme}
                         fitOnFirstLoad={fitWorkspaceOnFirstLoad}
+                        nodeAssetService={nodeAssetService}
                         storageKey={workspaceStorageKey}
                         viewportControlMenuState={viewportControlMenuState}
                         onCollectionChange={handleWorkspaceCollectionChange}

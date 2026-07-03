@@ -1,6 +1,7 @@
 import { CanvasEngine } from '../CanvasEngine';
 import type { CanvasDocumentId } from '../../../domain/documentTypes';
-import type { EngineInteractionMode, EngineOptions } from '../../../domain/types';
+import type { EngineInteractionMode } from '../../../domain/types';
+import type { CanvasEngineOptions } from '../CanvasEngineOptions';
 import { createCanvasViewportToolbar, type CanvasViewportControl, type CanvasViewportToolbarControlEvent } from './createCanvasViewportToolbar';
 
 export type { CanvasViewportControl };
@@ -31,7 +32,7 @@ export type CanvasViewportSlotOptions = {
   wrapperClassName: string;
   viewportClassName: string;
   controls: CanvasViewportControl[];
-  engineOptions: EngineOptions;
+  engineOptions: CanvasEngineOptions;
   includePaneLayers?: boolean;
   onControl?: (slot: CanvasViewportSlot, control: CanvasViewportControl, event: CanvasViewportControlEvent) => void;
 };

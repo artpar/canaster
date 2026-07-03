@@ -1,4 +1,6 @@
 import { canvasThemeFor, type CanvasTheme } from './theme';
+import type { CanvasEngineOptions } from './CanvasEngineOptions';
+import { unavailableCanvasNodeAssetService, type CanvasNodeAssetService } from './nodeAssetService';
 import { hasSelectionShortcutModifier } from '../KeyboardShortcuts';
 import { asString, cloneNodeData } from '../../core/nodeData';
 import { embedFrameUrlForUrl, embedTitleForUrl, normalizeEmbedUrl } from '../../core/embedUrl';
@@ -31,7 +33,6 @@ import type {
   CanvasOperation,
   CanvasSelectionState,
   EngineInteractionMode,
-  EngineOptions,
   PortalLayout,
   ScreenRect,
   ViewportStatus,
@@ -197,6 +198,7 @@ export class CanvasEngine {
   private readonly transformPastedNode?: (node: CanvasNode) => CanvasNode;
   private readonly pasteInteractionForNodes?: (nodes: CanvasNode[]) => string | null;
   private readonly shouldUseSystemClipboardPaste?: (data: DataTransfer | null) => boolean;
+  private readonly nodeAssetService: CanvasNodeAssetService;
   private readonly inlineLayer: HTMLDivElement | null;
   private readonly nodeContentToolbar: HTMLDivElement | null;
   private readonly resizeObserver: ResizeObserver;
@@ -242,7 +244,7 @@ export class CanvasEngine {
   private embedOverlaySlots = new Map<string, EmbedOverlaySlot>();
   private liveNodeContentOverlaySlots = new Map<string, LiveNodeContentOverlaySlot>();
 
-  constructor(canvas: HTMLCanvasElement, options: EngineOptions = {}) {
+  constructor(canvas: HTMLCanvasElement, options: CanvasEngineOptions = {}) {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('2D canvas context is not available');
 
@@ -262,6 +264,7 @@ export class CanvasEngine {
     this.transformPastedNode = options.transformPastedNode;
     this.pasteInteractionForNodes = options.pasteInteractionForNodes;
     this.shouldUseSystemClipboardPaste = options.shouldUseSystemClipboardPaste;
+    this.nodeAssetService = options.nodeAssetService ?? unavailableCanvasNodeAssetService;
     this.nodeVisibilityFilter = options.nodeVisibilityFilter ?? null;
     this.nodeVisibilitySignature = options.nodeVisibilitySignature ?? '';
     this.livePortalNodeIds = new Set(options.livePortalNodeIds ?? []);
@@ -1117,6 +1120,7 @@ export class CanvasEngine {
         contentViewport,
         visibleContentRect: this.visibleNodeContentRect(renderNode, contentRect, contentViewport),
         state,
+        nodeAssetService: this.nodeAssetService,
         requestRender: () => this.markDirty(),
       });
       ctx.restore();
@@ -1861,6 +1865,7 @@ export class CanvasEngine {
       contentRect: this.nodeContentRect(node, theme),
       region,
       mount,
+      nodeAssetService: this.nodeAssetService,
       requestCommit: (nextData, commitSource = source) => {
         const current = this.model.nodes.find((candidate) => candidate.id === node.id);
         if (!current) return;

@@ -1,5 +1,3 @@
-import { listImageAssets, loadAssetObject, uploadImageAsset, type CanasterAssetSummary } from '../../../infra/daptin/assets';
-import { hasUsableStoredToken, normalizeDaptinError } from '../../../infra/daptin/daptinClient';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import { cachedAssetImage, cacheAssetImage } from '../imageAssets';
 import { createInlineNodeSurface } from './createInlineNodeSurface';
@@ -9,6 +7,7 @@ import { nodeEditInteractionRegion } from './nodeContentInteractionRegion';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeContentRect, NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
 import type { CanvasTheme } from '../theme';
+import type { CanasterAssetRecord, CanvasNodeAssetService } from '../nodeAssetService';
 
 const IMAGE_FITS: readonly ImageNodeData['fit'][] = ['contain', 'cover'];
 
@@ -35,7 +34,7 @@ export const imageNodeDefinition: NodeDefinition<ImageNodeData> = defineNodeType
   },
   createInteraction(ctx) {
     if (ctx.region.id !== 'edit') return null;
-    return createImagePicker(ctx.mount, ctx.data, (nextData) => ctx.requestCommit(nextData), ctx.requestClose);
+    return createImagePicker(ctx.mount, ctx.data, ctx.nodeAssetService, (nextData) => ctx.requestCommit(nextData), ctx.requestClose);
   },
   referencedAssetIds({ data }) {
     return data.assetId ? [data.assetId] : [];
@@ -52,12 +51,12 @@ function imageFrame(contentRect: NodeContentRect, theme: CanvasTheme) {
   };
 }
 
-function createImagePicker(mount: HTMLElement, data: ImageNodeData, commit: (nextData: ImageNodeData) => void, close: () => void) {
+function createImagePicker(mount: HTMLElement, data: ImageNodeData, nodeAssetService: CanvasNodeAssetService, commit: (nextData: ImageNodeData) => void, close: () => void) {
   let disposed = false;
   let assetIdDraft = data.assetId;
   let altDraft = data.alt;
   let fitDraft = data.fit;
-  let directPickOpen = !data.assetId && hasUsableStoredToken();
+  let directPickOpen = !data.assetId && nodeAssetService.canStoreFiles();
   const surface = createInlineNodeSurface({
     mount,
     className: 'node-inline-image-editor',
@@ -71,7 +70,7 @@ function createImagePicker(mount: HTMLElement, data: ImageNodeData, commit: (nex
     },
   });
 
-  const render = (state: { assets: CanasterAssetSummary[]; busy: boolean; message: string }) => {
+  const render = (state: { assets: CanasterAssetRecord[]; busy: boolean; message: string }) => {
     surface.root.replaceChildren();
     if (directPickOpen) {
       const input = createUploadInput({ disabled: false, onPick: uploadSelectedImage, onCancel: close });
@@ -86,7 +85,7 @@ function createImagePicker(mount: HTMLElement, data: ImageNodeData, commit: (nex
     const actions = document.createElement('div');
     actions.className = 'image-picker-actions';
 
-    const uploadInput = createUploadInput({ disabled: state.busy || !hasUsableStoredToken(), onPick: uploadSelectedImage });
+    const uploadInput = createUploadInput({ disabled: state.busy || !nodeAssetService.canStoreFiles(), onPick: uploadSelectedImage });
     const uploadButton = document.createElement('button');
     uploadButton.type = 'button';
     uploadButton.className = 'image-picker-upload';
@@ -97,7 +96,7 @@ function createImagePicker(mount: HTMLElement, data: ImageNodeData, commit: (nex
     });
 
     const select = document.createElement('select');
-    select.disabled = state.busy || !hasUsableStoredToken();
+    select.disabled = state.busy || !nodeAssetService.canChooseSavedImages();
     select.setAttribute('aria-label', 'Select saved image');
     const emptyOption = document.createElement('option');
     emptyOption.value = '';
@@ -160,7 +159,7 @@ function createImagePicker(mount: HTMLElement, data: ImageNodeData, commit: (nex
     }
   };
 
-  const setState = (state: { assets: CanasterAssetSummary[]; busy: boolean; message: string }) => {
+  const setState = (state: { assets: CanasterAssetRecord[]; busy: boolean; message: string }) => {
     if (!disposed) render(state);
   };
 
@@ -172,26 +171,27 @@ function createImagePicker(mount: HTMLElement, data: ImageNodeData, commit: (nex
     directPickOpen = false;
     setState({ assets: [], busy: true, message: 'Uploading image' });
     try {
-      const asset = await uploadImageAsset(file);
-      const object = await loadAssetObject(asset.id);
-      await cacheAssetImage(object.id, object.objectUrl);
+      const asset = await nodeAssetService.storeImageFile(file);
+      await cacheAssetImage(asset.id, asset.objectUrl);
       assetIdDraft = asset.id;
       altDraft = altDraft || data.alt || cleanImageName(asset.name);
       surface.commitAndClose();
     } catch (error) {
-      setState({ assets: [], busy: false, message: imageErrorMessage(error, 'Could not upload image') });
+      setState({ assets: [], busy: false, message: nodeAssetService.assetErrorMessage(error, 'Could not upload image') });
     }
   }
 
-  if (!hasUsableStoredToken()) {
-    render({ assets: [], busy: false, message: 'Sign in to upload images.' });
+  if (!nodeAssetService.canStoreFiles()) {
+    render({ assets: [], busy: false, message: 'File assets are unavailable in this view.' });
   } else if (directPickOpen) {
     render({ assets: [], busy: false, message: 'Choose an image from this device.' });
+  } else if (!nodeAssetService.canChooseSavedImages()) {
+    render({ assets: [], busy: false, message: '' });
   } else {
     render({ assets: [], busy: true, message: 'Loading images' });
-    void listImageAssets()
+    void nodeAssetService.listImageAssets()
       .then((assets) => setState({ assets, busy: false, message: assets.length ? '' : 'No saved images yet.' }))
-      .catch((error) => setState({ assets: [], busy: false, message: imageErrorMessage(error, 'Could not list images') }));
+      .catch((error) => setState({ assets: [], busy: false, message: nodeAssetService.assetErrorMessage(error, 'Could not list images') }));
   }
 
   return {
@@ -229,18 +229,12 @@ function createUploadInput({
   return input;
 }
 
-function selectedAssetName(assets: CanasterAssetSummary[], assetId: string) {
+function selectedAssetName(assets: CanasterAssetRecord[], assetId: string) {
   return cleanImageName(assets.find((asset) => asset.id === assetId)?.name ?? '');
 }
 
 function cleanImageName(name: string) {
   return name.replace(/\.[a-z0-9]+$/i, '').trim();
-}
-
-function imageErrorMessage(error: unknown, fallback: string) {
-  const apiError = normalizeDaptinError(error, fallback);
-  if (apiError.kind === 'session' || apiError.kind === 'permission') return 'Sign in to upload images.';
-  return error instanceof Error ? error.message : fallback;
 }
 
 function drawImage(ctx: CanvasRenderingContext2D, image: HTMLImageElement, frame: { x: number; y: number; w: number; h: number }, fit: 'contain' | 'cover') {

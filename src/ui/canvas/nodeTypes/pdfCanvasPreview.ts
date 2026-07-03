@@ -4,7 +4,7 @@ import type { NodeContentViewport } from '../../../core/nodeAppearance';
 import { drawNodeBodyLines, nodeLayout, nodeText, wrapText } from '../nodeRendering';
 import type { NodeContentRect } from '../nodeDefinition/nodeDefinitionTypes';
 import type { CanvasTheme } from '../theme';
-import { loadFileAssetFile } from './fileAssetPreview';
+import type { CanvasNodeAssetService } from '../nodeAssetService';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.mjs', import.meta.url).toString();
 
@@ -38,6 +38,7 @@ export function drawPdfCanvasPreview(
   theme: CanvasTheme,
   visibleRect: NodeContentRect,
   contentViewport: NodeContentViewport,
+  nodeAssetService: CanvasNodeAssetService,
   requestRender: () => void,
 ) {
   const layout = nodeLayout(theme);
@@ -53,7 +54,7 @@ export function drawPdfCanvasPreview(
     return;
   }
 
-  const document = pdfDocumentForAsset(assetId, requestRender);
+  const document = pdfDocumentForAsset(assetId, nodeAssetService, requestRender);
   if (document.status === 'loading') {
     drawPdfMessage(ctx, documentRect, 'Loading PDF', theme);
     return;
@@ -66,13 +67,13 @@ export function drawPdfCanvasPreview(
   drawPdfPages(ctx, documentRect, document, fileName, theme, visibleRect, contentViewport, requestRender);
 }
 
-function pdfDocumentForAsset(assetId: string, requestRender: () => void): PdfDocumentCacheEntry {
+function pdfDocumentForAsset(assetId: string, nodeAssetService: CanvasNodeAssetService, requestRender: () => void): PdfDocumentCacheEntry {
   const cached = pdfDocumentCache.get(assetId);
   if (cached) return cached;
 
   const entry: PdfDocumentCacheEntry = { status: 'loading' };
   pdfDocumentCache.set(assetId, entry);
-  void loadFileAssetFile(assetId)
+  void nodeAssetService.loadAssetFile(assetId)
     .then((file) => file.arrayBuffer())
     .then((buffer) => pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise)
     .then((document) => {

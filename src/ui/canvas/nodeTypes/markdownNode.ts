@@ -2,7 +2,7 @@ import { cleanAssetTitle, workspaceAssetKindForFile } from '../../../core/worksp
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import { markdownNodeSemanticDefinition, type MarkdownNodeData } from '../../../domain/nodeDefinitions/markdownNodeSemanticDefinition';
 import { drawNodeMeta } from '../nodeRendering';
-import { createFilePreviewShell, loadFileAssetFile, saveFileAsset } from './fileAssetPreview';
+import { createFilePreviewShell } from './fileAssetPreview';
 import {
   drawMarkdownCanvasBlocks,
   drawMarkdownCanvasPreview,
@@ -14,14 +14,15 @@ import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeContentRect, NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
 import type { CanvasTheme } from '../theme';
 import { renderMarkdownHtml } from './renderMarkdownHtml';
+import type { CanvasNodeAssetService } from '../nodeAssetService';
 
 export const markdownNodeDefinition: NodeDefinition<MarkdownNodeData> = defineNodeType({
   ...nodeTypeSpecs.md,
   createDefaultData: markdownNodeSemanticDefinition.createDefaultData,
   parseData: markdownNodeSemanticDefinition.parseData,
-  render({ ctx, data, theme, contentRect, visibleContentRect, requestRender, state }) {
+  render({ ctx, data, theme, contentRect, visibleContentRect, nodeAssetService, requestRender, state }) {
     if (state.quality === 'compact' && !state.selected && !state.hovered) return;
-    drawMarkdownPreview(ctx, contentRect, visibleContentRect, data, theme, requestRender);
+    drawMarkdownPreview(ctx, contentRect, visibleContentRect, data, theme, nodeAssetService, requestRender);
   },
   describe: markdownNodeSemanticDefinition.describe,
   getInteractionRegions({ contentRect }) {
@@ -29,7 +30,7 @@ export const markdownNodeDefinition: NodeDefinition<MarkdownNodeData> = defineNo
   },
   createInteraction(ctx) {
     if (ctx.region.id !== 'edit') return null;
-    return createMarkdownPreview(ctx.mount, ctx.data, (nextData) => ctx.requestCommit(nextData), ctx.requestClose);
+    return createMarkdownPreview(ctx.mount, ctx.data, ctx.nodeAssetService, (nextData) => ctx.requestCommit(nextData), ctx.requestClose);
   },
   referencedAssetIds({ data }) {
     return data.assetId ? [data.assetId] : [];
@@ -42,10 +43,11 @@ function drawMarkdownPreview(
   visibleRect: NodeContentRect,
   data: MarkdownNodeData,
   theme: CanvasTheme,
+  nodeAssetService: CanvasNodeAssetService,
   requestRender: () => void,
 ) {
   drawNodeMeta(ctx, rect, data.assetId ? 'Markdown document' : 'Add a Markdown file', theme, 0);
-  const assetBlocks = markdownBlocksForCanvas(data, requestRender);
+  const assetBlocks = markdownBlocksForCanvas(data, nodeAssetService, requestRender);
   if (assetBlocks) {
     drawMarkdownCanvasBlocks(ctx, rect, assetBlocks, theme, visibleRect);
     return;
@@ -53,15 +55,15 @@ function drawMarkdownPreview(
   drawMarkdownCanvasPreview(ctx, rect, markdownPreviewTextForCanvas(data), theme, visibleRect);
 }
 
-function createMarkdownPreview(mount: HTMLElement, data: MarkdownNodeData, commit: (nextData: MarkdownNodeData) => void, close: () => void) {
+function createMarkdownPreview(mount: HTMLElement, data: MarkdownNodeData, nodeAssetService: CanvasNodeAssetService, commit: (nextData: MarkdownNodeData) => void, close: () => void) {
   const shell = createFilePreviewShell(mount, 'node-inline-markdown-preview', data.title || 'Markdown');
   let disposed = false;
   shell.closeButton.addEventListener('click', close);
   if (!data.assetId) {
-    renderMarkdownAttach(shell.body, data, commit, close);
+    renderMarkdownAttach(shell.body, data, nodeAssetService, commit, close);
   } else {
     shell.setMessage('Loading Markdown');
-    void loadFileAssetFile(data.assetId)
+    void nodeAssetService.loadAssetFile(data.assetId)
       .then((file) => file.text())
       .then((text) => {
         if (disposed) return;
@@ -102,7 +104,7 @@ function openMarkdownLinksInNewTabs(root: HTMLElement) {
   });
 }
 
-function renderMarkdownAttach(body: HTMLElement, data: MarkdownNodeData, commit: (nextData: MarkdownNodeData) => void, close: () => void) {
+function renderMarkdownAttach(body: HTMLElement, data: MarkdownNodeData, nodeAssetService: CanvasNodeAssetService, commit: (nextData: MarkdownNodeData) => void, close: () => void) {
   body.replaceChildren();
   const panel = document.createElement('div');
   panel.className = 'file-attach-panel';
@@ -125,7 +127,7 @@ function renderMarkdownAttach(body: HTMLElement, data: MarkdownNodeData, commit:
     }
     message.textContent = 'Attaching Markdown';
     input.disabled = true;
-    void saveFileAsset(file)
+    void nodeAssetService.storeWorkspaceFile(file)
       .then((asset) => {
         const title = cleanAssetTitle(asset.name || file.name, 'Markdown');
         commit({
@@ -141,7 +143,7 @@ function renderMarkdownAttach(body: HTMLElement, data: MarkdownNodeData, commit:
       .catch((error) => {
         input.disabled = false;
         input.value = '';
-        message.textContent = error instanceof Error ? error.message : 'Could not attach Markdown';
+        message.textContent = nodeAssetService.assetErrorMessage(error, 'Could not attach Markdown');
       });
   });
 
@@ -157,7 +159,7 @@ type MarkdownAssetBlockCacheEntry =
 const MAX_MARKDOWN_ASSET_BLOCK_CACHE_ENTRIES = 16;
 const markdownAssetBlockCache = new Map<string, MarkdownAssetBlockCacheEntry>();
 
-function markdownBlocksForCanvas(data: MarkdownNodeData, requestRender: () => void): MarkdownCanvasBlock[] | null {
+function markdownBlocksForCanvas(data: MarkdownNodeData, nodeAssetService: CanvasNodeAssetService, requestRender: () => void): MarkdownCanvasBlock[] | null {
   if (!data.assetId) return null;
   const cached = markdownAssetBlockCache.get(data.assetId);
   if (cached?.status === 'ready') {
@@ -168,7 +170,7 @@ function markdownBlocksForCanvas(data: MarkdownNodeData, requestRender: () => vo
   if (cached?.status === 'loading' || cached?.status === 'error') return null;
 
   markdownAssetBlockCache.set(data.assetId, { status: 'loading' });
-  void loadFileAssetFile(data.assetId)
+  void nodeAssetService.loadAssetFile(data.assetId)
     .then((file) => file.text())
     .then((text) => {
       markdownAssetBlockCache.set(data.assetId, { status: 'ready', blocks: parseMarkdownCanvasBlocks(text) });

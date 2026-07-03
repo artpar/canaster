@@ -3,20 +3,21 @@ import { cleanAssetTitle, workspaceAssetKindForFile } from '../../../core/worksp
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import { pdfNodeSemanticDefinition, type PdfNodeData } from '../../../domain/nodeDefinitions/pdfNodeSemanticDefinition';
 import { drawNodeMeta } from '../nodeRendering';
-import { createFilePreviewShell, loadFileAssetObject, saveFileAsset } from './fileAssetPreview';
+import { createFilePreviewShell } from './fileAssetPreview';
 import { nodeEditInteractionRegion } from './nodeContentInteractionRegion';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeContentRect, NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
 import type { CanvasTheme } from '../theme';
 import { drawPdfCanvasPreview } from './pdfCanvasPreview';
+import type { CanvasNodeAssetService } from '../nodeAssetService';
 
 export const pdfNodeDefinition: NodeDefinition<PdfNodeData> = defineNodeType({
   ...nodeTypeSpecs.pdf,
   createDefaultData: pdfNodeSemanticDefinition.createDefaultData,
   parseData: pdfNodeSemanticDefinition.parseData,
-  render({ ctx, data, theme, contentRect, visibleContentRect, contentViewport, requestRender, state }) {
+  render({ ctx, data, theme, contentRect, visibleContentRect, contentViewport, nodeAssetService, requestRender, state }) {
     if (state.quality === 'compact' && !state.selected && !state.hovered) return;
-    drawPdfPreview(ctx, contentRect, visibleContentRect, contentViewport, data, theme, requestRender);
+    drawPdfPreview(ctx, contentRect, visibleContentRect, contentViewport, data, theme, nodeAssetService, requestRender);
   },
   describe: pdfNodeSemanticDefinition.describe,
   getInteractionRegions({ contentRect }) {
@@ -24,7 +25,7 @@ export const pdfNodeDefinition: NodeDefinition<PdfNodeData> = defineNodeType({
   },
   createInteraction(ctx) {
     if (ctx.region.id !== 'edit') return null;
-    return createPdfPreview(ctx.mount, ctx.data, (nextData) => ctx.requestCommit(nextData), ctx.requestClose);
+    return createPdfPreview(ctx.mount, ctx.data, ctx.nodeAssetService, (nextData) => ctx.requestCommit(nextData), ctx.requestClose);
   },
   referencedAssetIds({ data }) {
     return data.assetId ? [data.assetId] : [];
@@ -38,21 +39,22 @@ function drawPdfPreview(
   contentViewport: NodeContentViewport,
   data: PdfNodeData,
   theme: CanvasTheme,
+  nodeAssetService: CanvasNodeAssetService,
   requestRender: () => void,
 ) {
   drawNodeMeta(ctx, rect, data.assetId ? 'PDF document' : 'Add a PDF file', theme, 0);
-  drawPdfCanvasPreview(ctx, rect, data.assetId, data.fileName, theme, visibleRect, contentViewport, requestRender);
+  drawPdfCanvasPreview(ctx, rect, data.assetId, data.fileName, theme, visibleRect, contentViewport, nodeAssetService, requestRender);
 }
 
-function createPdfPreview(mount: HTMLElement, data: PdfNodeData, commit: (nextData: PdfNodeData) => void, close: () => void) {
+function createPdfPreview(mount: HTMLElement, data: PdfNodeData, nodeAssetService: CanvasNodeAssetService, commit: (nextData: PdfNodeData) => void, close: () => void) {
   const shell = createFilePreviewShell(mount, 'node-inline-pdf-preview', data.title || 'PDF');
   let disposed = false;
   shell.closeButton.addEventListener('click', close);
   if (!data.assetId) {
-    renderPdfAttach(shell.body, data, commit, close);
+    renderPdfAttach(shell.body, data, nodeAssetService, commit, close);
   } else {
     shell.setMessage('Loading PDF');
-    void loadFileAssetObject(data.assetId)
+    void nodeAssetService.loadAssetObject(data.assetId)
       .then((asset) => {
         if (disposed) return;
         shell.body.replaceChildren();
@@ -82,7 +84,7 @@ function createPdfPreview(mount: HTMLElement, data: PdfNodeData, commit: (nextDa
   };
 }
 
-function renderPdfAttach(body: HTMLElement, data: PdfNodeData, commit: (nextData: PdfNodeData) => void, close: () => void) {
+function renderPdfAttach(body: HTMLElement, data: PdfNodeData, nodeAssetService: CanvasNodeAssetService, commit: (nextData: PdfNodeData) => void, close: () => void) {
   body.replaceChildren();
   const panel = document.createElement('div');
   panel.className = 'file-attach-panel';
@@ -105,7 +107,7 @@ function renderPdfAttach(body: HTMLElement, data: PdfNodeData, commit: (nextData
     }
     message.textContent = 'Attaching PDF';
     input.disabled = true;
-    void saveFileAsset(file)
+    void nodeAssetService.storeWorkspaceFile(file)
       .then((asset) => {
         const title = cleanAssetTitle(asset.name || file.name, 'PDF');
         commit({
@@ -120,7 +122,7 @@ function renderPdfAttach(body: HTMLElement, data: PdfNodeData, commit: (nextData
       .catch((error) => {
         input.disabled = false;
         input.value = '';
-        message.textContent = error instanceof Error ? error.message : 'Could not attach PDF';
+        message.textContent = nodeAssetService.assetErrorMessage(error, 'Could not attach PDF');
       });
   });
 
