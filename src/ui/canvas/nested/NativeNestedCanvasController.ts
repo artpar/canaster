@@ -104,6 +104,7 @@ type Slot = {
   parentContextOwnerKey: string;
   portalLayouts: PortalLayout[];
   sizeSignature: string;
+  initialFitFrame: number | null;
 };
 
 type ParentContextPaneSlot = {
@@ -419,22 +420,18 @@ export class NativeNestedCanvasController {
       this.setStatus({ ...this.status, interaction: 'Choose canvas theme' });
       return;
     }
-    const targets = this.viewportControlTargets(slot, recursive);
     if (control === 'fit') {
-      for (const target of targets) target.engine.fit(target.mode === 'active' ? undefined : 16);
-      if (this.activeSlot && targets.includes(this.activeSlot)) this.persistViewportFromActiveEngine();
-      this.setStatus({ ...this.status, interaction: recursive && targets.length > 1 ? `Centered ${targets.length} views` : 'Centered view' });
+      const affected = this.applyViewportControl(slot, recursive, (target) => target.engine.fit(target.mode === 'active' ? undefined : 16));
+      this.setStatus({ ...this.status, interaction: recursive && affected > 1 ? `Centered ${affected} views` : 'Centered view' });
       return;
     }
     if (control === 'reset-zoom') {
-      for (const target of targets) target.engine.resetZoom();
-      if (this.activeSlot && targets.includes(this.activeSlot)) this.persistViewportFromActiveEngine();
-      this.setStatus({ ...this.status, interaction: recursive && targets.length > 1 ? `Reset zoom for ${targets.length} views` : 'Reset view zoom' });
+      const affected = this.applyViewportControl(slot, recursive, (target) => target.engine.resetZoom());
+      this.setStatus({ ...this.status, interaction: recursive && affected > 1 ? `Reset zoom for ${affected} views` : 'Reset view zoom' });
       return;
     }
     const factor = control === 'zoom-in' ? 1.22 : 0.82;
-    for (const target of targets) target.engine.zoomBy(factor);
-    if (this.activeSlot && targets.includes(this.activeSlot)) this.persistViewportFromActiveEngine();
+    this.applyViewportControl(slot, recursive, (target) => target.engine.zoomBy(factor));
   }
 
   private handleViewportControlPointerMove = (event: PointerEvent) => {
@@ -667,19 +664,64 @@ export class NativeNestedCanvasController {
     this.setControlOwnerSlot(this.activeSlot);
   }
 
-  private viewportControlTargets(slot: CanvasViewportSlot, recursive: boolean): CanvasViewportSlot[] {
-    if (!recursive) return [slot];
-    const targets = [slot];
-    const seenSlotKeys = new Set([slot.key]);
-    for (let index = 0; index < targets.length; index++) {
-      const parentSlot = targets[index];
-      for (const candidate of this.slots.values()) {
-        if (candidate.viewportSlot.wrapper.parentElement !== parentSlot.childOverlayLayer || seenSlotKeys.has(candidate.key)) continue;
-        seenSlotKeys.add(candidate.key);
-        targets.push(candidate.viewportSlot);
-      }
+  private applyViewportControl(
+    slot: CanvasViewportSlot,
+    recursive: boolean,
+    apply: (slot: CanvasViewportSlot) => void,
+  ): number {
+    if (!recursive) {
+      apply(slot);
+      if (slot === this.activeSlot) this.persistViewportFromActiveEngine();
+      return 1;
     }
-    return targets;
+
+    const queue: CanvasViewportSlot[] = [slot];
+    const seenSlotKeys = new Set([slot.key]);
+    let affected = 0;
+    let activeAffected = false;
+    for (let index = 0; index < queue.length; index++) {
+      const current = queue[index];
+      if (!this.viewportControlSlotExists(current)) continue;
+      this.cancelInitialOverlayFitForViewport(current);
+      apply(current);
+      affected += 1;
+      activeAffected = activeAffected || current === this.activeSlot;
+      current.engine.flushRender();
+      this.flushOverlayRender();
+      for (const child of this.childViewportControlSlots(current, seenSlotKeys)) queue.push(child);
+    }
+    if (activeAffected) this.persistViewportFromActiveEngine();
+    return affected;
+  }
+
+  private childViewportControlSlots(parentSlot: CanvasViewportSlot, seenSlotKeys: Set<string>): CanvasViewportSlot[] {
+    const children: CanvasViewportSlot[] = [];
+    for (const candidate of this.slots.values()) {
+      if (candidate.viewportSlot.wrapper.parentElement !== parentSlot.childOverlayLayer || seenSlotKeys.has(candidate.key)) continue;
+      seenSlotKeys.add(candidate.key);
+      children.push(candidate.viewportSlot);
+    }
+    return children;
+  }
+
+  private cancelInitialOverlayFitForViewport(viewportSlot: CanvasViewportSlot): void {
+    for (const slot of this.slots.values()) {
+      if (slot.viewportSlot !== viewportSlot || slot.initialFitFrame === null) continue;
+      cancelAnimationFrame(slot.initialFitFrame);
+      slot.initialFitFrame = null;
+      return;
+    }
+  }
+
+  private viewportControlSlotExists(slot: CanvasViewportSlot): boolean {
+    if (slot === this.activeSlot) return true;
+    for (const candidate of this.slots.values()) {
+      if (candidate.viewportSlot === slot) return true;
+    }
+    for (const candidate of this.parentContextSlots.values()) {
+      if (candidate.viewportSlot === slot) return true;
+    }
+    return false;
   }
 
   collection(): CanvasDocumentCollection {
@@ -1157,11 +1199,12 @@ export class NativeNestedCanvasController {
     viewportSlot.engine.setTheme(this.canvasThemeFor(canvasId));
     viewportSlot.engine.setBackgroundImage(this.canvasBackgroundImageFor(canvasId));
     this.applyActiveHandleSizing(viewportSlot);
-    const slot: Slot = { key, parentCanvasId: layout.parentCanvasId, portalNodeId: layout.portalNodeId, canvasId, viewportSlot, parentContextOwnerKey, portalLayouts: [], sizeSignature: sizeSignature(stageRect) };
+    const slot: Slot = { key, parentCanvasId: layout.parentCanvasId, portalNodeId: layout.portalNodeId, canvasId, viewportSlot, parentContextOwnerKey, portalLayouts: [], sizeSignature: sizeSignature(stageRect), initialFitFrame: null };
     this.slots.set(key, slot);
     this.syncViewportControlVisibility();
     this.layoutEmbeddedSlot(slot, stageRect);
-    requestAnimationFrame(() => {
+    slot.initialFitFrame = requestAnimationFrame(() => {
+      slot.initialFitFrame = null;
       if (this.disposed || !this.slots.has(key)) return;
       viewportSlot.engine.fit(16);
     });
@@ -1778,6 +1821,7 @@ export class NativeNestedCanvasController {
   private disposeSlots() {
     if (this.slots.size) this.record('engine:embedded:dispose', { slots: this.slots.size });
     for (const slot of this.slots.values()) {
+      this.cancelInitialOverlayFit(slot);
       this.disposeParentContextSlotsForOwner(slot.parentContextOwnerKey);
       slot.viewportSlot.engine.dispose();
       slot.viewportSlot.wrapper.remove();
@@ -1790,6 +1834,7 @@ export class NativeNestedCanvasController {
     let disposed = 0;
     for (const [key, slot] of this.slots) {
       if (seen.has(key)) continue;
+      this.cancelInitialOverlayFit(slot);
       this.disposeParentContextSlotsForOwner(slot.parentContextOwnerKey);
       slot.viewportSlot.engine.dispose();
       slot.viewportSlot.wrapper.remove();
@@ -1798,6 +1843,12 @@ export class NativeNestedCanvasController {
     }
     if (disposed) this.record('engine:embedded:dispose-removed', { slots: disposed });
     if (disposed) this.ensureControlOwnerSlotExists();
+  }
+
+  private cancelInitialOverlayFit(slot: Slot): void {
+    if (slot.initialFitFrame === null) return;
+    cancelAnimationFrame(slot.initialFitFrame);
+    slot.initialFitFrame = null;
   }
 
   private disposeParentContextSlots() {

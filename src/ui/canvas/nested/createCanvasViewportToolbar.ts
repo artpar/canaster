@@ -162,7 +162,7 @@ function wireViewportControls(
   controls.addEventListener('pointerdown', (event) => {
     stopViewportControlEvent(event);
     clearPress();
-    if (!options.recursiveLongPress || !onControl || !event.isPrimary || (event.pointerType !== 'touch' && event.pointerType !== 'pen')) return;
+    if (!options.recursiveLongPress || !onControl || !isRecursiveLongPressPointer(event)) return;
     const button = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-control]');
     const control = parseViewportControl(button?.dataset.control);
     if (!button || !control || button.disabled) return;
@@ -214,6 +214,12 @@ function wireViewportControls(
     }
     onControl?.(control, controlEventForButton(button, event, false));
   });
+}
+
+function isRecursiveLongPressPointer(event: PointerEvent): boolean {
+  if (!event.isPrimary) return false;
+  if (event.pointerType === 'mouse') return event.button === 0;
+  return event.pointerType === 'touch' || event.pointerType === 'pen';
 }
 
 function parseViewportControl(value: string | undefined): CanvasViewportControl | null {
