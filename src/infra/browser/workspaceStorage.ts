@@ -56,12 +56,6 @@ export function saveWorkspaceSnapshotMirror(snapshot: CanvasWorkspaceSnapshot, i
   writeLocalWorkspaceSnapshot(createStoredWorkspaceSnapshot(snapshot, id));
 }
 
-// Local storage maintenance primitive. Sign-out must preserve the visible workspace locally.
-export async function clearWorkspaceSnapshot(id = DEFAULT_WORKSPACE_STORAGE_ID): Promise<void> {
-  removeLocalWorkspaceSnapshot(id);
-  await db.workspaces.delete(id);
-}
-
 function createStoredWorkspaceSnapshot(snapshot: CanvasWorkspaceSnapshot, id: string): StoredWorkspaceSnapshot {
   return {
     id,
@@ -124,12 +118,4 @@ function shouldSkipLocalMirror(snapshot: CanvasWorkspaceSnapshot): boolean {
 
 function totalSnapshotNodes(snapshot: CanvasWorkspaceSnapshot): number {
   return Object.values(snapshot.history.present.documents).reduce((sum, document) => sum + document.model.nodes.length, 0);
-}
-
-function removeLocalWorkspaceSnapshot(id: string): void {
-  try {
-    window.localStorage.removeItem(localStorageKey(id));
-  } catch (error) {
-    console.warn('Failed to clear Canway workspace snapshot from localStorage', error);
-  }
 }

@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import { isImageAssetMime, isSupportedWorkspaceAssetFile } from '../../core/workspaceAssetTypes';
+import { isSupportedWorkspaceAssetFile } from '../../core/workspaceAssetTypes';
 
 export type LocalAssetSummary = {
   id: string;
@@ -55,12 +55,6 @@ export async function saveLocalAsset(file: File): Promise<LocalAssetSummary> {
   };
   await db.assets.put(record);
   return summaryFromRecord(record);
-}
-
-// Image-only convenience wrapper; current app flows store files through the workspace asset service.
-export async function saveLocalImageAsset(file: File): Promise<LocalAssetSummary> {
-  if (!isImageAssetMime(file.type)) throw new Error('Choose an image file.');
-  return saveLocalAsset(file);
 }
 
 export async function loadLocalAssetObject(assetId: string): Promise<LocalAssetObject> {
