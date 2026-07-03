@@ -1,3 +1,218 @@
+Actions:
+  - Name: ensure_canaster_mail_account
+    Label: Ensure Canaster mail account
+    OnType: user_account
+    InstanceOptional: false
+    Permission: 2085120
+    AccessGroups:
+      - Name: users
+        Permission: 524288
+    InFields: []
+    OutFields:
+      - Type: client.notify
+        Method: ACTIONRESPONSE
+        Condition: '!subject.reference_id.toString() != user.reference_id.toString()'
+        SkipInResponse: false
+        Attributes:
+          type: error
+          message: Only the account owner can set up this mailbox.
+      - Type: mail_server
+        Method: GET
+        Reference: canaster_mail_server
+        Condition: '!subject.reference_id.toString() == user.reference_id.toString()'
+        SkipInResponse: true
+        Attributes:
+          query: '[{"column": "hostname", "operator": "is", "value": "mail.canaster.in"}, {"column": "listen_interface", "operator": "is", "value": "0.0.0.0:465"}]'
+      - Type: mail_account
+        Method: GET
+        Reference: existing_mail_account
+        Condition: '!subject.reference_id.toString() == user.reference_id.toString()'
+        SkipInResponse: true
+        Attributes:
+          query: '!JSON.stringify([{"column": "username", "operator": "is", "value": subject.name + "@canaster.in"}])'
+      - Type: mail_account
+        Method: POST
+        Reference: mail_account
+        Condition: '!subject.reference_id.toString() == user.reference_id.toString() && (existing_mail_account == null || existing_mail_account.length == 0)'
+        SkipInResponse: true
+        Attributes:
+          username: '!subject.name + "@canaster.in"'
+          password: '!"cm-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 14)'
+          password_md5: '!"cmm-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 14)'
+          mail_server_id: '$canaster_mail_server[0].reference_id'
+          user_account_id: '$subject.reference_id'
+      - Type: mail_box
+        Method: GET
+        Reference: existing_mail_boxes
+        Condition: '!subject.reference_id.toString() == user.reference_id.toString()'
+        SkipInResponse: true
+        Attributes:
+          query: '!JSON.stringify([{"column": "mail_account_id", "operator": "is", "value": existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id : mail_account.reference_id}])'
+      - Type: mail_box
+        Method: POST
+        Reference: inbox_mail_box
+        Condition: '!subject.reference_id.toString() == user.reference_id.toString() && (existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "INBOX"; }))'
+        SkipInResponse: true
+        Attributes:
+          name: INBOX
+          subscribed: true
+          uidvalidity: '!Math.floor(Date.now() / 1000)'
+          nextuid: 1
+          attributes: ''
+          flags: '\*'
+          permanent_flags: '\*'
+          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id : mail_account.reference_id)'
+          user_account_id: '$subject.reference_id'
+      - Type: mail_box
+        Method: POST
+        Reference: draft_mail_box
+        Condition: '!subject.reference_id.toString() == user.reference_id.toString() && (existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "Draft"; }))'
+        SkipInResponse: true
+        Attributes:
+          name: Draft
+          subscribed: true
+          uidvalidity: '!Math.floor(Date.now() / 1000)'
+          nextuid: 1
+          attributes: ''
+          flags: '\*'
+          permanent_flags: '\*'
+          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id : mail_account.reference_id)'
+          user_account_id: '$subject.reference_id'
+      - Type: mail_box
+        Method: POST
+        Reference: sent_mail_box
+        Condition: '!subject.reference_id.toString() == user.reference_id.toString() && (existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "Sent"; }))'
+        SkipInResponse: true
+        Attributes:
+          name: Sent
+          subscribed: true
+          uidvalidity: '!Math.floor(Date.now() / 1000)'
+          nextuid: 1
+          attributes: ''
+          flags: '\*'
+          permanent_flags: '\*'
+          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id : mail_account.reference_id)'
+          user_account_id: '$subject.reference_id'
+      - Type: mail_box
+        Method: POST
+        Reference: archive_mail_box
+        Condition: '!subject.reference_id.toString() == user.reference_id.toString() && (existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "Archive"; }))'
+        SkipInResponse: true
+        Attributes:
+          name: Archive
+          subscribed: true
+          uidvalidity: '!Math.floor(Date.now() / 1000)'
+          nextuid: 1
+          attributes: ''
+          flags: '\*'
+          permanent_flags: '\*'
+          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id : mail_account.reference_id)'
+          user_account_id: '$subject.reference_id'
+      - Type: mail_box
+        Method: POST
+        Reference: trash_mail_box
+        Condition: '!subject.reference_id.toString() == user.reference_id.toString() && (existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "Trash"; }))'
+        SkipInResponse: true
+        Attributes:
+          name: Trash
+          subscribed: true
+          uidvalidity: '!Math.floor(Date.now() / 1000)'
+          nextuid: 1
+          attributes: ''
+          flags: '\*'
+          permanent_flags: '\*'
+          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id : mail_account.reference_id)'
+          user_account_id: '$subject.reference_id'
+      - Type: mail_box
+        Method: POST
+        Reference: spam_mail_box
+        Condition: '!subject.reference_id.toString() == user.reference_id.toString() && (existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "Spam"; }))'
+        SkipInResponse: true
+        Attributes:
+          name: Spam
+          subscribed: true
+          uidvalidity: '!Math.floor(Date.now() / 1000)'
+          nextuid: 1
+          attributes: ''
+          flags: '\*'
+          permanent_flags: '\*'
+          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id : mail_account.reference_id)'
+          user_account_id: '$subject.reference_id'
+      - Type: client.notify
+        Method: ACTIONRESPONSE
+        Condition: '!subject.reference_id.toString() == user.reference_id.toString()'
+        SkipInResponse: false
+        Attributes:
+          type: success
+          title: Mail ready
+          message: '!subject.name + "@canaster.in is ready."'
+
+  - Name: send_canaster_mail
+    Label: Send Canaster mail
+    OnType: mail_account
+    InstanceOptional: false
+    Permission: 2085120
+    AccessGroups:
+      - Name: users
+        Permission: 524288
+    InFields:
+      - ColumnName: to
+        ColumnType: content
+        IsNullable: false
+        Name: to
+      - ColumnName: cc
+        ColumnType: content
+        IsNullable: true
+        Name: cc
+      - ColumnName: bcc
+        ColumnType: content
+        IsNullable: true
+        Name: bcc
+      - ColumnName: mail_subject
+        ColumnType: label
+        IsNullable: false
+        Name: mail_subject
+      - ColumnName: body
+        ColumnType: content
+        IsNullable: false
+        Name: body
+    OutFields:
+      - Type: client.notify
+        Method: ACTIONRESPONSE
+        Condition: '!subject.user_account_id.toString() != user.reference_id.toString()'
+        SkipInResponse: false
+        Attributes:
+          type: error
+          message: Only the account owner can send mail from this mailbox.
+      - Type: client.notify
+        Method: ACTIONRESPONSE
+        Condition: '!subject.user_account_id.toString() == user.reference_id.toString() && subject.username != user.name + "@canaster.in"'
+        SkipInResponse: false
+        Attributes:
+          type: error
+          message: Use your Canaster mail address to send mail.
+      - Type: mail.send
+        Method: EXECUTE
+        Condition: '!subject.user_account_id.toString() == user.reference_id.toString() && subject.username == user.name + "@canaster.in"'
+        SkipInResponse: true
+        Attributes:
+          body: ~body
+          to: '!(to || "").split(/[,\n;]/).map(function(value) { return value.trim(); }).filter(Boolean)'
+          cc: '!(cc || "").split(/[,\n;]/).map(function(value) { return value.trim(); }).filter(Boolean)'
+          bcc: '!(bcc || "").split(/[,\n;]/).map(function(value) { return value.trim(); }).filter(Boolean)'
+          subject: ~mail_subject
+          from: '!subject.username'
+          mail_server_hostname: 'mail.canaster.in'
+          send_immediately: true
+      - Type: client.notify
+        Method: ACTIONRESPONSE
+        Condition: '!subject.user_account_id.toString() == user.reference_id.toString() && subject.username == user.name + "@canaster.in"'
+        SkipInResponse: false
+        Attributes:
+          type: success
+          title: Message sent
+          message: Message sent.
+
 Tables:
   - TableName: mail_account
     DefaultPermission: 569633

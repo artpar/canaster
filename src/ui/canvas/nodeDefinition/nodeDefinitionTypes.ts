@@ -2,6 +2,7 @@ import type { CanvasTheme } from '../theme';
 import type { NodeContentViewport } from '../../../core/nodeAppearance';
 import type { CanvasEditSource, CanvasNode, JsonObject, NodeData, NodeTypeId, WorldPoint } from '../../../core/nodePrimitives';
 import type { CanvasNodeAssetService } from '../nodeAssetService';
+import type { CanvasNodeMailService } from '../nodeMailService';
 
 export type NodeSize = {
   w: number;
@@ -35,6 +36,7 @@ export type NodeRenderContext<TData extends NodeData = NodeData> = {
   visibleContentRect: NodeContentRect;
   state: NodeRenderState;
   nodeAssetService: CanvasNodeAssetService;
+  nodeMailService: CanvasNodeMailService;
   requestRender(): void;
 };
 
@@ -73,6 +75,7 @@ export type NodeInteractionContext<TData extends NodeData = NodeData> = {
   region: NodeInteractionRegion;
   mount: HTMLElement;
   nodeAssetService: CanvasNodeAssetService;
+  nodeMailService: CanvasNodeMailService;
   requestCommit(nextData: TData, source?: CanvasEditSource): void;
   requestClose(): void;
 };

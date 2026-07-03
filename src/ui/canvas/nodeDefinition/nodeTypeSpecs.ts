@@ -110,6 +110,20 @@ export const nodeTypeSpecs = {
     defaultSize: { w: 300, h: 200 },
     minSize: { w: 180, h: 120 },
   },
+  mail: {
+    type: BuiltInNodeTypes.mail,
+    displayName: 'Mail',
+    roleDescription: 'Mail',
+    typeBadge: 'MAIL',
+    addMenu: {
+      label: 'Mail',
+      detail: 'Inbox, messages, and compose',
+      badge: 'MAIL',
+    },
+    defaultSize: { w: 420, h: 280 },
+    minSize: { w: 280, h: 180 },
+    contentPadding: 0,
+  },
   embed: {
     type: BuiltInNodeTypes.embed,
     displayName: 'Embed',

@@ -18,6 +18,7 @@ import { canvasNodeDefinition } from './nodeTypes/canvasNode';
 import { checkNodeDefinition } from './nodeTypes/checkNode';
 import { embedNodeDefinition } from './nodeTypes/embedNode';
 import { imageNodeDefinition } from './nodeTypes/imageNode';
+import { mailNodeDefinition } from './nodeTypes/mailNode';
 import { markdownNodeDefinition } from './nodeTypes/markdownNode';
 import { pdfNodeDefinition } from './nodeTypes/pdfNode';
 import { tableNodeDefinition } from './nodeTypes/tableNode';
@@ -32,6 +33,7 @@ const definitions = createRegistry([
   checkNodeDefinition,
   pdfNodeDefinition,
   markdownNodeDefinition,
+  mailNodeDefinition,
   embedNodeDefinition,
 ]);
 
@@ -78,11 +80,12 @@ export type RegisteredNodeAddOption = NodeAddMenuMetadata & {
 };
 
 export function registeredNodeAddOptions(): RegisteredNodeAddOption[] {
-  return registeredNodeDefinitions()
+  const options = registeredNodeDefinitions()
     .map((definition) => ({
       type: definition.type,
       ...definition.addMenu,
     }));
+  return options;
 }
 
 export function parseNodeData(node: CanvasNode) {

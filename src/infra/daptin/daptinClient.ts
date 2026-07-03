@@ -110,6 +110,12 @@ export function tokenName(token = getToken()): string {
   return typeof name === 'string' && name.trim() ? name.trim() : '';
 }
 
+export function tokenSubject(token = getToken()): string {
+  const claims = tokenClaims(token);
+  const subject = claims?.sub ?? claims?.Sub;
+  return typeof subject === 'string' && subject.trim() ? subject.trim() : '';
+}
+
 export function tokenExpired(token = getToken(), leewaySeconds = 30): boolean {
   if (!token) return true;
   const claims = tokenClaims(token);

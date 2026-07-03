@@ -3,6 +3,7 @@ import { canvasNodeSemanticDefinition } from './canvasNodeSemanticDefinition';
 import { checkNodeSemanticDefinition } from './checkNodeSemanticDefinition';
 import { embedNodeSemanticDefinition } from './embedNodeSemanticDefinition';
 import { imageNodeSemanticDefinition } from './imageNodeSemanticDefinition';
+import { mailNodeSemanticDefinition } from './mailNodeSemanticDefinition';
 import { markdownNodeSemanticDefinition } from './markdownNodeSemanticDefinition';
 import type { CanvasNode, NodeData } from '../types';
 import type { NodeDescription, NodePortalInfo, NodePortalSummary, NodeSemanticDefinition } from './NodeSemanticDefinition';
@@ -19,6 +20,7 @@ const nodeSemanticDefinitions = createRegistry([
   checkNodeSemanticDefinition,
   pdfNodeSemanticDefinition,
   markdownNodeSemanticDefinition,
+  mailNodeSemanticDefinition,
   embedNodeSemanticDefinition,
 ]);
 

@@ -55,6 +55,9 @@ type DaptinFileObject = {
 };
 
 const REQUEST_EMAIL_OTP_ACTION = 'request_canaster_email_otp';
+const REQUEST_PASSWORD_RESET_ACTION = 'request_canaster_password_reset';
+const SIGNIN_ACTION = 'signin';
+const VERIFY_PASSWORD_RESET_ACTION = 'reset-password-verify';
 const VERIFY_EMAIL_OTP_ACTION = 'verify_canaster_email_otp';
 const SET_DOCUMENT_PRIVATE_ACTION = 'set_canaster_document_private';
 const SET_DOCUMENT_PUBLIC_ACTION = 'set_canaster_document_public';
@@ -79,10 +82,41 @@ export async function verifyEmailOtp(input: { email: string; otp: string }): Pro
     });
     const failureMessage = daptinActionFailureMessage(response);
     if (failureMessage) throw new Error(failureMessage);
-    const token = client.authManager.extractToken(response);
-    if (!token) throw new Error('Daptin OTP verification did not return a token');
-    setToken(token);
-    await ensureDaptinModelsLoaded();
+    await storeDaptinAuthToken(response, 'Daptin OTP verification did not return a token');
+  });
+}
+
+export async function signInWithPassword(input: { email: string; password: string }): Promise<void> {
+  return daptinRequest('Could not sign in with that password', async () => {
+    const client = getDaptinClient();
+    const response = await client.actionManager.doAction('user_account', SIGNIN_ACTION, {
+      email: input.email,
+      password: input.password,
+    });
+    const failureMessage = daptinActionFailureMessage(response);
+    if (failureMessage) throw new Error(failureMessage);
+    await storeDaptinAuthToken(response, 'Daptin password sign-in did not return a token');
+  });
+}
+
+export async function requestPasswordReset(input: { email: string }): Promise<void> {
+  return daptinRequest('Could not send a password reset code', async () => {
+    const response = await getDaptinClient().actionManager.doAction('user_account', REQUEST_PASSWORD_RESET_ACTION, {
+      email: input.email,
+    });
+    const failureMessage = daptinActionFailureMessage(response);
+    if (failureMessage) throw new Error(failureMessage);
+  });
+}
+
+export async function verifyPasswordReset(input: { email: string; otp: string }): Promise<void> {
+  return daptinRequest('Could not reset the password', async () => {
+    const response = await getDaptinClient().actionManager.doAction('user_account', VERIFY_PASSWORD_RESET_ACTION, {
+      email: input.email,
+      otp: input.otp,
+    });
+    const failureMessage = daptinActionFailureMessage(response);
+    if (failureMessage) throw new Error(failureMessage);
   });
 }
 
@@ -224,6 +258,13 @@ async function daptinRequest<T>(fallbackMessage: string, run: () => Promise<T>):
   } catch (error) {
     throw normalizeDaptinError(error, fallbackMessage);
   }
+}
+
+async function storeDaptinAuthToken(response: any[], missingTokenMessage: string): Promise<void> {
+  const token = getDaptinClient().authManager.extractToken(response as any[]);
+  if (!token) throw new Error(missingTokenMessage);
+  setToken(token);
+  await ensureDaptinModelsLoaded();
 }
 
 function encodeSnapshotContent(name: string, snapshot: CanvasWorkspaceSnapshot): string {

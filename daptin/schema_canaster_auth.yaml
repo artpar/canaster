@@ -77,6 +77,69 @@ Actions:
       - ColumnName: email
         Tags: email
 
+  - Name: request_canaster_password_reset
+    Label: Request Canaster password reset code
+    OnType: user_account
+    InstanceOptional: true
+    Permission: 32
+    Conformations:
+      - ColumnName: email
+        Tags: email,lower
+    InFields:
+      - ColumnName: email
+        ColumnType: email
+        IsNullable: false
+        Name: email
+    OutFields:
+      - Type: user_account
+        Method: GET
+        Reference: user
+        SkipInResponse: true
+        Attributes:
+          query: '[{"column": "email", "operator": "is", "value": "$email"}]'
+      - Type: user_account
+        Method: PATCH
+        Reference: existing_user_permission
+        Condition: '!user != null && user.length > 0 && (user[0].permission & 8192) == 0'
+        SkipInResponse: true
+        Attributes:
+          reference_id: '$user[0].reference_id'
+          permission: '!user[0].permission | 8192'
+      - Type: __as_user
+        Method: SWITCH_USER
+        Condition: '!user != null && user.length > 0'
+        SkipInResponse: true
+        Attributes:
+          user_reference_id: '$user[0].reference_id'
+      - Type: otp.generate
+        Method: EXECUTE
+        Reference: otp
+        Condition: '!user != null && user.length > 0'
+        SkipInResponse: true
+        Attributes:
+          email: ~email
+      - Type: mail.send
+        Method: EXECUTE
+        Condition: '!user != null && user.length > 0'
+        SkipInResponse: true
+        Attributes:
+          body: '!"Your Canaster password reset code is " + otp.otp + ". It is valid for 5 minutes."'
+          to:
+            - '~email'
+          subject: 'Your Canaster password reset code'
+          from: 'login@canaster.in'
+          mail_server_hostname: 'mail.canaster.in'
+          send_immediately: true
+      - Type: client.notify
+        Method: ACTIONRESPONSE
+        Attributes:
+          type: success
+          title: Code sent
+          message: Check your email for the password reset code.
+    Validations:
+      - ColumnName: email
+        Tags: email
+
   - Name: verify_canaster_email_otp
     Label: Verify Canaster email sign-in code
     OnType: user_account
@@ -123,14 +186,14 @@ Actions:
         Reference: existing_mail_account
         SkipInResponse: true
         Attributes:
-          query: '[{"column": "username", "operator": "is", "value": "$email"}]'
+          query: '!JSON.stringify([{"column": "username", "operator": "is", "value": user[0].name + "@canaster.in"}])'
       - Type: mail_account
         Method: POST
         Reference: mail_account
         Condition: '!existing_mail_account == null || existing_mail_account.length == 0'
         SkipInResponse: true
         Attributes:
-          username: ~email
+          username: '!user[0].name + "@canaster.in"'
           password: '!"cm-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 14)'
           password_md5: '!"cmm-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 14)'
           mail_server_id: '$canaster_mail_server[0].reference_id'
@@ -154,7 +217,7 @@ Actions:
           attributes: ''
           flags: '\*'
           permanent_flags: '\*'
-          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0) ? existing_mail_account[0].reference_id : mail_account.reference_id'
+          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id : mail_account.reference_id)'
           user_account_id: '$user[0].reference_id'
       - Type: mail_box
         Method: POST
@@ -169,7 +232,7 @@ Actions:
           attributes: ''
           flags: '\*'
           permanent_flags: '\*'
-          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0) ? existing_mail_account[0].reference_id : mail_account.reference_id'
+          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id : mail_account.reference_id)'
           user_account_id: '$user[0].reference_id'
       - Type: mail_box
         Method: POST
@@ -184,7 +247,7 @@ Actions:
           attributes: ''
           flags: '\*'
           permanent_flags: '\*'
-          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0) ? existing_mail_account[0].reference_id : mail_account.reference_id'
+          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id : mail_account.reference_id)'
           user_account_id: '$user[0].reference_id'
       - Type: mail_box
         Method: POST
@@ -199,7 +262,7 @@ Actions:
           attributes: ''
           flags: '\*'
           permanent_flags: '\*'
-          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0) ? existing_mail_account[0].reference_id : mail_account.reference_id'
+          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id : mail_account.reference_id)'
           user_account_id: '$user[0].reference_id'
       - Type: mail_box
         Method: POST
@@ -214,7 +277,7 @@ Actions:
           attributes: ''
           flags: '\*'
           permanent_flags: '\*'
-          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0) ? existing_mail_account[0].reference_id : mail_account.reference_id'
+          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id : mail_account.reference_id)'
           user_account_id: '$user[0].reference_id'
       - Type: mail_box
         Method: POST
@@ -229,7 +292,7 @@ Actions:
           attributes: ''
           flags: '\*'
           permanent_flags: '\*'
-          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0) ? existing_mail_account[0].reference_id : mail_account.reference_id'
+          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id : mail_account.reference_id)'
           user_account_id: '$user[0].reference_id'
     Validations:
       - ColumnName: email

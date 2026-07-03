@@ -31,13 +31,13 @@ secret_access() {
 
 DAPTIN_DB_CONNECTION_STRING="$(secret_access)"
 
-ensure_password_signin_permission() {
+ensure_password_auth_permissions() {
   docker run --rm --network host postgres:16-alpine \
     psql "$DAPTIN_DB_CONNECTION_STRING" -v ON_ERROR_STOP=1 -q -P pager=off <<'SQL'
 UPDATE action
    SET permission = 2085152,
        updated_at = now()
- WHERE action_name = 'signin'
+ WHERE action_name IN ('signin', 'reset-password', 'reset-password-verify')
    AND permission <> 2085152;
 SQL
 }
@@ -75,7 +75,7 @@ docker run -d \
 
 for _ in $(seq 1 60); do
   if curl -fsS -H "Host: api.canaster.in" "http://127.0.0.1/api/world?page%5Bsize%5D=1" >/dev/null; then
-    ensure_password_signin_permission
+    ensure_password_auth_permissions
     exit 0
   fi
   sleep 2

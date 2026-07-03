@@ -1,5 +1,6 @@
 import type { CanvasEditSource, CanvasNode, NodeData, ScreenRect } from '../../domain/types';
 import type { CanvasNodeAssetService } from './nodeAssetService';
+import type { CanvasNodeMailService } from './nodeMailService';
 import type { CanvasTheme } from './theme';
 import { createNodeInteraction, nodeDefinitionFor, parseNodeData } from './nodeRegistry';
 import type { NodeContentRect, NodeInteractionController, NodeInteractionRegion } from './nodeDefinition/nodeDefinitionTypes';
@@ -14,6 +15,7 @@ type ActiveNodeInteraction = {
 
 export type CanvasOverlayLayerHost = {
   nodeAssetService: CanvasNodeAssetService;
+  nodeMailService: CanvasNodeMailService;
   currentNode(nodeId: string): CanvasNode | null;
   isNodeVisible(node: CanvasNode): boolean;
   primarySelectedNodeId(): string | null;
@@ -70,6 +72,7 @@ export class CanvasOverlayLayer {
       region,
       mount,
       nodeAssetService: this.host.nodeAssetService,
+      nodeMailService: this.host.nodeMailService,
       requestCommit: (nextData, commitSource = source) => {
         const current = this.host.currentNode(node.id);
         if (!current) return;

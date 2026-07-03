@@ -78,11 +78,19 @@ export function workspaceErrorMessage(error: unknown, action: 'open' | 'refresh'
     return 'Could not save this workspace. Check your connection and try again.';
 }
 
-export function accountErrorMessage(error: unknown, action: 'send-code' | 'verify-code'): string {
+export function accountErrorMessage(
+    error: unknown,
+    action: 'password-signin' | 'send-code' | 'send-reset-code' | 'verify-code' | 'verify-reset-code',
+): string {
     const apiError = normalizeDaptinError(error, '');
     if (apiError.kind === 'network') return 'Could not reach accounts. Check your connection and try again.';
-    if (apiError.kind === 'server' && action ===
-        'send-code') return 'Accounts are unavailable right now. Try sending the code again.';
+    if (apiError.kind === 'permission' && action ===
+        'send-reset-code') return 'Password reset is not available yet. Use an email code to sign in.';
+    if (apiError.kind === 'server' && (action === 'send-code' || action ===
+        'send-reset-code')) return 'Accounts are unavailable right now. Try sending the code again.';
+    if (action === 'password-signin') return 'Could not sign in with that password. Check the email and password.';
+    if (action === 'send-reset-code') return 'Could not send a password reset code. Check the email and try again.';
+    if (action === 'verify-reset-code') return 'Could not reset the password. Check the code and try again.';
     if (action === 'send-code') return 'Could not send a sign-in code. Check the email and try again.';
     return 'Could not verify that code. Check the code and try again.';
 }

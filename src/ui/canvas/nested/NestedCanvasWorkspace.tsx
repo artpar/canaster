@@ -40,6 +40,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     theme,
     fitOnFirstLoad = true,
     nodeAssetService,
+    nodeMailService,
     storageKey,
     viewportControlMenuState = null,
     onCollectionChange,
@@ -70,6 +71,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
       theme,
       fitOnFirstLoad,
       nodeAssetService,
+      nodeMailService,
       storageKey,
       onCollectionChange: (collection, changes) => callbacksRef.current.onCollectionChange?.(collection, changes),
       onChromeStateChange: (state) => callbacksRef.current.onChromeStateChange?.(state),
@@ -84,7 +86,7 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
       controller.dispose();
       controllerRef.current = null;
     };
-  }, [fitOnFirstLoad, nodeAssetService]);
+  }, [fitOnFirstLoad, nodeAssetService, nodeMailService]);
 
   useEffect(() => {
     if (storageKey) controllerRef.current?.setStorageKey(storageKey);

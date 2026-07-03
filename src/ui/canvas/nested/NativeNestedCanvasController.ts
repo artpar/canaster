@@ -78,6 +78,7 @@ import {hasMetaOrCtrlShortcutModifier} from '../../KeyboardShortcuts';
 import type {CanasterThemeId} from '../../theme/CanasterTheme';
 import {normalizeCanasterThemeId} from '../../theme/CanasterThemeRegistry';
 import type { CanvasNodeAssetService } from '../nodeAssetService';
+import type { CanvasNodeMailService } from '../nodeMailService';
 
 export type {
   CanvasViewportControlMenuState,
@@ -90,6 +91,7 @@ export type NativeNestedCanvasControllerOptions = {
   theme: CanasterThemeId;
   fitOnFirstLoad?: boolean;
   nodeAssetService?: CanvasNodeAssetService;
+  nodeMailService?: CanvasNodeMailService;
   storageKey?: string;
   onCollectionChange?: (collection: CanvasDocumentCollection, changes: DocumentModelChange[]) => void;
   onChromeStateChange?: (state: NestedCanvasWorkspaceChromeState) => void;
@@ -168,6 +170,7 @@ export class NativeNestedCanvasController {
   private readonly onFileDrop?: (request: WorkspaceFileDropRequest) => void;
   private readonly onTextPaste?: (request: WorkspaceTextPasteRequest) => boolean;
   private readonly nodeAssetService?: CanvasNodeAssetService;
+  private readonly nodeMailService?: CanvasNodeMailService;
   private readonly historyRef: { current: CanvasWorkspaceHistory };
   private readonly collectionRef: { current: CanvasDocumentCollection };
   private readonly lastModelChangeRef: { current: DocumentModelChange | null } = { current: null };
@@ -218,6 +221,7 @@ export class NativeNestedCanvasController {
     this.onFileDrop = options.onFileDrop;
     this.onTextPaste = options.onTextPaste;
     this.nodeAssetService = options.nodeAssetService;
+    this.nodeMailService = options.nodeMailService;
     this.historyRef = { current: createWorkspaceHistory(options.initialCollection) };
     this.collectionRef = { current: this.historyRef.current.present };
 
@@ -930,6 +934,7 @@ export class NativeNestedCanvasController {
     return {
       ...engineOptions,
       nodeAssetService: this.nodeAssetService,
+      nodeMailService: this.nodeMailService,
       onNodeAction: engineOptions.onNodeAction ?? ((nodeId, actionId, source) => {
         this.executeDocumentCommand({ type: 'execute-node-action', canvasId: canvasId(), nodeId, actionId, source });
         return true;

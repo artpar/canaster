@@ -9,6 +9,7 @@ import type {
 import type { WorkspaceUrlState } from '../../../infra/browser/workspaceUrlLocation';
 import type { CanasterThemeId } from '../../theme/CanasterTheme';
 import type { CanvasNodeAssetService } from '../nodeAssetService';
+import type { CanvasNodeMailService } from '../nodeMailService';
 
 export type CanvasViewportControlMenuState = {
   canvasId: CanvasDocumentId;
@@ -28,6 +29,7 @@ export type NestedCanvasWorkspaceProps = {
   animationEnabled?: boolean;
   fitOnFirstLoad?: boolean;
   nodeAssetService?: CanvasNodeAssetService;
+  nodeMailService?: CanvasNodeMailService;
   storageKey?: string;
   viewportControlMenuState?: CanvasViewportControlMenuState;
   onCollectionChange?: (collection: CanvasDocumentCollection, changes: DocumentModelChange[]) => void;

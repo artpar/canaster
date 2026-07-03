@@ -6,8 +6,11 @@ import {
 import {
     type CanasterDocumentSummary,
     requestEmailOtp,
+    requestPasswordReset,
+    signInWithPassword,
     signOut,
-    verifyEmailOtp
+    verifyEmailOtp,
+    verifyPasswordReset
 } from '../infra/daptin/canasterDocuments';
 import {
     clearDaptinSession,
@@ -21,11 +24,14 @@ import {
     accountErrorMessage,
     emailFromStoredToken
 } from './workspaceDocumentWorkflow';
-import type {AuthStep, SyncStatusSetter} from './workspaceWorkflowTypes';
+import type {AuthMode, AuthStep, PasswordResetStep, SyncStatusSetter} from './workspaceWorkflowTypes';
 
 export function useAccountSession(input: {
     authEmail: string;
     authOtp: string;
+    authPassword: string;
+    authResetOtp: string;
+    authResetStep: PasswordResetStep;
     authStep: AuthStep;
     documentOpenRequestIdRef: MutableRefObject<number>;
     lastSavedSnapshotSignatureRef: MutableRefObject<string | null>;
@@ -36,7 +42,11 @@ export function useAccountSession(input: {
     setAccountOpen: (open: boolean) => void;
     setActiveDocumentId: (documentRef: string) => void;
     setAuthEmail: (email: string) => void;
+    setAuthMode: (mode: AuthMode) => void;
     setAuthOtp: (otp: string) => void;
+    setAuthPassword: (password: string) => void;
+    setAuthResetOtp: (otp: string) => void;
+    setAuthResetStep: (step: PasswordResetStep) => void;
     setAuthStep: (step: AuthStep) => void;
     setDocuments: (documents: CanasterDocumentSummary[]) => void;
     setSidePanelOpen: (open: boolean) => void;
@@ -49,6 +59,9 @@ export function useAccountSession(input: {
     const {
         authEmail,
         authOtp,
+        authPassword,
+        authResetOtp,
+        authResetStep,
         authStep,
         documentOpenRequestIdRef,
         lastSavedSnapshotSignatureRef,
@@ -59,7 +72,11 @@ export function useAccountSession(input: {
         setAccountOpen,
         setActiveDocumentId,
         setAuthEmail,
+        setAuthMode,
         setAuthOtp,
+        setAuthPassword,
+        setAuthResetOtp,
+        setAuthResetStep,
         setAuthStep,
         setDocuments,
         setSidePanelOpen,
@@ -84,7 +101,38 @@ export function useAccountSession(input: {
             setAuthStep('email');
             setAuthOtp('');
         }
-    }, [authStep, setAuthEmail, setAuthOtp, setAuthStep]);
+        if (authResetStep === 'verify') {
+            setAuthResetStep('request');
+            setAuthResetOtp('');
+        }
+    }, [authResetStep, authStep, setAuthEmail, setAuthOtp, setAuthResetOtp, setAuthResetStep, setAuthStep]);
+
+    const completeSignedInAuth = useCallback((email: string) => {
+        window.localStorage.setItem(DAPTIN_LAST_EMAIL_STORAGE_KEY, email);
+        setAuthEmail(email);
+        setSignedIn(true);
+        setAccountOpen(false);
+        setAuthMode('code');
+        setAuthOtp('');
+        setAuthPassword('');
+        setAuthResetOtp('');
+        setAuthResetStep('request');
+        setAuthStep('email');
+        setSyncStatus('loading');
+        setSyncMessage('Checking saved workspaces');
+    }, [
+        setAccountOpen,
+        setAuthEmail,
+        setAuthMode,
+        setAuthOtp,
+        setAuthPassword,
+        setAuthResetOtp,
+        setAuthResetStep,
+        setAuthStep,
+        setSignedIn,
+        setSyncMessage,
+        setSyncStatus,
+    ]);
 
     const handleRequestEmailOtp = useCallback(async () => {
         const email = authEmail.trim().toLowerCase();
@@ -116,19 +164,88 @@ export function useAccountSession(input: {
                 email,
                 otp
             });
-            window.localStorage.setItem(DAPTIN_LAST_EMAIL_STORAGE_KEY, email);
-            setAuthEmail(email);
-            setSignedIn(true);
-            setAccountOpen(false);
-            setAuthOtp('');
-            setAuthStep('email');
-            setSyncStatus('loading');
-            setSyncMessage('Checking saved workspaces');
+            completeSignedInAuth(email);
         } catch (error) {
             setSyncStatus('error');
             setSyncMessage(accountErrorMessage(error, 'verify-code'));
         }
-    }, [authEmail, authOtp, setAccountOpen, setAuthEmail, setAuthOtp, setAuthStep, setSignedIn, setSyncMessage, setSyncStatus]);
+    }, [authEmail, authOtp, completeSignedInAuth, setSyncMessage, setSyncStatus]);
+
+    const handleSignInWithPassword = useCallback(async () => {
+        const email = authEmail.trim().toLowerCase();
+        const password = authPassword;
+        if (!email || !password) return;
+        setSyncStatus('loading');
+        setSyncMessage('Signing in');
+        try {
+            await signInWithPassword({
+                email,
+                password,
+            });
+            completeSignedInAuth(email);
+        } catch (error) {
+            setSyncStatus('error');
+            setSyncMessage(accountErrorMessage(error, 'password-signin'));
+        }
+    }, [authEmail, authPassword, completeSignedInAuth, setSyncMessage, setSyncStatus]);
+
+    const handleRequestPasswordReset = useCallback(async () => {
+        const email = authEmail.trim().toLowerCase();
+        if (!email) return;
+        setSyncStatus('loading');
+        setSyncMessage('Sending password reset code');
+        try {
+            await requestPasswordReset({email});
+            window.localStorage.setItem(DAPTIN_LAST_EMAIL_STORAGE_KEY, email);
+            setAuthEmail(email);
+            setAuthResetOtp('');
+            setAuthResetStep('verify');
+            setSyncStatus('clean');
+            setSyncMessage('Check your email for the password reset code.');
+        } catch (error) {
+            setSyncStatus('error');
+            setSyncMessage(accountErrorMessage(error, 'send-reset-code'));
+        }
+    }, [
+        authEmail,
+        setAuthEmail,
+        setAuthResetOtp,
+        setAuthResetStep,
+        setSyncMessage,
+        setSyncStatus,
+    ]);
+
+    const handleVerifyPasswordReset = useCallback(async () => {
+        const email = authEmail.trim().toLowerCase();
+        const otp = authResetOtp.trim();
+        if (!email || !otp) return;
+        setSyncStatus('loading');
+        setSyncMessage('Verifying reset code');
+        try {
+            await verifyPasswordReset({
+                email,
+                otp,
+            });
+            setAuthMode('password');
+            setAuthPassword('');
+            setAuthResetOtp('');
+            setAuthResetStep('request');
+            setSyncStatus('clean');
+            setSyncMessage('Password reset. Use the new password from your email to sign in.');
+        } catch (error) {
+            setSyncStatus('error');
+            setSyncMessage(accountErrorMessage(error, 'verify-reset-code'));
+        }
+    }, [
+        authEmail,
+        authResetOtp,
+        setAuthMode,
+        setAuthPassword,
+        setAuthResetOtp,
+        setAuthResetStep,
+        setSyncMessage,
+        setSyncStatus,
+    ]);
 
     const handleSessionExpired = useCallback(async () => {
         documentOpenRequestIdRef.current += 1;
@@ -149,6 +266,10 @@ export function useAccountSession(input: {
         setActiveDocumentId('');
         setDocuments([]);
         setAuthOtp('');
+        setAuthPassword('');
+        setAuthResetOtp('');
+        setAuthResetStep('request');
+        setAuthMode('code');
         setAuthStep('email');
         setSidePanelOpen(true);
         setAccountOpen(true);
@@ -165,6 +286,10 @@ export function useAccountSession(input: {
         setAccountOpen,
         setActiveDocumentId,
         setAuthOtp,
+        setAuthMode,
+        setAuthPassword,
+        setAuthResetOtp,
+        setAuthResetStep,
         setAuthStep,
         setDocuments,
         setSidePanelOpen,
@@ -195,6 +320,10 @@ export function useAccountSession(input: {
         setActiveDocumentId('');
         setDocuments([]);
         setAuthOtp('');
+        setAuthPassword('');
+        setAuthResetOtp('');
+        setAuthResetStep('request');
+        setAuthMode('code');
         setAuthStep('email');
         setAccountOpen(false);
         setSyncStatus('anonymous');
@@ -211,6 +340,10 @@ export function useAccountSession(input: {
         setAccountOpen,
         setActiveDocumentId,
         setAuthOtp,
+        setAuthMode,
+        setAuthPassword,
+        setAuthResetOtp,
+        setAuthResetStep,
         setAuthStep,
         setDocuments,
         setSignedIn,
@@ -222,9 +355,12 @@ export function useAccountSession(input: {
     return {
         handleAuthEmailChange,
         handleRequestEmailOtp,
+        handleRequestPasswordReset,
         handleSessionExpired,
+        handleSignInWithPassword,
         handleSignOut,
         handleVerifyEmailOtp,
+        handleVerifyPasswordReset,
         recoverSessionError,
     };
 }

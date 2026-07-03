@@ -6,6 +6,7 @@ export const BuiltInNodeTypes = {
   check: 'check',
   pdf: 'pdf',
   md: 'md',
+  mail: 'mail',
   embed: 'embed',
 } as const;
 

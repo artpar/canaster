@@ -17,51 +17,81 @@ import {
     X
 } from "lucide-react";
 import {SyncStatusIcon} from "./SyncStatusIcon";
-import type {AuthStep, SyncStatus} from "./workspaceWorkflowTypes";
+import type {AuthMode, AuthStep, PasswordResetStep, SyncStatus} from "./workspaceWorkflowTypes";
 
 export type AccountPopoverProps = {
     authEmail: string;
+    authMode: AuthMode;
     authOtp: string;
+    authPassword: string;
+    authResetOtp: string;
+    authResetStep: PasswordResetStep;
     authStep: AuthStep;
     docked?: boolean;
     signedIn: boolean;
     syncMessage: string;
     syncStatus: SyncStatus;
+    onAuthModeChange: (mode: AuthMode) => void;
+    onAuthPasswordChange: (value: string) => void;
+    onAuthResetOtpChange: (value: string) => void;
+    onAuthResetStepChange: (step: PasswordResetStep) => void;
     onAuthStepChange: (step: AuthStep) => void;
     onClose: () => void;
     onEmailChange: (value: string) => void;
     onOtpChange: (value: string) => void;
     onRequestEmailOtp: () => void;
+    onRequestPasswordReset: () => void;
+    onSignInWithPassword: () => void;
     onSignOut: () => void;
     onVerifyEmailOtp: () => void;
+    onVerifyPasswordReset: () => void;
 };
 
 export function AccountPopover({
                                    authEmail,
+                                   authMode,
                                    authOtp,
+                                   authPassword,
+                                   authResetOtp,
+                                   authResetStep,
                                    authStep,
                                    docked = false,
                                    signedIn,
                                    syncMessage,
                                    syncStatus,
+                                   onAuthModeChange,
+                                   onAuthPasswordChange,
+                                   onAuthResetOtpChange,
+                                   onAuthResetStepChange,
                                    onAuthStepChange,
                                    onClose,
                                    onEmailChange,
                                    onOtpChange,
                                    onRequestEmailOtp,
+                                   onRequestPasswordReset,
+                                   onSignInWithPassword,
                                    onSignOut,
                                    onVerifyEmailOtp,
+                                   onVerifyPasswordReset,
                                }: AccountPopoverProps) {
     const busy = syncStatus === 'loading' || syncStatus === 'saving';
-    const submitDisabled = busy || !authEmail.trim() || (authStep === 'otp' && !authOtp.trim());
+    const submitDisabled = authSubmitDisabled({
+        authEmail,
+        authMode,
+        authOtp,
+        authPassword,
+        authResetOtp,
+        authResetStep,
+        authStep,
+        busy,
+    });
     const dialogRef = useRef<HTMLElement | null>(null);
-    const modeLabel = accountModeLabel(authStep, signedIn);
+    const modeLabel = accountModeLabel(authMode, authResetStep, authStep, signedIn);
     const syncLabel = syncStatusLabel(syncStatus, signedIn);
     const syncDescription = syncStatusDescription(syncStatus, signedIn);
-    const accountAccessLabel = signedIn ? 'Connected' : authStep === 'otp' ? 'Code pending' : 'Email code';
+    const accountAccessLabel = accountAccessStatusLabel(authMode, authResetStep, authStep, signedIn);
     const saveScopeLabel = signedIn ? 'Account workspaces' : 'This browser';
-    const verificationLabel = signedIn ? 'Ready to open online workspaces' :
-        authStep === 'otp' ? 'Enter the code from your email' : 'No password needed';
+    const verificationLabel = accountVerificationLabel(authMode, authResetStep, authStep, signedIn);
 
     useEffect(() => {
         if (docked) return;
@@ -132,7 +162,25 @@ export function AccountPopover({
             </div>
             <div className="account-popover-body">
                 <section className="account-primary-panel" aria-label={signedIn ? 'Signed-in account' : 'Sign in'}>
-                    {!signedIn ? (<div className="account-stepper">
+                    {!signedIn && authMode !== 'reset' ? (<div className="account-tabs" role="tablist" aria-label="Sign-in method">
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={authMode === 'code'}
+                            onClick={() => onAuthModeChange('code')}
+                        >
+                            Email code
+                        </button>
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={authMode === 'password'}
+                            onClick={() => onAuthModeChange('password')}
+                        >
+                            Password
+                        </button>
+                    </div>) : null}
+                    {!signedIn && authMode === 'code' ? (<div className="account-stepper">
                         <span className={`account-step ${authStep === 'email' ? 'active' : 'complete'}`}>
                             <Mail size={14}/>
                             Email
@@ -180,26 +228,60 @@ export function AccountPopover({
                         className="account-form"
                         onSubmit={(event) => {
                             event.preventDefault();
-                            if (authStep === 'otp') onVerifyEmailOtp(); else onRequestEmailOtp();
+                            if (authMode === 'code') {
+                                if (authStep === 'otp') onVerifyEmailOtp(); else onRequestEmailOtp();
+                                return;
+                            }
+                            if (authMode === 'password') {
+                                onSignInWithPassword();
+                                return;
+                            }
+                            if (authResetStep === 'verify') onVerifyPasswordReset(); else onRequestPasswordReset();
                         }}
                     >
                         <div className="account-auth-copy">
-                            <span>{authStep === 'otp' ? 'Check email' : 'Save workspaces online'}</span>
-                            <p>{authStep === 'otp' ? `Enter the 4-digit code sent to ${authEmail || 'your email'}.` :
-                                'Use email to open and save account workspaces.'}</p>
+                            <span>{authTitle(authMode, authResetStep, authStep)}</span>
+                            <p>{authDescription(authEmail, authMode, authResetStep, authStep)}</p>
                         </div>
                         <label className="account-field">
                             <span className="account-field-label">
                                 Email
-                                {authStep === 'otp' ? <em>Code sent</em> : null}
+                                {emailFieldBadge(authMode, authResetStep, authStep)}
                             </span>
                             <input name="email" type="email" autoComplete="email" value={authEmail}
-                                   autoFocus={authStep === 'email'}
-                                   data-account-initial-focus={authStep === 'email' ? 'true' : undefined}
-                                   disabled={busy && authStep === 'otp'}
+                                   autoFocus={authMode === 'code' && authStep === 'email'}
+                                   data-account-initial-focus={authMode === 'code' && authStep === 'email' ? 'true' : undefined}
+                                   disabled={busy && (authStep === 'otp' || authResetStep === 'verify')}
                                    onChange={(event) => onEmailChange(event.target.value)}/>
                         </label>
-                        {authStep === 'otp' ? (<label className="account-field account-code-field">
+                        {authMode === 'password' ? (<label className="account-field">
+                            <span className="account-field-label">Password</span>
+                            <input
+                                name="password"
+                                type="password"
+                                autoComplete="current-password"
+                                value={authPassword}
+                                autoFocus
+                                data-account-initial-focus="true"
+                                onChange={(event) => onAuthPasswordChange(event.target.value)}
+                            />
+                        </label>) : null}
+                        {authMode === 'reset' && authResetStep === 'verify' ? (
+                            <label className="account-field">
+                                <span className="account-field-label">Reset code</span>
+                                <input
+                                    name="password-reset-code"
+                                    type="text"
+                                    inputMode="numeric"
+                                    autoComplete="one-time-code"
+                                    value={authResetOtp}
+                                    autoFocus
+                                    data-account-initial-focus="true"
+                                    onChange={(event) => onAuthResetOtpChange(event.target.value.replace(/\D/g, '').slice(0, 8))}
+                                />
+                            </label>
+                        ) : null}
+                        {authMode === 'code' && authStep === 'otp' ? (<label className="account-field account-code-field">
                             <span className="account-field-label">
                                 Code
                                 <em>{authOtp.length}/4 digits</em>
@@ -229,11 +311,21 @@ export function AccountPopover({
                             />
                         </label>) : null}
                         <button className="account-submit" type="submit" disabled={submitDisabled}>
-                            {busy ? <Clock3 size={15}/> : authStep === 'otp' ? <CheckCircle2 size={15}/> : <LogIn size={15}/>}
-                            {busy ? authStep === 'otp' ? 'Checking code' : 'Sending code' :
-                                authStep === 'otp' ? 'Verify code' : 'Send code'}
+                            {busy ? <Clock3 size={15}/> : submitIcon(authMode, authResetStep, authStep)}
+                            {submitLabel(authMode, authResetStep, authStep, busy)}
                         </button>
-                        {authStep === 'otp' ? (
+                        {authMode === 'password' ? (
+                            <button className="account-text-action" type="button" onClick={() => {
+                                onAuthResetStepChange('request');
+                                onAuthModeChange('reset');
+                            }}>
+                                Forgot password
+                            </button>) : null}
+                        {authMode === 'reset' ? (
+                            <button className="account-text-action" type="button" onClick={() => onAuthModeChange('password')}>
+                                Back to password sign in
+                            </button>) : null}
+                        {authMode === 'code' && authStep === 'otp' ? (
                             <button className="account-text-action" type="button" onClick={() => onAuthStepChange('email')}>
                                 Use a different email
                             </button>) : null}
@@ -282,10 +374,105 @@ export function AccountPopover({
     );
 }
 
-function accountModeLabel(authStep: AuthStep, signedIn: boolean): string {
+function authSubmitDisabled(input: {
+    authEmail: string;
+    authMode: AuthMode;
+    authOtp: string;
+    authPassword: string;
+    authResetOtp: string;
+    authResetStep: PasswordResetStep;
+    authStep: AuthStep;
+    busy: boolean;
+}): boolean {
+    if (input.busy || !input.authEmail.trim()) return true;
+    if (input.authMode === 'code') return input.authStep === 'otp' && !input.authOtp.trim();
+    if (input.authMode === 'password') return !input.authPassword;
+    return input.authResetStep === 'verify' && !input.authResetOtp.trim();
+}
+
+function accountModeLabel(
+    authMode: AuthMode,
+    authResetStep: PasswordResetStep,
+    authStep: AuthStep,
+    signedIn: boolean,
+): string {
     if (signedIn) return 'Signed in';
+    if (authMode === 'password') return 'Password sign in';
+    if (authMode === 'reset') return authResetStep === 'verify' ? 'Reset password' : 'Forgot password';
     if (authStep === 'otp') return 'Enter code';
     return 'Email sign in';
+}
+
+function accountAccessStatusLabel(
+    authMode: AuthMode,
+    authResetStep: PasswordResetStep,
+    authStep: AuthStep,
+    signedIn: boolean,
+): string {
+    if (signedIn) return 'Connected';
+    if (authMode === 'password') return 'Password';
+    if (authMode === 'reset') return authResetStep === 'verify' ? 'Reset code pending' : 'Password reset';
+    return authStep === 'otp' ? 'Code pending' : 'Email code';
+}
+
+function accountVerificationLabel(
+    authMode: AuthMode,
+    authResetStep: PasswordResetStep,
+    authStep: AuthStep,
+    signedIn: boolean,
+): string {
+    if (signedIn) return 'Ready to open online workspaces';
+    if (authMode === 'password') return 'Use your account password';
+    if (authMode === 'reset') return authResetStep === 'verify' ? 'Enter the code from your email' : 'Send a reset code';
+    return authStep === 'otp' ? 'Enter the code from your email' : 'No password needed';
+}
+
+function authTitle(authMode: AuthMode, authResetStep: PasswordResetStep, authStep: AuthStep): string {
+    if (authMode === 'password') return 'Sign in with password';
+    if (authMode === 'reset') return authResetStep === 'verify' ? 'Reset password' : 'Forgot password';
+    return authStep === 'otp' ? 'Check email' : 'Save workspaces online';
+}
+
+function authDescription(
+    authEmail: string,
+    authMode: AuthMode,
+    authResetStep: PasswordResetStep,
+    authStep: AuthStep,
+): string {
+    if (authMode === 'password') return 'Use your account password to open and save account workspaces.';
+    if (authMode === 'reset') {
+        if (authResetStep === 'verify') return `Enter the reset code sent to ${authEmail || 'your email'}. A new password will be emailed after verification.`;
+        return 'Send a password reset code to the email on your account.';
+    }
+    if (authStep === 'otp') return `Enter the 4-digit code sent to ${authEmail || 'your email'}.`;
+    return 'Use email to open and save account workspaces.';
+}
+
+function emailFieldBadge(authMode: AuthMode, authResetStep: PasswordResetStep, authStep: AuthStep) {
+    if (authMode === 'reset' && authResetStep === 'verify') return <em>Reset sent</em>;
+    if (authMode === 'code' && authStep === 'otp') return <em>Code sent</em>;
+    return null;
+}
+
+function submitIcon(authMode: AuthMode, authResetStep: PasswordResetStep, authStep: AuthStep) {
+    if (authMode === 'reset') return authResetStep === 'verify' ? <CheckCircle2 size={15}/> : <KeyRound size={15}/>;
+    if (authMode === 'code' && authStep === 'otp') return <CheckCircle2 size={15}/>;
+    return <LogIn size={15}/>;
+}
+
+function submitLabel(
+    authMode: AuthMode,
+    authResetStep: PasswordResetStep,
+    authStep: AuthStep,
+    busy: boolean,
+): string {
+    if (authMode === 'password') return busy ? 'Signing in' : 'Sign in';
+    if (authMode === 'reset') {
+        if (authResetStep === 'verify') return busy ? 'Verifying code' : 'Verify reset code';
+        return busy ? 'Sending reset code' : 'Send reset code';
+    }
+    if (authStep === 'otp') return busy ? 'Checking code' : 'Verify code';
+    return busy ? 'Sending code' : 'Send code';
 }
 
 function codeSlotClassName(slot: number, authOtp: string): string {

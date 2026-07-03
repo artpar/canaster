@@ -5,6 +5,7 @@ import { CanvasNodeContentToolbar } from './CanvasNodeContentToolbar';
 import { CanvasOverlayLayer } from './CanvasOverlayLayer';
 import type { CanvasEngineOptions } from './CanvasEngineOptions';
 import { unavailableCanvasNodeAssetService, type CanvasNodeAssetService } from './nodeAssetService';
+import { unavailableCanvasNodeMailService, type CanvasNodeMailService } from './nodeMailService';
 import { hasSelectionShortcutModifier } from '../KeyboardShortcuts';
 import { asString, cloneNodeData } from '../../core/nodeData';
 import { embedFrameUrlForUrl, embedTitleForUrl, normalizeEmbedUrl } from '../../core/embedUrl';
@@ -185,6 +186,7 @@ export class CanvasEngine {
   private readonly pasteInteractionForNodes?: (nodes: CanvasNode[]) => string | null;
   private readonly shouldUseSystemClipboardPaste?: (data: DataTransfer | null) => boolean;
   private readonly nodeAssetService: CanvasNodeAssetService;
+  private readonly nodeMailService: CanvasNodeMailService;
   private readonly overlayLayer: CanvasOverlayLayer | null;
   private readonly nodeContentToolbar: CanvasNodeContentToolbar | null;
   private readonly inputController: CanvasInputController;
@@ -249,6 +251,7 @@ export class CanvasEngine {
     this.pasteInteractionForNodes = options.pasteInteractionForNodes;
     this.shouldUseSystemClipboardPaste = options.shouldUseSystemClipboardPaste;
     this.nodeAssetService = options.nodeAssetService ?? unavailableCanvasNodeAssetService;
+    this.nodeMailService = options.nodeMailService ?? unavailableCanvasNodeMailService;
     this.nodeVisibilityFilter = options.nodeVisibilityFilter ?? null;
     this.nodeVisibilitySignature = options.nodeVisibilitySignature ?? '';
     this.livePortalNodeIds = new Set(options.livePortalNodeIds ?? []);
@@ -274,6 +277,7 @@ export class CanvasEngine {
     if (this.onNodeDataChange) {
       this.overlayLayer = new CanvasOverlayLayer(this.canvas, {
         nodeAssetService: this.nodeAssetService,
+        nodeMailService: this.nodeMailService,
         currentNode: (nodeId) => this.model.nodes.find((node) => node.id === nodeId) ?? null,
         isNodeVisible: (node) => this.isNodeVisible(node),
         primarySelectedNodeId: () => this.primarySelectedNodeId,
@@ -880,6 +884,7 @@ export class CanvasEngine {
         visibleContentRect: this.visibleNodeContentRect(renderNode, contentRect, contentViewport),
         state,
         nodeAssetService: this.nodeAssetService,
+        nodeMailService: this.nodeMailService,
         requestRender: () => this.markDirty(),
       });
       ctx.restore();

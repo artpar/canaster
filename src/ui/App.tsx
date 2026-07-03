@@ -121,6 +121,7 @@ import {
     canCopyPngToClipboard,
     useWorkspaceExport
 } from "./useWorkspaceExport";
+import {useWorkspaceMail} from "./useWorkspaceMail";
 import {
     createLocalDraftSnapshot,
     DEFAULT_DOCUMENT_TITLE,
@@ -133,7 +134,7 @@ import {
     titleFromSnapshot,
     workspaceErrorMessage
 } from "./workspaceDocumentWorkflow";
-import type {ArrangeMenuPosition, AuthStep, SyncStatus} from "./workspaceWorkflowTypes";
+import type {ArrangeMenuPosition, AuthMode, AuthStep, PasswordResetStep, SyncStatus} from "./workspaceWorkflowTypes";
 
 const LOCAL_SAVE_MESSAGE = 'Saved on this device';
 const ONLINE_READY_MESSAGE = 'Ready to save online';
@@ -418,10 +419,14 @@ export function App() {
     const [addPanelActiveIndex, setAddPanelActiveIndex] = useState(0);
     const [sidePanelOpen, setSidePanelOpen] = useState(() => window.matchMedia('(min-width: 641px)').matches);
     const [workspaceToast, setWorkspaceToast] = useState<WorkspaceToast>(null);
+    const [authMode, setAuthMode] = useState<AuthMode>('code');
     const [authStep, setAuthStep] = useState<AuthStep>('email');
     const [authEmail, setAuthEmail] = useState(
         () => emailFromStoredToken() || window.localStorage.getItem(DAPTIN_LAST_EMAIL_STORAGE_KEY) || '');
     const [authOtp, setAuthOtp] = useState('');
+    const [authPassword, setAuthPassword] = useState('');
+    const [authResetOtp, setAuthResetOtp] = useState('');
+    const [authResetStep, setAuthResetStep] = useState<PasswordResetStep>('request');
     const [signedIn, setSignedIn] = useState(() => hasInitialStoredSession);
     const [documents, setDocuments] = useState<CanasterDocumentSummary[]>([]);
     const [activeDocumentId, setActiveDocumentId] = useState(() => initialUrlStateRef.current?.documentId ??
@@ -493,6 +498,7 @@ export function App() {
         signedIn,
         workspaceRef,
     });
+    const nodeMailService = useWorkspaceMail({signedIn});
     const viewportControlMenuState = useMemo(() => {
         if (arrangeMenuOpen && arrangeMenuTarget) {
             return {
@@ -632,13 +638,19 @@ export function App() {
     const {
         handleAuthEmailChange,
         handleRequestEmailOtp,
+        handleRequestPasswordReset,
         handleSessionExpired,
+        handleSignInWithPassword,
         handleSignOut,
         handleVerifyEmailOtp,
+        handleVerifyPasswordReset,
         recoverSessionError,
     } = useAccountSession({
         authEmail,
         authOtp,
+        authPassword,
+        authResetOtp,
+        authResetStep,
         authStep,
         documentOpenRequestIdRef,
         lastSavedSnapshotSignatureRef,
@@ -649,7 +661,11 @@ export function App() {
         setAccountOpen,
         setActiveDocumentId,
         setAuthEmail,
+        setAuthMode,
         setAuthOtp,
+        setAuthPassword,
+        setAuthResetOtp,
+        setAuthResetStep,
         setAuthStep,
         setDocuments,
         setSidePanelOpen,
@@ -1544,20 +1560,31 @@ export function App() {
                     activeDocumentId={activeDocumentId}
                     account={{
                         authEmail,
+                        authMode,
                         authOtp,
+                        authPassword,
+                        authResetOtp,
+                        authResetStep,
                         authStep,
                         open             : accountOpen,
                         signedIn,
                         syncMessage,
                         syncStatus,
-                        onAuthStepChange : setAuthStep,
-                        onClose          : () => setAccountOpen(false),
-                        onEmailChange    : handleAuthEmailChange,
-                        onOtpChange      : setAuthOtp,
-                        onRequestEmailOtp: () => void handleRequestEmailOtp(),
-                        onSignOut        : () => void handleSignOut(),
-                        onToggle         : () => setAccountOpen((open) => !open),
-                        onVerifyEmailOtp : () => void handleVerifyEmailOtp()
+                        onAuthModeChange         : setAuthMode,
+                        onAuthPasswordChange     : setAuthPassword,
+                        onAuthResetOtpChange     : setAuthResetOtp,
+                        onAuthResetStepChange    : setAuthResetStep,
+                        onAuthStepChange         : setAuthStep,
+                        onClose                  : () => setAccountOpen(false),
+                        onEmailChange            : handleAuthEmailChange,
+                        onOtpChange              : setAuthOtp,
+                        onRequestEmailOtp        : () => void handleRequestEmailOtp(),
+                        onRequestPasswordReset   : () => void handleRequestPasswordReset(),
+                        onSignInWithPassword     : () => void handleSignInWithPassword(),
+                        onSignOut                : () => void handleSignOut(),
+                        onToggle                 : () => setAccountOpen((open) => !open),
+                        onVerifyEmailOtp         : () => void handleVerifyEmailOtp(),
+                        onVerifyPasswordReset    : () => void handleVerifyPasswordReset()
                     }}
                     documents={documents}
                     catalogEntries={starterCatalog}
@@ -1569,6 +1596,7 @@ export function App() {
                     onClose={() => setSidePanelOpen(false)}
                     onNewDocument={() => void handleNewLocalDraft()}
                     onOpenAccount={() => {
+                        setAuthMode('code');
                         setAuthStep('email');
                         setSidePanelOpen(true);
                         setAccountOpen(true);
@@ -1585,6 +1613,7 @@ export function App() {
                         theme={documentFallbackTheme}
                         fitOnFirstLoad={fitWorkspaceOnFirstLoad}
                         nodeAssetService={nodeAssetService}
+                        nodeMailService={nodeMailService}
                         storageKey={workspaceStorageKey}
                         viewportControlMenuState={viewportControlMenuState}
                         onCollectionChange={handleWorkspaceCollectionChange}
@@ -1615,18 +1644,29 @@ export function App() {
             </div>
             {accountOpen ? (<AccountPopover
                 authEmail={authEmail}
+                authMode={authMode}
                 authOtp={authOtp}
+                authPassword={authPassword}
+                authResetOtp={authResetOtp}
+                authResetStep={authResetStep}
                 authStep={authStep}
                 signedIn={signedIn}
                 syncMessage={syncMessage}
                 syncStatus={syncStatus}
+                onAuthModeChange={setAuthMode}
+                onAuthPasswordChange={setAuthPassword}
+                onAuthResetOtpChange={setAuthResetOtp}
+                onAuthResetStepChange={setAuthResetStep}
                 onAuthStepChange={setAuthStep}
                 onClose={() => setAccountOpen(false)}
                 onEmailChange={handleAuthEmailChange}
                 onOtpChange={setAuthOtp}
                 onRequestEmailOtp={() => void handleRequestEmailOtp()}
+                onRequestPasswordReset={() => void handleRequestPasswordReset()}
+                onSignInWithPassword={() => void handleSignInWithPassword()}
                 onSignOut={() => void handleSignOut()}
                 onVerifyEmailOtp={() => void handleVerifyEmailOtp()}
+                onVerifyPasswordReset={() => void handleVerifyPasswordReset()}
             />) : null}
         </section>
     </main>

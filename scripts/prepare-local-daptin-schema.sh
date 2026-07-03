@@ -6,6 +6,7 @@ target_dir="${CANASTER_DAPTIN_LOCAL_SCHEMA_DIR:-.tmp/daptin/local-schema}"
 local_domain="${CANASTER_LOCAL_DOMAIN:-canaster.local}"
 local_mail_host="${CANASTER_LOCAL_MAIL_HOST:-mail.${local_domain}}"
 local_login_email="${CANASTER_LOCAL_LOGIN_EMAIL:-login@${local_domain}}"
+local_mail_domain="${CANASTER_LOCAL_MAIL_DOMAIN:-${local_domain}}"
 
 if [[ ! -d "$source_dir" ]]; then
   echo "Schema source directory not found: ${source_dir}" >&2
@@ -28,9 +29,11 @@ done
 
 CANASTER_LOCAL_LOGIN_EMAIL="$local_login_email" \
 CANASTER_LOCAL_MAIL_HOST="$local_mail_host" \
-  perl -0pi -e 's/login\@canaster\.in/$ENV{CANASTER_LOCAL_LOGIN_EMAIL}/g; s/mail\.canaster\.in/$ENV{CANASTER_LOCAL_MAIL_HOST}/g;' \
+CANASTER_LOCAL_MAIL_DOMAIN="$local_mail_domain" \
+  perl -0pi -e 's/login\@canaster\.in/$ENV{CANASTER_LOCAL_LOGIN_EMAIL}/g; s/\@canaster\.in/\@$ENV{CANASTER_LOCAL_MAIL_DOMAIN}/g; s/mail\.canaster\.in/$ENV{CANASTER_LOCAL_MAIL_HOST}/g;' \
   "$target_dir"/schema_*.yaml
 
 echo "Prepared local Daptin schema in ${target_dir}"
 echo "Local OTP sender: ${local_login_email}"
+echo "Local user mail domain: ${local_mail_domain}"
 echo "Local mail host: ${local_mail_host}"

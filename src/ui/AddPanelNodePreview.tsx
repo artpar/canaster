@@ -5,6 +5,7 @@ import { BuiltInNodeTypes } from '../domain/types';
 import { canvasThemeFor } from './canvas/theme';
 import { nodeDefinitionForType, parseNodeData, renderNodeContent } from './canvas/nodeRegistry';
 import { unavailableCanvasNodeAssetService } from './canvas/nodeAssetService';
+import { unavailableCanvasNodeMailService } from './canvas/nodeMailService';
 import type { CanvasTheme } from './canvas/theme';
 import type { NodeContentRect } from './canvas/nodeDefinition/nodeDefinitionTypes';
 import { DEFAULT_CANASTER_THEME_ID } from './theme/CanasterThemeRegistry';
@@ -89,6 +90,7 @@ function renderAddPanelNodePreview(canvas: HTMLCanvasElement, type: string, widt
       portalPreview: 'none',
     },
     nodeAssetService: unavailableCanvasNodeAssetService,
+    nodeMailService: unavailableCanvasNodeMailService,
     requestRender: () => renderAddPanelNodePreview(canvas, type, width, height),
   });
   ctx.restore();
@@ -126,6 +128,8 @@ function previewDataForType(type: string): JsonObject {
       };
     case BuiltInNodeTypes.md:
       return { assetId: '', title: 'Markdown', fileName: '', mime: 'text/markdown', markdownText: '# Notes\n- Item' };
+    case BuiltInNodeTypes.mail:
+      return { title: 'Inbox', folderName: 'INBOX', mode: 'inbox' };
     case BuiltInNodeTypes.embed:
       return { url: 'https://example.com', title: 'Web preview', provider: 'web', aspectRatio: '16:9' };
     case BuiltInNodeTypes.image:
