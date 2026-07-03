@@ -63,12 +63,26 @@ import {
   type ParentContextPaneLayoutConstraints,
 } from './parentContextField';
 import { portalOverlayStyle } from './portalLayout';
-import type { ArrangeCanvasMenuRequest, CanvasAddPanelMenuRequest, CanvasThemeMenuRequest, NestedCanvasWorkspaceChromeState, WorkspaceFileDropRequest, WorkspaceTextPasteRequest } from './NestedCanvasWorkspace';
+import type {
+  ArrangeCanvasMenuRequest,
+  CanvasAddPanelMenuRequest,
+  CanvasThemeMenuRequest,
+  CanvasViewportControlMenuState,
+  CanvasWorkspacePreviewCapture,
+  NestedCanvasWorkspaceChromeState,
+  WorkspaceFileDropRequest,
+  WorkspaceTextPasteRequest,
+} from './NestedCanvasWorkspaceTypes';
 import type { WorkspaceUrlPaneCamera, WorkspaceUrlState } from '../../../infra/browser/workspaceUrlLocation';
 import {hasMetaOrCtrlShortcutModifier} from '../../KeyboardShortcuts';
 import type {CanasterThemeId} from '../../theme/CanasterTheme';
 import {normalizeCanasterThemeId} from '../../theme/CanasterThemeRegistry';
 import type { CanvasNodeAssetService } from '../nodeAssetService';
+
+export type {
+  CanvasViewportControlMenuState,
+  CanvasWorkspacePreviewCapture,
+} from './NestedCanvasWorkspaceTypes';
 
 export type NativeNestedCanvasControllerOptions = {
   root: HTMLElement;
@@ -84,18 +98,6 @@ export type NativeNestedCanvasControllerOptions = {
   onCanvasThemeMenuRequest?: (request: CanvasThemeMenuRequest) => void;
   onFileDrop?: (request: WorkspaceFileDropRequest) => void;
   onTextPaste?: (request: WorkspaceTextPasteRequest) => boolean;
-};
-
-export type CanvasViewportControlMenuState = {
-  canvasId: CanvasDocumentId;
-  control: 'arrange' | 'theme';
-} | null;
-
-export type CanvasWorkspacePreviewCapture = {
-  blob: Blob;
-  width: number;
-  height: number;
-  canvasId: CanvasDocumentId;
 };
 
 type Slot = {

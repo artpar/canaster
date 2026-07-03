@@ -5,99 +5,23 @@ import {
   useRef,
 } from 'react';
 import { cloneDocumentCollection } from '../../../domain/documentModel';
-import { type CanvasCommand, type CanvasModelChange, type ScreenRect, type ViewportStatus, type WorldPoint } from '../../../domain/types';
-import type {
-  CanvasDocumentCollection,
-  CanvasWorkspaceSnapshot,
-  DocumentCommand,
-  DocumentModelChange,
-} from '../../../domain/documentTypes';
+import type { ViewportStatus } from '../../../domain/types';
 import { createWorkspaceHistory, createWorkspaceSnapshot } from '../../../domain/workspaceHistory';
-import type { WorkspaceUrlState } from '../../../infra/browser/workspaceUrlLocation';
-import type {CanasterThemeId} from '../../theme/CanasterTheme';
-import type { CanvasNodeAssetService } from '../nodeAssetService';
-import { NativeNestedCanvasController, type CanvasViewportControlMenuState, type CanvasWorkspacePreviewCapture } from './NativeNestedCanvasController';
+import { NativeNestedCanvasController } from './NativeNestedCanvasController';
+import type { NestedCanvasWorkspaceHandle, NestedCanvasWorkspaceProps } from './NestedCanvasWorkspaceTypes';
 
-export type NestedCanvasWorkspaceProps = {
-  initialCollection: CanvasDocumentCollection;
-  theme: CanasterThemeId;
-  animationEnabled?: boolean;
-  fitOnFirstLoad?: boolean;
-  nodeAssetService?: CanvasNodeAssetService;
-  storageKey?: string;
-  viewportControlMenuState?: CanvasViewportControlMenuState;
-  onCollectionChange?: (collection: CanvasDocumentCollection, changes: DocumentModelChange[]) => void;
-  onChromeStateChange?: (state: NestedCanvasWorkspaceChromeState) => void;
-  onCanvasAddPanelMenuRequest?: (request: CanvasAddPanelMenuRequest) => void;
-  onArrangeCanvasMenuRequest?: (request: ArrangeCanvasMenuRequest) => void;
-  onCanvasThemeMenuRequest?: (request: CanvasThemeMenuRequest) => void;
-  onFileDrop?: (request: WorkspaceFileDropRequest) => void;
-  onTextPaste?: (request: WorkspaceTextPasteRequest) => boolean;
-};
-
-export type ArrangeCanvasMenuRequest = {
-  canvasId: string;
-  anchor?: ScreenRect;
-  metaOrCtrl?: boolean;
-};
-
-export type CanvasThemeMenuRequest = {
-  canvasId: string;
-  anchor?: ScreenRect;
-  metaOrCtrl?: boolean;
-};
-
-export type CanvasAddPanelMenuRequest = {
-  canvasId: string;
-  anchor: ScreenRect;
-  at: WorldPoint;
-};
-
-export type WorkspaceFileDropRequest = {
-  canvasId: string;
-  at: WorldPoint;
-  files: File[];
-  source?: 'drop' | 'paste';
-};
-
-export type WorkspaceTextPasteRequest = {
-  canvasId: string;
-  at: WorldPoint;
-  text: string;
-};
-
-export type NestedCanvasWorkspaceChromeState = {
-  collection: CanvasDocumentCollection;
-  status: ViewportStatus;
-  lastModelChange: DocumentModelChange | null;
-  lastCanvasModelChange: CanvasModelChange | null;
-  lastCanvasModelChangeId: number;
-  canUndo: boolean;
-  canRedo: boolean;
-  storageReady: boolean;
-};
-
-export type NestedCanvasWorkspaceHandle = {
-  fitActiveCanvas(): void;
-  refreshActiveCanvas(): void;
-  resetActiveZoom(): void;
-  zoomActiveBy(factor: number): void;
-  undoWorkspace(): boolean;
-  redoWorkspace(): boolean;
-  executeActiveCanvasCommand(command: CanvasCommand): boolean;
-  executeDocumentCommand(command: DocumentCommand): boolean;
-  setWorkspaceTheme(themeId: CanasterThemeId): boolean;
-  collection(): CanvasDocumentCollection;
-  openWorkspaceUrlState(state: WorkspaceUrlState): boolean;
-  currentWorkspaceUrlState(documentId: string | null): WorkspaceUrlState | null;
-  getWorkspaceSnapshot(): CanvasWorkspaceSnapshot;
-  loadWorkspaceSnapshot(snapshot: CanvasWorkspaceSnapshot, interaction?: string): void;
-  replaceWorkspaceSnapshot(snapshot: CanvasWorkspaceSnapshot, options?: { storageKey?: string; interaction?: string; persist?: boolean }): void;
-  setParentContextVisible(visible: boolean): void;
-  setStorageKey(storageKey: string): void;
-  flushWorkspaceSnapshot(): Promise<void>;
-  captureActiveCanvasPreview(): Promise<CanvasWorkspacePreviewCapture | null>;
-};
+export type {
+  ArrangeCanvasMenuRequest,
+  CanvasAddPanelMenuRequest,
+  CanvasThemeMenuRequest,
+  CanvasViewportControlMenuState,
+  CanvasWorkspacePreviewCapture,
+  NestedCanvasWorkspaceChromeState,
+  NestedCanvasWorkspaceHandle,
+  NestedCanvasWorkspaceProps,
+  WorkspaceFileDropRequest,
+  WorkspaceTextPasteRequest,
+} from './NestedCanvasWorkspaceTypes';
 
 export const initialViewportStatus: ViewportStatus = {
   zoom: 1,
@@ -181,15 +105,15 @@ export const NestedCanvasWorkspace = forwardRef<NestedCanvasWorkspaceHandle, Nes
     zoomActiveBy: (factor: number) => controllerRef.current?.zoomActiveBy(factor),
     undoWorkspace: () => controllerRef.current?.undoWorkspace() ?? false,
     redoWorkspace: () => controllerRef.current?.redoWorkspace() ?? false,
-    executeActiveCanvasCommand: (command: CanvasCommand) => controllerRef.current?.executeActiveCanvasCommand(command) ?? false,
-    executeDocumentCommand: (command: DocumentCommand) => controllerRef.current?.executeDocumentCommand(command) ?? false,
-    setWorkspaceTheme: (themeId: CanasterThemeId) => controllerRef.current?.setWorkspaceTheme(themeId) ?? false,
+    executeActiveCanvasCommand: (command) => controllerRef.current?.executeActiveCanvasCommand(command) ?? false,
+    executeDocumentCommand: (command) => controllerRef.current?.executeDocumentCommand(command) ?? false,
+    setWorkspaceTheme: (themeId) => controllerRef.current?.setWorkspaceTheme(themeId) ?? false,
     collection: () => controllerRef.current?.collection() ?? cloneDocumentCollection(initialCollection),
-    openWorkspaceUrlState: (state: WorkspaceUrlState) => controllerRef.current?.openWorkspaceUrlState(state) ?? false,
+    openWorkspaceUrlState: (state) => controllerRef.current?.openWorkspaceUrlState(state) ?? false,
     currentWorkspaceUrlState: (documentId: string | null) => controllerRef.current?.currentWorkspaceUrlState(documentId) ?? null,
     getWorkspaceSnapshot: () => controllerRef.current?.getWorkspaceSnapshot() ?? createWorkspaceSnapshot(createWorkspaceHistory(initialCollection), null),
-    loadWorkspaceSnapshot: (snapshot: CanvasWorkspaceSnapshot, interaction?: string) => controllerRef.current?.loadWorkspaceSnapshot(snapshot, interaction),
-    replaceWorkspaceSnapshot: (snapshot: CanvasWorkspaceSnapshot, options?: { storageKey?: string; interaction?: string; persist?: boolean }) => controllerRef.current?.replaceWorkspaceSnapshot(snapshot, options),
+    loadWorkspaceSnapshot: (snapshot, interaction) => controllerRef.current?.loadWorkspaceSnapshot(snapshot, interaction),
+    replaceWorkspaceSnapshot: (snapshot, options) => controllerRef.current?.replaceWorkspaceSnapshot(snapshot, options),
     setParentContextVisible: (visible: boolean) => controllerRef.current?.setParentContextVisible(visible),
     setStorageKey: (nextStorageKey: string) => controllerRef.current?.setStorageKey(nextStorageKey),
     flushWorkspaceSnapshot: () => controllerRef.current?.flushWorkspaceSnapshot() ?? Promise.resolve(),

@@ -1,4 +1,8 @@
 import { canvasThemeFor, type CanvasTheme } from './theme';
+import { planCanvasCommand, sameSelectionState, type CanvasCommandPlan } from './CanvasCommandPlanner';
+import { CanvasInputController } from './CanvasInputController';
+import { CanvasNodeContentToolbar } from './CanvasNodeContentToolbar';
+import { CanvasOverlayLayer } from './CanvasOverlayLayer';
 import type { CanvasEngineOptions } from './CanvasEngineOptions';
 import { unavailableCanvasNodeAssetService, type CanvasNodeAssetService } from './nodeAssetService';
 import { hasSelectionShortcutModifier } from '../KeyboardShortcuts';
@@ -6,7 +10,6 @@ import { asString, cloneNodeData } from '../../core/nodeData';
 import { embedFrameUrlForUrl, embedTitleForUrl, normalizeEmbedUrl } from '../../core/embedUrl';
 import {
   cloneNodeAppearance,
-  contentScaleForNode,
   contentViewportForNode,
   DEFAULT_NODE_CONTENT_SCALE,
   nodeAppearanceWithContentOffset,
@@ -16,10 +19,9 @@ import {
 import { canvasPortalViewportRect } from './nodeTypes/canvasNode';
 import { cachedAssetImage } from './imageAssets';
 import { createLiveNodeContentOverlay, hasLiveNodeContentOverlay, type LiveNodeContentOverlay } from './nodeTypes/liveNodeContentOverlay';
-import { createNodeInteraction, describeNode, hitTestNodeContent, nodeDefinitionFor, nodeDefinitionForType, nodeInteractionRegions, parseNodeData, portalInfoForNode, renderNodeContent } from './nodeRegistry';
+import { describeNode, hitTestNodeContent, nodeDefinitionFor, nodeInteractionRegions, parseNodeData, portalInfoForNode, renderNodeContent } from './nodeRegistry';
 import { clipText, nodeText } from './nodeRendering';
-import type { NodeContentRect, NodeInteractionController, NodeInteractionRegion } from './nodeDefinition/nodeDefinitionTypes';
-import { createCanvasViewportToolbar, setCanvasViewportToolbarVisible, type CanvasViewportControl } from './nested/createCanvasViewportToolbar';
+import type { NodeContentRect, NodeInteractionRegion } from './nodeDefinition/nodeDefinitionTypes';
 import type {
   Camera,
   CanvasCommand,
@@ -61,8 +63,6 @@ const CONTEXT_FRAME_INTERVAL_MS = 100;
 const NODE_HEADER_MIN_WIDTH = 72;
 const NODE_HEADER_PAD_X = 8;
 const NODE_HEADER_HEIGHT = 22;
-const NODE_CONTENT_ZOOM_FACTOR = 1.22;
-const NODE_CONTENT_TOOLBAR_INSET = 8;
 const PRIMARY_NODE_EDIT_REGION_ID = 'edit';
 const MARQUEE_DRAG_THRESHOLD = 3;
 
@@ -144,25 +144,11 @@ type TouchGestureState = {
   startScale: number;
 };
 
-type CommandPlan = {
-  operations: CanvasOperation[];
-  change?: CanvasModelChange;
-  interaction: string;
-};
-
 type NodeChromeState = {
   selected: boolean;
   primary: boolean;
   hovered: boolean;
   compact: boolean;
-};
-
-type ActiveNodeInteraction = {
-  nodeId: string;
-  regionId: string;
-  region: NodeInteractionRegion;
-  mount: HTMLDivElement;
-  controller: NodeInteractionController;
 };
 
 type EmbedOverlaySlot = {
@@ -199,8 +185,9 @@ export class CanvasEngine {
   private readonly pasteInteractionForNodes?: (nodes: CanvasNode[]) => string | null;
   private readonly shouldUseSystemClipboardPaste?: (data: DataTransfer | null) => boolean;
   private readonly nodeAssetService: CanvasNodeAssetService;
-  private readonly inlineLayer: HTMLDivElement | null;
-  private readonly nodeContentToolbar: HTMLDivElement | null;
+  private readonly overlayLayer: CanvasOverlayLayer | null;
+  private readonly nodeContentToolbar: CanvasNodeContentToolbar | null;
+  private readonly inputController: CanvasInputController;
   private readonly resizeObserver: ResizeObserver;
 
   private model: CanvasModel = { schemaVersion: 2, nodes: [] };
@@ -224,7 +211,6 @@ export class CanvasEngine {
   private frameQueued = false;
   private statusFrame: number | null = null;
   private throttleTimer: number | null = null;
-  private inputListenersAttached = false;
   private lastRenderedNodes = 0;
   private lastRenderTime = 0;
   private interaction = 'Idle';
@@ -238,9 +224,7 @@ export class CanvasEngine {
   private livePortalNodeIds = new Set<string>();
   private highlightNodeIds = new Set<string>();
   private lastRenderedNodeIds: string[] = [];
-  private activeNodeInteraction: ActiveNodeInteraction | null = null;
   private liveNodeContentInteractionNodeId: string | null = null;
-  private nodeContentToolbarTarget: string | null = null;
   private embedOverlaySlots = new Map<string, EmbedOverlaySlot>();
   private liveNodeContentOverlaySlots = new Map<string, LiveNodeContentOverlaySlot>();
 
@@ -271,29 +255,50 @@ export class CanvasEngine {
     this.highlightNodeIds = new Set(options.highlightNodeIds ?? []);
     this.backgroundImage = cloneBackgroundImage(options.backgroundImage ?? null);
     this.resizeObserver = new ResizeObserver(() => this.resize());
+    this.inputController = new CanvasInputController(this.canvas, {
+      onPointerDown: this.onPointerDown,
+      onPointerMove: this.onPointerMove,
+      onPointerUp: this.onPointerUp,
+      onPointerCancel: this.onPointerCancel,
+      onLostPointerCapture: this.onLostPointerCapture,
+      onKeyDown: this.onKeyDown,
+      onPaste: this.onPaste,
+      onFocus: this.onFocus,
+      onBlur: this.onBlur,
+      onWindowBlur: this.onWindowBlur,
+      onWheel: this.onWheel,
+      onDoubleClick: this.onDoubleClick,
+      onContextMenu: this.onContextMenu,
+    });
 
     if (this.onNodeDataChange) {
-      this.inlineLayer = document.createElement('div');
-      this.inlineLayer.className = 'node-inline-editor-layer';
-      this.inlineLayer.setAttribute('aria-label', 'Inline panel editor');
-      this.canvas.insertAdjacentElement('afterend', this.inlineLayer);
-      this.nodeContentToolbar = createCanvasViewportToolbar({
-        controls: ['fit', 'zoom-out', 'reset-zoom', 'zoom-in'],
-        ariaLabel: 'Panel content viewport',
-        controlLabels: {
-          fit: 'Center panel content',
-          'reset-zoom': 'Reset panel content zoom',
-          'zoom-in': 'Zoom panel content in',
-          'zoom-out': 'Zoom panel content out',
+      this.overlayLayer = new CanvasOverlayLayer(this.canvas, {
+        nodeAssetService: this.nodeAssetService,
+        currentNode: (nodeId) => this.model.nodes.find((node) => node.id === nodeId) ?? null,
+        isNodeVisible: (node) => this.isNodeVisible(node),
+        primarySelectedNodeId: () => this.primarySelectedNodeId,
+        themeForNode: (node) => this.themeForNode(node),
+        nodeContentRect: (node, theme) => this.nodeContentRect(node, theme),
+        interactionRegionsFor: (node) => this.interactionRegionsFor(node),
+        worldToScreenRect: (rect) => this.worldToScreenRect(rect),
+        commitNodeData: (nodeId, from, to, source) => this.onNodeDataChange?.(nodeId, from, to, source) ?? false,
+        setInteraction: (interaction) => {
+          this.interaction = interaction;
         },
-        onControl: (control) => this.handleNodeContentToolbarControl(control),
+        markDirty: () => this.markDirty(),
+        emitStatus: () => this.emitStatus(),
+        syncNodeContentToolbar: () => this.syncNodeContentToolbar(),
       });
-      this.nodeContentToolbar.classList.add('node-content-zoom-controls');
-      this.inlineLayer.append(this.nodeContentToolbar);
-      setCanvasViewportToolbarVisible(this.nodeContentToolbar, false);
-      this.nodeContentToolbar.style.display = 'none';
+      this.nodeContentToolbar = new CanvasNodeContentToolbar({
+        executeCommand: (command) => this.executeCommand(command),
+        isBlocked: () => Boolean(this.overlayLayer?.hasActiveNodeInteraction() || this.liveNodeContentInteractionNodeId),
+        targetNode: () => this.nodeContentToolbarNode(),
+        targetNodeIds: (nodeId) => this.nodeContentTargetIdsFor(nodeId),
+        worldToScreenRect: (rect) => this.worldToScreenRect(rect),
+      });
+      this.overlayLayer.root.append(this.nodeContentToolbar.element);
     } else {
-      this.inlineLayer = null;
+      this.overlayLayer = null;
       this.nodeContentToolbar = null;
     }
 
@@ -311,7 +316,7 @@ export class CanvasEngine {
     this.closeNodeInteraction();
     this.disposeLiveNodeContentOverlays();
     this.disposeEmbedOverlays();
-    this.inlineLayer?.remove();
+    this.overlayLayer?.dispose();
     this.resizeObserver.disconnect();
     this.detachInputListeners();
   }
@@ -505,7 +510,7 @@ export class CanvasEngine {
     return this.applyCommandPlan(this.planCommand(guarded), true).operations.length > 0;
   }
 
-  private applyCommandPlan(plan: CommandPlan, emitChange: boolean) {
+  private applyCommandPlan(plan: CanvasCommandPlan, emitChange: boolean) {
     this.interaction = plan.interaction;
     if (!plan.operations.length) {
       this.emitStatus();
@@ -518,7 +523,7 @@ export class CanvasEngine {
     return plan;
   }
 
-  private applyPreviewPlan(plan: CommandPlan) {
+  private applyPreviewPlan(plan: CanvasCommandPlan) {
     this.interaction = plan.interaction;
     this.previewGeometries = previewGeometriesFrom(plan.operations);
     this.previewContentPans = previewContentPansFrom(plan.operations);
@@ -534,268 +539,22 @@ export class CanvasEngine {
     this.markDirty();
   }
 
-  private planCommand(command: CanvasCommand): CommandPlan {
-    switch (command.type) {
-      case 'create-node':
-        return this.planCreateNode(command.nodeType, command.source, command.at, command.data);
-      case 'select-node':
-        return this.planSelectNode(command.nodeId, command.source, command.mode ?? 'replace');
-      case 'select-nodes':
-        return this.planSelectNodes(command.nodeIds, command.source);
-      case 'select-all-nodes':
-        return this.planSelectAllNodes(command.source);
-      case 'clear-selection':
-        return this.planClearSelection(command.source);
-      case 'move-selection':
-        return this.planMoveSelection(command.dx, command.dy, command.source);
-      case 'resize-selection':
-        return this.planResizeSelection(command.dw, command.dh, command.source);
-      case 'scale-selection-content':
-        return this.planScaleSelectionContent(command.factor, command.source, command.nodeIds);
-      case 'pan-selection-content':
-        return this.planPanSelectionContent(command.dx, command.dy, command.source, command.nodeIds);
-      case 'reset-selection-content-pan':
-        return this.planResetSelectionContentPan(command.source, command.nodeIds);
-      case 'reset-selection-content-scale':
-        return this.planResetSelectionContentScale(command.source, command.nodeIds);
-      case 'delete-selection':
-        return this.planDeleteSelection(command.source);
-      case 'copy-selection':
-        return this.planCopySelection(command.source);
-      case 'paste-clipboard':
-        return this.planPasteClipboard(command.source);
-    }
-  }
-
-  private planCreateNode(nodeType: string, source: CanvasEditSource, at?: WorldPoint, data?: NodeData): CommandPlan {
-    const definition = nodeDefinitionForType(nodeType);
-    if (!definition) return { operations: [], interaction: 'Panel type unavailable' };
-    const existingIds = new Set(this.model.nodes.map((node) => node.id));
-    const id = uniqueNodeId(definition.type, existingIds);
-    const { w, h } = definition.defaultSize;
-    const center = at ?? this.cursorWorld ?? this.screenToWorld(this.viewW / 2, this.viewH / 2);
-    const node: CanvasNode = {
-      id,
-      type: definition.type,
-      x: snapCoordinate(center.x - w / 2),
-      y: snapCoordinate(center.y - h / 2),
-      w,
-      h,
-      data: cloneNodeData(data ?? definition.createDefaultData()),
-    };
-    node.data = parseNodeData(node);
-    const selection = {
-      selectedNodeIds: [id],
-      primarySelectedNodeId: id,
-      resizeMode: false,
-    };
-    return {
-      operations: [
-        { type: 'create-nodes', nodes: [node] },
-        { type: 'set-selection', from: this.selectionState(), to: selection },
-      ],
-      change: { kind: 'node-create', nodeId: id, nodeIds: [id], source },
-      interaction: `Added ${panelLabelFor(definition.displayName)}`,
-    };
-  }
-
-  private planSelectNode(nodeId: string, source: CanvasEditSource, mode: 'replace' | 'toggle' | 'add'): CommandPlan {
-    if (!this.model.nodes.some((node) => node.id === nodeId && this.isNodeVisible(node))) return { operations: [], interaction: 'Selection unchanged' };
-    const from = this.selectionState();
-    const to = selectInState(from, nodeId, mode);
-    return {
-      operations: sameSelectionState(from, to) ? [] : [{ type: 'set-selection', from, to }],
-      interaction: sourceInteraction(source, 'selection'),
-    };
-  }
-
-  private planSelectNodes(nodeIds: string[], source: CanvasEditSource): CommandPlan {
-    const requested = new Set(nodeIds);
-    const selectedNodeIds = this.model.nodes
-      .filter((node) => requested.has(node.id) && this.isNodeVisible(node))
-      .map((node) => node.id);
-    const from = this.selectionState();
-    const to = {
-      selectedNodeIds,
-      primarySelectedNodeId: selectedNodeIds[0] ?? null,
-      resizeMode: false,
-    };
-    const count = selectedNodeIds.length;
-    const selectedLabel = source === 'ai' ? 'AI selected' : 'Selected';
-    return {
-      operations: sameSelectionState(from, to) ? [] : [{ type: 'set-selection', from, to }],
-      interaction: count > 1 ? `${selectedLabel} ${count} panes` : count === 1 ? `${selectedLabel} pane` : 'Selection cleared',
-    };
-  }
-
-  private planSelectAllNodes(source: CanvasEditSource): CommandPlan {
-    const selectedNodeIds = this.model.nodes.filter((node) => this.isNodeVisible(node)).map((node) => node.id);
-    const from = this.selectionState();
-    const to = {
-      selectedNodeIds,
-      primarySelectedNodeId: selectedNodeIds[0] ?? null,
-      resizeMode: false,
-    };
-    const count = selectedNodeIds.length;
-    const selectedLabel = source === 'ai' ? 'AI selected' : 'Selected';
-    return {
-      operations: sameSelectionState(from, to) ? [] : [{ type: 'set-selection', from, to }],
-      interaction: count > 1 ? `${selectedLabel} ${count} panes` : count === 1 ? `${selectedLabel} pane` : 'Select all no panes',
-    };
-  }
-
-  private planClearSelection(source: CanvasEditSource): CommandPlan {
-    const from = this.selectionState();
-    const to = emptySelectionState();
-    return {
-      operations: sameSelectionState(from, to) ? [] : [{ type: 'set-selection', from, to }],
-      interaction: source === 'keyboard' ? 'Selection cleared' : sourceInteraction(source, 'selection'),
-    };
-  }
-
-  private planMoveSelection(dx: number, dy: number, source: CanvasEditSource): CommandPlan {
-    const nodes = this.selectedNodes();
-    if (!nodes.length) return { operations: [], interaction: 'Move no selection' };
-    if (dx === 0 && dy === 0) return { operations: [], interaction: 'Move unchanged' };
-    const operations: CanvasOperation[] = [];
-    for (const node of nodes) {
-      const from = nodeGeometry(node);
-      const to = { ...from, x: snapCoordinate(node.x + dx), y: snapCoordinate(node.y + dy) };
-      if (!sameGeometry(from, to)) operations.push({ type: 'set-node-geometry', nodeId: node.id, from, to });
-    }
-    return {
-      operations,
-      change: operations.length ? { kind: 'node-move', nodeId: this.primarySelectedNodeId ?? nodes[0].id, nodeIds: nodes.map((node) => node.id), source } : undefined,
-      interaction: operations.length ? sourceInteraction(source, 'move') : 'Move unchanged',
-    };
-  }
-
-  private planResizeSelection(dw: number, dh: number, source: CanvasEditSource): CommandPlan {
-    const nodes = this.selectedNodes();
-    if (!nodes.length) return { operations: [], interaction: 'Resize no selection' };
-    if (dw === 0 && dh === 0) return { operations: [], interaction: 'Resize unchanged' };
-    const operations: CanvasOperation[] = [];
-    for (const node of nodes) {
-      const from = nodeGeometry(node);
-      const to = {
-        ...from,
-        w: dw === 0 ? node.w : snapNodeWidth(node, node.w + dw),
-        h: dh === 0 ? node.h : snapNodeHeight(node, node.h + dh),
-      };
-      if (!sameGeometry(from, to)) operations.push({ type: 'set-node-geometry', nodeId: node.id, from, to });
-    }
-    const nodeIds = operations.map((operation) => operation.type === 'set-node-geometry' ? operation.nodeId : '').filter(Boolean);
-    return {
-      operations,
-      change: operations.length ? { kind: 'node-resize', nodeId: this.primarySelectedNodeId ?? nodeIds[0] ?? nodes[0].id, nodeIds, source } : undefined,
-      interaction: operations.length ? sourceInteraction(source, 'resize') : 'Resize unchanged',
-    };
-  }
-
-  private planScaleSelectionContent(factor: number, source: CanvasEditSource, nodeIds?: string[]): CommandPlan {
-    if (!Number.isFinite(factor) || factor <= 0 || factor === 1) return { operations: [], interaction: 'Panel zoom unchanged' };
-    return this.planSetSelectionContentScale((node) => contentScaleForNode(node) * factor, source, nodeIds);
-  }
-
-  private planResetSelectionContentScale(source: CanvasEditSource, nodeIds?: string[]): CommandPlan {
-    return this.planSetSelectionContentScale(() => DEFAULT_NODE_CONTENT_SCALE, source, nodeIds);
-  }
-
-  private planPanSelectionContent(dx: number, dy: number, source: CanvasEditSource, nodeIds?: string[]): CommandPlan {
-    if ((!Number.isFinite(dx) || dx === 0) && (!Number.isFinite(dy) || dy === 0)) return { operations: [], interaction: 'Panel pan unchanged' };
-    return this.planSetSelectionContentPan((node) => {
-      const viewport = contentViewportForNode(node);
-      return { x: viewport.offsetX + (Number.isFinite(dx) ? dx : 0), y: viewport.offsetY + (Number.isFinite(dy) ? dy : 0) };
-    }, source, nodeIds);
-  }
-
-  private planResetSelectionContentPan(source: CanvasEditSource, nodeIds?: string[]): CommandPlan {
-    return this.planSetSelectionContentPan(() => ({ x: 0, y: 0 }), source, nodeIds);
-  }
-
-  private planSetSelectionContentScale(nextScaleForNode: (node: CanvasNode) => number, source: CanvasEditSource, nodeIds?: string[]): CommandPlan {
-    const nodes = this.contentZoomTargetNodes(nodeIds);
-    if (!nodes.length) return { operations: [], interaction: 'Panel zoom no target' };
-    const operations: CanvasOperation[] = [];
-    for (const node of nodes) {
-      const from = contentScaleForNode(node);
-      const to = contentScaleForNode({ ...node, appearance: nodeAppearanceWithContentScale(node.appearance, nextScaleForNode(node)) });
-      if (from !== to) operations.push({ type: 'set-node-content-scale', nodeId: node.id, from, to });
-    }
-    const changedNodeIds = operations.map((operation) => operation.type === 'set-node-content-scale' ? operation.nodeId : '').filter(Boolean);
-    return {
-      operations,
-      change: operations.length ? { kind: 'node-content-scale', nodeId: this.primarySelectedNodeId ?? changedNodeIds[0] ?? nodes[0].id, nodeIds: changedNodeIds, source } : undefined,
-      interaction: operations.length ? (changedNodeIds.length > 1 ? 'Panel contents zoomed' : 'Panel content zoomed') : 'Panel zoom unchanged',
-    };
-  }
-
-  private planSetSelectionContentPan(nextPanForNode: (node: CanvasNode) => CanvasNodeContentPan, source: CanvasEditSource, nodeIds?: string[]): CommandPlan {
-    const nodes = this.contentZoomTargetNodes(nodeIds);
-    if (!nodes.length) return { operations: [], interaction: 'Panel pan no target' };
-    const operations: CanvasOperation[] = [];
-    for (const node of nodes) {
-      const viewport = contentViewportForNode(node);
-      const from = { x: viewport.offsetX, y: viewport.offsetY };
-      const next = nextPanForNode(node);
-      const toAppearance = nodeAppearanceWithContentOffset(node.appearance, next.x, next.y);
-      const toViewport = contentViewportForNode({ ...node, appearance: toAppearance });
-      const to = { x: toViewport.offsetX, y: toViewport.offsetY };
-      if (!sameContentPan(from, to)) operations.push({ type: 'set-node-content-pan', nodeId: node.id, from, to });
-    }
-    const changedNodeIds = operations.map((operation) => operation.type === 'set-node-content-pan' ? operation.nodeId : '').filter(Boolean);
-    return {
-      operations,
-      change: operations.length ? { kind: 'node-content-pan', nodeId: this.primarySelectedNodeId ?? changedNodeIds[0] ?? nodes[0].id, nodeIds: changedNodeIds, source } : undefined,
-      interaction: operations.length ? (changedNodeIds.length > 1 ? 'Panel contents panned' : 'Panel content panned') : 'Panel pan unchanged',
-    };
-  }
-
-  private planDeleteSelection(source: CanvasEditSource): CommandPlan {
-    const ids = this.selectionIds();
-    if (!ids.length) return { operations: [], interaction: 'Delete no selection' };
-    const nodes = this.selectedNodes().map(cloneNode);
-    return {
-      operations: [{ type: 'delete-nodes', nodes }, { type: 'set-selection', from: this.selectionState(), to: emptySelectionState() }],
-      change: { kind: 'node-delete', nodeId: ids[0] ?? null, nodeIds: ids, source },
-      interaction: ids.length > 1 ? `Deleted ${ids.length} nodes` : 'Deleted node',
-    };
-  }
-
-  private planCopySelection(source: CanvasEditSource): CommandPlan {
-    const nodes = this.selectedNodes();
-    if (!nodes.length) return { operations: [], interaction: 'Copy no selection' };
-    const to = nodes.map(cloneNode);
-    return {
-      operations: [{ type: 'set-clipboard', from: this.clipboard.map(cloneNode), to }],
-      interaction: source === 'ai' ? (nodes.length > 1 ? `AI copied ${nodes.length} nodes` : 'AI copied node') : nodes.length > 1 ? `Copied ${nodes.length} nodes` : 'Copied node',
-    };
-  }
-
-  private planPasteClipboard(source: CanvasEditSource): CommandPlan {
-    if (!this.clipboard.length) return { operations: [], interaction: 'Paste no clipboard' };
-    const existingIds = new Set(this.model.nodes.map((node) => node.id));
-    const offset = SNAP_STEP * this.pasteCounter;
-    const pasted = this.clipboard.map((node) => {
-      const id = uniqueNodeId(`${node.id}-copy`, existingIds);
-      existingIds.add(id);
-      const transformed = this.transformPastedNode?.(node) ?? cloneNode(node);
-      return { ...transformed, id, x: snapCoordinate(node.x + offset), y: snapCoordinate(node.y + offset) };
-    });
-    const selection = {
-      selectedNodeIds: pasted.map((node) => node.id),
-      primarySelectedNodeId: pasted[0]?.id ?? null,
-      resizeMode: false,
-    };
-    return {
-      operations: [
-        { type: 'create-nodes', nodes: pasted },
-        { type: 'set-selection', from: this.selectionState(), to: selection },
-        { type: 'set-paste-counter', from: this.pasteCounter, to: this.pasteCounter + 1 },
-      ],
-      change: { kind: 'node-create', nodeId: pasted[0]?.id ?? null, nodeIds: pasted.map((node) => node.id), source },
-      interaction: this.pasteInteractionForNodes?.(pasted) ?? (pasted.length > 1 ? `Pasted ${pasted.length} nodes` : 'Pasted node'),
-    };
+  private planCommand(command: CanvasCommand): CanvasCommandPlan {
+    return planCanvasCommand({
+      model: this.model,
+      selectionState: this.selectionState(),
+      selectedNodes: this.selectedNodes(),
+      selectionIds: this.selectionIds(),
+      clipboard: this.clipboard,
+      pasteCounter: this.pasteCounter,
+      primarySelectedNodeId: this.primarySelectedNodeId,
+      cursorWorld: this.cursorWorld,
+      fallbackCreatePoint: this.screenToWorld(this.viewW / 2, this.viewH / 2),
+      isNodeVisible: (node) => this.isNodeVisible(node),
+      contentZoomTargetNodes: (nodeIds) => this.contentZoomTargetNodes(nodeIds),
+      transformPastedNode: this.transformPastedNode,
+      pasteInteractionForNodes: this.pasteInteractionForNodes,
+    }, command);
   }
 
   private applyOperations(operations: CanvasOperation[]) {
@@ -1310,7 +1069,7 @@ export class CanvasEngine {
     if (selectedResizeNode) {
       this.closeNodeInteraction();
       if (selectedResizeNode.id !== this.primarySelectedNodeId) {
-        this.applyCommandPlan(this.planSelectNode(selectedResizeNode.id, 'pointer', 'add'), false);
+        this.applyCommandPlan(this.planCommand({ type: 'select-node', nodeId: selectedResizeNode.id, source: 'pointer', mode: 'add' }), false);
       }
       this.drag = {
         mode: 'resize',
@@ -1333,7 +1092,7 @@ export class CanvasEngine {
       this.closeNodeInteraction();
       if (selectedDragNode.id !== this.primarySelectedNodeId) {
         const mode = this.selectedNodeIds.has(selectedDragNode.id) || hasSelectionShortcutModifier(event) ? 'add' : 'replace';
-        this.applyCommandPlan(this.planSelectNode(selectedDragNode.id, 'pointer', mode), false);
+        this.applyCommandPlan(this.planCommand({ type: 'select-node', nodeId: selectedDragNode.id, source: 'pointer', mode }), false);
       }
       this.drag = {
         mode: 'node',
@@ -1847,85 +1606,19 @@ export class CanvasEngine {
   }
 
   private startNodeInteraction(node: CanvasNode, region: NodeInteractionRegion, source: CanvasEditSource) {
-    if (!this.inlineLayer || !this.onNodeDataChange) return false;
-    this.closeNodeInteraction();
-    const definition = nodeDefinitionFor(node);
-    const data = parseNodeData(node);
-    const theme = this.themeForNode(node);
-    const mount = document.createElement('div');
-    mount.className = 'node-inline-editor-mount';
-    mount.dataset.nodeId = node.id;
-    mount.dataset.regionId = region.id;
-    this.inlineLayer.append(mount);
-    const controller = createNodeInteraction({
-      definition,
-      node,
-      data,
-      theme,
-      contentRect: this.nodeContentRect(node, theme),
-      region,
-      mount,
-      nodeAssetService: this.nodeAssetService,
-      requestCommit: (nextData, commitSource = source) => {
-        const current = this.model.nodes.find((candidate) => candidate.id === node.id);
-        if (!current) return;
-        const committed = this.onNodeDataChange?.(node.id, current.data, nextData, commitSource) ?? false;
-        this.interaction = committed ? 'Edited panel' : 'Panel edit unchanged';
-        if (committed) this.markDirty();
-        this.emitStatus();
-      },
-      requestClose: () => this.closeNodeInteraction(),
-    });
-    if (!controller) {
-      mount.remove();
-      return false;
-    }
-    this.activeNodeInteraction = { nodeId: node.id, regionId: region.id, region, mount, controller };
-    this.positionNodeInteraction();
-    this.syncNodeContentToolbar();
-    this.interaction = region.label ? `Editing ${region.label}` : 'Editing panel';
-    this.emitStatus();
-    requestAnimationFrame(() => {
-      if (this.activeNodeInteraction?.controller === controller) controller.focus?.();
-    });
-    return true;
+    return this.overlayLayer?.startNodeInteraction(node, region, source) ?? false;
   }
 
   private closeNodeInteraction() {
-    const active = this.activeNodeInteraction;
-    if (!active) return;
-    this.activeNodeInteraction = null;
-    active.controller.dispose();
-    active.mount.remove();
-    this.syncNodeContentToolbar();
-    this.emitStatus();
+    this.overlayLayer?.closeNodeInteraction();
   }
 
   private reconcileNodeInteraction() {
-    const active = this.activeNodeInteraction;
-    if (!active) return;
-    const node = this.model.nodes.find((candidate) => candidate.id === active.nodeId && this.isNodeVisible(candidate));
-    if (!node || this.primarySelectedNodeId !== active.nodeId) {
-      this.closeNodeInteraction();
-      return;
-    }
-    const region = this.interactionRegionsFor(node).find((candidate) => candidate.id === active.regionId);
-    if (!region) {
-      this.closeNodeInteraction();
-      return;
-    }
-    active.region = region;
-    this.positionNodeInteraction();
+    this.overlayLayer?.reconcileNodeInteraction();
   }
 
   private positionNodeInteraction() {
-    const active = this.activeNodeInteraction;
-    if (!active) return;
-    const rect = this.worldToScreenRect(active.region.rect);
-    active.mount.style.left = `${rect.x}px`;
-    active.mount.style.top = `${rect.y}px`;
-    active.mount.style.width = `${Math.max(1, rect.w)}px`;
-    active.mount.style.height = `${Math.max(1, rect.h)}px`;
+    this.overlayLayer?.positionNodeInteraction();
   }
 
   private cursorFor(point: WorldPoint, node: CanvasNode | null) {
@@ -2218,43 +1911,11 @@ export class CanvasEngine {
   }
 
   private attachInputListenersForMode() {
-    if (this.acceptsInput()) {
-      if (this.inputListenersAttached) return;
-      this.canvas.addEventListener('pointerdown', this.onPointerDown);
-      this.canvas.addEventListener('pointercancel', this.onPointerCancel);
-      this.canvas.addEventListener('lostpointercapture', this.onLostPointerCapture);
-      this.canvas.addEventListener('keydown', this.onKeyDown);
-      this.canvas.addEventListener('paste', this.onPaste);
-      this.canvas.addEventListener('focus', this.onFocus);
-      this.canvas.addEventListener('blur', this.onBlur);
-      window.addEventListener('pointermove', this.onPointerMove);
-      window.addEventListener('pointerup', this.onPointerUp);
-      window.addEventListener('blur', this.onWindowBlur);
-      this.canvas.addEventListener('wheel', this.onWheel, { passive: false });
-      this.canvas.addEventListener('dblclick', this.onDoubleClick);
-      this.canvas.addEventListener('contextmenu', this.onContextMenu);
-      this.inputListenersAttached = true;
-      return;
-    }
-    this.detachInputListeners();
+    this.inputController.setEnabled(this.acceptsInput());
   }
 
   private detachInputListeners() {
-    if (!this.inputListenersAttached) return;
-    this.canvas.removeEventListener('pointerdown', this.onPointerDown);
-    this.canvas.removeEventListener('pointercancel', this.onPointerCancel);
-    this.canvas.removeEventListener('lostpointercapture', this.onLostPointerCapture);
-    this.canvas.removeEventListener('keydown', this.onKeyDown);
-    this.canvas.removeEventListener('paste', this.onPaste);
-    this.canvas.removeEventListener('focus', this.onFocus);
-    this.canvas.removeEventListener('blur', this.onBlur);
-    window.removeEventListener('pointermove', this.onPointerMove);
-    window.removeEventListener('pointerup', this.onPointerUp);
-    window.removeEventListener('blur', this.onWindowBlur);
-    this.canvas.removeEventListener('wheel', this.onWheel);
-    this.canvas.removeEventListener('dblclick', this.onDoubleClick);
-    this.canvas.removeEventListener('contextmenu', this.onContextMenu);
-    this.inputListenersAttached = false;
+    this.inputController.detach();
   }
 
   private frameIntervalMs() {
@@ -2307,7 +1968,7 @@ export class CanvasEngine {
   }
 
   private syncLiveNodeContentOverlays(visibleNodes: CanvasNode[], compact: boolean, liveNodeIds = this.liveNodeContentOverlayNodeIdsFor(visibleNodes, compact)): void {
-    const layer = this.inlineLayer;
+    const layer = this.overlayLayer?.root ?? null;
     if (!layer || compact) {
       this.disposeLiveNodeContentOverlays();
       return;
@@ -2328,7 +1989,7 @@ export class CanvasEngine {
 
   private liveNodeContentOverlayNodeIdsFor(visibleNodes: CanvasNode[], compact: boolean): Set<string> {
     const live = new Set<string>();
-    if (!this.inlineLayer || compact) return live;
+    if (!this.overlayLayer || compact) return live;
     const portalRects = this.portalLayoutsFor(visibleNodes)
       .filter((layout) => layout.visible && layout.childCanvasId)
       .map((layout) => layout.screenRect);
@@ -2381,7 +2042,7 @@ export class CanvasEngine {
   }
 
   private shouldUseLiveNodeContentOverlay(node: CanvasNode): boolean {
-    if (this.activeNodeInteraction?.nodeId === node.id) return false;
+    if (this.overlayLayer?.activeNodeId === node.id) return false;
     if (!this.onNodeDataChange) return false;
     if (!hasLiveNodeContentOverlay(node)) return false;
     const rect = this.worldToScreenRect(this.nodeContentRect(node, this.themeForNode(node)));
@@ -2449,7 +2110,7 @@ export class CanvasEngine {
   }
 
   private syncEmbedOverlays(visibleNodes: CanvasNode[], compact: boolean): void {
-    const layer = this.inlineLayer;
+    const layer = this.overlayLayer?.root ?? null;
     if (!layer || compact) {
       this.disposeEmbedOverlays();
       return;
@@ -2459,7 +2120,7 @@ export class CanvasEngine {
       .filter((layout) => layout.visible && layout.childCanvasId)
       .map((layout) => layout.screenRect);
     for (const [index, node] of visibleNodes.entries()) {
-      if (this.activeNodeInteraction?.nodeId === node.id) continue;
+      if (this.overlayLayer?.activeNodeId === node.id) continue;
       const embed = embedOverlayForNode(node);
       if (!embed) continue;
       const theme = this.themeForNode(node);
@@ -2522,46 +2183,8 @@ export class CanvasEngine {
     return this.onNodeAction?.(nodeId, actionId, source) ?? false;
   }
 
-  private handleNodeContentToolbarControl(control: CanvasViewportControl): void {
-    const targetIds = this.nodeContentToolbarTargetIds();
-    if (!targetIds.length) return;
-    if (control === 'fit') {
-      this.executeCommand({ type: 'reset-selection-content-pan', nodeIds: targetIds, source: 'pointer' });
-      return;
-    }
-    if (control === 'zoom-in') {
-      this.executeCommand({ type: 'scale-selection-content', factor: NODE_CONTENT_ZOOM_FACTOR, nodeIds: targetIds, source: 'pointer' });
-      return;
-    }
-    if (control === 'zoom-out') {
-      this.executeCommand({ type: 'scale-selection-content', factor: 1 / NODE_CONTENT_ZOOM_FACTOR, nodeIds: targetIds, source: 'pointer' });
-      return;
-    }
-    if (control === 'reset-zoom') {
-      this.executeCommand({ type: 'reset-selection-content-scale', nodeIds: targetIds, source: 'pointer' });
-    }
-  }
-
   private syncNodeContentToolbar(): void {
-    const toolbar = this.nodeContentToolbar;
-    if (!toolbar) return;
-    const node = this.nodeContentToolbarNode();
-    this.nodeContentToolbarTarget = node?.id ?? null;
-    if (!node || this.activeNodeInteraction || this.liveNodeContentInteractionNodeId) {
-      setCanvasViewportToolbarVisible(toolbar, false);
-      toolbar.style.display = 'none';
-      return;
-    }
-    toolbar.style.display = '';
-    const panelRect = this.worldToScreenRect(node);
-    const toolbarRect = toolbar.getBoundingClientRect();
-    const width = toolbarRect.width || 96;
-    const height = toolbarRect.height || 28;
-    const left = Math.max(panelRect.x + NODE_CONTENT_TOOLBAR_INSET, panelRect.x + panelRect.w - width - NODE_CONTENT_TOOLBAR_INSET);
-    const top = Math.max(panelRect.y + NODE_CONTENT_TOOLBAR_INSET, panelRect.y + panelRect.h - height - NODE_CONTENT_TOOLBAR_INSET);
-    toolbar.style.left = `${left}px`;
-    toolbar.style.top = `${top}px`;
-    setCanvasViewportToolbarVisible(toolbar, true);
+    this.nodeContentToolbar?.sync();
   }
 
   private nodeContentToolbarNode(): CanvasNode | null {
@@ -2569,11 +2192,6 @@ export class CanvasEngine {
     if (primary) return this.renderNode(primary);
     const hovered = this.hoverNodeId ? this.model.nodes.find((node) => node.id === this.hoverNodeId && this.canZoomNodeContent(node)) ?? null : null;
     return hovered ? this.renderNode(hovered) : null;
-  }
-
-  private nodeContentToolbarTargetIds(): string[] {
-    if (!this.nodeContentToolbarTarget) return [];
-    return this.nodeContentTargetIdsFor(this.nodeContentToolbarTarget);
   }
 
   private contentZoomTargetNodes(nodeIds?: string[]): CanvasNode[] {
@@ -2790,67 +2408,12 @@ function operationAffectsRender(operation: CanvasOperation) {
   return operation.type !== 'set-clipboard' && operation.type !== 'set-paste-counter';
 }
 
-function sameGeometry(a: NodeGeometry, b: NodeGeometry) {
-  return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
-}
-
-function sameContentPan(a: CanvasNodeContentPan, b: CanvasNodeContentPan) {
-  return a.x === b.x && a.y === b.y;
-}
-
-function emptySelectionState(): CanvasSelectionState {
-  return { selectedNodeIds: [], primarySelectedNodeId: null, resizeMode: false };
-}
-
-function sameSelectionState(a: CanvasSelectionState, b: CanvasSelectionState) {
-  return a.primarySelectedNodeId === b.primarySelectedNodeId && a.resizeMode === b.resizeMode && arraysEqual(a.selectedNodeIds, b.selectedNodeIds);
-}
-
 function sameStringSet(a: Set<string>, b: Set<string>) {
   if (a.size !== b.size) return false;
   for (const id of a) {
     if (!b.has(id)) return false;
   }
   return true;
-}
-
-function selectInState(state: CanvasSelectionState, nodeId: string, mode: 'replace' | 'toggle' | 'add'): CanvasSelectionState {
-  if (mode === 'replace') return { selectedNodeIds: [nodeId], primarySelectedNodeId: nodeId, resizeMode: false };
-
-  const ids = new Set(state.selectedNodeIds);
-  if (mode === 'toggle' && ids.has(nodeId)) {
-    ids.delete(nodeId);
-    const selectedNodeIds = [...ids];
-    return {
-      selectedNodeIds,
-      primarySelectedNodeId: state.primarySelectedNodeId === nodeId ? (selectedNodeIds[0] ?? null) : state.primarySelectedNodeId,
-      resizeMode: false,
-    };
-  }
-
-  ids.add(nodeId);
-  return { selectedNodeIds: [...ids], primarySelectedNodeId: nodeId, resizeMode: false };
-}
-
-function arraysEqual(a: string[], b: string[]) {
-  return a.length === b.length && a.every((value, index) => value === b[index]);
-}
-
-function snapCoordinate(value: number) {
-  return Math.round(value / SNAP_STEP) * SNAP_STEP;
-}
-
-function snapNodeWidth(node: CanvasNode, value: number) {
-  return Math.max(nodeDefinitionFor(node).minSize.w, snapCoordinate(value));
-}
-
-function snapNodeHeight(node: CanvasNode, value: number) {
-  return Math.max(nodeDefinitionFor(node).minSize.h, snapCoordinate(value));
-}
-
-function sourceInteraction(source: CanvasEditSource, action: 'selection' | 'move' | 'resize') {
-  const label = source === 'ai' ? 'AI' : source.charAt(0).toUpperCase() + source.slice(1);
-  return `${label} ${action}`;
 }
 
 function isNodeChromeRegion(region: NodeInteractionRegion): boolean {
@@ -2872,10 +2435,6 @@ function intersectNodeContentRects(a: NodeContentRect, b: NodeContentRect): Node
     w: Math.max(1, x2 - x1),
     h: Math.max(1, y2 - y1),
   };
-}
-
-function panelLabelFor(displayName: string) {
-  return displayName;
 }
 
 function keyMovement(key: string, step: number) {
@@ -2904,16 +2463,6 @@ function distance(a: ScreenPoint, b: ScreenPoint) {
 function normalizedWheelDelta(event: WheelEvent) {
   const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? WHEEL_LINE_PX : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? WHEEL_PAGE_PX : 1;
   return { x: event.deltaX * unit, y: event.deltaY * unit };
-}
-
-function uniqueNodeId(base: string, existingIds: Set<string>) {
-  const normalized = base.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase() || 'node-copy';
-  let candidate = normalized;
-  let suffix = 2;
-  while (existingIds.has(candidate)) {
-    candidate = `${normalized}-${suffix++}`;
-  }
-  return candidate;
 }
 
 function marqueeRect(start: WorldPoint, current: WorldPoint): NodeGeometry {
