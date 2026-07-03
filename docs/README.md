@@ -1,21 +1,76 @@
-# Canaster Docs Status
+# Canaster Docs
 
 Current status: **usable nested canvas workspace with Daptin-backed document persistence, but with known architecture and verification debt**.
 
-Current contract set:
+Use this file as the docs map. File paths in `docs/` are intentionally stable because older prompts and reports reference `docs/<file>.md` directly. Organize by reading order and status here before moving files.
+
+## Read First
+
+These files are the current contract set. They override older plans, prompts, and reports when there is a conflict.
 
 1. `../PRODUCT.md` - product purpose, audience, language, and anti-references.
 2. `../DESIGN.md` - visual system, interaction patterns, colors, typography, and UI bans.
-3. `architecture-software-kt.md` - current architecture handoff for layer ownership, Daptin boundaries, persistence contracts, edit contracts, verification expectations, and known limits.
-4. `canaster-user-journeys.md` - supported product journeys written in product language.
-5. This `README.md` - documentation status and source-surface map.
+3. `canaster-user-journeys.md` - supported product journeys written in product language.
+4. `architecture-software-kt.md` - current architecture handoff for layer ownership, Daptin boundaries, persistence contracts, edit contracts, verification expectations, and known limits.
+5. This `README.md` - documentation status, reading order, and source-surface map.
 
-Current supporting evidence:
+## Current Evidence
+
+These documents describe current decisions or recently verified behavior. They are evidence, not replacements for the contract set above.
 
 - `document-visibility-implementation.md` - current Private/Public visibility contract backed by Daptin `document.permission` and schema-managed actions.
-- `deep-architecture-technical-debt-review-2026-07-03.md` - latest sourced architecture and technical-debt review. It is audit evidence, not a replacement for the contract set above.
+- `daptin-backend-groundwork.md` - current backend setup, production notes, deployment notes, and Daptin operational evidence. Some retained sections are marked as archaeology.
+- `daptin-template-rendering-gotchas.md` - routed-template behavior, share metadata, and Daptin CLI pitfalls found while implementing Canaster share metadata.
+- `canaster-release-readiness-report.md` - production release-readiness evidence from 2026-06-21.
+- `canaster-visual-catalog-followup.md` - preferred direction for finished visual catalog documents.
+- `panel-types-ux-plan.md` - current panel vocabulary and node-type direction.
+- `canvas-interaction.md` - nested embedded-canvas interaction notes. Treat as a plan unless a current architecture document confirms a behavior is shipped.
 
-Historical plans, progress reports, audit reports, completion reports, and goal prompts in this directory are useful for provenance, but they may describe old Canway source paths, missing scripts, or issues that were later fixed or reclassified. Treat them as history unless a current contract document explicitly references them as live evidence. Files with historical banners must not be followed for current paths or implementation sequence.
+## Historical Evidence
+
+These files are useful for provenance, but may describe old Canway paths, removed scripts, or issues that were later fixed or reclassified. Read their status banners before using them as evidence.
+
+- `canvas-engine-reliability-audit.md`
+- `canvas-engine-technical-dents-report.md`
+- `canvas-foundation-dents-investigation-report.md`
+- `canvas-foundation-gap-closure-report.md`
+- `canvas-foundation-remaining-reliability-report.md`
+- `canvas-keyboard-touch-performance-completion-report.md`
+- `canway-technical-dents-audit-report.md`
+- `daptin-canaster-architecture-plan.md`
+- `daptin-document-persistence-progress.md`
+- `nested-canvas-ux-plan.md`
+- `nonvisual-touch-editing-completion-report.md`
+- `product-complete-remaining-dents-report.md`
+
+## Prompt Archive
+
+These files are execution prompts. They are not current product, architecture, or verification contracts unless a current contract document explicitly says so.
+
+- `audit-canvas-engine-reliability-prompt.md`
+- `automate-and-close-canvas-foundation-gaps-goal-prompt.md`
+- `find-all-canvas-engine-reliability-issues-prompt.md`
+- `find-all-canvas-foundation-dents-goal-prompt.md`
+- `find-all-remaining-technical-dents-goal-prompt.md`
+- `find-product-complete-remaining-dents-goal-prompt.md`
+- `find-remaining-canvas-foundation-reliability-issues-goal-prompt.md`
+- `finish-recursive-infinite-nested-canvas-goal-prompt.md`
+- `fix-canvas-engine-foundation-prompt.md`
+- `implement-daptin-document-persistence-goal-prompt.md`
+- `perfect-canvas-keyboard-touch-performance-goal-prompt.md`
+- `perfect-nonvisual-touch-editing-goal-prompt.md`
+
+## Fixtures
+
+- `fixtures/nested-3x3-4-level-workspace.json` - nested workspace fixture data.
+
+## What Not To Infer
+
+- Do not treat old goal prompts as implementation sequence.
+- Do not restore removed smoke scripts or probes because a historical doc mentions them.
+- Do not treat `verify:fast` or `verify:static` as Daptin integration proof.
+- Do not use stale Canway source paths when current docs point to `src/core`, `src/domain`, `src/app`, `src/infra`, and `src/ui`.
+- Do not move public docs paths unless all references are updated in the same change.
 
 ## Current Source Surface
 

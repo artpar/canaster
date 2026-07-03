@@ -2,6 +2,16 @@
 
 Canaster is a nested visual canvas workspace. The frontend owns the canvas experience; Daptin owns the backend boundary.
 
+## Docs
+
+Start with `docs/README.md` for the current reading order. The contract set is:
+
+- `PRODUCT.md`
+- `DESIGN.md`
+- `docs/canaster-user-journeys.md`
+- `docs/architecture-software-kt.md`
+- `docs/README.md`
+
 ## Backend
 
 The backend setup is defined in:
@@ -10,7 +20,6 @@ The backend setup is defined in:
 - `deploy/daptin/Dockerfile`
 - `daptin/README.md`
 - `docs/daptin-backend-groundwork.md`
-- `docs/daptin-canaster-architecture-plan.md`
 
 Local backend:
 
