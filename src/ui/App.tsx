@@ -74,6 +74,8 @@ import {
     connectDaptinLive,
     type DaptinLiveEvent
 } from '../infra/daptin/daptinLive';
+import {createDaptinAgentLiveTransport} from '../infra/daptin/createDaptinAgentLiveTransport';
+import {createBrowserCanasterAgentTimer} from '../infra/browser/createBrowserCanasterAgentTimer';
 import {createAgentAccessBrief} from '../app/agentAccess/createAgentAccessBrief';
 import {
     connectCanasterAgentBridge,
@@ -110,6 +112,8 @@ import {
     describeNode,
     referencedAssetIdsForNode
 } from './canvas/nodeRegistry';
+import {createCanasterAgentNodeMetadata} from './agentBridge/createCanasterAgentNodeMetadata';
+import {createNestedWorkspaceAgentWorkspace} from './agentBridge/createNestedWorkspaceAgentWorkspace';
 import {
     cacheAssetImage,
     hasCachedAssetImage
@@ -168,6 +172,9 @@ const LOCAL_SAVE_MESSAGE = 'Saved on this device';
 const ONLINE_READY_MESSAGE = 'Ready to save online';
 const SAVED_MESSAGE = 'Saved online';
 const SIGN_IN_SAVE_MESSAGE = 'Sign in to save online';
+const AGENT_LIVE_TRANSPORT = createDaptinAgentLiveTransport();
+const AGENT_NODE_METADATA = createCanasterAgentNodeMetadata();
+const AGENT_TIMER = createBrowserCanasterAgentTimer();
 const MENU_VIEWPORT_MARGIN = 12;
 const MENU_ANCHOR_GAP = 8;
 const DEFAULT_ADD_PANEL_MENU_HEIGHT = 560;
@@ -1393,6 +1400,8 @@ export function App() {
             bumpStateVersion: bumpAgentStateVersion,
             documentId   : activeDocumentId,
             documentTitle: () => documentTitleRef.current,
+            liveTransport: AGENT_LIVE_TRANSPORT,
+            nodeMetadata : AGENT_NODE_METADATA,
             topicName    : agentTopicName(activeDocumentId, agentPageIdRef.current),
             reloadDocument: async () => {
                 const documentRef = activeDocumentIdRef.current;
@@ -1412,7 +1421,8 @@ export function App() {
                 signedIn: signedInRef.current,
                 status  : syncStatusRef.current,
             }),
-            workspace: () => workspaceRef.current,
+            timer: AGENT_TIMER,
+            workspace: () => workspaceRef.current ? createNestedWorkspaceAgentWorkspace(workspaceRef.current) : null,
         });
         agentBridgeRef.current = bridge;
         return () => {

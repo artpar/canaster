@@ -1,10 +1,6 @@
 import { assertJsonValue } from '../../core/nodeData';
 import type { Camera, CanvasArrangeLayout, CanvasNodeGeometry, NodeData, WorldPoint } from '../../domain/types';
 import type { CanvasDocumentCollection, CanvasDocumentId } from '../../domain/documentTypes';
-import type { WorkspaceUrlState } from '../../infra/browser/workspaceUrlLocation';
-import { connectDaptinLive, type DaptinLiveEvent } from '../../infra/daptin/daptinLive';
-import type { NestedCanvasWorkspaceHandle } from '../../ui/canvas/nested/NestedCanvasWorkspace';
-import { referencedAssetIdsForNode, registeredNodeAddOptions } from '../../ui/canvas/nodeRegistry';
 import {
   AGENT_CAPABILITIES,
   AGENT_COMMAND_SCHEMAS,
@@ -18,6 +14,14 @@ import {
   isRecord,
   requestParams,
 } from './AgentProtocol';
+import type {
+  CanasterAgentLiveEvent,
+  CanasterAgentLiveTransport,
+  CanasterAgentNodeMetadata,
+  CanasterAgentTimer,
+  CanasterAgentWorkspace,
+  CanasterAgentWorkspaceViewState,
+} from './CanasterAgentBridgePorts';
 
 export type CanasterAgentBridgeInput = {
   appUrl: () => string;
@@ -25,11 +29,14 @@ export type CanasterAgentBridgeInput = {
   documentTitle: () => string;
   topicName: string;
   bumpStateVersion: () => number;
+  liveTransport: CanasterAgentLiveTransport;
+  nodeMetadata: CanasterAgentNodeMetadata;
   reloadDocument: () => Promise<void>;
   saveOnline: () => Promise<void>;
   stateVersion: () => number;
   syncState: () => { status: string; message: string; signedIn: boolean };
-  workspace: () => NestedCanvasWorkspaceHandle | null;
+  timer: CanasterAgentTimer;
+  workspace: () => CanasterAgentWorkspace | null;
 };
 
 export type CanasterAgentBridgeConnection = {
@@ -51,7 +58,7 @@ class AgentBridgeError extends Error {
   }
 }
 
-const DEFAULT_PREVIEW_MAX_BYTES = 2_000_000;
+const DEFAULT_PREVIEW_MAX_BYTES = 5_000_000;
 const DEFAULT_SYNC_WAIT_TIMEOUT_MS = 20_000;
 const SYNC_WAIT_POLL_MS = 250;
 
@@ -59,7 +66,7 @@ export function connectCanasterAgentBridge(input: CanasterAgentBridgeInput): Can
   const topicName = input.topicName;
   const eventSubscriptions = new Set<AgentEventName>();
   const context: AgentHandlerContext = { ...input, eventSubscriptions };
-  const live = connectDaptinLive({
+  const live = input.liveTransport.connect({
     ensureTopicName: topicName,
     topicName,
     onEvent: (event) => {
@@ -98,7 +105,7 @@ export function connectCanasterAgentBridge(input: CanasterAgentBridgeInput): Can
 async function handleAgentLiveEvent(
   context: AgentHandlerContext,
   publish: (topicName: string, message: unknown) => void,
-  event: DaptinLiveEvent,
+  event: CanasterAgentLiveEvent,
 ) {
   if (event.topic !== context.topicName || event.event !== 'new-message' || !isAgentRequest(event.data)) return;
   const request = event.data;
@@ -155,9 +162,9 @@ async function handleAgentRequest(context: AgentHandlerContext, request: AgentRe
     case 'workspace.get':
       return workspaceState(context);
     case 'asset.list':
-      return assetList(collectionFor(context));
+      return assetList(context, collectionFor(context));
     case 'nodeType.list':
-      return registeredNodeAddOptions();
+      return context.nodeMetadata.listNodeTypes();
     case 'canvas.list':
       return canvasList(collectionFor(context));
     case 'canvas.get':
@@ -280,13 +287,13 @@ function canvasList(collection: CanvasDocumentCollection) {
   }));
 }
 
-function assetList(collection: CanvasDocumentCollection) {
+function assetList(context: AgentHandlerContext, collection: CanvasDocumentCollection) {
   const assetIds = new Set<string>();
   const preview = collection.appearance.previewImage;
   if (preview?.assetId) assetIds.add(preview.assetId);
   for (const document of Object.values(collection.documents)) {
     for (const node of document.model.nodes) {
-      for (const assetId of referencedAssetIdsForNode(node)) assetIds.add(assetId);
+      for (const assetId of context.nodeMetadata.referencedAssetIdsForNode(node)) assetIds.add(assetId);
     }
   }
   return [...assetIds].map((assetId) => ({
@@ -470,12 +477,12 @@ function selectionClear(context: AgentHandlerContext, canvasId: string | null) {
 }
 
 function viewGet(context: AgentHandlerContext) {
-  return readyWorkspace(context).currentWorkspaceUrlState(context.documentId);
+  return readyWorkspace(context).currentViewState(context.documentId);
 }
 
 function viewSet(context: AgentHandlerContext, request: AgentRequest) {
   const state = workspaceUrlStateParam(requestParams(request), context);
-  if (!readyWorkspace(context).openWorkspaceUrlState(state)) {
+  if (!readyWorkspace(context).openViewState(state)) {
     throw new AgentBridgeError(agentError('CANVAS_NOT_FOUND', 'View target canvas does not exist.'));
   }
   return viewGet(context);
@@ -499,16 +506,16 @@ async function previewCapture(context: AgentHandlerContext, request: AgentReques
   const maxBytes = optionalNumber(params.maxBytes) ?? DEFAULT_PREVIEW_MAX_BYTES;
   const capture = await readyWorkspace(context).captureActiveCanvasPreview();
   if (!capture) throw new AgentBridgeError(agentError('NOT_READY', 'Workspace preview is not ready yet.'));
-  if (capture.blob.size > maxBytes) {
-    throw new AgentBridgeError(agentError('PAYLOAD_TOO_LARGE', `Preview is ${capture.blob.size} bytes, above maxBytes ${maxBytes}.`));
+  if (capture.size > maxBytes) {
+    throw new AgentBridgeError(agentError('PAYLOAD_TOO_LARGE', `Preview is ${capture.size} bytes, above maxBytes ${maxBytes}.`));
   }
   return {
-    mime: capture.blob.type || 'image/png',
+    mime: capture.mime,
     width: capture.width,
     height: capture.height,
     canvasId: capture.canvasId,
-    size: capture.blob.size,
-    dataUri: await blobToDataUri(capture.blob),
+    size: capture.size,
+    dataUri: await capture.readDataUri(),
   };
 }
 
@@ -529,7 +536,7 @@ async function waitForSyncState(context: AgentHandlerContext, request: AgentRequ
   while (Date.now() - started <= timeoutMs) {
     const sync = context.syncState();
     if (sync.status === target || sync.status === 'dirty' || sync.status === 'error') return sync;
-    await sleep(SYNC_WAIT_POLL_MS);
+    await context.timer.sleep(SYNC_WAIT_POLL_MS);
   }
   return context.syncState();
 }
@@ -564,7 +571,7 @@ function collectionFor(context: AgentHandlerContext): CanvasDocumentCollection {
   return readyWorkspace(context).collection();
 }
 
-function readyWorkspace(context: AgentHandlerContext): NestedCanvasWorkspaceHandle {
+function readyWorkspace(context: AgentHandlerContext): CanasterAgentWorkspace {
   const workspace = context.workspace();
   if (!workspace) throw new AgentBridgeError(agentError('NOT_READY', 'Canaster workspace is not ready yet.'));
   return workspace;
@@ -611,7 +618,7 @@ function nodeIdsParam(params: Record<string, unknown>): string[] {
   return arrayParam(params.nodeIds, 'nodeIds').map((value) => stringValue(value, 'nodeId'));
 }
 
-function workspaceUrlStateParam(params: Record<string, unknown>, context: AgentHandlerContext): WorkspaceUrlState {
+function workspaceUrlStateParam(params: Record<string, unknown>, context: AgentHandlerContext): CanasterAgentWorkspaceViewState {
   const current = viewGet(context);
   if (!current) throw new AgentBridgeError(agentError('NOT_READY', 'Current view state is not ready.'));
   const activeCanvasId = optionalString(params.activeCanvasId) || current.activeCanvasId;
@@ -703,17 +710,4 @@ function requestedGeometry(params: Record<string, unknown>): Partial<CanvasNodeG
   if (w !== null) geometry.w = w;
   if (h !== null) geometry.h = h;
   return geometry;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
-function blobToDataUri(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.addEventListener('load', () => resolve(String(reader.result ?? '')));
-    reader.addEventListener('error', () => reject(reader.error ?? new Error('Could not read preview image.')));
-    reader.readAsDataURL(blob);
-  });
 }
