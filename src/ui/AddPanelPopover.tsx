@@ -7,6 +7,7 @@ import {
 import {X} from "lucide-react";
 import {AddPanelNodePreview} from "./AddPanelNodePreview";
 import {registeredNodeAddOptions, type RegisteredNodeAddOption} from "./canvas/nodeRegistry";
+import type {ArrangeMenuPosition} from "./workspaceWorkflowTypes";
 
 export const PANEL_CREATE_OPTIONS = registeredNodeAddOptions();
 

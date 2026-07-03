@@ -12,6 +12,7 @@ import {
     documentVisibilityFromPermission
 } from "../infra/daptin/documentPermissions";
 import {SyncStatusIcon} from "./SyncStatusIcon";
+import type {SyncStatus} from "./workspaceWorkflowTypes";
 
 type DocumentsPanelProps = {
     activeDocumentId: string;

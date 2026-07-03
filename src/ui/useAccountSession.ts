@@ -21,8 +21,7 @@ import {
     accountErrorMessage,
     emailFromStoredToken
 } from './workspaceDocumentWorkflow';
-
-type SyncStatusSetter = (value: SyncStatus | ((current: SyncStatus) => SyncStatus)) => void;
+import type {AuthStep, SyncStatusSetter} from './workspaceWorkflowTypes';
 
 export function useAccountSession(input: {
     authEmail: string;

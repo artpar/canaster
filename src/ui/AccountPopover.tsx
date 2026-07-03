@@ -17,6 +17,7 @@ import {
     X
 } from "lucide-react";
 import {SyncStatusIcon} from "./SyncStatusIcon";
+import type {AuthStep, SyncStatus} from "./workspaceWorkflowTypes";
 
 export type AccountPopoverProps = {
     authEmail: string;

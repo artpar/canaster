@@ -30,12 +30,11 @@ import {
     agentAccessDisabledReason,
     snapshotSignature
 } from './workspaceDocumentWorkflow';
+import type {SyncStatus, SyncStatusSetter} from './workspaceWorkflowTypes';
 
 const AGENT_LIVE_TRANSPORT = createDaptinAgentLiveTransport();
 const AGENT_NODE_METADATA = createCanasterAgentNodeMetadata();
 const AGENT_TIMER = createBrowserCanasterAgentTimer();
-
-type SyncStatusSetter = (value: SyncStatus | ((current: SyncStatus) => SyncStatus)) => void;
 
 export function useAgentAccess(input: {
     activeDocumentId: string;

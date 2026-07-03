@@ -2,17 +2,20 @@
 
 Current status: **usable nested canvas workspace with Daptin-backed document persistence, but with known architecture and verification debt**.
 
-Read these first:
+Current contract set:
 
-1. `architecture-software-kt.md` - current architecture handoff for layer ownership, Daptin boundaries, persistence contracts, edit contracts, verification expectations, and known limits.
-2. `canaster-user-journeys.md` - supported product journeys written in product language.
-3. `document-visibility-implementation.md` - current Private/Public visibility contract backed by Daptin `document.permission` and schema-managed actions.
-4. `nested-canvas-ux-plan.md` - UX plan for canvas nodes that contain child canvases, drill-in navigation, breadcrumbs, previews, keyboard/nonvisual paths, and implementation phasing.
-5. `panel-types-ux-plan.md` - concise UX plan for current and next panel types; recommends checklist before embed.
-6. `canaster-visual-catalog-followup.md` - follow-up catalog direction for highly visual starter documents such as brackets, lore maps, rankings, timelines, and atlases.
-7. `deep-architecture-technical-debt-review-2026-07-03.md` - latest sourced architecture and technical-debt review.
+1. `../PRODUCT.md` - product purpose, audience, language, and anti-references.
+2. `../DESIGN.md` - visual system, interaction patterns, colors, typography, and UI bans.
+3. `architecture-software-kt.md` - current architecture handoff for layer ownership, Daptin boundaries, persistence contracts, edit contracts, verification expectations, and known limits.
+4. `canaster-user-journeys.md` - supported product journeys written in product language.
+5. This `README.md` - documentation status and source-surface map.
 
-Historical audit reports, completion reports, and goal prompts in this directory are useful for provenance, but they may describe old Canway source paths, missing scripts, or issues that were later fixed or reclassified. Treat them as audit history unless a current document explicitly references them as live evidence.
+Current supporting evidence:
+
+- `document-visibility-implementation.md` - current Private/Public visibility contract backed by Daptin `document.permission` and schema-managed actions.
+- `deep-architecture-technical-debt-review-2026-07-03.md` - latest sourced architecture and technical-debt review. It is audit evidence, not a replacement for the contract set above.
+
+Historical plans, progress reports, audit reports, completion reports, and goal prompts in this directory are useful for provenance, but they may describe old Canway source paths, missing scripts, or issues that were later fixed or reclassified. Treat them as history unless a current contract document explicitly references them as live evidence. Files with historical banners must not be followed for current paths or implementation sequence.
 
 ## Current Source Surface
 

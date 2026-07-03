@@ -11,10 +11,9 @@ import {
     emailFromStoredToken,
     nameFromStoredToken
 } from './workspaceDocumentWorkflow';
+import type {SyncStatusSetter} from './workspaceWorkflowTypes';
 
 export type WorkspacePreviewCapture = NonNullable<Awaited<ReturnType<NestedCanvasWorkspaceHandle['captureActiveCanvasPreview']>>>;
-
-type SyncStatusSetter = (value: SyncStatus | ((current: SyncStatus) => SyncStatus)) => void;
 
 export function useWorkspaceExport(input: {
     activeDocumentId: string;

@@ -1,9 +1,11 @@
 # Canaster Daptin MVP Architecture Plan
 
-Status: verified MVP implementation plan; current verification workflow updated on 2026-07-03.
+Status: historical MVP architecture plan with some still-useful Daptin storage notes. Do not follow this document for current source paths, adapter names, or implementation sequence.
 Date: 2026-06-15.
 
-This is the concrete backend plan for MVP delivery. The MVP persists each Canaster workspace as one JSON file blob in Daptin's built-in `document` entity. Do not add a custom Canaster backend service and do not add a custom Canaster table for MVP.
+Current source uses `src/infra/daptin/*`, not `src/backend/*`. Current contracts live in `docs/README.md`, `docs/architecture-software-kt.md`, `PRODUCT.md`, `DESIGN.md`, and `docs/canaster-user-journeys.md`.
+
+Original purpose: this was the concrete backend plan for MVP delivery. The MVP persists each Canaster workspace as one JSON file blob in Daptin's built-in `document` entity. Do not add a custom Canaster backend service and do not add a custom Canaster table for MVP.
 
 ## Verified Ground Truth
 
@@ -144,7 +146,9 @@ Visibility metadata is derived from `permission` for MVP:
 
 Do not implement private sharing in MVP. It needs separate product UI and token/group behavior verification.
 
-## Frontend Adapter
+## Historical Frontend Adapter Plan
+
+Do not follow these paths for current source. They are preserved to show the original MVP plan. The current implementation boundary is under `src/infra/daptin/*`.
 
 Add `src/backend/daptinClient.ts`:
 

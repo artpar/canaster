@@ -1,5 +1,9 @@
 # Goal Prompt: Implement Daptin Document Persistence MVP
 
+Status: historical goal prompt. Do not follow this document for current source paths, scripts, backend verification commands, or implementation sequence.
+
+Current source uses `src/domain`, `src/infra`, and `src/ui/canvas`; the old `src/engine/*`, `src/backend/*`, and `scripts/daptin-smoke.mjs` references below are historical. Use `docs/README.md`, `docs/architecture-software-kt.md`, `PRODUCT.md`, `DESIGN.md`, and `docs/canaster-user-journeys.md` as the current contract set.
+
 You are working in `/Users/artpar/workspace/code/canway`.
 
 Your goal is to implement and verify end-to-end signed-in persistence for Canaster using the real local Daptin setup at `http://localhost:6336`, exactly as a real user would use it in the browser.
@@ -242,4 +246,3 @@ When done, report:
 - any residual risk or unverified behavior.
 
 Do not call the work complete if the browser flow only works through localStorage or IndexedDB. The saved state must round-trip through Daptin built-in `document`.
-

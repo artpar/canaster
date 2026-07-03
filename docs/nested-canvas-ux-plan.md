@@ -2,7 +2,11 @@
 
 Date: 2026-06-15
 
-Purpose: this is the concrete implementation plan for live nested canvases in Canway. Follow this document for the real implementation. Do not treat it as a loose UX brief.
+Status: historical implementation plan. Do not follow this document for current source paths, current verification commands, or current implementation sequence.
+
+Current source uses the Canaster `src/core`, `src/domain`, `src/app`, `src/infra`, and `src/ui` layout. Nested canvas runtime code now lives under `src/ui/canvas` and current document/domain logic lives under `src/domain`. Use `docs/README.md`, `docs/architecture-software-kt.md`, `PRODUCT.md`, `DESIGN.md`, and `docs/canaster-user-journeys.md` as the current contract set.
+
+Original purpose: this was the concrete implementation plan for live nested canvases in the older Canway-era source layout. Keep it as provenance for decisions and rejected shapes, not as live instructions.
 
 ## Fixed Decisions
 

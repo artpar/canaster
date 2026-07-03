@@ -15,8 +15,7 @@ import {
     snapshotSignature,
     workspaceErrorMessage
 } from './workspaceDocumentWorkflow';
-
-type SyncStatusSetter = (value: SyncStatus | ((current: SyncStatus) => SyncStatus)) => void;
+import type {SyncStatus, SyncStatusSetter} from './workspaceWorkflowTypes';
 
 export function useDocumentLiveConnection(input: {
     activeDocumentIdRef: MutableRefObject<string>;

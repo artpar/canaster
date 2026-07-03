@@ -9,8 +9,7 @@ import type {DocumentVisibility} from '../infra/daptin/documentPermissions';
 import {normalizeDaptinError} from '../infra/daptin/daptinClient';
 import type {NestedCanvasWorkspaceHandle} from './canvas/nested/NestedCanvasWorkspace';
 import {snapshotSignature} from './workspaceDocumentWorkflow';
-
-type SyncStatusSetter = (value: SyncStatus | ((current: SyncStatus) => SyncStatus)) => void;
+import type {AuthStep, SyncStatus, SyncStatusSetter} from './workspaceWorkflowTypes';
 
 export function useDocumentVisibility(input: {
     activeDocumentEditable: boolean;

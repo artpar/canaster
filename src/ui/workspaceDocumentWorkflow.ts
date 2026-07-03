@@ -16,6 +16,7 @@ import {
     tokenName
 } from '../infra/daptin/daptinClient';
 import type {DaptinLiveEvent} from '../infra/daptin/daptinLive';
+import type {SyncStatus} from './workspaceWorkflowTypes';
 
 export const DEFAULT_DOCUMENT_TITLE = 'Canaster Workspace';
 export const SAVED_MESSAGE = 'Saved online';

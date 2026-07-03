@@ -14,6 +14,7 @@ import {CatalogPanel} from "./CatalogPanel";
 import {DocumentsPanel} from "./DocumentsPanel";
 import type {StarterCatalogEntry} from "../app/starterWorkspace/types";
 import type {CSSProperties} from "react";
+import type {SyncStatus} from "./workspaceWorkflowTypes";
 
 export type ViewTreeNode = {
     canvasId: CanvasDocumentId; title: string; depth: number; children: ViewTreeNode[];

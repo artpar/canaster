@@ -133,6 +133,7 @@ import {
     titleFromSnapshot,
     workspaceErrorMessage
 } from "./workspaceDocumentWorkflow";
+import type {ArrangeMenuPosition, AuthStep, SyncStatus} from "./workspaceWorkflowTypes";
 
 const LOCAL_SAVE_MESSAGE = 'Saved on this device';
 const ONLINE_READY_MESSAGE = 'Ready to save online';

@@ -1,412 +1,391 @@
-# Deep Architecture and Technical Debt Review
+# Deep Architecture And Technical Debt Review
 
 Date: 2026-07-03
 
-Scope: local source, scripts, product documentation, package metadata, and static architecture checks for the Canaster frontend/Daptin boundary. No Daptin backend probes were run. No dev server was started or restarted. `npm run build` was not run because the local agent instructions forbid it.
+Scope: current local source, scripts, package metadata, and architecture/product documentation for the Canaster frontend and Daptin boundary. No Daptin backend probes were run. No dev server was started or restarted. `npm run build` was not run because the active local instructions forbid it.
 
 ## Verification Performed
 
-- `git status --short`: one unrelated untracked local artifact, `live-node-surfaces-toolbar.png`.
-- `npm exec tsc -- --noEmit`: passed.
+- `git status --short --untracked-files=all`: use the current command output as the worktree baseline; this report is not a stable status snapshot.
+- `npm run verify:fast`: passed.
+- `npx tsc --noEmit`: passed through `verify:fast`.
+- `git diff --check`: passed.
 - `npm audit --omit=dev`: passed, 0 vulnerabilities.
-- Static import graph check:
-  - No `src/domain` imports from `src/infra`.
-  - One source dependency cycle: `src/ui/canvas/nested/NestedCanvasWorkspace.tsx -> src/ui/canvas/nested/NativeNestedCanvasController.ts -> src/ui/canvas/nested/NestedCanvasWorkspace.tsx`.
-  - Four layer-direction violations centered on `src/app/agentBridge/CanasterAgentBridge.ts`.
+- `npx madge --extensions ts,tsx --circular src`: passed, no circular dependency found.
+- `npx madge --extensions ts,tsx --orphans src`: after follow-up cleanup, reports only `ui/main.tsx` and `vite-env.d.ts`, which are expected entry/environment files.
+- `npx ts-prune`: used as a rough stale-export scan. Its output contains expected false positives for public types and module-local exports, so only corroborated items are listed as findings.
 
 ## Executive Verdict
 
-The codebase has a solid core in two places: the domain layer is currently protected from infra imports, and the Daptin document adapter largely respects the intended backend boundary by using the built-in `document` model rather than inventing a separate workspace persistence store.
+The codebase is healthier than the older report in this file claimed. The current `src/domain` layer still has no `src/infra` imports, the app-layer agent bridge has already been moved behind ports, the nested workspace/controller cycle is gone, and PDF/object URL cache cleanup has been substantially improved.
 
-The main debt is not TypeScript correctness. The current failure mode is architectural drift: stale docs and stale scripts describe a different product and source layout, while the live application has accumulated several large UI/app objects that own too many responsibilities. The highest-risk dead ends are the app-layer agent bridge importing infra and UI directly, the stale verification scripts that cannot be trusted, and agent access sharing a full bearer token inside a URL/clipboard command.
+The remaining debt is now concentrated in four places:
 
-What not to do: do not add new tables, routes, metadata stores, document wrappers, or direct Daptin probes as a first move. The first move should be to align the documented contracts and verification path with what the code actually does, then reduce boundary crossings with small ports around the existing behavior.
+- product workflow composition is still too centralized in `src/ui/App.tsx`;
+- the nested canvas runtime and asset workflow hooks are large ownership clusters;
+- Daptin verification and deployment operations still have unsupported or rule-conflicting paths;
+- stale/deferred public surfaces remain in docs and compatibility exports.
+
+What not to do: do not respond to these debts by inventing a new persistence model, adding backend tables, moving Daptin details into `domain`, or mass-renaming storage keys. The current Daptin document and asset primitives are real contracts. The repair path is to tighten boundaries around the existing behavior.
 
 ## High Severity Findings
 
-### 1. Architecture Documentation Is Stale And Contradicts The Product Boundary
+### 1. Agent Access Copies A Full Bearer Token In A Live URL
 
 Where:
 
-- `docs/architecture-software-kt.md:21-40` says there is no backend, no persistence layer, no routing layer, no auth, and no save/load product flow.
-- `docs/architecture-software-kt.md:37-38` names missing scripts: `scripts/generate-nested-grid-fixture.mjs` and `scripts/profile-nested-grid-fixture.mjs`.
-- `docs/architecture-software-kt.md:238` and `docs/architecture-software-kt.md:351` reference `npm run fixture:nested`.
-- `docs/README.md:24-32` references `npm run fixture:nested` and `npm run profile:nested`.
-- Current source contains `src/infra/daptin/*`, `src/infra/browser/*`, document persistence, account state, live sync, and Daptin asset code.
+- `src/ui/useAgentAccess.ts:225-245` reads the stored token and passes it into the copied agent access brief.
+- `src/app/agentAccess/createAgentAccessBrief.ts:11-22` builds and includes a live websocket URL containing the token.
+- `src/app/agentAccess/createAgentAccessBrief.ts:31-32` includes a ready-to-run shell command with the token-bearing URL.
+- `src/app/agentAccess/createAgentAccessBrief.ts:110-117` stores the token in the `token` query parameter.
+- `scripts/canaster-agent.mjs:26-68` accepts that URL and connects directly.
 
 Why this matters:
 
-The docs now encode a false architecture. A maintainer following them would believe Canaster has no backend boundary and may design persistence from scratch. That directly conflicts with the current product frame: the frontend owns the canvas experience, while Daptin owns document persistence.
+The copied access material contains a bearer credential. It can leak through clipboard history, shell history, process listings, terminal scrollback, crash reports, screen sharing, or copied support text. The topic is scoped to the open page, but the websocket credential is still the account live token, not a narrow document-scoped capability.
 
 When it fails:
 
-It fails during planning and onboarding, before code is written. It also fails during review because there is no reliable written source of truth for whether a change belongs in `domain`, `app`, `infra`, or `ui`.
+It fails during normal use of "Copy for agent", especially if the helper command is pasted into a terminal or issue report. The failure is not a compiler failure; it is a credential-handling and auditability failure.
 
 What not to do:
 
-Do not treat the old `src/engine/*` and "no backend" descriptions as partially true. They are stale enough to be dangerous. Replace or quarantine them before relying on them for architecture decisions.
+Do not expand the agent protocol surface on top of this credential-sharing pattern. Do not hide the risk in UI copy. Do not move token handling into `domain`.
+
+Why not:
+
+Adding more commands to the same copied bearer URL increases the blast radius without changing the security model. `domain` cannot own account/session credentials.
 
 Recommended repair:
 
-Rewrite `docs/architecture-software-kt.md` around the actual `src/core`, `src/domain`, `src/app`, `src/infra`, and `src/ui` layout. Explicitly document the Daptin document boundary, account/session boundary, asset boundary, live transport boundary, and the fact that `domain` cannot import `infra`.
+Replace the copied account token with a scoped, expiring agent capability if Daptin can support it. Until then, treat the feature as a local/developer capability and avoid generating shell commands that embed long bearer URLs.
 
-### 2. The Agent Bridge Violates The App Boundary In Both Directions
+### 2. Deployment Scripts Directly Bypass The Daptin Operation Boundary
 
 Where:
 
-- `src/app/agentBridge/CanasterAgentBridge.ts:4-7` imports:
-  - `src/infra/browser/workspaceUrlLocation`
-  - `src/infra/daptin/daptinLive`
-  - `src/ui/canvas/nested/NestedCanvasWorkspace`
-  - `src/ui/canvas/nodeRegistry`
-- `src/app/agentBridge/CanasterAgentBridge.ts:58-63` opens the Daptin live connection directly.
+- `deploy/gcp/vm-deploy-image.sh:34-43` runs `psql` directly against the Daptin database to update the `signin` action permission.
+- `deploy/gcp/vm-deploy-image.sh:76-80` health-checks Daptin with raw HTTP against `/api/world`.
+- `deploy/gcp/vm-startup.sh:99-102` writes the same raw Daptin HTTP health check into the VM deploy script.
+- `AGENTS.md` and `docs/architecture-software-kt.md` state that non-UI Daptin backend operations must use `daptin-cli`, not SQL, `curl`, inline scripts, or custom HTTP probes.
 
 Why this matters:
 
-`src/app` should orchestrate use cases. In this file it knows about browser URL mechanics, Daptin live transport, concrete React workspace handles, and UI node registry metadata. That makes the protocol hard to test outside the browser and hard to evolve without touching app, infra, and UI at once.
+These scripts are not just historical docs; they are executable deployment material. Direct SQL against Daptin-owned tables bypasses Daptin's schema/action boundary, and the raw `/api/world` probes normalize a maintenance style the repo now explicitly forbids.
 
 When it fails:
 
-It fails when adding any new agent operation, because the easiest path is to keep importing more UI and infra into the app bridge. It also fails when trying to reuse the bridge in another runtime, because the bridge is already tied to browser and UI implementations.
+It fails during production deploy, emergency repair, or future backend permission changes. A maintainer may copy this pattern into local troubleshooting or app verification and create a second, unsupported backend control path.
 
 What not to do:
 
-Do not add more direct UI handle or Daptin imports to `CanasterAgentBridge.ts`. Do not move Daptin code into `domain` to make this look cleaner.
+Do not add more psql patches or `curl` Daptin probes to deployment or local scripts. Do not "fix" this by moving permission constants into frontend code.
+
+Why not:
+
+Daptin owns those rows and actions. Mutating them below Daptin makes the actual deployed access model hard to review and hard to reproduce through the supported CLI boundary.
 
 Recommended repair:
 
-Keep the current behavior but invert the dependencies. Define app-level ports for:
+Move the permission repair into schema/provisioning that is applied through `daptin-cli`, or explicitly document a narrow deployment-only exception approved for those scripts. Replace `/api/world` health checks with a supported Daptin CLI readiness command if available; if the CLI lacks that capability, file it against the CLI rather than spreading raw probes.
 
-- live transport connection
-- workspace command surface
-- node type metadata lookup
-- workspace URL resolution
-
-Then let `ui` and `infra` provide adapters at the composition boundary.
-
-### 3. `App.tsx` Is A God Component For Product, Account, Document, Live, Asset, And Agent Behavior
+### 3. There Is No Supported Automated Integration Gate For The Highest-Risk Product Paths
 
 Where:
 
-- `src/ui/App.tsx` is about 2,499 lines.
-- `src/ui/App.tsx:24-164` imports Daptin actions/assets/client/docs/live, browser storage, domain helpers, theme registries, export utilities, panels, and canvas workspace components.
-- `src/ui/App.tsx:420-480` holds broad state and refs for document state, auth/account state, save state, live state, menus, theme, assets, and agent access.
-- `src/ui/App.tsx:1271-1321` owns document visibility mutation flow.
-- `src/ui/App.tsx:1335-1355` owns agent access clipboard flow.
+- `package.json:6-18` defines `verify:fast` and `verify:static`, but no supported browser, Daptin, live transport, asset upload/download, or accessibility gate.
+- `docs/README.md:64-89` says `verify:fast` is TypeScript plus diff hygiene only and explicitly does not prove Daptin integration, live transport, asset upload/download, or production auth behavior.
+- `docs/architecture-software-kt.md:412-431` states the same verification gap.
 
 Why this matters:
 
-The component is no longer just an application shell. It is a composition root, account controller, document controller, live-status coordinator, asset workflow coordinator, menu coordinator, and export coordinator. This makes changes risky because unrelated workflows share state and handlers in one file.
+The riskiest code paths are account/session, Daptin documents, visibility actions, live transport, file assets, nested canvas interactions, and preview capture. The current required gate does not exercise them. TypeScript passing is necessary but not enough for this product.
 
 When it fails:
 
-It fails under product growth: save/open, account, live, export, asset upload, and agent access are all likely to change independently, but the implementation forces them through one large object. Review becomes expensive because a small feature touches a file that controls multiple critical workflows.
+It fails after apparently safe refactors in `App.tsx`, `useWorkspaceAssets.ts`, `useDocumentLiveConnection.ts`, Daptin adapters, or the nested canvas runtime. The regression will appear in browser flows, not in `tsc`.
 
 What not to do:
 
-Do not move this logic into `domain` if it talks to Daptin, browser storage, clipboard, dialogs, or live transport. That would violate the boundary. Do not split it by arbitrary line ranges.
+Do not revive old direct-backend smoke scripts or start new custom HTTP probes. Do not run `npm run build` as a substitute in this workflow; local instructions forbid it and build output would still not prove app behavior.
+
+Why not:
+
+The backend operation rules are strict, and build success does not exercise Daptin account/document/asset flows.
 
 Recommended repair:
 
-Extract behavior by workflow, preserving current public props and behavior:
+Add a rule-compliant integration verification path using the running app UI for account/document flows and `daptin-cli` for non-UI backend setup. Include at least save/open round trip, visibility action, asset upload/download, live document event handling, and one nested canvas interaction.
 
-- document lifecycle hook/use-case
-- account/session hook
-- live connection hook
-- asset workflow hook
-- agent access hook
-- export workflow hook
-
-After extraction, keep `App.tsx` as the composition shell.
-
-### 4. Verification Tooling Contains Dead Ends And Rule Violations
+### 4. `App.tsx` Still Owns Too Many Product Workflows
 
 Where:
 
-- `package.json:6-18` has no general `test`, `probe`, `fixture`, or `profile` scripts.
-- `package.json:16` defines `daptin:live:e2e`.
-- `package.json:18` defines `daptin:check:cloud` using `curl`.
-- `scripts/canaster-live-e2e.mjs:12` points at `src/catalog/service-business-atlas.json`, but the current file is under `src/app/starterWorkspace/catalog/service-business-atlas.json`.
-- `scripts/canaster-live-e2e.mjs:31` starts its own Vite server.
-- `scripts/daptin-smoke.mjs:124-145` defines a custom direct HTTP `fetch` helper for Daptin API calls.
+- `src/ui/App.tsx:24-135` imports Daptin document adapters, Daptin client/session helpers, browser storage, URL state, starter catalog, domain model helpers, canvas workspace types, asset hooks, export hooks, and panels.
+- `src/ui/App.tsx:382-451` owns refs and state for storage restoration, URL state, document open requests, account popover, menus, documents, active document, title, sync, and workspace chrome.
+- `src/ui/App.tsx:662-813` owns document refresh/open/share-link restore behavior.
+- `src/ui/App.tsx:815-887` owns browser `popstate` URL restoration and shared document opening.
+- `src/ui/App.tsx:931-986` owns the full online save sequence: local flush, local asset promotion, preview capture, preview upload, Daptin create/update, local mirror update, URL update, and document refresh.
+- `src/ui/App.tsx:1039-1405` owns multiple floating menu position/listener systems.
 
 Why this matters:
 
-The repo has a TypeScript check, but the documented deeper verification path is broken or conflicts with current backend-operation rules. A maintainer cannot honestly prove canvas performance, nested workspace behavior, or Daptin integration behavior through the scripts currently advertised by docs.
+The file is no longer only a React shell. It is the document lifecycle coordinator, URL router, account entry coordinator, save pipeline, asset promotion caller, preview upload caller, menu controller, and canvas composition root. The existing hooks help, but major workflow state still crosses through one component.
 
 When it fails:
 
-It fails when someone tries to validate a risky change. The stale live E2E script fails before it can test product behavior because the fixture path is wrong. The Daptin smoke script and cloud check are not acceptable under the current rule that non-UI Daptin backend operations must go through `daptin-cli`.
+It fails during ordinary product growth: changing save behavior can affect URL state, asset promotion, sync messages, account recovery, or agent access because they all share refs and status state in this one file.
 
 What not to do:
 
-Do not run or expand direct HTTP Daptin scripts. Do not add another ad hoc probe script to compensate. Do not start a second dev server to work around missing test orchestration.
+Do not move this into `domain`; it talks to Daptin, browser storage, DOM, clipboard, and React. Do not split it by arbitrary line count.
+
+Why not:
+
+The problem is workflow ownership, not file length alone. Moving browser/backend concerns into pure layers would violate the main architecture rule.
 
 Recommended repair:
 
-Replace Daptin smoke and cloud checks with `daptin-cli` flows or remove them from local verification. Fix or remove `daptin:live:e2e` after deciding whether it is still a supported workflow. Restore documented canvas fixture/profile scripts only if they are still part of the maintenance standard.
-
-### 5. Agent Access Shares A Bearer Token Through URL And Clipboard Surfaces
-
-Where:
-
-- `src/ui/App.tsx:110-117` builds a live WebSocket URL with `accessToken` in the query string.
-- `src/app/agentAccess/createAgentAccessBrief.ts:21` includes the full live WebSocket URL in copied text.
-- `src/app/agentAccess/createAgentAccessBrief.ts:32` includes a shell command containing that URL.
-- `src/ui/App.tsx:1335-1355` copies the generated agent access brief to clipboard.
-- `scripts/canaster-agent.mjs:26-68` accepts the URL and sends live protocol requests.
-
-Why this matters:
-
-Bearer tokens in URLs are easy to leak through clipboard history, shell history, process listings, terminal scrollback, logs, and issue reports. The access being shared appears to be the account token used for live Daptin access, not a narrow, short-lived capability scoped to a single document/work item operation.
-
-When it fails:
-
-It fails when a user copies the helper command into a terminal, shares a bug report, or leaves shell history intact. The leak surface exists even if the WebSocket protocol itself works correctly.
-
-What not to do:
-
-Do not broaden this feature by adding more agent topics or commands on top of the same token-sharing pattern. Do not hide the risk behind UI wording.
-
-Recommended repair:
-
-Introduce a scoped, expiring agent capability if Daptin supports it. If not, make the limitation explicit in the product and avoid generating shell commands with bearer tokens embedded in the URL.
+Extract a focused document lifecycle hook/use-case for open/restore/save/new/share-url restoration. Keep `App.tsx` as the composition shell, but make document lifecycle, floating menu state, URL state, and online save sequencing separately reviewable.
 
 ## Medium Severity Findings
 
-### 6. UI Node Types Reach Directly Into Daptin And Browser Asset Infra
+### 5. `NativeNestedCanvasController.ts` Is A Runtime/Persistence/Debug Monolith
 
 Where:
 
-- `src/ui/canvas/nodeTypes/fileAssetPreview.ts:1-3` imports local browser assets, Daptin assets, and Daptin client helpers.
-- `src/ui/canvas/nodeTypes/fileAssetPreview.ts:16-23` decides whether to save file assets locally or through Daptin based on stored-token state.
-- `src/ui/canvas/nodeTypes/imageNode.ts:1-2` imports Daptin asset helpers directly.
-- `src/ui/canvas/nodeTypes/imageNode.ts:89-100` and `src/ui/canvas/nodeTypes/imageNode.ts:186-194` handle sign-in-required asset behavior inside node/editor code.
+- `src/ui/canvas/nested/NativeNestedCanvasController.ts:1-80` imports domain model/history/commands, browser storage, URL-state types, engine slots, DOM toolbar helpers, parent context layout, theme helpers, keyboard helpers, and asset service types.
+- `src/ui/canvas/nested/NativeNestedCanvasController.ts:820-847` loads/replaces/persists workspace snapshots and writes browser storage.
+- `src/ui/canvas/nested/NativeNestedCanvasController.ts:861-883` restores from browser storage.
+- `src/ui/canvas/nested/NativeNestedCanvasController.ts:1682-1784` mutates view state, mirrors snapshots, commits history, emits changes, and transitions canvases.
+- `src/ui/canvas/nested/NativeNestedCanvasController.ts:1988-2018` captures preview images by composing visible canvases.
+- `src/ui/canvas/nested/NativeNestedCanvasController.ts:1905-1933` exposes a debug API on `window`.
 
 Why this matters:
 
-Node definitions should describe canvas behavior and editing surfaces. These files now own persistence selection, account-sensitive asset behavior, and Daptin upload details. That makes asset behavior hard to change without editing canvas node code.
+The controller is a critical runtime object and now also owns local persistence handoff, debug API shape, preview capture, engine slot lifecycle, parent-context panes, history commits, and URL camera conversion. That makes it hard to test or change one behavior without reading the whole runtime.
 
 When it fails:
 
-It fails when adding another asset backend, changing account rules, or testing nodes without Daptin/browser storage. It also makes offline/online behavior harder to reason about because the decision is hidden inside node rendering/editing modules.
+It fails when changing nested navigation, local autosave, preview capture, or parent-context behavior. A storage change can accidentally disturb engine lifecycle; a layout change can disturb saved view state.
 
 What not to do:
 
-Do not move asset persistence into `domain`; it depends on browser and backend behavior. Do not add more Daptin client imports to node type files.
+Do not move DOM/canvas lifecycle into `domain`. Do not add Daptin or account behavior here.
+
+Why not:
+
+`domain` must remain pure, and the nested controller is already at the edge of too many responsibilities.
 
 Recommended repair:
 
-Create an app/UI asset service port and inject it into node editing/rendering code. Keep Daptin and IndexedDB implementations in `infra`.
+Extract browser-storage handoff behind a small UI/infra port and move debug API wiring behind an explicit development/debug module. Keep engine slot and DOM lifecycle in UI.
 
-### 7. Nested Canvas Has A Type-Level Cycle Between Workspace And Controller
+### 6. The Nested Workspace Public Handle Depends On Browser URL Infra Types
 
 Where:
 
-- `src/ui/canvas/nested/NestedCanvasWorkspace.tsx:18` imports `NativeNestedCanvasController`.
-- `src/ui/canvas/nested/NativeNestedCanvasController.ts:65` imports request/state types from `NestedCanvasWorkspace`.
-- Static graph cycle: `NestedCanvasWorkspace.tsx -> NativeNestedCanvasController.ts -> NestedCanvasWorkspace.tsx`.
+- `src/ui/canvas/nested/NestedCanvasWorkspaceTypes.ts:9` imports `WorkspaceUrlState` from `src/infra/browser/workspaceUrlLocation`.
+- `src/ui/canvas/nested/NestedCanvasWorkspaceTypes.ts:95-96` exposes `openWorkspaceUrlState` and `currentWorkspaceUrlState` on the workspace handle.
+- `src/ui/canvas/nested/NativeNestedCanvasController.ts:76` also imports URL state types from browser infra.
 
 Why this matters:
 
-The controller import is type-only on one side, so this is not currently a runtime cycle. It is still an architecture smell because the controller and React component define each other's contract. It makes the boundary harder to split or test.
+The earlier React/controller type cycle has been fixed, and `madge` reports no cycles. The remaining issue is type ownership: a nested canvas public handle now depends on a browser URL serialization type. That makes URL concerns part of the nested canvas API instead of an adapter at the app shell boundary.
 
 When it fails:
 
-It fails when either side needs a value import or when shared request/state types grow. A type-only cycle can silently become a runtime cycle during ordinary maintenance.
+It fails when URL format changes, when the nested workspace is reused in another host, or when view-state serialization needs to be tested independently of browser location state.
 
 What not to do:
 
-Do not add value imports from the controller back to the React workspace component.
+Do not reintroduce the old `NestedCanvasWorkspace.tsx` <-> `NativeNestedCanvasController.ts` cycle. Do not put URL parsing in `domain`.
+
+Why not:
+
+The cycle was real debt and is now gone. URL parsing is browser infra, not model semantics.
 
 Recommended repair:
 
-Move shared request/state/handle contract types into a small sibling module, for example `src/ui/canvas/nested/NestedCanvasWorkspaceTypes.ts`, or into a domain-level module only if the types are pure product state and contain no React/DOM concepts.
+Define a pure workspace view-state DTO in `domain` or a UI-local contract module, then let `workspaceUrlLocation.ts` convert between that DTO and URL query/path state.
 
-### 8. `CanvasEngine.ts` Is Too Broad For A Single Maintained Unit
+### 7. Asset Workflow Is Centralized In One Large Hook With Mixed Responsibilities
 
 Where:
 
-- `src/ui/canvas/CanvasEngine.ts` is about 2,959 lines.
-- `src/ui/canvas/CanvasEngine.ts:2`, `src/ui/canvas/CanvasEngine.ts:17`, and `src/ui/canvas/CanvasEngine.ts:20` import UI shortcut, node registry, and nested toolbar behavior.
-- `src/ui/canvas/CanvasEngine.ts:272-291` creates DOM overlay/editor/toolbar layers.
-- `src/ui/canvas/CanvasEngine.ts:297-300` configures focus and event listeners.
-- `src/ui/canvas/CanvasEngine.ts:520` onward owns substantial command planning and interaction behavior.
+- `src/ui/useWorkspaceAssets.ts:84-220` creates the node asset service, preloads image assets, releases runtime resources, and handles file drops.
+- `src/ui/useWorkspaceAssets.ts:222-297` decides local-vs-Daptin storage, loads asset objects/files, handles object URL release, and releases PDF/image runtime caches.
+- `src/ui/useWorkspaceAssets.ts:299-315` uploads workspace preview images.
+- `src/ui/useWorkspaceAssets.ts:362-428` promotes local assets to Daptin assets and rewrites asset ids through the full snapshot history.
 
 Why this matters:
 
-This class owns rendering, DOM overlay layers, focus/input registration, interaction planning, toolbar behavior, and command execution glue. Because canvas behavior is a primary product surface, every unrelated concern inside this file raises the cost of changing the workspace experience.
+The node type boundary has improved: node modules now depend on `CanvasNodeAssetService` rather than importing Daptin/local infra directly. The debt has moved into a single hook that owns storage policy, runtime cache lifecycle, file-drop product behavior, preview upload, and snapshot rewriting.
 
 When it fails:
 
-It fails when changing input behavior, inline editing, rendering, command semantics, or toolbar behavior because the same file must be understood across multiple execution domains: canvas drawing, DOM event handling, UI overlays, and product commands.
+It fails when changing offline/online behavior, adding another file type, changing asset visibility, or altering save semantics. These operations are coupled through one hook and shared helper exports.
 
 What not to do:
 
-Do not extract by creating generic abstractions with no product boundary. Do not move DOM/canvas code into `domain`.
+Do not put asset storage into node definitions or `domain`. Do not embed file bytes into workspace snapshots.
+
+Why not:
+
+Node definitions should stay about canvas behavior; large bytes belong outside snapshots.
 
 Recommended repair:
 
-Extract only seams that are already visible:
+Split the hook by responsibility: runtime asset service, file-drop-to-node creation, preview image upload, and local-asset promotion. Keep Daptin/local implementations in infra and inject them through the UI composition boundary.
 
-- pure command planning to a domain or app-level planner if it has no DOM/canvas dependency
-- overlay/editor DOM management to a UI helper
-- toolbar lifecycle to a UI helper
-- input event normalization to a focused controller
-
-Keep visual rendering close to the engine until there are tests around behavior.
-
-### 9. PDF And Object URL Caches Have Lifecycle Gaps
+### 8. Dormant Adapter APIs Exposed Unsupported Product Paths
 
 Where:
 
-- `src/ui/canvas/nodeTypes/pdfCanvasPreview.ts:31` defines `pdfDocumentCache = new Map()`.
-- `src/ui/canvas/nodeTypes/pdfCanvasPreview.ts:69-89` loads PDF documents into that cache.
-- `src/ui/canvas/nodeTypes/pdfCanvasPreview.ts:120-170` renders PDF pages into canvases.
-- `src/infra/daptin/assets.ts` stores object URLs and exports `releaseAssetObjectUrls`.
-- `src/infra/browser/localAssets.ts` stores object URLs and exports `releaseLocalAssetObjectUrls`.
-- `src/ui/useWorkspaceAssets.ts` now calls both release-all helpers through workspace runtime cleanup.
-- `src/ui/canvas/nodeTypes/markdownNode.ts:157` and `src/ui/canvas/nodeTypes/markdownNode.ts:192-198` show a healthier bounded cache pattern with a max size and eviction.
+- `src/infra/daptin/canasterDocuments.ts` previously exported unused compatibility wrappers and a low-level `deleteDocument` adapter.
+- `src/infra/browser/workspaceStorage.ts` previously exported unused `clearWorkspaceSnapshot`.
+- `src/infra/browser/localAssets.ts` previously exported unused `saveLocalImageAsset`.
 
 Why this matters:
 
-Long-running workspace sessions can load many PDFs and asset previews. Unbounded PDF document caches and unreleased object URLs can retain memory after a document or workspace is no longer visible.
+Exported adapter functions looked like supported product paths even when no UI journey, access behavior, confirmation flow, or local fallback existed. `deleteDocument` was the biggest hazard because product fallback, active-document behavior, confirmation, and local state were explicitly not defined.
 
 When it fails:
 
-It fails during extended editing sessions, asset-heavy workspaces, repeated open/close flows, or tests that load many documents. The symptom will be memory growth rather than a TypeScript error.
+It fails when a maintainer wires a dormant function into UI without designing the complete journey and access behavior.
 
 What not to do:
 
-Do not just raise cache sizes or add another map. Do not rely on browser navigation as the only cleanup strategy in a single-page app.
+Do not add delete UI just because an adapter can delete a row. Do not keep unused compatibility wrappers when there are no current source callers and no product decision to support them.
+
+Why not:
+
+Product exposure requires more than an adapter call. Without a supported journey, an exported low-level operation is misleading surface area.
 
 Recommended repair:
 
-Keep explicit document/workspace-close cleanup wired through the workspace asset runtime path. Bound the PDF cache and call the PDF document destroy/cleanup path when evicting.
+Remove unused compatibility exports and unsupported product-path adapters from the current source surface. Reintroduce document deletion only with an explicit product journey covering confirmation, owner/access errors, active-document fallback, local draft state, live refresh behavior, and retry messaging.
 
-### 10. Legacy Canway Names Remain In Storage, Debug Globals, And Warnings
+### 11. Current Documentation Mixed Current Contracts With Historical Plans - Repaired 2026-07-03
 
 Where:
 
-- `src/infra/browser/workspaceStorage.ts:5-8` uses `canway-workspaces` and `canway-workspace-snapshot:`.
-- `src/infra/browser/workspaceStorage.ts:38`, `src/infra/browser/workspaceStorage.ts:94`, `src/infra/browser/workspaceStorage.ts:115`, and `src/infra/browser/workspaceStorage.ts:132` log "Canway" warnings.
-- `src/infra/browser/localAssets.ts:24-39` uses `canway-local-assets` and `CanwayLocalAssetDatabase`.
-- `src/ui/canvas/nested/NativeNestedCanvasController.ts:290-291` and `src/ui/canvas/nested/NativeNestedCanvasController.ts:1898` expose `__canwayNested`.
-- `src/ui/canvas/nested/NativeNestedCanvasController.ts:2191-2211` references `__canwayNativeCanvasLog`, `__CANWAY_DEBUG_CANVAS`, and `canway-native` performance marks.
+- `docs/README.md:5-18` now names the current contract set: `PRODUCT.md`, `DESIGN.md`, `docs/architecture-software-kt.md`, `docs/canaster-user-journeys.md`, and `docs/README.md`.
+- `docs/README.md:13-15` keeps this report as current audit evidence, not as a replacement architecture contract.
+- `docs/nested-canvas-ux-plan.md:5-9` now says the plan is historical and must not be followed for current source paths, verification commands, or implementation sequence.
+- `docs/daptin-canaster-architecture-plan.md:3-8` now says the plan is historical for paths/adapter names/sequence and points readers to `src/infra/daptin/*` for the current Daptin implementation boundary.
+- `docs/implement-daptin-document-persistence-goal-prompt.md:3-5` now marks the goal prompt historical and calls out old `src/engine/*`, `src/backend/*`, and `scripts/daptin-smoke.mjs` references.
+- `docs/daptin-document-persistence-progress.md:3-6` now marks the progress report historical and calls out old source paths, scripts, probes, and `npm run build` evidence as historical only.
 
 Why this matters:
 
-Some of these names are probably compatibility names for existing local data. Others are debug and warning names that make the current product harder to reason about. The risk is not cosmetic only: storage names become migration contracts.
+The docs index must separate current contracts from provenance. Historical plans are useful only when they cannot be mistaken for live implementation instructions.
 
 When it fails:
 
-It fails during rename/migration work. A naive rename can orphan existing local drafts or local assets. Leaving the names forever makes diagnostics and docs drift.
+Before the repair, this failed during onboarding, architecture planning, and review because old path plans could look authoritative.
 
 What not to do:
 
-Do not silently rename IndexedDB databases or localStorage prefixes without a migration bridge. Do not mix new Canaster names and old Canway names ad hoc.
+Do not use historical goal prompts as current architecture. Do not fix docs by deleting all history without preserving provenance.
+
+Why not:
+
+History is useful, but it must not masquerade as current source of truth.
 
 Recommended repair:
 
-Classify each name as compatibility storage, internal debug, or stale user-facing text. For compatibility storage, add explicit comments and migration planning. For debug globals and warnings, rename under a controlled compatibility alias if needed.
-
-### 11. Infra Exports Include Dormant Or Partially Surfaced Capabilities
-
-Where:
-
-- `src/infra/daptin/canasterDocuments.ts` exports `loadDocument`, `makeDocumentPrivate`, `makeDocumentPublic`, and `deleteDocument`, but current `src` callers do not use them directly.
-- `src/infra/daptin/daptinClient.ts` exports endpoint override helpers that current `src` callers do not use.
-- `src/infra/browser/workspaceStorage.ts` exports `clearWorkspaceSnapshot`, but current `src` callers do not use it.
-- `src/infra/browser/localAssets.ts` exports `saveLocalImageAsset`, but current `src` callers do not use it.
-- `src/ui/DocumentsPanel.tsx` does not expose document delete even though the adapter has `deleteDocument`.
-
-Why this matters:
-
-Some of this may be intentional public API surface. Without comments, tests, or UI journeys, these exports look like unfinished pathways. Future work may assume product support exists because an adapter function exists.
-
-When it fails:
-
-It fails when a maintainer wires a dormant function directly into UI without checking access rules, product copy, confirmation flows, live state, or local draft behavior.
-
-What not to do:
-
-Do not delete these exports blindly if they are planned public API. Do not expose them in UI just because the adapter already has them.
-
-Recommended repair:
-
-Mark deferred adapter functions with short comments or tests that define intended behavior. Either wire them through a supported journey or keep them internal until the journey exists.
+Completed. Keep the historical banners in place and do not promote historical plan/progress docs back into the current contract set without updating their paths, verification rules, and source-boundary claims.
 
 ## Low Severity Findings
 
-### 12. A Raw Production `console.log` Remains In Document Live Handling
+### 12. Raw Live Event Logging Remains In Runtime Source
 
 Where:
 
-- `src/ui/App.tsx:2465-2467` logs `Get document id from` with the live event.
+- `src/ui/workspaceDocumentWorkflow.ts:89-92` logs `Get document id from` and the full live event payload.
 
 Why this matters:
 
-Raw event logging can leak document/live metadata into the browser console and makes debugging noisier. It also bypasses any intended debug gating.
+Live event payloads can include document metadata. Always-on logging makes the browser console noisy and can leak useful debugging details into screenshots or support traces.
 
 When it fails:
 
-It fails during normal product use when live events occur.
+It fails during normal live document event handling.
 
 What not to do:
 
-Do not leave raw live event logging in product code. Do not replace it with another always-on log.
+Do not replace it with another always-on log.
+
+Why not:
+
+The repo already has gated debug logging patterns elsewhere.
 
 Recommended repair:
 
-Remove it or route it through an explicit debug logger controlled by a development-only flag.
+Remove the log or route it through an explicit development-only debug logger.
 
-### 13. Formatting And Maintenance Gates Are Under-Specified
+### 13. Formatting And Lint Gates Are Still Under-Specified
 
 Where:
 
-- `package.json:6-18` defines dev, typecheck, preview, Daptin scripts, and audit, but no formatter, lint, or general test gate.
-- Import style and spacing vary across large files.
+- `package.json:6-18` has TypeScript and audit checks but no formatter, lint, or general test command.
+- Import spacing and quote style vary across source files, for example `src/ui/App.tsx` uses both tightly spaced named imports and spaced named imports.
 
 Why this matters:
 
-The project relies heavily on TypeScript for correctness, but there is no consistent automated style or lint gate. That makes large-file churn harder to review and allows small quality regressions to accumulate.
+The project relies on TypeScript and human review for style and maintainability. In large files, style churn makes behavior changes harder to review.
 
 When it fails:
 
-It fails during repeated feature work in `App.tsx`, `CanvasEngine.ts`, and node type files, where unrelated formatting churn can obscure behavioral changes.
+It fails during broad refactors of `App.tsx`, `CanvasEngine.ts`, `NativeNestedCanvasController.ts`, and node type modules.
 
 What not to do:
 
-Do not mass-format the repo without first adding agreed tooling and checking user-owned changes. Do not introduce lint rules that conflict with the existing architecture without fixing the architecture first.
+Do not mass-format the repo while the worktree contains unrelated user changes.
+
+Why not:
+
+Formatting churn would obscure real behavior changes and could trample in-progress work.
 
 Recommended repair:
 
-Add a small formatting/lint gate after the stale docs and verification scripts are corrected. Apply it incrementally or with a clearly separated formatting-only change.
+Add a small agreed formatting/lint gate in a separate change after architectural hot spots are stabilized.
+
+## Findings From The Older Report That Are No Longer Current
+
+- The app-layer agent bridge no longer imports Daptin or UI concrete modules directly. `src/app/agentBridge/CanasterAgentBridge.ts` now depends on `CanasterAgentLiveTransport`, `CanasterAgentWorkspace`, `CanasterAgentNodeMetadata`, and `CanasterAgentTimer` ports from `CanasterAgentBridgePorts.ts`.
+- The nested workspace/controller import cycle is gone. `madge` reports no circular dependencies, and shared types now live in `src/ui/canvas/nested/NestedCanvasWorkspaceTypes.ts`.
+- UI node types no longer directly import Daptin/local asset infra for image/PDF file handling. They use `CanvasNodeAssetService`.
+- PDF preview caches are now bounded and have explicit release paths in `src/ui/canvas/nodeTypes/pdfCanvasPreview.ts:16-17`, `src/ui/canvas/nodeTypes/pdfCanvasPreview.ts:280-296`, and `src/ui/useWorkspaceAssets.ts:288-297`.
+- `docs/architecture-software-kt.md` has been updated and now reflects the current `core/domain/app/infra/ui` source layout and Daptin boundary.
+- Stale direct Daptin smoke scripts referenced in the older report are no longer present in `package.json` or `scripts/`; the remaining direct backend operations are in deployment material and historical docs.
 
 ## Confirmed Healthy Constraints
 
-- `src/domain` currently does not import `src/infra`.
-- `npm exec tsc -- --noEmit` passes.
+- `src/domain` has no imports from `src/infra`.
+- `npx madge --extensions ts,tsx --circular src` found no cycles.
+- `npx madge --extensions ts,tsx --orphans src` now reports only expected entry/environment files.
+- `npm run verify:fast` passes.
 - `npm audit --omit=dev` reports 0 vulnerabilities.
-- `src/infra/daptin/canasterDocuments.ts` uses Daptin's built-in `document` model and does not create a parallel workspace table.
-- `src/infra/daptin/canasterDocuments.ts:107-132` follows a placeholder-create, visibility-action, update flow for document creation.
-- `src/ui/canvas/nodeTypes/markdownNode.ts` uses DOMPurify for rendered markdown sanitization and has a bounded cache pattern.
-- `scripts/provision-canaster-share-template.sh` explicitly uses `daptin-cli` and states that direct HTTP/SQL is not used.
+- Online document persistence continues to use Daptin's built-in `document` row through `src/infra/daptin/canasterDocuments.ts`; no parallel workspace table is present in current source.
+- Visibility changes go through schema-managed Daptin actions in `src/infra/daptin/canasterDocuments.ts` and `src/infra/daptin/assets.ts`, not generic JSON:API permission patches from UI.
+- Node asset handling has a service boundary (`src/ui/canvas/nodeAssetService.ts`) instead of Daptin imports inside image/PDF node definitions.
+- UI workflow types are now explicit imports from `src/ui/workspaceWorkflowTypes.ts`; the ambient `src/core/Enums.ts` file has been removed.
+- The unused `actionRouting`, `createTextStylePanel`, and `ThemeSwitcher` modules, plus their private CSS selectors, have been removed.
 
 ## Recommended Repair Order
 
-1. Replace or quarantine stale architecture docs and verification instructions.
-2. Fix package scripts so advertised checks are real and rule-compliant; remove direct Daptin HTTP checks from normal workflows.
-3. Refactor `CanasterAgentBridge.ts` behind app-level ports for live transport, workspace commands, URL resolution, and node metadata.
-4. Split `App.tsx` by supported product workflows while keeping it as the composition shell.
-5. Move Daptin/local asset decisions out of node type files behind an injected asset service.
-6. Break the nested workspace/controller type cycle by moving shared contract types to a dedicated module.
-7. Add explicit cache and object URL lifecycle cleanup for PDFs and asset previews.
-8. Classify and migrate legacy Canway names deliberately.
-9. Remove or mark dormant infra exports according to supported user journeys.
-10. Remove the raw live-event `console.log`.
-11. Add formatting/lint/test gates only after the stale verification path is corrected.
+1. Replace the token-in-URL agent access model with a scoped capability, or explicitly constrain it as a local/developer feature until that exists.
+2. Bring deployment scripts back inside the Daptin operation boundary, especially the direct `psql` action-permission patch.
+3. Add a rule-compliant browser/Daptin/live/asset integration gate.
+4. Extract document lifecycle and save/open/URL restoration from `App.tsx`.
+5. Split `useWorkspaceAssets.ts` into runtime asset service, file-drop node creation, preview upload, and local-asset promotion units.
+6. Move nested workspace URL-state types behind a pure view-state DTO and keep browser URL serialization outside the nested workspace handle.
+7. Extract browser-storage handoff and debug API wiring from `NativeNestedCanvasController.ts`.
+8. Remove the raw live event `console.log`.
+9. Add formatting/lint gates in a separate, low-risk change.
 
 ## Bottom Line
 
-The codebase is not broken at the compiler level. The problem is maintainability drift. The highest-value work is to make the real architecture explicit, repair the verification path, and stop app/UI/infra coupling from spreading further. After that, the large UI units can be split along actual product workflows without inventing a new architecture or breaking the Daptin persistence contract.
+The current codebase is not failing at the compiler or import-cycle level. The real risk is maintenance drift around large workflow objects, unsupported verification/deployment paths, credential sharing for agent access, and stale surfaces that look more official than they are. The docs cleanup reduced one of those stale-surface risks; the remaining repair work should preserve the current Daptin document/asset boundary and reduce coupling around existing behavior rather than inventing new persistence primitives.

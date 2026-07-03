@@ -71,8 +71,7 @@ import {
     isRecord,
     stringField
 } from './workspaceDocumentWorkflow';
-
-type SyncStatusSetter = (value: SyncStatus | ((current: SyncStatus) => SyncStatus)) => void;
+import type {SyncStatusSetter} from './workspaceWorkflowTypes';
 
 type StoredWorkspaceAsset = CanasterAssetRecord;
 

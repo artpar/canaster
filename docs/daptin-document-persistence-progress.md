@@ -1,7 +1,9 @@
 # Daptin Document Persistence Progress
 
-Status: implemented and locally verified.
+Status: historical progress report. Do not follow this document for current source paths, current scripts, or current verification commands.
 Date: 2026-06-15.
+
+Current source uses `src/infra/daptin/*`, `src/domain/*`, and `src/ui/canvas/*`; old `src/backend/*`, `src/engine/*`, `scripts/daptin-smoke.mjs`, `npm run build`, and old probe references below are historical evidence only. Use `docs/README.md`, `docs/architecture-software-kt.md`, `PRODUCT.md`, `DESIGN.md`, and `docs/canaster-user-journeys.md` as the current contract set.
 
 ## Summary
 
