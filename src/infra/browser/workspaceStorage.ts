@@ -56,6 +56,7 @@ export function saveWorkspaceSnapshotMirror(snapshot: CanvasWorkspaceSnapshot, i
   writeLocalWorkspaceSnapshot(createStoredWorkspaceSnapshot(snapshot, id));
 }
 
+// Local storage maintenance primitive. Sign-out must preserve the visible workspace locally.
 export async function clearWorkspaceSnapshot(id = DEFAULT_WORKSPACE_STORAGE_ID): Promise<void> {
   removeLocalWorkspaceSnapshot(id);
   await db.workspaces.delete(id);

@@ -132,6 +132,8 @@ export async function createDocument(title: string, snapshot: CanvasWorkspaceSna
   });
 }
 
+// Compatibility API for callers that only need the saved workspace snapshot.
+// Product UI should prefer loadDocumentDetails so the document title stays in sync.
 export async function loadDocument(documentRef: string): Promise<CanvasWorkspaceSnapshot> {
   return (await loadDocumentDetails(documentRef)).snapshot;
 }
@@ -182,12 +184,16 @@ export async function findDocumentByPublicPath(publicOwner: string, slug: string
   });
 }
 
+// Compatibility wrapper for the older visibility API. New UI flows should call
+// setDocumentVisibility so Private/Public changes share one product path.
 export async function makeDocumentPrivate(documentRef: string): Promise<void> {
   return authenticatedDaptinRequest('Could not make this workspace private', async () => {
     await executeDocumentVisibilityAction(documentRef, 'private');
   });
 }
 
+// Compatibility wrapper for the older visibility API. New UI flows should call
+// setDocumentVisibility so Private/Public changes share one product path.
 export async function makeDocumentPublic(documentRef: string): Promise<void> {
   return authenticatedDaptinRequest('Could not make this workspace public', async () => {
     await executeDocumentVisibilityAction(documentRef, 'public');
@@ -200,6 +206,8 @@ export async function setDocumentVisibility(documentRef: string, visibility: Doc
   });
 }
 
+// Low-level adapter only. Document deletion is not a supported UI journey until
+// confirmation, active-document fallback, local draft state, and refresh behavior are defined.
 export async function deleteDocument(documentRef: string): Promise<void> {
   return authenticatedDaptinRequest('Could not delete this workspace', async () => {
     const destroy = getDaptinClient().jsonApi.destroy;

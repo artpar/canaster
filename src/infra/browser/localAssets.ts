@@ -57,6 +57,7 @@ export async function saveLocalAsset(file: File): Promise<LocalAssetSummary> {
   return summaryFromRecord(record);
 }
 
+// Image-only convenience wrapper; current app flows store files through the workspace asset service.
 export async function saveLocalImageAsset(file: File): Promise<LocalAssetSummary> {
   if (!isImageAssetMime(file.type)) throw new Error('Choose an image file.');
   return saveLocalAsset(file);

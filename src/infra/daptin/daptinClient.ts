@@ -36,6 +36,7 @@ export function getDaptinEndpoint(): string {
   return normalizeDaptinEndpoint(env?.VITE_DAPTIN_ENDPOINT || DEFAULT_DAPTIN_ENDPOINT);
 }
 
+// Dev/session-bound endpoint switch. Changing it clears token and active document state.
 export function setDaptinEndpointOverride(endpoint: string): void {
   const currentEndpoint = getDaptinEndpoint();
   const nextEndpoint = normalizeDaptinEndpoint(endpoint);
@@ -48,6 +49,7 @@ export function setDaptinEndpointOverride(endpoint: string): void {
   resetDaptinClient();
 }
 
+// Dev/session-bound endpoint switch. Clearing it has the same session-reset semantics as setting it.
 export function clearDaptinEndpointOverride(): void {
   setDaptinEndpointOverride('');
 }

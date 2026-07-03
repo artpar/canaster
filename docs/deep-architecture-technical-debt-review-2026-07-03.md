@@ -263,9 +263,9 @@ Where:
 - `src/ui/canvas/nodeTypes/pdfCanvasPreview.ts:31` defines `pdfDocumentCache = new Map()`.
 - `src/ui/canvas/nodeTypes/pdfCanvasPreview.ts:69-89` loads PDF documents into that cache.
 - `src/ui/canvas/nodeTypes/pdfCanvasPreview.ts:120-170` renders PDF pages into canvases.
-- `src/infra/daptin/assets.ts:47` stores object URLs.
-- `src/infra/daptin/assets.ts:114-117` exports `releaseAssetObjectUrls`, but there is no current `src` caller.
-- `src/infra/browser/localAssets.ts:81-84` exports `releaseLocalAssetObjectUrls`, but there is no current `src` caller.
+- `src/infra/daptin/assets.ts` stores object URLs and exports `releaseAssetObjectUrls`.
+- `src/infra/browser/localAssets.ts` stores object URLs and exports `releaseLocalAssetObjectUrls`.
+- `src/ui/useWorkspaceAssets.ts` now calls both release-all helpers through workspace runtime cleanup.
 - `src/ui/canvas/nodeTypes/markdownNode.ts:157` and `src/ui/canvas/nodeTypes/markdownNode.ts:192-198` show a healthier bounded cache pattern with a max size and eviction.
 
 Why this matters:
@@ -282,7 +282,7 @@ Do not just raise cache sizes or add another map. Do not rely on browser navigat
 
 Recommended repair:
 
-Add explicit document/workspace-close cleanup. Bound the PDF cache and call the PDF document destroy/cleanup path when evicting. Wire Daptin/local object URL release functions into document close, asset replacement, or app teardown.
+Keep explicit document/workspace-close cleanup wired through the workspace asset runtime path. Bound the PDF cache and call the PDF document destroy/cleanup path when evicting.
 
 ### 10. Legacy Canway Names Remain In Storage, Debug Globals, And Warnings
 
@@ -317,8 +317,7 @@ Where:
 - `src/infra/daptin/canasterDocuments.ts` exports `loadDocument`, `makeDocumentPrivate`, `makeDocumentPublic`, and `deleteDocument`, but current `src` callers do not use them directly.
 - `src/infra/daptin/daptinClient.ts` exports endpoint override helpers that current `src` callers do not use.
 - `src/infra/browser/workspaceStorage.ts` exports `clearWorkspaceSnapshot`, but current `src` callers do not use it.
-- `src/infra/browser/localAssets.ts` exports `saveLocalImageAsset` and `releaseLocalAssetObjectUrls`, but current `src` callers do not use them.
-- `src/infra/daptin/assets.ts` exports `releaseAssetObjectUrls`, but current `src` callers do not use it.
+- `src/infra/browser/localAssets.ts` exports `saveLocalImageAsset`, but current `src` callers do not use it.
 - `src/ui/DocumentsPanel.tsx` does not expose document delete even though the adapter has `deleteDocument`.
 
 Why this matters:
