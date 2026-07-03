@@ -20,38 +20,12 @@ jobs:
 
   daptin-schema:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: canaster
-          POSTGRES_PASSWORD: canaster
-          POSTGRES_DB: canaster
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U canaster -d canaster"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.23"
       - run: npm ci
-      - name: Install Daptin CLI
-        run: |
-          go install github.com/daptin/daptin-cli@latest
-          echo "DAPTIN_CLI=$HOME/go/bin/daptin-cli" >> "$GITHUB_ENV"
-      - name: Smoke Canaster schema against Daptin
-        env:
-          DAPTIN_DOCKER_IMAGE: daptin/daptin:v0.12.28
-          DAPTIN_SMOKE_RUNTIME: docker
-          DAPTIN_SMOKE_DB_TYPE: postgres
-          DAPTIN_SMOKE_DB_CONNECTION_STRING: host=host.docker.internal port=5432 user=canaster password=canaster dbname=canaster sslmode=disable
-        run: npm run daptin:smoke
+      - name: Prepare local Daptin schema
+        run: npm run daptin:local:schema
