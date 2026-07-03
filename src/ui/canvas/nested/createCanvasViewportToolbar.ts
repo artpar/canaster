@@ -4,6 +4,7 @@ export type CanvasViewportControl = 'arrange' | 'fit' | 'reset-zoom' | 'theme' |
 
 export type CanvasViewportToolbarControlEvent = {
   anchor: ScreenRect;
+  recursive: boolean;
   sourceEvent: MouseEvent;
 };
 
@@ -12,6 +13,7 @@ export type CanvasViewportToolbarOptions = {
   ariaLabel?: string;
   controlLabels?: Partial<Record<CanvasViewportControl, string>>;
   onControl?: (control: CanvasViewportControl, event: CanvasViewportToolbarControlEvent) => void;
+  recursiveLongPress?: boolean;
 };
 
 const controlLabels: Record<CanvasViewportControl, string> = {
@@ -30,6 +32,18 @@ const controlGroups: { label: string; controls: CanvasViewportControl[] }[] = [
 ];
 
 const menuControls = new Set<CanvasViewportControl>(['arrange', 'theme']);
+const RECURSIVE_LONG_PRESS_MS = 560;
+const RECURSIVE_LONG_PRESS_MOVE_PX = 8;
+
+type ViewportControlPress = {
+  pointerId: number;
+  button: HTMLButtonElement;
+  control: CanvasViewportControl;
+  sourceEvent: PointerEvent;
+  startX: number;
+  startY: number;
+  timer: number;
+};
 
 export function createCanvasViewportToolbar(options: CanvasViewportToolbarOptions): HTMLDivElement {
   const group = document.createElement('div');
@@ -46,7 +60,7 @@ export function createCanvasViewportToolbar(options: CanvasViewportToolbarOption
     for (const control of rowControls) row.append(createViewportControlButton(control, !options.onControl, options.controlLabels?.[control]));
     group.append(row);
   }
-  wireViewportControls(group, options.onControl);
+  wireViewportControls(group, options);
   return group;
 }
 
@@ -119,9 +133,73 @@ function iconPathsFor(control: CanvasViewportControl): string[] {
 
 function wireViewportControls(
   controls: HTMLDivElement,
-  onControl: CanvasViewportToolbarOptions['onControl'],
+  options: CanvasViewportToolbarOptions,
 ): void {
-  controls.addEventListener('pointerdown', stopViewportControlEvent);
+  const onControl = options.onControl;
+  let press: ViewportControlPress | null = null;
+  let suppressedClickButton: HTMLButtonElement | null = null;
+  let suppressedClickTimer: number | null = null;
+
+  const clearPress = () => {
+    if (press) window.clearTimeout(press.timer);
+    press?.button.removeAttribute('data-long-press-pending');
+    press = null;
+  };
+  const suppressNextClickForButton = (button: HTMLButtonElement) => {
+    if (suppressedClickTimer !== null) window.clearTimeout(suppressedClickTimer);
+    suppressedClickButton = button;
+    suppressedClickTimer = window.setTimeout(() => {
+      suppressedClickButton = null;
+      suppressedClickTimer = null;
+    }, 800);
+  };
+  const clearSuppressedClick = () => {
+    if (suppressedClickTimer !== null) window.clearTimeout(suppressedClickTimer);
+    suppressedClickButton = null;
+    suppressedClickTimer = null;
+  };
+
+  controls.addEventListener('pointerdown', (event) => {
+    stopViewportControlEvent(event);
+    clearPress();
+    if (!options.recursiveLongPress || !onControl || !event.isPrimary || (event.pointerType !== 'touch' && event.pointerType !== 'pen')) return;
+    const button = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-control]');
+    const control = parseViewportControl(button?.dataset.control);
+    if (!button || !control || button.disabled) return;
+    button.setPointerCapture?.(event.pointerId);
+    button.dataset.longPressPending = 'true';
+    press = {
+      pointerId: event.pointerId,
+      button,
+      control,
+      sourceEvent: event,
+      startX: event.clientX,
+      startY: event.clientY,
+      timer: window.setTimeout(() => {
+        if (!press) return;
+        const active = press;
+        suppressNextClickForButton(active.button);
+        active.button.removeAttribute('data-long-press-pending');
+        press = null;
+        onControl(active.control, controlEventForButton(active.button, active.sourceEvent, true));
+      }, RECURSIVE_LONG_PRESS_MS),
+    };
+  });
+  controls.addEventListener('pointermove', (event) => {
+    if (!press || event.pointerId !== press.pointerId) return;
+    const dx = event.clientX - press.startX;
+    const dy = event.clientY - press.startY;
+    if (Math.hypot(dx, dy) > RECURSIVE_LONG_PRESS_MOVE_PX) clearPress();
+  });
+  controls.addEventListener('pointerup', (event) => {
+    if (!press || event.pointerId !== press.pointerId) return;
+    clearPress();
+  });
+  controls.addEventListener('pointercancel', (event) => {
+    if (!press || event.pointerId !== press.pointerId) return;
+    clearPress();
+  });
+  controls.addEventListener('lostpointercapture', clearPress);
   controls.addEventListener('dblclick', stopViewportControlEvent);
   controls.addEventListener('contextmenu', stopViewportControlEvent);
   controls.addEventListener('click', (event) => {
@@ -130,10 +208,11 @@ function wireViewportControls(
     const button = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-control]');
     const control = parseViewportControl(button?.dataset.control);
     if (!button || !control) return;
-    onControl?.(control, {
-      anchor: rectToScreenRect(button.getBoundingClientRect()),
-      sourceEvent: event,
-    });
+    if (button === suppressedClickButton) {
+      clearSuppressedClick();
+      return;
+    }
+    onControl?.(control, controlEventForButton(button, event, false));
   });
 }
 
@@ -144,6 +223,14 @@ function parseViewportControl(value: string | undefined): CanvasViewportControl 
 
 function rectToScreenRect(rect: DOMRect): ScreenRect {
   return { x: rect.x, y: rect.y, w: rect.width, h: rect.height };
+}
+
+function controlEventForButton(button: HTMLButtonElement, sourceEvent: MouseEvent, recursive: boolean): CanvasViewportToolbarControlEvent {
+  return {
+    anchor: rectToScreenRect(button.getBoundingClientRect()),
+    recursive,
+    sourceEvent,
+  };
 }
 
 function stopViewportControlEvent(event: Event): void {

@@ -1598,14 +1598,30 @@ export function App() {
     }, [arrangeMenuTarget, chromeState.collection, closeArrangeMenu]);
 
     const handleCreatePanel = useCallback((nodeType: string) => {
-        const activeCanvasId = workspaceRef.current?.collection().activeCanvasId ?? chromeState.collection.activeCanvasId;
+        const beforeCollection = workspaceRef.current?.collection();
+        const activeCanvasId = beforeCollection?.activeCanvasId ?? chromeState.collection.activeCanvasId;
         const target = addPanelMenuTarget?.canvasId === activeCanvasId ? addPanelMenuTarget : null;
-        workspaceRef.current?.executeActiveCanvasCommand({
+        const beforeNodeIds = new Set(beforeCollection?.documents[activeCanvasId]?.model.nodes.map((node) => node.id) ?? []);
+        const created = workspaceRef.current?.executeActiveCanvasCommand({
             type  : 'create-node',
             nodeType,
             source: target ? 'pointer' : 'nonvisual',
             ...(target ? { at: target.at } : {}),
         });
+        if (created && nodeType === BuiltInNodeTypes.canvas) {
+            const collection = workspaceRef.current?.collection();
+            const node = collection?.documents[activeCanvasId]?.model.nodes.find((candidate) =>
+                !beforeNodeIds.has(candidate.id) && candidate.type === BuiltInNodeTypes.canvas
+            );
+            if (node) {
+                workspaceRef.current?.executeDocumentCommand({
+                    type          : 'create-child-canvas',
+                    parentCanvasId: activeCanvasId,
+                    nodeId        : node.id,
+                    source        : target ? 'pointer' : 'nonvisual',
+                });
+            }
+        }
         closeAddPanelMenu();
     }, [addPanelMenuTarget, chromeState.collection.activeCanvasId, closeAddPanelMenu]);
 

@@ -2428,6 +2428,13 @@ button {
   background: var(--canaster-color-panel-surface);
   box-shadow: var(--canaster-shadow-chrome);
   backdrop-filter: var(--canaster-texture-panel-backdrop-filter);
+  touch-action: none;
+}
+
+.canvas-viewport-control-button[data-long-press-pending='true'] {
+  border-color: var(--canaster-color-action-primary);
+  color: var(--canaster-color-text-high);
+  background: var(--canaster-color-hover);
 }
 
 .canvas-viewport-control-button svg {

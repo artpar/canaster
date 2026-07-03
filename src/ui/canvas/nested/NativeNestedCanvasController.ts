@@ -400,11 +400,12 @@ export class NativeNestedCanvasController {
   }
 
   private handleViewportControl(slot: CanvasViewportSlot, control: CanvasViewportControl, event: CanvasViewportControlEvent): void {
+    const recursive = event.recursive || hasMetaOrCtrlShortcutModifier(event.sourceEvent);
     if (control === 'arrange') {
       this.onArrangeCanvasMenuRequest?.({
         canvasId: slot.canvasId,
         anchor: event.anchor,
-        metaOrCtrl: hasMetaOrCtrlShortcutModifier(event.sourceEvent),
+        metaOrCtrl: recursive,
       });
       this.setStatus({ ...this.status, interaction: 'Choose arrangement' });
       return;
@@ -413,12 +414,11 @@ export class NativeNestedCanvasController {
       this.onCanvasThemeMenuRequest?.({
         canvasId: slot.canvasId,
         anchor: event.anchor,
-        metaOrCtrl: hasMetaOrCtrlShortcutModifier(event.sourceEvent),
+        metaOrCtrl: recursive,
       });
       this.setStatus({ ...this.status, interaction: 'Choose canvas theme' });
       return;
     }
-    const recursive = hasMetaOrCtrlShortcutModifier(event.sourceEvent);
     const targets = this.viewportControlTargets(slot, recursive);
     if (control === 'fit') {
       for (const target of targets) target.engine.fit(target.mode === 'active' ? undefined : 16);

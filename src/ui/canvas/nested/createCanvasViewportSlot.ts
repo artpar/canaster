@@ -74,6 +74,7 @@ export function createCanvasViewportSlot(options: CanvasViewportSlotOptions): Ca
     ? createCanvasViewportToolbar({
       controls: options.controls,
       onControl: (control, event) => options.onControl?.(slot, control, event),
+      recursiveLongPress: true,
     })
     : null;
   center.append(canvas);
