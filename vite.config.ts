@@ -2,6 +2,9 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
+  server: {
+    allowedHosts: ['canaster.local'],
+  },
   plugins: [
     react(),
     {
@@ -9,7 +12,7 @@ export default defineConfig({
       transformIndexHtml(html) {
         const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
         const publicOrigin = env.VITE_CANASTER_PUBLIC_ORIGIN || 'https://canaster.in';
-        const daptinEndpoint = env.VITE_DAPTIN_ENDPOINT || 'http://localhost:6336';
+        const daptinEndpoint = env.VITE_DAPTIN_ENDPOINT || 'http://canaster.local:6336';
         const ogImageUrl = env.VITE_CANASTER_OG_IMAGE_URL || `${publicOrigin}/og-image.svg`;
         return html
           .replace(/%VITE_CANASTER_PUBLIC_ORIGIN%/g, publicOrigin)

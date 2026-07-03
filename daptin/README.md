@@ -85,7 +85,7 @@ Production after admin lockdown must grant `document` table access to authentica
 
 ## Local Daptin Startup
 
-Daptin loads `schema_*.yaml` files from its schema folder at startup. For permanent local development, use Docker Compose:
+Daptin loads `schema_*.yaml` files from its schema folder at startup. For permanent local Canaster development, use Docker Compose:
 
 ```bash
 npm run daptin:up
@@ -93,16 +93,45 @@ npm run daptin:logs
 npm run daptin:down
 ```
 
-Local Daptin uses Postgres, not SQLite, to stay close to production.
+Local Daptin uses Postgres, not SQLite, to stay close to production. The Compose project uses named `postgres-data` and `daptin-data` volumes, so it is a persistent local backend. Normal `daptin:down` stops it without deleting accounts, saved documents, assets, mail rows, or stored files. Only remove volumes when intentionally resetting local state.
 
-Use `scripts/daptin-smoke.mjs` for the supported repo-level smoke flow:
+Before Compose starts Daptin, `npm run daptin:up` runs `scripts/prepare-local-daptin-schema.sh`. That script copies production `daptin/schema_*.yaml` files into `.tmp/daptin/local-schema` and substitutes only the local mail identity:
+
+- `login@canaster.in` becomes `login@canaster.local`.
+- `mail.canaster.in` becomes `mail.canaster.local`.
+
+Why this exists: the checked-in `daptin/` schema directory is production backend material and must keep the production sender and SMTP host. Local mail identity belongs in generated `.tmp` schema, not in production schema files.
+
+The local hostnames are:
+
+- app: `http://canaster.local:5173`
+- Daptin HTTP/API: `http://canaster.local:6336`
+- Daptin HTTPS: `https://canaster.local:6443` after local HTTPS is configured in Daptin
+- SMTP: `mail.canaster.local` on ports `25`, `465`, and `587`
+- IMAPS: `imap.canaster.local` on port `993`
+
+For local mail testing, `canaster.local`, `mail.canaster.local`, and `imap.canaster.local` must resolve to `127.0.0.1`. The Compose service also resolves those names inside the Daptin container so Daptin can deliver local-domain OTP mail back to the local SMTP listener.
+
+Run the frontend against the persistent local backend with:
 
 ```bash
-npm run daptin:smoke
-npm run daptin:smoke:local
+npm run dev:local
 ```
 
-`daptin:smoke` starts an isolated temporary Daptin. `daptin:smoke:local` verifies the permanent Compose instance at `http://localhost:6336`.
+Use `daptin-cli` to provision local backend rows such as admin users, `mail_server`, `certificate`, `cloud_store`, `site`, and `template`. Do not bypass `daptin-cli` with direct SQL, `curl`, inline Node HTTP probes, or custom backend scripts. The app UI remains the preferred path for account, save, open, document visibility, asset, and live flows.
+
+There is currently no supported repo-level Daptin smoke script. Older smoke scripts mixed `daptin-client` and direct HTTP probes with setup work; that violates the current backend-operation boundary and has been removed from the runnable local workflow.
+
+For rapid local Canaster development, keep Daptin running through Compose when needed and use the app UI for account, save, open, document visibility, asset, and live flows. For non-UI backend maintenance, use `daptin-cli` only. `scripts/provision-canaster-share-template.sh` is the current script pattern because it intentionally uses `daptin-cli` without direct HTTP or SQL calls.
+
+Current frontend/static verification is:
+
+```bash
+npm run verify:fast
+npm run verify:static
+```
+
+These checks do not prove Daptin integration, live transport, asset upload/download, or production auth behavior. Treat those as manual UI verification or future `daptin-cli`-backed automation work.
 
 ## SDK Boundary
 
@@ -124,7 +153,7 @@ Production Daptin runs directly on a Compute Engine VM and owns API, static fron
 1. Run one Daptin container on `canaster-daptin-vm` with Cloud SQL for PostgreSQL.
 2. Publish VM ports `80 -> Daptin HTTP`, `443 -> Daptin HTTPS`, and SMTP ports `25`, `465`, `587`.
 3. Start with the Canaster actions-only auth schema folder for email OTP; use Daptin's built-in `document` for app state.
-4. Create an admin user and run the smoke test.
+4. Create an admin user and verify required schema rows through `daptin-cli`.
 5. Verify the schema-managed OTP actions are present and executable by guest requests.
 6. Configure Daptin `mail_server`, `certificate`, DKIM DNS, and outbox processing for OTP delivery.
 7. Create/link a GCS-backed Daptin `cloud_store` for static site files.

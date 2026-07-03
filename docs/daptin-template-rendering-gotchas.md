@@ -217,7 +217,7 @@ Global flags:
 - `--no-truncate` is a global flag. Put it before the command:
 
 ```bash
-daptin-cli --endpoint http://localhost:6336 --no-truncate list site
+daptin-cli --endpoint http://canaster.local:6336 --no-truncate list site
 ```
 
 Do not put it after `list`; subcommands reject it there.
@@ -259,13 +259,14 @@ docker compose -f .tmp/daptin/share-e2e.compose.yml restart daptin
 
 ## Local E2E Notes
 
-Existing local Daptin on `localhost:6336`:
+Existing persistent local Daptin on `canaster.local:6336`:
 
 - Already had locked-down auth/admin bootstrap.
 - `signup` returned `403`.
 - `world become_an_administrator` returned `403`.
 - `template` creation returned `403`.
 - After restarting local Daptin, logs confirmed `schema_canaster_share.yaml` was loaded and the routed-template action was added.
+- Current local development should use the persistent Compose instance for normal Canaster flows. Use disposable Daptin only for isolated backend experiments that must not disturb persistent local state.
 
 Fresh disposable Daptin:
 
@@ -344,13 +345,13 @@ The fixture used an absolute Vite dev-server script URL and the Vite React pream
 
 ```html
 <script type="module">
-  import RefreshRuntime from 'http://localhost:5173/@react-refresh';
+  import RefreshRuntime from 'http://canaster.local:5173/@react-refresh';
   RefreshRuntime.injectIntoGlobalHook(window);
   window.$RefreshReg$ = () => {};
   window.$RefreshSig$ = () => (type) => type;
   window.__vite_plugin_react_preamble_installed__ = true;
 </script>
-<script type="module" src="http://localhost:5173/src/ui/main.tsx"></script>
+<script type="module" src="http://canaster.local:5173/src/ui/main.tsx"></script>
 ```
 
 Without that preamble, Chrome showed `@vitejs/plugin-react can't detect preamble` and the React root stayed empty.
@@ -358,7 +359,7 @@ Without that preamble, Chrome showed `@vitejs/plugin-react can't detect preamble
 7. Create the site row and set `cloud_store_id` directly:
 
 ```bash
-SITE_REF="$(daptin-cli --config .tmp/daptin/share-e2e-cli.yaml --quiet create site name=canaster-share-e2e hostname=localhost path=canaster-share-e2e enable=true site_type=static | sed -n '1p')"
+SITE_REF="$(daptin-cli --config .tmp/daptin/share-e2e-cli.yaml --quiet create site name=canaster-share-e2e hostname=canaster.local path=canaster-share-e2e enable=true site_type=static | sed -n '1p')"
 daptin-cli --config .tmp/daptin/share-e2e-cli.yaml update site "$SITE_REF" cloud_store_id=019f19a6-f2e4-77b1-8903-d2ee413bed83
 ```
 

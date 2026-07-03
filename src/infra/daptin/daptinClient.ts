@@ -6,7 +6,7 @@ export const DAPTIN_LAST_EMAIL_STORAGE_KEY = 'canaster:daptin:last-email';
 export const DAPTIN_ENDPOINT_STORAGE_KEY = 'canaster:daptin:endpoint';
 export const DAPTIN_SESSION_ENDPOINT_STORAGE_KEY = 'canaster:daptin:session-endpoint';
 
-const DEFAULT_DAPTIN_ENDPOINT = 'http://localhost:6336';
+const DEFAULT_DAPTIN_ENDPOINT = 'http://canaster.local:6336';
 const DAPTIN_TOKEN_COOKIE_NAME = 'token';
 
 let client: DaptinClient | null = null;

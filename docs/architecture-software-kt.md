@@ -370,14 +370,32 @@ Repository note:
 
 Some older scripts still use direct HTTP or `curl`. They are stale against the current operation rules and must not be treated as the approved maintenance path.
 
+## Local Persistent Daptin
+
+The local Daptin development target is a persistent Compose instance, not a scratch smoke runtime:
+
+- `npm run daptin:up` prepares `.tmp/daptin/local-schema` and starts `docker-compose.daptin.yml`.
+- The Compose file uses named `postgres-data` and `daptin-data` volumes.
+- Normal `npm run daptin:down` stops the backend without deleting local account, document, asset, or mail state.
+- Local app development should use `npm run dev:local`, which points the frontend at `http://canaster.local:6336`.
+- Local mail-oriented flows use `canaster.local`, `mail.canaster.local`, and `imap.canaster.local`, all resolving to `127.0.0.1`.
+
+The generated local schema substitutes local mail identity only. Production schema files under `daptin/` must keep `login@canaster.in` and `mail.canaster.in`. Do not edit production schema just to make local OTP mail easier.
+
 ## Verification Gate
 
-Current rule-compliant local static checks:
+Rapid local check for day-to-day Canaster development:
 
 ```bash
-npm exec tsc -- --noEmit
-npm audit --omit=dev
-git diff --check
+npm run verify:fast
+```
+
+This proves TypeScript correctness and catches whitespace/conflict-marker issues without touching Daptin, running browser automation, producing build output, or depending on the network.
+
+Full rule-compliant static checks:
+
+```bash
+npm run verify:static
 ```
 
 Do not run `npm run build` in the current local agent workflow. The build script exists in `package.json`, but the active repository instructions forbid running it.
@@ -407,6 +425,8 @@ What the current static gate does not prove:
 Verification debt:
 
 The repo needs a new rule-compliant interaction and integration verification path that matches the current source tree and Daptin operation rules.
+
+The old direct-backend Daptin smoke and live E2E scripts have been removed from the runnable package scripts. Do not restore them by path-fixing stale fixtures or adding custom HTTP probes; replace them with app-UI verification or `daptin-cli`-backed automation.
 
 ## Known Limits And Current Technical Debt
 

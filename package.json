@@ -5,17 +5,18 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "dev:local": "VITE_DAPTIN_ENDPOINT=http://canaster.local:6336 VITE_CANASTER_PUBLIC_ORIGIN=http://canaster.local:5173 VITE_CANASTER_STORAGE_MODE=daptin vite --host 0.0.0.0 --port 5173 --strictPort",
     "dev:cloud": "VITE_DAPTIN_ENDPOINT=https://api.canaster.in VITE_CANASTER_STORAGE_MODE=daptin vite --host 0.0.0.0",
+    "typecheck": "tsc --noEmit",
+    "verify:fast": "npm run typecheck && git diff --check",
+    "verify:static": "npm run verify:fast && npm audit --omit=dev",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "daptin:up": "docker compose -f docker-compose.daptin.yml up -d",
+    "daptin:local:schema": "scripts/prepare-local-daptin-schema.sh",
+    "daptin:up": "npm run daptin:local:schema && docker compose -f docker-compose.daptin.yml up -d",
     "daptin:down": "docker compose -f docker-compose.daptin.yml down",
     "daptin:logs": "docker compose -f docker-compose.daptin.yml logs -f daptin",
-    "daptin:smoke": "node scripts/daptin-smoke.mjs",
-    "daptin:smoke:local": "DAPTIN_SMOKE_ENDPOINT=http://localhost:6336 DAPTIN_SMOKE_CLI_CONFIG=.tmp/daptin/local-site-cli.yaml node scripts/daptin-smoke.mjs",
-    "daptin:live:e2e": "node scripts/canaster-live-e2e.mjs",
-    "daptin:provision-share-template": "scripts/provision-canaster-share-template.sh",
-    "daptin:check:cloud": "curl -fsS 'https://api.canaster.in/api/world?page%5Bsize%5D=1' >/dev/null"
+    "daptin:provision-share-template": "scripts/provision-canaster-share-template.sh"
   },
   "dependencies": {
     "@fontsource-variable/ibm-plex-sans": "^5.2.8",

@@ -30,6 +30,8 @@ Backend and deployment material is under:
 - `deploy/daptin/`
 - `docker-compose.daptin.yml`
 
+Local Daptin development uses the persistent Compose instance from `docker-compose.daptin.yml`, not per-run scratch Daptin containers. `npm run daptin:up` prepares generated local schema under `.tmp/daptin/local-schema`, starts Postgres and Daptin with named volumes, and keeps local account/document/asset/mail state across normal stops. The local app target is `npm run dev:local`, using `canaster.local` for the app/backend hostname.
+
 Generated or installed output:
 
 - `dist/`
@@ -61,12 +63,18 @@ Out of scope unless a current architecture decision says otherwise:
 
 ## Local Verification
 
-Current rule-compliant local static checks:
+Rapid local check for day-to-day Canaster development:
 
 ```bash
-npm exec tsc -- --noEmit
-npm audit --omit=dev
-git diff --check
+npm run verify:fast
+```
+
+This runs TypeScript and whitespace/conflict-marker checks only. It avoids Daptin, network audit, browser automation, and build output so it is suitable for the hot-reload development loop.
+
+Full rule-compliant static checks:
+
+```bash
+npm run verify:static
 ```
 
 Do not run `npm run build` in the current local agent workflow. The active repository instructions forbid it.
@@ -77,3 +85,5 @@ Do not rely on old missing gates such as:
 - `npm run profile:nested`
 
 Some older Daptin scripts use direct HTTP or `curl`. Current backend operation rules require using the running app UI for user-account document flows or `daptin-cli` for non-UI Daptin backend operations.
+
+There is currently no supported automated Daptin integration gate in this repo. Do not treat `verify:fast` or `verify:static` as proof of Daptin integration, live transport, asset upload/download, or production auth behavior.

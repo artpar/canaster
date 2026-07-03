@@ -49,7 +49,11 @@ npm run daptin:down
 
 Local service defaults:
 
-- Daptin API: `http://localhost:6336`
+- Canaster app: `http://canaster.local:5173` through `npm run dev:local`
+- Daptin API: `http://canaster.local:6336`
+- Daptin HTTPS: `https://canaster.local:6443` after local HTTPS is configured
+- SMTP: `mail.canaster.local` on `25`, `465`, and `587`
+- IMAPS: `imap.canaster.local` on `993`
 - Daptin container port: `8080`
 - Postgres service: `postgres:5432`
 - Database: `canaster`
@@ -58,17 +62,21 @@ Local service defaults:
 - Schema folder: `/opt/daptin/schema`
 - Daptin storage: `/data/storage`
 
-The compose file mounts `./daptin` as `DAPTIN_SCHEMA_FOLDER`. MVP app state does not add schema files; it uses Daptin's built-in `document`.
+The compose file mounts `.tmp/daptin/local-schema` as `DAPTIN_SCHEMA_FOLDER`. `npm run daptin:up` prepares that generated folder before Compose starts Daptin. The generated local schema copies `daptin/schema_*.yaml` and substitutes only the mail identity so local OTP mail uses `login@canaster.local` and `mail.canaster.local`; production schema files must keep `login@canaster.in` and `mail.canaster.in`.
 
-Current local status as of 2026-06-15 18:53 IST:
+MVP app state does not add custom workspace schema files; it uses Daptin's built-in `document`.
+
+Current local status as of 2026-07-03:
 
 - `npm run daptin:up` starts local Daptin and local Postgres.
-- Daptin is available at `http://localhost:6336`.
+- Daptin is available at `http://canaster.local:6336`.
 - Postgres uses the `canaster_postgres-data` Docker volume.
 - Daptin storage uses the `canaster_daptin-data` Docker volume.
+- Both volumes are intentionally persistent across normal `npm run daptin:down`.
 - Compose waits for Postgres health before starting Daptin.
-- Verified with `curl http://localhost:6336/api/world?page%5Bsize%5D=5`.
-- Verified with `npm run daptin:smoke:local`.
+- Non-UI backend maintenance must use `daptin-cli`.
+- User-account, save, open, document visibility, asset, and live flows should be verified through the running Canaster app UI.
+- There is no current repo-level Daptin smoke script. The old direct-backend smoke path was removed because current backend-operation rules forbid custom HTTP probes.
 
 ## Production Backend
 
@@ -498,46 +506,41 @@ npm run dev:cloud
 
 ### Permanent Local Site/GCS Verification
 
-Current state as of 2026-06-16 14:15 IST:
+Current state as of 2026-07-03:
 
 - Do not use throwaway Daptin instances for Canaster backend/site validation.
 - The permanent local setup is `docker-compose.daptin.yml` and runs Daptin plus Postgres.
 - Docker Desktop must be running before `npm run daptin:up`.
-- `npm run daptin:up` and `npm run daptin:smoke:local` passed against `http://localhost:6336`.
+- `npm run daptin:up` prepares `.tmp/daptin/local-schema` and starts the persistent local instance at `http://canaster.local:6336`.
 - Local GCS-backed site hosting was verified through the permanent local Daptin instance, not a temporary instance.
 
 Local verification setup:
 
 ```text
-Daptin endpoint: http://localhost:6336
+Daptin endpoint: http://canaster.local:6336
 Daptin store: canaster-site-local-gcs
 Store type: google cloud storage
 Store provider: Google
 Root path: canaster-site-local-gcs:canaster-daptin-storage
 Credential style: rclone config keys
 Credential key used locally: access_token from gcloud auth print-access-token
-Site hostname: localhost
+Site hostname: canaster.local
 Site path: /canaster-local
 Uploaded GCS prefix: gs://canaster-daptin-storage/canaster-local/
 ```
 
-Local verification evidence:
+Local verification runbook:
 
 ```bash
-npm run build
-npm run daptin:smoke:local
+npm run daptin:up
+npm run dev:local
+daptin-cli --endpoint http://canaster.local:6336 list world --page-size 1
 daptin-cli storage upload canaster-site-local-gcs:/canaster-local ./dist --recursive
 gcloud storage ls gs://canaster-daptin-storage/canaster-local/index.html
 docker compose -f docker-compose.daptin.yml restart daptin
-curl --noproxy '*' -D - http://localhost:6336/ -o /tmp/canaster-local-site-index.html
 ```
 
-Observed result:
-
-```text
-HTTP/1.1 200 OK
-Content-Type: text/html; charset=utf-8
-```
+Use browser inspection at `http://canaster.local:6336/` for rendered site checks. Do not replace this with `curl` or one-off direct HTTP scripts in local agent workflows.
 
 Daptin source behavior verified before using this flow:
 
@@ -549,12 +552,12 @@ Daptin source behavior verified before using this flow:
 - For GCS, Daptin's rclone config is supplied through the linked credential content.
 - Local verification used a short-lived `access_token`; production should use VM service account metadata credentials with rclone `env_auth=true`.
 
-Permanent local smoke behavior:
+Permanent local verification behavior:
 
-- `npm run daptin:smoke:local` uses the existing CLI token in `.tmp/daptin/local-site-cli.yaml`.
-- It does not sign up a new user against the permanent local Daptin server.
-- It verifies built-in `document` JSON blob create/update/read/delete, schema-managed private/public visibility actions, private guest `403`, public guest read `200`, guest delete `403`, and snapshot decode.
-- On 2026-06-16 14:52 IST the permanent local create permission was `561441`; the smoke does not depend on a specific create default and instead verifies the explicit private/public visibility actions.
+- Static checks are `npm run verify:fast` and `npm run verify:static`.
+- These checks do not prove Daptin integration, live transport, asset upload/download, local SMTP/IMAP, or production auth behavior.
+- Daptin integration should be verified through the app UI against the persistent local instance.
+- Non-UI Daptin maintenance and provisioning should be done with `daptin-cli`.
 
 ### Historical Production Site/GCS Bootstrap Status
 

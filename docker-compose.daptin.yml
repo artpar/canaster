@@ -23,11 +23,18 @@ services:
       - -olric_env
       - local
     ports:
+      - "25:25"
+      - "465:465"
+      - "587:587"
       - "6336:8080"
       - "6443:6443"
       - "993:993"
+    extra_hosts:
+      - "canaster.local:127.0.0.1"
+      - "mail.canaster.local:127.0.0.1"
+      - "imap.canaster.local:127.0.0.1"
     volumes:
-      - ./daptin:/opt/daptin/schema:ro
+      - ./.tmp/daptin/local-schema:/opt/daptin/schema:ro
       - daptin-data:/data
     depends_on:
       postgres:

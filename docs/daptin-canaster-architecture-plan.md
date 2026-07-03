@@ -1,6 +1,6 @@
 # Canaster Daptin MVP Architecture Plan
 
-Status: verified MVP implementation plan.
+Status: verified MVP implementation plan; current verification workflow updated on 2026-07-03.
 Date: 2026-06-15.
 
 This is the concrete backend plan for MVP delivery. The MVP persists each Canaster workspace as one JSON file blob in Daptin's built-in `document` entity. Do not add a custom Canaster backend service and do not add a custom Canaster table for MVP.
@@ -187,7 +187,7 @@ Save order:
 ## Implementation Sequence
 
 1. Keep `daptin/schema_canaster.yaml` removed for app state. Do not reintroduce the stale `space`, `plane`, and `snapshot` schema before Daptin integration.
-2. Update `scripts/daptin-smoke.mjs` to verify built-in `document` JSON file blob CRUD through `daptin-client`:
+2. Use the persistent local Daptin instance for backend validation. The old `scripts/daptin-smoke.mjs` direct-backend smoke script has been removed because current backend-operation rules forbid custom HTTP probes. Replacement automation must use `daptin-cli` for non-UI backend operations or the running Canaster app UI for account/document flows. It still needs to prove:
    - create placeholder document;
    - patch private permission;
    - patch real JSON content;
@@ -201,7 +201,7 @@ Save order:
 6. Add minimal document open/create UI outside `NestedCanvasWorkspace`.
 7. Change `NestedCanvasWorkspace` persistence boundary so Daptin save/load sits outside engine/model helpers.
 8. Keep Dexie/localStorage as fallback cache.
-9. Run local Daptin smoke and frontend build.
+9. Run rule-compliant static verification and manually verify the relevant app UI flows against the persistent local Daptin instance.
 10. Deploy the same flow to production only after local MVP persistence works.
 
 ## Verification Gates
@@ -210,11 +210,13 @@ Run before calling MVP backend persistence complete:
 
 ```bash
 npm run daptin:up
-npm run daptin:smoke:local
-npm run build
+npm run dev:local
+npm run verify:static
 ```
 
-The smoke must prove:
+The static gate proves TypeScript correctness, dependency audit status, and whitespace/conflict-marker cleanliness. It does not prove Daptin integration.
+
+Manual app UI verification or future `daptin-cli`-backed automation must prove:
 
 - built-in `document` exists;
 - `document_content` stores and returns an `application/json` file payload;
