@@ -10,9 +10,9 @@ This is a reliability investigation and hardening task. Do not add product featu
 
 Read these first:
 
-- `docs/canvas-engine-technical-dents-report.md`
-- `docs/canvas-engine-reliability-audit.md`
-- `docs/find-all-canvas-engine-reliability-issues-prompt.md`
+- `docs/history/canvas-engine-technical-dents-report.md`
+- `docs/history/canvas-engine-reliability-audit.md`
+- `docs/prompts/find-all-canvas-engine-reliability-issues-prompt.md`
 - `src/engine/CanvasEngine.ts`
 - `src/engine/types.ts`
 - `src/engine/theme.ts`
@@ -282,7 +282,7 @@ If a test/probe script is added, run it and include the exact command and result
 
 Create or update:
 
-`docs/canvas-foundation-dents-investigation-report.md`
+`docs/history/canvas-foundation-dents-investigation-report.md`
 
 The report must include:
 
@@ -308,7 +308,7 @@ The report must include:
 
 The task is complete only when:
 
-- `docs/canvas-foundation-dents-investigation-report.md` exists.
+- `docs/history/canvas-foundation-dents-investigation-report.md` exists.
 - Every explicit invariant in this prompt is proven, disproven with evidence, or explicitly marked untested with a reason.
 - Every confirmed small foundation issue discovered during the investigation is fixed and verified.
 - Larger confirmed issues are documented with concrete reproduction evidence and a recommended next task.

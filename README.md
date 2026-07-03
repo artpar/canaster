@@ -19,7 +19,7 @@ The backend setup is defined in:
 - `docker-compose.daptin.yml`
 - `deploy/daptin/Dockerfile`
 - `daptin/README.md`
-- `docs/daptin-backend-groundwork.md`
+- `docs/daptin/daptin-backend-groundwork.md`
 
 Local backend:
 

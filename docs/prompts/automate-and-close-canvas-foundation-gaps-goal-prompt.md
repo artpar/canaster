@@ -10,10 +10,10 @@ This is a reliability, testability, and foundation-design task. Do not add produ
 
 Read these first:
 
-- `docs/canvas-foundation-remaining-reliability-report.md`
+- `docs/history/canvas-foundation-remaining-reliability-report.md`
 - `docs/canvas-foundation-devtools-probe.js`
-- `docs/canvas-foundation-dents-investigation-report.md`
-- `docs/find-remaining-canvas-foundation-reliability-issues-goal-prompt.md`
+- `docs/history/canvas-foundation-dents-investigation-report.md`
+- `docs/prompts/find-remaining-canvas-foundation-reliability-issues-goal-prompt.md`
 - `src/engine/CanvasEngine.ts`
 - `src/App.tsx`
 - `src/styles.css`
@@ -202,7 +202,7 @@ If you add an npm script or test/probe script, run it and include exact output.
 
 Create or update:
 
-`docs/canvas-foundation-gap-closure-report.md`
+`docs/history/canvas-foundation-gap-closure-report.md`
 
 The report must include:
 
@@ -225,7 +225,7 @@ The report must include:
 
 The task is complete only when:
 
-- `docs/canvas-foundation-gap-closure-report.md` exists.
+- `docs/history/canvas-foundation-gap-closure-report.md` exists.
 - Every explicit check in this prompt is proven, disproven with evidence, or explicitly marked untested with a reason.
 - Every confirmed small foundation issue discovered during the investigation is fixed and verified.
 - Larger confirmed issues are documented with reproduction evidence and recommended next task.

@@ -14,8 +14,8 @@ The MVP backend target is Daptin's existing built-in `document` entity. Do not c
 
 Read and verify these first:
 
-- `docs/daptin-canaster-architecture-plan.md`
-- `docs/daptin-backend-groundwork.md`
+- `docs/daptin/daptin-canaster-architecture-plan.md`
+- `docs/daptin/daptin-backend-groundwork.md`
 - `daptin/README.md`
 - `scripts/daptin-smoke.mjs`
 - `package.json`

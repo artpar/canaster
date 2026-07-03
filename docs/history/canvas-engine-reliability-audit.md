@@ -121,7 +121,7 @@ Console/network:
 
 ## Completion Criteria Audit
 
-- `docs/canvas-engine-reliability-audit.md` exists and is evidence-backed: complete.
+- `docs/history/canvas-engine-reliability-audit.md` exists and is evidence-backed: complete.
 - All small confirmed foundation bugs found during the audit are fixed: complete; selection no longer emits model changes.
 - `npm run build` passes: complete.
 - `npm audit --omit=dev` reports no vulnerabilities: complete.

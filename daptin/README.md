@@ -17,7 +17,7 @@ MVP uses Daptin's built-in `document` table for workspace storage:
 
 - `document_content`: one `application/json` file containing the full nested canvas snapshot, view state, and undo/redo history.
 
-The older `space` / `plane` / `snapshot` schema is stale and must not be used for MVP backend integration. Do not add `canaster_document` for MVP. See `docs/daptin-canaster-architecture-plan.md` for the concrete built-in `document` file-blob plan.
+The older `space` / `plane` / `snapshot` schema is stale and must not be used for MVP backend integration. Do not add `canaster_document` for MVP. See `docs/daptin/daptin-canaster-architecture-plan.md` for the concrete built-in `document` file-blob plan.
 
 Canaster ships an actions-only schema file for email OTP auth:
 
@@ -171,10 +171,10 @@ Current public TLS shape:
 - Public frontend auth calls should use `https://api.canaster.in`; after this schema is deployed, browser auth uses the schema-managed email OTP actions `request_canaster_email_otp` and `verify_canaster_email_otp`.
 - Production document storage has `world.permission(document)=1003811`, `Tables[].AccessGroups(document -> users)` relation permission `999424`, and `DefaultPermission(document)=16256`. Production asset storage has `world.permission(asset)=741632`, `Tables[].AccessGroups(asset -> users)` relation permission `770048`, and `DefaultPermission(asset)=16256`. These world-usergroup relations grant signed-in users table-level create/update where needed while private rows remain visible only to their owner. Do not add `DefaultGroups` on `document` or `asset`, because those become row-level group relations and leak private rows. The extra document `GuestExecute` bit is required for Daptin routed-template actions and does not grant anonymous create/update/delete. The asset world relation includes `GroupRead` only so `daptin-client` can load the asset resource definition for normal users. The four visibility action rows use `Actions[].AccessGroups(action -> users)` with permission `524288`. Do not use direct SQL, raw HTTP, or anonymous guest create/update/delete bits for the save path.
 
-See `docs/daptin-backend-groundwork.md` for the exact GCP commands and required CI/CD variables.
+See `docs/daptin/daptin-backend-groundwork.md` for the exact GCP commands and required CI/CD variables.
 
-See `docs/daptin-template-rendering-gotchas.md` for routed-template behavior, 100x reference patterns, slug mapping, and Daptin CLI pitfalls found while implementing Canaster share metadata.
+See `docs/daptin/daptin-template-rendering-gotchas.md` for routed-template behavior, 100x reference patterns, slug mapping, and Daptin CLI pitfalls found while implementing Canaster share metadata.
 
 ## Required CI/CD Configuration
 
-GitHub variables and secrets are listed in `docs/daptin-backend-groundwork.md`. Google Secret Manager must contain `canaster-daptin-vm-db-connection` for the VM runtime.
+GitHub variables and secrets are listed in `docs/daptin/daptin-backend-groundwork.md`. Google Secret Manager must contain `canaster-daptin-vm-db-connection` for the VM runtime.

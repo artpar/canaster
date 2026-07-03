@@ -14,7 +14,7 @@ This is a frontend/canvas foundation task. Do not do ER diagrams, backend design
 
 Start by reading and verifying:
 
-- `docs/product-complete-remaining-dents-report.md`
+- `docs/history/product-complete-remaining-dents-report.md`
 - `docs/README.md`
 - `scripts/run-canvas-foundation-probe.mjs`
 - `src/App.tsx`
@@ -219,7 +219,7 @@ Capture screenshots or snapshots for:
 
 Create or update:
 
-`docs/canvas-keyboard-touch-performance-completion-report.md`
+`docs/history/canvas-keyboard-touch-performance-completion-report.md`
 
 The report must include:
 

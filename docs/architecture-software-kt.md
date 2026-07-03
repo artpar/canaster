@@ -208,7 +208,7 @@ Current contract:
 - The UI exposes Private/Public only for saved online documents.
 - Group sharing remains deferred.
 
-See `docs/document-visibility-implementation.md` for the detailed visibility contract.
+See `docs/current/document-visibility-implementation.md` for the detailed visibility contract.
 
 What not to do:
 

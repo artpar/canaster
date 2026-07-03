@@ -15,7 +15,7 @@ Key files:
 - `src/App.tsx`
 - `src/engine/sampleModel.ts`
 - `src/styles.css`
-- `docs/fix-canvas-engine-foundation-prompt.md`
+- `docs/prompts/fix-canvas-engine-foundation-prompt.md`
 
 The engine currently supports high-DPI canvas rendering, grid, fit/reset/zoom controls, pan, wheel zoom, node selection, drag, resize, culling counters, theme toggle, pointer cancellation cleanup, and `onModelChange` events for committed model changes.
 
@@ -90,7 +90,7 @@ For each runtime probe, record:
 
 Create or update a report at:
 
-`docs/canvas-engine-reliability-audit.md`
+`docs/history/canvas-engine-reliability-audit.md`
 
 The report must include:
 
@@ -106,7 +106,7 @@ If you change code, keep the changes focused on reliability fixes in the current
 
 The task is complete only when:
 
-- `docs/canvas-engine-reliability-audit.md` exists and is evidence-backed.
+- `docs/history/canvas-engine-reliability-audit.md` exists and is evidence-backed.
 - All small confirmed foundation bugs found during the audit are fixed.
 - `npm run build` passes.
 - `npm audit --omit=dev` reports no vulnerabilities.

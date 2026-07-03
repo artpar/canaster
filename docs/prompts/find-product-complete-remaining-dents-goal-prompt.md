@@ -10,8 +10,8 @@ This is a frontend/canvas foundation repo. Do not do ER diagrams, database analy
 
 Read and verify these first:
 
-- `docs/canway-technical-dents-audit-report.md`
-- `docs/canvas-foundation-gap-closure-report.md`
+- `docs/history/canway-technical-dents-audit-report.md`
+- `docs/history/canvas-foundation-gap-closure-report.md`
 - `docs/canvas-foundation-devtools-probe.js`
 - `scripts/run-canvas-foundation-probe.mjs`
 - `package.json`
@@ -212,7 +212,7 @@ npm run probe:canvas
 
 Create or update:
 
-`docs/product-complete-remaining-dents-report.md`
+`docs/history/product-complete-remaining-dents-report.md`
 
 The report must include:
 
@@ -236,7 +236,7 @@ The report must include:
 
 The task is complete only when:
 
-- `docs/product-complete-remaining-dents-report.md` exists.
+- `docs/history/product-complete-remaining-dents-report.md` exists.
 - Every category above is classified with evidence.
 - `npm run build` passed.
 - `npm audit --omit=dev` passed or vulnerabilities are documented.

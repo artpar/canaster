@@ -80,7 +80,7 @@ Target:
 - 1,000 visible nodes: max frame below `100ms`;
 - 2,000 visible nodes: max frame below `200ms`.
 
-Before evidence from `docs/product-complete-remaining-dents-report.md`:
+Before evidence from `docs/history/product-complete-remaining-dents-report.md`:
 
 - 1,000 nodes: max frame around `699ms`, average `43.2ms`;
 - 2,000 nodes: max frame around `1995.8ms`, average `109.7ms`.

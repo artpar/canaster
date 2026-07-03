@@ -10,7 +10,7 @@ This project is a frontend/canvas foundation. **Do not perform ER diagram, datab
 
 Read these first:
 
-- `docs/canvas-foundation-gap-closure-report.md`
+- `docs/history/canvas-foundation-gap-closure-report.md`
 - `docs/canvas-foundation-devtools-probe.js`
 - `scripts/run-canvas-foundation-probe.mjs`
 - `package.json`
@@ -205,7 +205,7 @@ npm run probe:canvas
 
 Create or update:
 
-`docs/canway-technical-dents-audit-report.md`
+`docs/history/canway-technical-dents-audit-report.md`
 
 The report must include:
 
@@ -227,7 +227,7 @@ The report must include:
 
 The task is complete only when:
 
-- `docs/canway-technical-dents-audit-report.md` exists.
+- `docs/history/canway-technical-dents-audit-report.md` exists.
 - Every category above is classified with evidence.
 - `npm run build` has passed.
 - `npm audit --omit=dev` has passed or any vulnerability is documented with package evidence.

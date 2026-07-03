@@ -6,7 +6,7 @@ Canaster uses Daptin as the backend. The frontend owns nested canvas rendering a
 
 There is no Canaster-specific API server in v1.
 
-The concrete MVP backend architecture and implementation plan is `docs/daptin-canaster-architecture-plan.md`. That plan is based on verified Daptin docs/source/runtime behavior and supersedes both the earlier normalized `space` / `plane` / `snapshot` model and the temporary `canaster_document` proposal.
+The concrete MVP backend architecture and implementation plan is `docs/daptin/daptin-canaster-architecture-plan.md`. That plan is based on verified Daptin docs/source/runtime behavior and supersedes both the earlier normalized `space` / `plane` / `snapshot` model and the temporary `canaster_document` proposal.
 
 ## Daptin Responsibilities
 

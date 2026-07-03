@@ -4,7 +4,7 @@ Last updated: 2026-06-17
 
 This document describes the product journeys the app should support from the user's point of view. It is intentionally written in product language. Backend details remain implementation notes elsewhere.
 
-Release-readiness evidence for these journeys is tracked in `docs/canaster-release-readiness-report.md`.
+Release-readiness evidence for these journeys is tracked in `docs/current/canaster-release-readiness-report.md`.
 
 ## Product Frame
 

@@ -152,7 +152,7 @@ rg -n "CanvasEngine|setModel|onModelChange|onStatus|sampleModel|ViewportStatus|C
 rg -n "addEventListener|removeEventListener|requestAnimationFrame|cancelAnimationFrame|ResizeObserver|setPointerCapture|releasePointerCapture|PointerEvent|WheelEvent|KeyboardEvent" src docs scripts
 rg -n "tabIndex|aria-|role=|focus|blur|statusbar|button|canvas|touch-action|pointerType|pointerId|lostpointercapture|pointercancel|wheel|dblclick" src docs scripts
 rg -n "TODO|FIXME|hack|ts-ignore|eslint-disable|as unknown|any|throw new Error|console\\." src docs scripts
-rg -n "express|server|api|database|sqlite|postgres|schema|auth|fetch|localStorage|indexedDB|ER diagram|entity relationship" src scripts package.json docs/find-all-remaining-technical-dents-goal-prompt.md
+rg -n "express|server|api|database|sqlite|postgres|schema|auth|fetch|localStorage|indexedDB|ER diagram|entity relationship" src scripts package.json docs/prompts/find-all-remaining-technical-dents-goal-prompt.md
 ```
 
 Findings:
@@ -257,7 +257,7 @@ Next task:
 - Browser/device coverage: Chrome/CDP and emulated mobile/high-DPR were checked; Safari, Firefox, and real touch hardware were not.
 - Accessibility completeness: nonvisual node/object inspection and manipulation remain product-layer work.
 - Performance profiling: the probe checks correctness, culling coherence, and obvious runtime failure. It is not a frame-time profiler.
-- Historical docs: older reports are useful audit history but can describe previous behavior, such as pre-automation or pre-keyboard-policy gaps. Treat this report and `docs/canvas-foundation-gap-closure-report.md` as current.
+- Historical docs: older reports are useful audit history but can describe previous behavior, such as pre-automation or pre-keyboard-policy gaps. Treat this report and `docs/history/canvas-foundation-gap-closure-report.md` as current.
 
 ## Out Of Scope
 
