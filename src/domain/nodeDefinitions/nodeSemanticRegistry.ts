@@ -1,6 +1,5 @@
 import { asJsonObject, cloneNodeData } from '../../core/nodeData';
 import { canvasNodeSemanticDefinition } from './canvasNodeSemanticDefinition';
-import { cardNodeSemanticDefinition } from './cardNodeSemanticDefinition';
 import { checkNodeSemanticDefinition } from './checkNodeSemanticDefinition';
 import { embedNodeSemanticDefinition } from './embedNodeSemanticDefinition';
 import { imageNodeSemanticDefinition } from './imageNodeSemanticDefinition';
@@ -13,7 +12,6 @@ import { textNodeSemanticDefinition } from './textNodeSemanticDefinition';
 import { unknownNodeSemanticDefinition } from './unknownNodeSemanticDefinition';
 
 const nodeSemanticDefinitions = createRegistry([
-  cardNodeSemanticDefinition,
   textNodeSemanticDefinition,
   tableNodeSemanticDefinition,
   imageNodeSemanticDefinition,

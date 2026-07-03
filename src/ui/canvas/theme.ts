@@ -1,8 +1,6 @@
 import type { CanasterThemeCanvasPatternKind, CanasterThemeId } from '../theme/CanasterTheme';
 import { CANASTER_THEMES, canasterThemeById } from '../theme/CanasterThemeRegistry';
 
-type NodeKindAccent = 'task' | 'data' | 'system';
-
 export type CanvasTheme = {
   name: CanasterThemeId;
   bg: string;
@@ -54,10 +52,7 @@ export type CanvasTheme = {
   nodeBodyLineHeight: number;
   nodeLabelLineHeight: number;
   nodeRowHeight: number;
-  nodeAccentWidth: number;
-  nodeAccentHeight: number;
   nodeControlRadius: number;
-  kind: Record<NodeKindAccent, string>;
 };
 
 export const THEMES: Record<CanasterThemeId, CanvasTheme> = Object.fromEntries(
@@ -117,14 +112,7 @@ export function canvasThemeFor(themeId: string): CanvasTheme {
     nodeBodyLineHeight: theme.components.node.bodyLineHeight,
     nodeLabelLineHeight: theme.components.node.labelLineHeight,
     nodeRowHeight: theme.components.node.rowHeight,
-    nodeAccentWidth: theme.components.node.accentWidth,
-    nodeAccentHeight: theme.components.node.accentHeight,
     nodeControlRadius: theme.components.node.controlRadius,
-    kind: {
-      task: theme.colors.node.task,
-      data: theme.colors.node.data,
-      system: theme.colors.node.system,
-    },
   };
 }
 

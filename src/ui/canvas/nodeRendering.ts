@@ -18,8 +18,6 @@ export type CanvasNodeLayout = {
   metaY: number;
   contentY: number;
   footerHeight: number;
-  accentWidth: number;
-  accentHeight: number;
   rowHeight: number;
   controlRadius: number;
 };
@@ -44,8 +42,6 @@ export function nodeLayout(theme: CanvasTheme): CanvasNodeLayout {
     metaY: theme.nodeMetaY,
     contentY: theme.nodeContentY,
     footerHeight: theme.nodeBodyLineHeight,
-    accentWidth: theme.nodeAccentWidth,
-    accentHeight: theme.nodeAccentHeight,
     rowHeight: theme.nodeRowHeight,
     controlRadius: theme.nodeControlRadius,
   };
@@ -114,14 +110,6 @@ export function drawTypeBadge(ctx: CanvasRenderingContext2D, rect: NodeContentRe
     rect.x + layout.insetX,
     rect.y + Math.max(0, rect.h - layout.labelLineHeight),
   );
-}
-
-export function drawAccentMark(ctx: CanvasRenderingContext2D, rect: NodeContentRect, color: string, theme: CanvasTheme) {
-  const layout = nodeLayout(theme);
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.roundRect(rect.x, rect.y, layout.accentWidth, layout.accentHeight, Math.max(2, layout.accentHeight / 2));
-  ctx.fill();
 }
 
 export function drawNodeTitle(ctx: CanvasRenderingContext2D, rect: NodeContentRect, title: string, theme: CanvasTheme, y = nodeLayout(theme).titleY) {

@@ -6,9 +6,9 @@ Purpose: decide the panel vocabulary before adding more canvas content types. Ke
 
 ## Evidence
 
-- Current built-in node types: `card`, `text`, `image`, `canvas`.
+- Current built-in node types: `text`, `table`, `image`, `canvas`, `check`, `pdf`, `md`, and `embed`.
 - Existing registry boundary: `src/engine/nodeTypes/*`; core canvas still owns geometry, selection, camera, snapping, copy/paste, and lifecycle.
-- Existing work-items drawer lists nodes through `describeNode(...)` and routes node actions, but it does not yet create panels or edit type-specific data.
+- Existing panel access lists nodes through `describeNode(...)` and routes node actions, but it does not yet create panels or edit type-specific data.
 - `set-node-data` exists at the document-command layer, so type-specific editors should use that path instead of mutating node data directly.
 - Real image rendering is not implemented yet; the image type is currently a placeholder.
 - Daptin is already Canaster's backend. The repo guide documents `document.document_content` file-blob storage, production GCS-backed `cloud_store`, and schema-backed cloud-store blob columns for mail/outbox. Images should use the same Daptin-native storage pattern through an asset/media entity instead of waiting for a custom backend.
@@ -19,7 +19,6 @@ Purpose: decide the panel vocabulary before adding more canvas content types. Ke
 
 | User label | Engine type | Status | UX role |
 |---|---:|---|---|
-| Work item | `card` | exists | Short operational object with title, detail, and task/data/system accent. |
 | Note | `text` | exists | Plain text or paragraph note. Do not split `text` and `paragraph` yet. |
 | Image | `image` | exists, needs asset backing | Single visual reference with alt text and contain/cover fit. |
 | View | `canvas` | exists | A child canvas portal; it is navigation, not just content. |
@@ -29,12 +28,12 @@ Purpose: decide the panel vocabulary before adding more canvas content types. Ke
 
 ## Shared UX Rules
 
-- A panel is a work object, not a decorative card.
+- A panel is a practical document object, not decoration.
 - Canvas rendering stays compact: title/state first, details only when zoom and size allow.
-- The work-items drawer becomes the plain-language inspector: select, edit content, toggle state, open actions.
+- The panel access drawer becomes the plain-language inspector: select, edit content, toggle state, open actions.
 - Creation should be a small **Add panel** popover from the toolbar, not a modal.
 - Default placement: center of active viewport, snapped to grid, selected immediately.
-- Type badges stay short: `WORK`, `NOTE`, `IMAGE`, `VIEW`, `LIST`, `WEB`.
+- Type badges stay short: `NOTE`, `IMAGE`, `VIEW`, `LIST`, `WEB`, `TABLE`, `PDF`, `MD`.
 - Internal entity/table/type ids stay under 9 characters. Keep readable names in labels, not identifiers.
 - All panel data remains JSON-safe. Runtime loading/error state does not live in `node.data`.
 - Media bytes do not live in `node.data`. Image panels store an asset reference plus display metadata; Daptin owns the file/blob row and cloud-store object.
@@ -44,7 +43,6 @@ Purpose: decide the panel vocabulary before adding more canvas content types. Ke
 
 | Type | Canvas View | Inspector / Drawer | Empty / Error |
 |---|---|---|---|
-| Work item | Accent mark, title, 1-2 detail lines, semantic badge. | Title, detail, accent segmented control. | Untitled item with muted detail prompt. |
 | Note | Plain text preview, line count in drawer. | Textarea with simple line wrapping; no rich text first pass. | `Empty note`; click/edit from drawer. |
 | Image | Real thumbnail when asset is loaded; placeholder otherwise; fit badge only when needed. | Upload/select asset, alt text, caption, contain/cover control. | Missing asset, failed load, unsafe URL, missing alt. |
 | View | Title plus live aperture/preview; action is open/create/focus. | Open view, preview here, rename title later. | No view inside; Add view inside. |
@@ -136,8 +134,8 @@ First-pass behavior:
 Implementation phases:
 
 1. Add registry type only: `BuiltInNodeTypes.check`, `checkNode.ts`, valid/malformed fixtures.
-2. Add creation path: toolbar **Add panel** popover with Work item, Note, Image, View, Checklist.
-3. Add inspector editing: selected checklist editor in work-items drawer using `set-node-data`.
+2. Add creation path: toolbar **Add panel** popover with Note, Image, View, Checklist.
+3. Add inspector editing: selected checklist editor in the panel access drawer using `set-node-data`.
 4. Add direct canvas toggles only after node actions can carry an item id cleanly.
 
 Acceptance:

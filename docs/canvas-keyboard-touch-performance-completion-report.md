@@ -68,7 +68,7 @@ Evidence from `npm run probe:canvas`:
 
 ## Implemented Performance Contract
 
-The old large-graph dent came from rendering full card text and shadow treatment for every visible node at very low zoom. The engine now switches to compact node rendering when either:
+The old large-graph dent came from rendering full node text and shadow treatment for every visible node at very low zoom. The engine now switches to compact node rendering when either:
 
 - camera scale is below `0.22`; or
 - more than `350` nodes are visible.

@@ -1693,7 +1693,6 @@ export class CanvasEngine {
       return;
     }
     if (this.requestAddMenuForEmptyCanvas(event)) return;
-    this.executeCommand({ type: 'create-node', nodeType: BuiltInNodeTypes.card, source: 'pointer', at: world });
   };
 
   private onContextMenu = (event: MouseEvent) => {
@@ -2871,7 +2870,7 @@ function intersectNodeContentRects(a: NodeContentRect, b: NodeContentRect): Node
 }
 
 function panelLabelFor(displayName: string) {
-  return displayName === 'Card' ? 'Work item' : displayName;
+  return displayName;
 }
 
 function keyMovement(key: string, step: number) {

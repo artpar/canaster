@@ -419,15 +419,10 @@ button {
   font-weight: var(--canaster-font-title-weight);
 }
 
-.node-live-card-detail,
 .node-live-textarea {
   flex: 1 1 auto;
   min-height: 0;
   resize: none;
-}
-
-.node-live-card-detail {
-  padding: var(--canaster-space-xs);
 }
 
 .node-live-textarea {
@@ -3000,7 +2995,7 @@ button {
   padding: 0;
 }
 
-.account-popover-docked .account-identity-card,
+.account-popover-docked .account-identity-panel,
 .account-popover-docked .account-session-grid,
 .account-popover-docked .account-trust-list {
   border: 0;
@@ -3721,7 +3716,7 @@ button {
   line-height: 1.45;
 }
 
-.account-identity-card {
+.account-identity-panel {
   display: grid;
   gap: var(--canaster-space-md);
   border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
@@ -4038,7 +4033,7 @@ button {
 
 :root[data-theme-mode='light'] .account-tabs,
 :root[data-theme-mode='light'] .account-status,
-:root[data-theme-mode='light'] .account-identity-card,
+:root[data-theme-mode='light'] .account-identity-panel,
 :root[data-theme-mode='light'] .account-session-grid,
 :root[data-theme-mode='light'] .account-trust-list > div {
   background: var(--canaster-color-panel-muted);

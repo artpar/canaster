@@ -36,10 +36,10 @@ The catalog should ship as finished example documents, not forms waiting to be f
 
 ## Current Constraints
 
-- Use the current primitives first: work item, note, checklist, image, and view.
+- Use the current primitives first: note, checklist, image, table, embed, document, and view.
 - Do not add new node types just to make the first catalog pass easier.
 - If a document is awkward with current primitives, record that as evidence for future primitives.
-- Keep product language practical: workspace, document, view, panel, work item, save, open, account.
+- Keep product language practical: workspace, document, view, panel, note, checklist, save, open, account.
 - Do not make the app feel like a developer graph tool, BI dashboard, generic whiteboard, or novelty mind-map app.
 - For copyrighted universes, avoid shipping exact names/art unless that decision is explicit. We can still create adjacent patterns, such as an anime power atlas or fictional clan-world map.
 
@@ -220,7 +220,7 @@ Why: public factual content, beautiful spatial layout, and a natural fit for nes
 ## Recommended Build Order
 
 1. **World Cup 2026 Groups And Knockout Ladder**
-   - Why first: validates bracket, lane, tournament, and dense match-card layouts.
+   - Why first: validates bracket, lane, tournament, and dense match-panel layouts.
 
 2. **Top 100 Movies Visual Canon**
    - Why second: validates ranking, curation, checklist, and watch-path documents.
@@ -255,7 +255,7 @@ Each catalog document should have:
 - a strong root composition
 - 5-8 top-level view nodes
 - at least 2-4 child views with real content
-- a mix of work items, notes, checklists, image placeholders, and nested views
+- a mix of notes, checklists, image placeholders, tables, embeds, documents, and nested views
 - clear spatial structure: lanes, clusters, map zones, timelines, brackets, or rankings
 - practical labels that help a user understand the document without instructions
 - enough content to feel finished, not skeletal

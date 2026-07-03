@@ -6,7 +6,7 @@ You are working in `/Users/artpar/workspace/code/canway`.
 
 Finish the native, recursive, infinite nested canvas implementation for Canaster.
 
-Canaster is not a preview-card app and not a screenshot-based whiteboard. It is a recursive nested canvas system. Every canvas can contain child canvas panes, and every child canvas can itself contain child canvas panes, indefinitely. The implementation must treat this as one recursive rendering and interaction model, not as one-off special cases for root, child, preview, or active view.
+Canaster is not a preview-tile app and not a screenshot-based whiteboard. It is a recursive nested canvas system. Every canvas can contain child canvas panes, and every child canvas can itself contain child canvas panes, indefinitely. The implementation must treat this as one recursive rendering and interaction model, not as one-off special cases for root, child, preview, or active view.
 
 ## Product Model
 
@@ -27,7 +27,7 @@ The core visual model is a 3x3 spatial canvas composition:
 - Canvas nodes inside any pane are themselves live nested canvases and must recurse.
 - This model applies whether the canvas is the main active view or is being rendered inside another canvas.
 
-The visible result must be a recursive grid of canvases and sibling context panes. A nested canvas must never degrade into a grey placeholder, a miniature symbolic card, a single guessed child preview, or a static screenshot.
+The visible result must be a recursive grid of canvases and sibling context panes. A nested canvas must never degrade into a grey placeholder, a miniature symbolic tile, a single guessed child preview, or a static screenshot.
 
 ## Hard Requirements
 
@@ -50,7 +50,7 @@ The visible result must be a recursive grid of canvases and sibling context pane
 
 4. Parent-context panes must render real sibling content.
    - Do not filter parent-context panes to only siblings that are canvas nodes.
-   - Normal card/text/image siblings must still appear in the N/S/W/E/corner panes.
+   - Normal note/text/image siblings must still appear in the N/S/W/E/corner panes.
    - Canvas siblings must render as nested canvases and recurse.
 
 5. Child canvas panes must remain live.
@@ -148,4 +148,3 @@ The task is complete only when:
 - CPU and memory profiling show no freeze, infinite loop, or whole-tree rerender on local interactions.
 - Stale competing code paths are removed.
 - `npm run build` passes.
-

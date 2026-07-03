@@ -238,7 +238,7 @@ The system uses a hybrid of tonal layering, canvas strokes, and functional overl
 - **Do** preserve the 6px control radius and 8px panel/node radius unless a new component has a strong usability reason.
 - **Do** keep toolbar controls stable at 32px desktop and 28px mobile so icons never shift layout.
 - **Do** make sync, selection, disabled, loading, and error states visible through text, shape, icon, or stroke, not color alone.
-- **Do** use practical labels for non-technical professionals; object names should sound like work items, not graph/database primitives.
+- **Do** use practical labels for non-technical professionals; object names should sound like notes, checklists, views, and documents, not graph/database primitives.
 
 ### Don't:
 - **Don't** make this feel like a developer diagramming tool, a BI dashboard, a generic whiteboard, or a novelty mind-map app.

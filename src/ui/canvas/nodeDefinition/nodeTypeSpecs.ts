@@ -17,19 +17,6 @@ export type NodeTypeSpec = {
 };
 
 export const nodeTypeSpecs = {
-  card: {
-    type: BuiltInNodeTypes.card,
-    displayName: 'Card',
-    roleDescription: 'Work item',
-    typeBadge: 'WORK',
-    addMenu: {
-      label: 'Work item',
-      detail: 'Title, detail, and work accent',
-      badge: 'WORK',
-    },
-    defaultSize: { w: 256, h: 128 },
-    minSize: { w: 140, h: 76 },
-  },
   text: {
     type: BuiltInNodeTypes.text,
     displayName: 'Text',

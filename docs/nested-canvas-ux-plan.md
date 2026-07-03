@@ -660,7 +660,7 @@ Nonvisual:
 
 Callout: parent context is eight-directional.
 
-Do not collapse parent context into a right-side shelf, floating cards, labeled card buttons, a panel list, or breadcrumbs.
+Do not collapse parent context into a right-side shelf, floating panels, labeled panel buttons, a panel list, or breadcrumbs.
 
 ## NestedCanvasWorkspace
 
@@ -756,7 +756,7 @@ CSS rules:
 - Active plane fills `.nested-center-cell`, not the outer stage.
 - Portal overlays use absolute rects from `PortalLayout`.
 - Parent-context visuals are edge-clipped real `CanvasEngine` canvases for the selected nearest sibling in each pane; SVG is only the transparent hit/affordance layer over rendered canvas content.
-- Do not render parent-context siblings as cards, text labels, shelves, or node-access-panel items.
+- Do not render parent-context siblings as floating panels, text labels, shelves, or node-access-panel items.
 
 App integration:
 
@@ -871,18 +871,18 @@ Add sample nested collection fixtures for probes only:
 
 ```ts
 Root canvas:
-  - source card
+  - source note
   - planning canvas portal -> planning canvas
-  - sibling card above portal
+  - sibling note above portal
   - sibling canvas portal to the right -> sibling canvas
-  - sibling card bottom-left
+  - sibling note bottom-left
 
 Planning canvas:
-  - three cards
+  - three notes
   - one text node
 
 Sibling canvas:
-  - one card
+  - one note
 ```
 
 Use deterministic ids:
@@ -947,7 +947,7 @@ Add `npm run probe:nested`.
 - parent-context region assignment matches the documented angle buckets;
 - projected portal activation moves sideways into sibling child canvas;
 - projected non-portal activation returns to parent and selects that node;
-- no `.halo-item` card DOM exists and no visible text labels render inside `.parent-context-field`;
+- no `.halo-item` panel DOM exists and no visible text labels render inside `.parent-context-field`;
 - copy/paste of portal strips `childCanvasId`;
 - delete portal with child opens confirmation and does not delete before confirmation;
 - confirm delete removes the portal and descendant documents;
@@ -968,7 +968,7 @@ npm run probe:canvas
 npm run probe:nested
 git diff --check
 rg -n "node\\.kind|node\\.label|node\\.detail|CanvasNodeKind" src scripts
-rg -n "node\\.kind|node\\.label|node\\.detail|CanvasNodeKind" docs --glob '!docs/node-plugin-contract-plan.md'
+rg -n "node\\.kind|node\\.label|node\\.detail|CanvasNodeKind" docs
 ```
 
 Expected search result:

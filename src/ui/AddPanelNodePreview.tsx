@@ -108,8 +108,6 @@ function previewNodeForType(type: string, w: number, h: number): CanvasNode {
 
 function previewDataForType(type: string): JsonObject {
   switch (type) {
-    case BuiltInNodeTypes.card:
-      return { title: 'Work item', detail: 'Next step and owner', accent: 'task' };
     case BuiltInNodeTypes.text:
       return { text: 'Field notes\nFollow up' };
     case BuiltInNodeTypes.table:

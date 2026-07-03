@@ -26,28 +26,24 @@
           "nodes": [
             {
               "id": "building-snapshot",
-              "type": "card",
+              "type": "text",
               "x": 36,
               "y": 58,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Riverton Court",
-                "detail": "64 apartments, four floors, one elevator, central hot water, split HVAC, flat roof, parking, laundry, trash room.",
-                "accent": "data"
+                "text": "Riverton Court\n64 apartments, four floors, one elevator, central hot water, split HVAC, flat roof, parking, laundry, trash room."
               }
             },
             {
               "id": "operating-rule",
-              "type": "card",
+              "type": "text",
               "x": 36,
               "y": 238,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Year-Round Care",
-                "detail": "Treat the building as a living system: inspect, document, correct, and learn before issues become emergencies.",
-                "accent": "task"
+                "text": "Year-Round Care\nTreat the building as a living system: inspect, document, correct, and learn before issues become emergencies."
               }
             },
             {
@@ -65,28 +61,24 @@
             },
             {
               "id": "resident-priority",
-              "type": "card",
+              "type": "text",
               "x": 774,
               "y": 58,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Resident Safety",
-                "detail": "Life-safety, habitability, egress, heat, water, and communication outrank cosmetic work.",
-                "accent": "system"
+                "text": "Resident Safety\nLife-safety, habitability, egress, heat, water, and communication outrank cosmetic work."
               }
             },
             {
               "id": "records-priority",
-              "type": "card",
+              "type": "text",
               "x": 774,
               "y": 238,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Proof and Records",
-                "detail": "Every inspection, vendor visit, photo, deficiency, and correction needs a durable place in the record.",
-                "accent": "data"
+                "text": "Proof and Records\nEvery inspection, vendor visit, photo, deficiency, and correction needs a durable place in the record."
               }
             },
             {
@@ -241,41 +233,35 @@
           "nodes": [
             {
               "id": "property-facts",
-              "type": "card",
+              "type": "text",
               "x": -340,
               "y": -168,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Property Facts",
-                "detail": "Built 1986. Four stories. 64 units. Elevator. Central domestic hot water. No on-site manager overnight.",
-                "accent": "data"
+                "text": "Property Facts\nBuilt 1986. Four stories. 64 units. Elevator. Central domestic hot water. No on-site manager overnight."
               }
             },
             {
               "id": "building-stack",
-              "type": "card",
+              "type": "text",
               "x": -24,
               "y": -168,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Building Stack",
-                "detail": "Ground: lobby, laundry, trash. Floors 2-4: apartments. Roof: drains, exhaust, make-up air, antenna.",
-                "accent": "data"
+                "text": "Building Stack\nGround: lobby, laundry, trash. Floors 2-4: apartments. Roof: drains, exhaust, make-up air, antenna."
               }
             },
             {
               "id": "resident-profile",
-              "type": "card",
+              "type": "text",
               "x": 292,
               "y": -168,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Resident Profile",
-                "detail": "Families, older residents, shift workers, pets, delivery traffic, and accessibility needs shape maintenance timing.",
-                "accent": "task"
+                "text": "Resident Profile\nFamilies, older residents, shift workers, pets, delivery traffic, and accessibility needs shape maintenance timing."
               }
             },
             {
@@ -328,41 +314,35 @@
           "nodes": [
             {
               "id": "front-entrance",
-              "type": "card",
+              "type": "text",
               "x": -340,
               "y": -162,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Front Entrance",
-                "detail": "Main callbox, package shelf, lobby camera, fire panel, resident notices, and primary key box.",
-                "accent": "data"
+                "text": "Front Entrance\nMain callbox, package shelf, lobby camera, fire panel, resident notices, and primary key box."
               }
             },
             {
               "id": "service-entry",
-              "type": "card",
+              "type": "text",
               "x": -28,
               "y": -162,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Service Entry",
-                "detail": "Trash room door, loading zone, janitor closet, vendor sign-in, and after-hours access route.",
-                "accent": "task"
+                "text": "Service Entry\nTrash room door, loading zone, janitor closet, vendor sign-in, and after-hours access route."
               }
             },
             {
               "id": "parking-drainage",
-              "type": "card",
+              "type": "text",
               "x": 284,
               "y": -162,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Parking and Drainage",
-                "detail": "Catch basins, snow pile zones, pothole tracking, lighting coverage, and tow/fire-lane markings.",
-                "accent": "system"
+                "text": "Parking and Drainage\nCatch basins, snow pile zones, pothole tracking, lighting coverage, and tow/fire-lane markings."
               }
             },
             {
@@ -427,41 +407,35 @@
           "nodes": [
             {
               "id": "water-main",
-              "type": "card",
+              "type": "text",
               "x": -340,
               "y": -172,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Water Main",
-                "detail": "Mechanical room west wall. Tag valve, keep handle clear, and record every emergency shutoff.",
-                "accent": "system"
+                "text": "Water Main\nMechanical room west wall. Tag valve, keep handle clear, and record every emergency shutoff."
               }
             },
             {
               "id": "gas-electric",
-              "type": "card",
+              "type": "text",
               "x": -28,
               "y": -172,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Gas and Electric",
-                "detail": "Meter room and main electrical panels require clear working space and controlled vendor access.",
-                "accent": "system"
+                "text": "Gas and Electric\nMeter room and main electrical panels require clear working space and controlled vendor access."
               }
             },
             {
               "id": "fire-system-valves",
-              "type": "card",
+              "type": "text",
               "x": 284,
               "y": -172,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Fire System Valves",
-                "detail": "Riser room valves, gauges, tamper switches, and drain paths need protection from storage creep.",
-                "accent": "task"
+                "text": "Fire System Valves\nRiser room valves, gauges, tamper switches, and drain paths need protection from storage creep."
               }
             },
             {
@@ -578,15 +552,13 @@
             },
             {
               "id": "calendar-rule",
-              "type": "card",
+              "type": "text",
               "x": 198,
               "y": 118,
               "w": 316,
               "h": 132,
               "data": {
-                "title": "Cadence Rule",
-                "detail": "Recurring maintenance owns the calendar. Emergency work interrupts it, but should not erase it.",
-                "accent": "task"
+                "text": "Cadence Rule\nRecurring maintenance owns the calendar. Emergency work interrupts it, but should not erase it."
               }
             },
             {
@@ -651,28 +623,24 @@
             },
             {
               "id": "work-triage",
-              "type": "card",
+              "type": "text",
               "x": 20,
               "y": -148,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Work Triage",
-                "detail": "Separate emergencies, habitability, scheduled repairs, cosmetic work, and capital issues at intake.",
-                "accent": "task"
+                "text": "Work Triage\nSeparate emergencies, habitability, scheduled repairs, cosmetic work, and capital issues at intake."
               }
             },
             {
               "id": "housekeeping",
-              "type": "card",
+              "type": "text",
               "x": 332,
               "y": -148,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Housekeeping Signals",
-                "detail": "Trash, odors, pests, clutter, and water marks often reveal system problems before residents report them.",
-                "accent": "data"
+                "text": "Housekeeping Signals\nTrash, odors, pests, clutter, and water marks often reveal system problems before residents report them."
               }
             },
             {
@@ -775,15 +743,13 @@
             },
             {
               "id": "backlog-review",
-              "type": "card",
+              "type": "text",
               "x": 388,
               "y": -156,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Backlog Review",
-                "detail": "Look for repeated unit lines, unresolved vendor tickets, missing photos, and stalled resident communication.",
-                "accent": "task"
+                "text": "Backlog Review\nLook for repeated unit lines, unresolved vendor tickets, missing photos, and stalled resident communication."
               }
             },
             {
@@ -886,15 +852,13 @@
             },
             {
               "id": "seasonal-proof",
-              "type": "card",
+              "type": "text",
               "x": 388,
               "y": -150,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Proof Pack",
-                "detail": "Photos, dates, vendor reports, and correction notes make seasonal work visible months later.",
-                "accent": "data"
+                "text": "Proof Pack\nPhotos, dates, vendor reports, and correction notes make seasonal work visible months later."
               }
             },
             {
@@ -921,41 +885,35 @@
           "nodes": [
             {
               "id": "nspire-focus",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": -164,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Health and Safety First",
-                "detail": "Use HUD NSPIRE as a practical lens: health, safety, functional defects, and year-round maintenance.",
-                "accent": "system"
+                "text": "Health and Safety First\nUse HUD NSPIRE as a practical lens: health, safety, functional defects, and year-round maintenance."
               }
             },
             {
               "id": "local-code",
-              "type": "card",
+              "type": "text",
               "x": -36,
               "y": -164,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Local Code Check",
-                "detail": "Confirm adopted property maintenance, fire, elevator, and rental inspection rules with the local authority.",
-                "accent": "task"
+                "text": "Local Code Check\nConfirm adopted property maintenance, fire, elevator, and rental inspection rules with the local authority."
               }
             },
             {
               "id": "evidence-binder",
-              "type": "card",
+              "type": "text",
               "x": 276,
               "y": -164,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Evidence Binder",
-                "detail": "Keep inspection reports, deficiency corrections, photos, resident notices, vendor reports, and dates together.",
-                "accent": "data"
+                "text": "Evidence Binder\nKeep inspection reports, deficiency corrections, photos, resident notices, vendor reports, and dates together."
               }
             },
             {
@@ -1119,54 +1077,46 @@
           "nodes": [
             {
               "id": "fire-alarm",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": -174,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Fire Alarm",
-                "detail": "Panel status, monitoring account, annual inspection, trouble signals, pull stations, horns/strobes, and deficiency reports.",
-                "accent": "system"
+                "text": "Fire Alarm\nPanel status, monitoring account, annual inspection, trouble signals, pull stations, horns/strobes, and deficiency reports."
               }
             },
             {
               "id": "sprinklers",
-              "type": "card",
+              "type": "text",
               "x": -36,
               "y": -174,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Sprinklers and Standpipe",
-                "detail": "Riser room access, valves, gauges, drains, five-year items, impairment steps, and licensed inspections.",
-                "accent": "system"
+                "text": "Sprinklers and Standpipe\nRiser room access, valves, gauges, drains, five-year items, impairment steps, and licensed inspections."
               }
             },
             {
               "id": "extinguishers",
-              "type": "card",
+              "type": "text",
               "x": 276,
               "y": -174,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Extinguishers",
-                "detail": "Monthly visual check, annual service tags, correct mounting, clear access, and replacement tracking.",
-                "accent": "task"
+                "text": "Extinguishers\nMonthly visual check, annual service tags, correct mounting, clear access, and replacement tracking."
               }
             },
             {
               "id": "smoke-co",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": 28,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Smoke and CO Alarms",
-                "detail": "Unit and common-area device checks, battery policy, resident reporting, and replacement dates.",
-                "accent": "task"
+                "text": "Smoke and CO Alarms\nUnit and common-area device checks, battery policy, resident reporting, and replacement dates."
               }
             },
             {
@@ -1231,41 +1181,35 @@
           "nodes": [
             {
               "id": "stairs",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": -158,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Stairwells",
-                "detail": "No storage, no propped doors, working closers, handrails intact, lighting adequate, tread hazards corrected.",
-                "accent": "system"
+                "text": "Stairwells\nNo storage, no propped doors, working closers, handrails intact, lighting adequate, tread hazards corrected."
               }
             },
             {
               "id": "corridors",
-              "type": "card",
+              "type": "text",
               "x": -36,
               "y": -158,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Corridors",
-                "detail": "Clear width, no trip hazards, functioning lights, visible unit numbers, and resident notice boards managed.",
-                "accent": "task"
+                "text": "Corridors\nClear width, no trip hazards, functioning lights, visible unit numbers, and resident notice boards managed."
               }
             },
             {
               "id": "exterior-exits",
-              "type": "card",
+              "type": "text",
               "x": 276,
               "y": -158,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Exterior Exits",
-                "detail": "Snow/ice control, panic hardware, door sweep condition, lighting, and landing drainage.",
-                "accent": "task"
+                "text": "Exterior Exits\nSnow/ice control, panic hardware, door sweep condition, lighting, and landing drainage."
               }
             },
             {
@@ -1330,41 +1274,35 @@
           "nodes": [
             {
               "id": "elevator-contract",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Service Contract",
-                "detail": "Monthly service, callback terms, parts exclusions, emergency phone, and response time expectations.",
-                "accent": "data"
+                "text": "Service Contract\nMonthly service, callback terms, parts exclusions, emergency phone, and response time expectations."
               }
             },
             {
               "id": "elevator-certs",
-              "type": "card",
+              "type": "text",
               "x": -36,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Certificates",
-                "detail": "Annual inspection records, deficiency corrections, jurisdiction filings, and posted permit/certificate status.",
-                "accent": "system"
+                "text": "Certificates\nAnnual inspection records, deficiency corrections, jurisdiction filings, and posted permit/certificate status."
               }
             },
             {
               "id": "outage-plan",
-              "type": "card",
+              "type": "text",
               "x": 276,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Outage Plan",
-                "detail": "Resident notices, mobility support, vendor escalation, manager coverage, and after-hours communication.",
-                "accent": "task"
+                "text": "Outage Plan\nResident notices, mobility support, vendor escalation, manager coverage, and after-hours communication."
               }
             },
             {
@@ -1494,15 +1432,13 @@
             },
             {
               "id": "systems-rule",
-              "type": "card",
+              "type": "text",
               "x": 364,
               "y": 294,
               "w": 316,
               "h": 132,
               "data": {
-                "title": "Systems Rule",
-                "detail": "A failed building system usually creates work in multiple views: resident impact, vendor call, record, and capital signal.",
-                "accent": "system"
+                "text": "Systems Rule\nA failed building system usually creates work in multiple views: resident impact, vendor call, record, and capital signal."
               }
             }
           ]
@@ -1518,54 +1454,46 @@
           "nodes": [
             {
               "id": "domestic-hot-water",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": -170,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Domestic Hot Water",
-                "detail": "Boilers/tanks, circulation pumps, mixing valves, sample points, temperature log, and scald controls.",
-                "accent": "system"
+                "text": "Domestic Hot Water\nBoilers/tanks, circulation pumps, mixing valves, sample points, temperature log, and scald controls."
               }
             },
             {
               "id": "leak-response",
-              "type": "card",
+              "type": "text",
               "x": -36,
               "y": -170,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Leak Response",
-                "detail": "Stop water, protect electrical, notify affected residents, dry materials, photograph, and track root cause.",
-                "accent": "task"
+                "text": "Leak Response\nStop water, protect electrical, notify affected residents, dry materials, photograph, and track root cause."
               }
             },
             {
               "id": "sewer-drains",
-              "type": "card",
+              "type": "text",
               "x": 276,
               "y": -170,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Sewer and Drains",
-                "detail": "Main cleanouts, stack history, floor drains, roof drains, catch basins, and recurring backup locations.",
-                "accent": "data"
+                "text": "Sewer and Drains\nMain cleanouts, stack history, floor drains, roof drains, catch basins, and recurring backup locations."
               }
             },
             {
               "id": "legionella",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": 34,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Water Quality Risk",
-                "detail": "Complex water systems need temperature control, flushing after low use, and a responsible water-management team.",
-                "accent": "system"
+                "text": "Water Quality Risk\nComplex water systems need temperature control, flushing after low use, and a responsible water-management team."
               }
             },
             {
@@ -1630,41 +1558,35 @@
           "nodes": [
             {
               "id": "hvac-inventory",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": -170,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Equipment Inventory",
-                "detail": "Unit heat pumps, make-up air, exhaust fans, thermostats, filters, age, model, warranty, and access notes.",
-                "accent": "data"
+                "text": "Equipment Inventory\nUnit heat pumps, make-up air, exhaust fans, thermostats, filters, age, model, warranty, and access notes."
               }
             },
             {
               "id": "filters-belts",
-              "type": "card",
+              "type": "text",
               "x": -36,
               "y": -170,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Filters and Belts",
-                "detail": "Replacement cadence, resident access limits, rooftop safety, contractor scope, and evidence photos.",
-                "accent": "task"
+                "text": "Filters and Belts\nReplacement cadence, resident access limits, rooftop safety, contractor scope, and evidence photos."
               }
             },
             {
               "id": "exhaust-ventilation",
-              "type": "card",
+              "type": "text",
               "x": 276,
               "y": -170,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Exhaust and Ventilation",
-                "detail": "Bath fans, kitchen exhaust, corridor pressurization, odors, humidity, and airflow complaints.",
-                "accent": "system"
+                "text": "Exhaust and Ventilation\nBath fans, kitchen exhaust, corridor pressurization, odors, humidity, and airflow complaints."
               }
             },
             {
@@ -1729,41 +1651,35 @@
           "nodes": [
             {
               "id": "main-panels",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": -162,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Main Panels",
-                "detail": "Clear working space, locked access, labeling, thermography notes, and licensed electrician changes.",
-                "accent": "system"
+                "text": "Main Panels\nClear working space, locked access, labeling, thermography notes, and licensed electrician changes."
               }
             },
             {
               "id": "common-lighting",
-              "type": "card",
+              "type": "text",
               "x": -36,
               "y": -162,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Common Lighting",
-                "detail": "Corridors, stairs, exterior, parking, laundry, trash, emergency lighting, and bulb/fixture standards.",
-                "accent": "task"
+                "text": "Common Lighting\nCorridors, stairs, exterior, parking, laundry, trash, emergency lighting, and bulb/fixture standards."
               }
             },
             {
               "id": "unit-devices",
-              "type": "card",
+              "type": "text",
               "x": 276,
               "y": -162,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Unit Devices",
-                "detail": "GFCI/AFCI issues, loose outlets, fan/light controls, range circuits, and resident repair boundaries.",
-                "accent": "data"
+                "text": "Unit Devices\nGFCI/AFCI issues, loose outlets, fan/light controls, range circuits, and resident repair boundaries."
               }
             },
             {
@@ -1828,41 +1744,35 @@
           "nodes": [
             {
               "id": "roof-membrane",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": -170,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Roof Membrane",
-                "detail": "Punctures, blisters, seams, ponding, patches, walkway pads, contractor reports, and warranty limits.",
-                "accent": "system"
+                "text": "Roof Membrane\nPunctures, blisters, seams, ponding, patches, walkway pads, contractor reports, and warranty limits."
               }
             },
             {
               "id": "drains-gutters",
-              "type": "card",
+              "type": "text",
               "x": -36,
               "y": -170,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Drains and Gutters",
-                "detail": "Roof drains, scuppers, downspouts, leaf loads, ice risk, and overflow evidence.",
-                "accent": "task"
+                "text": "Drains and Gutters\nRoof drains, scuppers, downspouts, leaf loads, ice risk, and overflow evidence."
               }
             },
             {
               "id": "windows-facade",
-              "type": "card",
+              "type": "text",
               "x": 276,
               "y": -170,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Windows and Facade",
-                "detail": "Sealant, flashing, cracks, failed balances, screens, air leaks, and recurring unit water stains.",
-                "accent": "data"
+                "text": "Windows and Facade\nSealant, flashing, cracks, failed balances, screens, air leaks, and recurring unit water stains."
               }
             },
             {
@@ -1927,41 +1837,35 @@
           "nodes": [
             {
               "id": "parking-lot",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": -162,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Parking Lot",
-                "detail": "Potholes, striping, ADA spaces, drainage, snow storage, lighting, tow signs, and trip hazards.",
-                "accent": "task"
+                "text": "Parking Lot\nPotholes, striping, ADA spaces, drainage, snow storage, lighting, tow signs, and trip hazards."
               }
             },
             {
               "id": "landscape",
-              "type": "card",
+              "type": "text",
               "x": -36,
               "y": -162,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Landscape",
-                "detail": "Trees near roof or wires, irrigation leaks, erosion, pest harborage, and defensible space where applicable.",
-                "accent": "data"
+                "text": "Landscape\nTrees near roof or wires, irrigation leaks, erosion, pest harborage, and defensible space where applicable."
               }
             },
             {
               "id": "trash-pest-zone",
-              "type": "card",
+              "type": "text",
               "x": 276,
               "y": -162,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Trash and Pest Zone",
-                "detail": "Dumpster pads, doors, bulk pickup, odors, resident misuse, vendor pickup failures, and pest logs.",
-                "accent": "system"
+                "text": "Trash and Pest Zone\nDumpster pads, doors, bulk pickup, odors, resident misuse, vendor pickup failures, and pest logs."
               }
             },
             {
@@ -2078,15 +1982,13 @@
             },
             {
               "id": "unit-patterns",
-              "type": "card",
+              "type": "text",
               "x": 198,
               "y": 116,
               "w": 316,
               "h": 132,
               "data": {
-                "title": "Pattern Watch",
-                "detail": "Repeated calls in one line, stack, floor, appliance model, or season should become system work.",
-                "accent": "data"
+                "text": "Pattern Watch\nRepeated calls in one line, stack, floor, appliance model, or season should become system work."
               }
             },
             {
@@ -2151,28 +2053,24 @@
             },
             {
               "id": "wet-areas",
-              "type": "card",
+              "type": "text",
               "x": 20,
               "y": -152,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Wet Areas",
-                "detail": "Bathrooms, kitchens, water heater closets, washer boxes, and ceiling stains are high-value inspection targets.",
-                "accent": "system"
+                "text": "Wet Areas\nBathrooms, kitchens, water heater closets, washer boxes, and ceiling stains are high-value inspection targets."
               }
             },
             {
               "id": "resident-access",
-              "type": "card",
+              "type": "text",
               "x": 332,
               "y": -152,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Resident Access",
-                "detail": "Notices, appointments, pets, privacy, language needs, no-access attempts, and follow-up are part of the record.",
-                "accent": "task"
+                "text": "Resident Access\nNotices, appointments, pets, privacy, language needs, no-access attempts, and follow-up are part of the record."
               }
             },
             {
@@ -2237,28 +2135,24 @@
             },
             {
               "id": "scope-control",
-              "type": "card",
+              "type": "text",
               "x": 20,
               "y": -152,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Scope Control",
-                "detail": "Separate resident damage, normal wear, capital defects, vendor work, and rent-ready cosmetics.",
-                "accent": "task"
+                "text": "Scope Control\nSeparate resident damage, normal wear, capital defects, vendor work, and rent-ready cosmetics."
               }
             },
             {
               "id": "days-vacant",
-              "type": "card",
+              "type": "text",
               "x": 332,
               "y": -152,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Days Vacant",
-                "detail": "Track average days from move-out to ready. Delays reveal staffing, vendor, parts, or decision bottlenecks.",
-                "accent": "data"
+                "text": "Days Vacant\nTrack average days from move-out to ready. Delays reveal staffing, vendor, parts, or decision bottlenecks."
               }
             },
             {
@@ -2285,41 +2179,35 @@
           "nodes": [
             {
               "id": "appliance-inventory",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": -162,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Inventory",
-                "detail": "Model, serial, age, warranty, location, repeated repair history, and spare-part compatibility.",
-                "accent": "data"
+                "text": "Inventory\nModel, serial, age, warranty, location, repeated repair history, and spare-part compatibility."
               }
             },
             {
               "id": "repair-replace",
-              "type": "card",
+              "type": "text",
               "x": -36,
               "y": -162,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Repair or Replace",
-                "detail": "Use age, failure type, parts delay, resident impact, and repeated calls to decide.",
-                "accent": "task"
+                "text": "Repair or Replace\nUse age, failure type, parts delay, resident impact, and repeated calls to decide."
               }
             },
             {
               "id": "laundry-room",
-              "type": "card",
+              "type": "text",
               "x": 276,
               "y": -162,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Laundry Room",
-                "detail": "Vendor equipment, lint, drains, flooring, ventilation, lighting, payment system, and resident complaints.",
-                "accent": "system"
+                "text": "Laundry Room\nVendor equipment, lint, drains, flooring, ventilation, lighting, payment system, and resident complaints."
               }
             },
             {
@@ -2384,41 +2272,35 @@
           "nodes": [
             {
               "id": "intake",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Intake",
-                "detail": "Who, unit, issue, urgency, access permission, pets, photos, symptoms, and preferred communication channel.",
-                "accent": "data"
+                "text": "Intake\nWho, unit, issue, urgency, access permission, pets, photos, symptoms, and preferred communication channel."
               }
             },
             {
               "id": "triage",
-              "type": "card",
+              "type": "text",
               "x": -36,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Triage",
-                "detail": "Emergency, habitability, scheduled repair, vendor needed, duplicate, resident responsibility, or capital signal.",
-                "accent": "task"
+                "text": "Triage\nEmergency, habitability, scheduled repair, vendor needed, duplicate, resident responsibility, or capital signal."
               }
             },
             {
               "id": "closeout",
-              "type": "card",
+              "type": "text",
               "x": 276,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Closeout",
-                "detail": "What changed, who did it, photos, materials, resident notice, follow-up date, and unresolved next step.",
-                "accent": "system"
+                "text": "Closeout\nWhat changed, who did it, photos, materials, resident notice, follow-up date, and unresolved next step."
               }
             },
             {
@@ -2595,41 +2477,35 @@
           "nodes": [
             {
               "id": "source-control",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": -174,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Source Control",
-                "detail": "Find and stop water first: roof, plumbing, condensation, exterior grading, HVAC condensate, or resident fixture use.",
-                "accent": "system"
+                "text": "Source Control\nFind and stop water first: roof, plumbing, condensation, exterior grading, HVAC condensate, or resident fixture use."
               }
             },
             {
               "id": "dry-out-clock",
-              "type": "card",
+              "type": "text",
               "x": -36,
               "y": -174,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Dry-Out Clock",
-                "detail": "Fast drying, material decisions, humidity control, photos, and follow-up prevent repeat damage.",
-                "accent": "task"
+                "text": "Dry-Out Clock\nFast drying, material decisions, humidity control, photos, and follow-up prevent repeat damage."
               }
             },
             {
               "id": "resident-communication",
-              "type": "card",
+              "type": "text",
               "x": 276,
               "y": -174,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Resident Communication",
-                "detail": "Explain access, drying equipment, containment, cleaning scope, and what will happen next.",
-                "accent": "data"
+                "text": "Resident Communication\nExplain access, drying equipment, containment, cleaning scope, and what will happen next."
               }
             },
             {
@@ -2694,41 +2570,35 @@
           "nodes": [
             {
               "id": "trash-control",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": -162,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Trash Control",
-                "detail": "Dumpster capacity, pickup misses, bulk items, chute/room cleaning, odors, resident notices, and vendor logs.",
-                "accent": "task"
+                "text": "Trash Control\nDumpster capacity, pickup misses, bulk items, chute/room cleaning, odors, resident notices, and vendor logs."
               }
             },
             {
               "id": "exclusion",
-              "type": "card",
+              "type": "text",
               "x": -36,
               "y": -162,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Exclusion",
-                "detail": "Seal penetrations, sweeps, screens, pipe chases, trash doors, and exterior gaps before repeated treatment.",
-                "accent": "system"
+                "text": "Exclusion\nSeal penetrations, sweeps, screens, pipe chases, trash doors, and exterior gaps before repeated treatment."
               }
             },
             {
               "id": "treatment-log",
-              "type": "card",
+              "type": "text",
               "x": 276,
               "y": -162,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Treatment Log",
-                "detail": "Unit reports, pest type, prep compliance, vendor treatment, follow-up date, and trend map.",
-                "accent": "data"
+                "text": "Treatment Log\nUnit reports, pest type, prep compliance, vendor treatment, follow-up date, and trend map."
               }
             },
             {
@@ -2793,41 +2663,35 @@
           "nodes": [
             {
               "id": "ventilation",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Ventilation",
-                "detail": "Bath and kitchen exhaust, corridor airflow, make-up air, odors, pressure issues, and humidity complaints.",
-                "accent": "system"
+                "text": "Ventilation\nBath and kitchen exhaust, corridor airflow, make-up air, odors, pressure issues, and humidity complaints."
               }
             },
             {
               "id": "combustion",
-              "type": "card",
+              "type": "text",
               "x": -36,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Combustion Safety",
-                "detail": "CO alarms, gas appliances, water heaters, boilers, flues, and vendor documentation where applicable.",
-                "accent": "task"
+                "text": "Combustion Safety\nCO alarms, gas appliances, water heaters, boilers, flues, and vendor documentation where applicable."
               }
             },
             {
               "id": "radon-smoking",
-              "type": "card",
+              "type": "text",
               "x": 276,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Radon and Smoke",
-                "detail": "Regional radon policy, smoking complaints, infiltration paths, notices, testing records, and mitigation decisions.",
-                "accent": "data"
+                "text": "Radon and Smoke\nRegional radon policy, smoking complaints, infiltration paths, notices, testing records, and mitigation decisions."
               }
             },
             {
@@ -2892,41 +2756,35 @@
           "nodes": [
             {
               "id": "lead-paint",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Lead-Based Paint",
-                "detail": "For pre-1978 buildings, keep certifications, hazard-control plans, notices, and disturbance boundaries visible.",
-                "accent": "system"
+                "text": "Lead-Based Paint\nFor pre-1978 buildings, keep certifications, hazard-control plans, notices, and disturbance boundaries visible."
               }
             },
             {
               "id": "asbestos",
-              "type": "card",
+              "type": "text",
               "x": -36,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Asbestos-Containing Materials",
-                "detail": "Flooring, mastic, insulation, textured materials, pipe wrap, survey records, and contractor controls.",
-                "accent": "data"
+                "text": "Asbestos-Containing Materials\nFlooring, mastic, insulation, textured materials, pipe wrap, survey records, and contractor controls."
               }
             },
             {
               "id": "disturbance-rules",
-              "type": "card",
+              "type": "text",
               "x": 276,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Disturbance Rules",
-                "detail": "Staff should know when to stop, isolate, document, and call qualified professionals before cutting or sanding.",
-                "accent": "task"
+                "text": "Disturbance Rules\nStaff should know when to stop, isolate, document, and call qualified professionals before cutting or sanding."
               }
             },
             {
@@ -3078,41 +2936,35 @@
           "nodes": [
             {
               "id": "incident-lead",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Incident Lead",
-                "detail": "Decides priorities, assigns roles, tracks timeline, confirms resident safety, and escalates to ownership.",
-                "accent": "task"
+                "text": "Incident Lead\nDecides priorities, assigns roles, tracks timeline, confirms resident safety, and escalates to ownership."
               }
             },
             {
               "id": "resident-comms",
-              "type": "card",
+              "type": "text",
               "x": -36,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Resident Communications",
-                "detail": "Notices, text/email, door posting, language needs, mobility needs, and update cadence.",
-                "accent": "data"
+                "text": "Resident Communications\nNotices, text/email, door posting, language needs, mobility needs, and update cadence."
               }
             },
             {
               "id": "building-protection",
-              "type": "card",
+              "type": "text",
               "x": 276,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Building Protection",
-                "detail": "Shutoffs, temporary safeguards, vendor access, photos, security, and recovery work orders.",
-                "accent": "system"
+                "text": "Building Protection\nShutoffs, temporary safeguards, vendor access, photos, security, and recovery work orders."
               }
             },
             {
@@ -3215,28 +3067,24 @@
             },
             {
               "id": "affected-units",
-              "type": "card",
+              "type": "text",
               "x": 20,
               "y": -152,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Affected Units",
-                "detail": "Track stack, floor, residents, access, temporary relocation needs, contents, and follow-up repairs.",
-                "accent": "data"
+                "text": "Affected Units\nTrack stack, floor, residents, access, temporary relocation needs, contents, and follow-up repairs."
               }
             },
             {
               "id": "drying-recovery",
-              "type": "card",
+              "type": "text",
               "x": 332,
               "y": -152,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Drying and Recovery",
-                "detail": "Restoration scope, moisture readings, demolition decisions, insurance, and final clearance notes.",
-                "accent": "system"
+                "text": "Drying and Recovery\nRestoration scope, moisture readings, demolition decisions, insurance, and final clearance notes."
               }
             },
             {
@@ -3301,28 +3149,24 @@
             },
             {
               "id": "critical-loads",
-              "type": "card",
+              "type": "text",
               "x": 20,
               "y": -152,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Critical Loads",
-                "detail": "Fire alarm, emergency lighting, elevator, entry access, sump pumps, boilers, communications, and office systems.",
-                "accent": "system"
+                "text": "Critical Loads\nFire alarm, emergency lighting, elevator, entry access, sump pumps, boilers, communications, and office systems."
               }
             },
             {
               "id": "resident-impact",
-              "type": "card",
+              "type": "text",
               "x": 332,
               "y": -152,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Resident Impact",
-                "detail": "Older adults, medical devices, mobility needs, temperature risk, and communication access determine escalation.",
-                "accent": "task"
+                "text": "Resident Impact\nOlder adults, medical devices, mobility needs, temperature risk, and communication access determine escalation."
               }
             },
             {
@@ -3387,28 +3231,24 @@
             },
             {
               "id": "fire-department",
-              "type": "card",
+              "type": "text",
               "x": 20,
               "y": -152,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Fire Department Interface",
-                "detail": "Knox/key box, fire panel, riser room, roof access, elevator recall, and building representative.",
-                "accent": "system"
+                "text": "Fire Department Interface\nKnox/key box, fire panel, riser room, roof access, elevator recall, and building representative."
               }
             },
             {
               "id": "displacement",
-              "type": "card",
+              "type": "text",
               "x": 332,
               "y": -152,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Resident Displacement",
-                "detail": "Temporary shelter, accessible needs, medications, pets, contact list, notices, and return conditions.",
-                "accent": "task"
+                "text": "Resident Displacement\nTemporary shelter, accessible needs, medications, pets, contact list, notices, and return conditions."
               }
             },
             {
@@ -3473,28 +3313,24 @@
             },
             {
               "id": "storm-watch",
-              "type": "card",
+              "type": "text",
               "x": 20,
               "y": -152,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Storm Watch",
-                "detail": "Wind, rain, flood, freeze, heat, wildfire smoke, and snow each stress different building systems.",
-                "accent": "data"
+                "text": "Storm Watch\nWind, rain, flood, freeze, heat, wildfire smoke, and snow each stress different building systems."
               }
             },
             {
               "id": "after-storm",
-              "type": "card",
+              "type": "text",
               "x": 332,
               "y": -152,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "After-Storm Walk",
-                "detail": "Roof, facade, drains, trees, parking, leaks, power, elevator, resident reports, and photos.",
-                "accent": "task"
+                "text": "After-Storm Walk\nRoof, facade, drains, trees, parking, leaks, power, elevator, resident reports, and photos."
               }
             },
             {
@@ -3560,15 +3396,13 @@
             },
             {
               "id": "immediate-repairs",
-              "type": "card",
+              "type": "text",
               "x": -338,
               "y": 96,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Immediate Repairs",
-                "detail": "Life-safety concerns, deferred maintenance, and active damage should not wait for annual budgeting.",
-                "accent": "task"
+                "text": "Immediate Repairs\nLife-safety concerns, deferred maintenance, and active damage should not wait for annual budgeting."
               }
             },
             {
@@ -3595,41 +3429,35 @@
           "nodes": [
             {
               "id": "roof-asset",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Roof",
-                "detail": "Age, type, warranty, patches, leak history, contractor, drain condition, and replacement window.",
-                "accent": "system"
+                "text": "Roof\nAge, type, warranty, patches, leak history, contractor, drain condition, and replacement window."
               }
             },
             {
               "id": "elevator-asset",
-              "type": "card",
+              "type": "text",
               "x": -36,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Elevator",
-                "detail": "Controller, cab, door equipment, service history, violations, modernization needs, and downtime.",
-                "accent": "system"
+                "text": "Elevator\nController, cab, door equipment, service history, violations, modernization needs, and downtime."
               }
             },
             {
               "id": "mechanical-assets",
-              "type": "card",
+              "type": "text",
               "x": 276,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Mechanical",
-                "detail": "Boilers, water heaters, pumps, air handlers, exhaust fans, age, condition, and service notes.",
-                "accent": "data"
+                "text": "Mechanical\nBoilers, water heaters, pumps, air handlers, exhaust fans, age, condition, and service notes."
               }
             },
             {
@@ -3694,41 +3522,35 @@
           "nodes": [
             {
               "id": "useful-life",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Useful Life",
-                "detail": "Remaining useful life should be updated when inspections, failures, or major repairs change the risk picture.",
-                "accent": "data"
+                "text": "Useful Life\nRemaining useful life should be updated when inspections, failures, or major repairs change the risk picture."
               }
             },
             {
               "id": "replacement-reserve",
-              "type": "card",
+              "type": "text",
               "x": -36,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Replacement Reserve",
-                "detail": "Set aside funds for components that wear out: roof, HVAC, paving, elevators, appliances, and common areas.",
-                "accent": "system"
+                "text": "Replacement Reserve\nSet aside funds for components that wear out: roof, HVAC, paving, elevators, appliances, and common areas."
               }
             },
             {
               "id": "required-repairs",
-              "type": "card",
+              "type": "text",
               "x": 276,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Required Repairs",
-                "detail": "Deferred maintenance and life-safety concerns need clear scope, owner, cost, date, and proof of completion.",
-                "accent": "task"
+                "text": "Required Repairs\nDeferred maintenance and life-safety concerns need clear scope, owner, cost, date, and proof of completion."
               }
             },
             {
@@ -3793,41 +3615,35 @@
           "nodes": [
             {
               "id": "year-one",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": -168,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Year 1",
-                "detail": "Correct life-safety gaps, restore roof drains, tag shutoffs, and close deferred maintenance with photos.",
-                "accent": "task"
+                "text": "Year 1\nCorrect life-safety gaps, restore roof drains, tag shutoffs, and close deferred maintenance with photos."
               }
             },
             {
               "id": "year-two-three",
-              "type": "card",
+              "type": "text",
               "x": -36,
               "y": -168,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Years 2-3",
-                "detail": "Plan water heater replacements, corridor lighting upgrades, parking repairs, and targeted unit ventilation work.",
-                "accent": "system"
+                "text": "Years 2-3\nPlan water heater replacements, corridor lighting upgrades, parking repairs, and targeted unit ventilation work."
               }
             },
             {
               "id": "year-four-five",
-              "type": "card",
+              "type": "text",
               "x": 276,
               "y": -168,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Years 4-5",
-                "detail": "Prepare roof replacement, elevator modernization study, facade repairs, and reserve adjustment.",
-                "accent": "data"
+                "text": "Years 4-5\nPrepare roof replacement, elevator modernization study, facade repairs, and reserve adjustment."
               }
             },
             {
@@ -4004,41 +3820,35 @@
           "nodes": [
             {
               "id": "plumber",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Plumber",
-                "detail": "Emergency line, account number, after-hours terms, shutoff authority, and standard response notes.",
-                "accent": "task"
+                "text": "Plumber\nEmergency line, account number, after-hours terms, shutoff authority, and standard response notes."
               }
             },
             {
               "id": "fire-vendor",
-              "type": "card",
+              "type": "text",
               "x": -36,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Fire Protection Vendor",
-                "detail": "Alarm, sprinkler, extinguisher, inspection schedule, monitoring account, and impairment contact.",
-                "accent": "system"
+                "text": "Fire Protection Vendor\nAlarm, sprinkler, extinguisher, inspection schedule, monitoring account, and impairment contact."
               }
             },
             {
               "id": "elevator-vendor",
-              "type": "card",
+              "type": "text",
               "x": 276,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Elevator Vendor",
-                "detail": "Service line, callback process, entrapment escalation, contract scope, and inspector contacts.",
-                "accent": "system"
+                "text": "Elevator Vendor\nService line, callback process, entrapment escalation, contract scope, and inspector contacts."
               }
             },
             {
@@ -4103,41 +3913,35 @@
           "nodes": [
             {
               "id": "report-intake",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Report Intake",
-                "detail": "Scan, name, tag, assign owner, extract deficiencies, due dates, and required filings.",
-                "accent": "data"
+                "text": "Report Intake\nScan, name, tag, assign owner, extract deficiencies, due dates, and required filings."
               }
             },
             {
               "id": "correction-tracking",
-              "type": "card",
+              "type": "text",
               "x": -36,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Correction Tracking",
-                "detail": "Each deficiency needs a work order, responsible person, evidence, and closeout date.",
-                "accent": "task"
+                "text": "Correction Tracking\nEach deficiency needs a work order, responsible person, evidence, and closeout date."
               }
             },
             {
               "id": "photo-proof",
-              "type": "card",
+              "type": "text",
               "x": 276,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Photo Proof",
-                "detail": "Before, during, after, label, unit/common area, date, and link to report item.",
-                "accent": "system"
+                "text": "Photo Proof\nBefore, during, after, label, unit/common area, date, and link to report item."
               }
             },
             {
@@ -4202,41 +4006,35 @@
           "nodes": [
             {
               "id": "keys",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Keys and Access",
-                "detail": "Master keys, fobs, lockbox, vendor keys, sign-out log, lost key procedure, and restricted areas.",
-                "accent": "system"
+                "text": "Keys and Access\nMaster keys, fobs, lockbox, vendor keys, sign-out log, lost key procedure, and restricted areas."
               }
             },
             {
               "id": "tools",
-              "type": "card",
+              "type": "text",
               "x": -36,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Tools",
-                "detail": "Serial numbers, assigned users, storage location, calibration needs, and theft/loss reporting.",
-                "accent": "data"
+                "text": "Tools\nSerial numbers, assigned users, storage location, calibration needs, and theft/loss reporting."
               }
             },
             {
               "id": "supplies",
-              "type": "card",
+              "type": "text",
               "x": 276,
               "y": -166,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Supplies",
-                "detail": "Filters, lamps, batteries, door hardware, plumbing parts, PPE, ice melt, and emergency stock.",
-                "accent": "task"
+                "text": "Supplies\nFilters, lamps, batteries, door hardware, plumbing parts, PPE, ice melt, and emergency stock."
               }
             },
             {
@@ -4301,80 +4099,68 @@
           "nodes": [
             {
               "id": "source-hud-nspire",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": -190,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "HUD NSPIRE",
-                "detail": "Health, safety, functional defects, resident focus, and year-round maintenance practices.",
-                "accent": "system"
+                "text": "HUD NSPIRE\nHealth, safety, functional defects, resident focus, and year-round maintenance practices."
               }
             },
             {
               "id": "source-hud-mor",
-              "type": "card",
+              "type": "text",
               "x": -36,
               "y": -190,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "HUD Management Review",
-                "detail": "Preventive schedules, unit inspections, work orders, emergency orders, inventory, and backlog.",
-                "accent": "data"
+                "text": "HUD Management Review\nPreventive schedules, unit inspections, work orders, emergency orders, inventory, and backlog."
               }
             },
             {
               "id": "source-ipmc",
-              "type": "card",
+              "type": "text",
               "x": 276,
               "y": -190,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Property Maintenance Code",
-                "detail": "Exterior/interior conditions, sanitation, plumbing, mechanical, electrical, elevators, egress, and fire safety.",
-                "accent": "system"
+                "text": "Property Maintenance Code\nExterior/interior conditions, sanitation, plumbing, mechanical, electrical, elevators, egress, and fire safety."
               }
             },
             {
               "id": "source-epa",
-              "type": "card",
+              "type": "text",
               "x": -348,
               "y": 18,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "EPA Mold and Legionella",
-                "detail": "Moisture control, mold prevention, water temperature, flushing, and water management programs.",
-                "accent": "task"
+                "text": "EPA Mold and Legionella\nMoisture control, mold prevention, water temperature, flushing, and water management programs."
               }
             },
             {
               "id": "source-ashrae",
-              "type": "card",
+              "type": "text",
               "x": -36,
               "y": 18,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "ASHRAE Multifamily",
-                "detail": "HVAC operation, maintenance, ventilation, and airflow guidance for multifamily buildings.",
-                "accent": "data"
+                "text": "ASHRAE Multifamily\nHVAC operation, maintenance, ventilation, and airflow guidance for multifamily buildings."
               }
             },
             {
               "id": "source-disaster",
-              "type": "card",
+              "type": "text",
               "x": 276,
               "y": 18,
               "w": 272,
               "h": 132,
               "data": {
-                "title": "Disaster Planning",
-                "detail": "Resident protection, building protection, business continuity, staff roles, and communication.",
-                "accent": "task"
+                "text": "Disaster Planning\nResident protection, building protection, business continuity, staff roles, and communication."
               }
             },
             {

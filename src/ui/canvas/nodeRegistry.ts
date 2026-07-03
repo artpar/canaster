@@ -14,7 +14,6 @@ import {
   type DefinitionRenderContext,
 } from './nodeDefinition/nodeDefinitionSafety';
 import type { NodeAddMenuMetadata, NodeDefinition, NodeDescription, NodeHitTarget, NodeHitTestContext, NodeInteractionController, NodeInteractionRegion, NodePortalInfo, NodePortalSummary, NodeRenderContext } from './nodeDefinition/nodeDefinitionTypes';
-import { cardNodeDefinition } from './nodeTypes/cardNode';
 import { canvasNodeDefinition } from './nodeTypes/canvasNode';
 import { checkNodeDefinition } from './nodeTypes/checkNode';
 import { embedNodeDefinition } from './nodeTypes/embedNode';
@@ -26,7 +25,6 @@ import { textNodeDefinition } from './nodeTypes/textNode';
 import { unknownNodeDefinition } from './nodeTypes/unknownNode';
 
 const definitions = createRegistry([
-  cardNodeDefinition,
   textNodeDefinition,
   tableNodeDefinition,
   imageNodeDefinition,
@@ -81,7 +79,6 @@ export type RegisteredNodeAddOption = NodeAddMenuMetadata & {
 
 export function registeredNodeAddOptions(): RegisteredNodeAddOption[] {
   return registeredNodeDefinitions()
-    .filter((definition) => definition.type !== cardNodeDefinition.type)
     .map((definition) => ({
       type: definition.type,
       ...definition.addMenu,

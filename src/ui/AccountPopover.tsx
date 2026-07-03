@@ -142,7 +142,7 @@ export function AccountPopover({
                         </span>
                     </div>) : null}
                     {signedIn ? (<div className="account-signed-in">
-                        <div className="account-identity-card">
+                        <div className="account-identity-panel">
                             <div className="account-identity">
                                 <span className="account-avatar" aria-hidden="true">
                                     <UserCircle size={20}/>

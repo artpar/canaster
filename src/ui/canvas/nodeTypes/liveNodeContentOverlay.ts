@@ -1,7 +1,6 @@
 import { asString } from '../../../core/nodeData';
 import type { NodeContentViewport } from '../../../core/nodeAppearance';
 import type { CanvasNode, NodeData } from '../../../core/nodePrimitives';
-import { CARD_ACCENTS, cardAccentLabel, normalizeCardNodeData, type CardNodeData } from '../../../domain/cardNodeData';
 import { BuiltInNodeTypes } from '../../../domain/BuiltInNodeTypes';
 import {
   addChecklistItem,
@@ -54,16 +53,13 @@ type LiveOverlayViewport = {
 };
 
 export function hasLiveNodeContentOverlay(node: CanvasNode) {
-  return node.type === BuiltInNodeTypes.card ||
-    node.type === BuiltInNodeTypes.text ||
+  return node.type === BuiltInNodeTypes.text ||
     node.type === BuiltInNodeTypes.table ||
     node.type === BuiltInNodeTypes.check;
 }
 
 export function createLiveNodeContentOverlay({ node, theme, commit, select, close }: LiveNodeContentOverlayConfig): LiveNodeContentOverlay | null {
   switch (node.type) {
-    case BuiltInNodeTypes.card:
-      return createCardOverlay(node, commit, select, close);
     case BuiltInNodeTypes.text:
       return createTextOverlay(node, theme, commit, select, close);
     case BuiltInNodeTypes.table:
@@ -72,86 +68,6 @@ export function createLiveNodeContentOverlay({ node, theme, commit, select, clos
       return createChecklistOverlay(node, commit, select, close);
     default:
       return null;
-  }
-}
-
-function createCardOverlay(node: CanvasNode, commit: (nextData: NodeData) => void, select: () => void, close: () => void): LiveNodeContentOverlay {
-  let draft = normalizeCardNodeData(node.data);
-  let committed = { ...draft };
-  const viewport = createLiveOverlayViewport('node-live-card', select, close);
-  const { root, content } = viewport;
-
-  const title = document.createElement('input');
-  title.className = 'node-live-title';
-  title.type = 'text';
-  title.placeholder = 'Untitled work item';
-  title.setAttribute('aria-label', 'Work item title');
-
-  const detail = document.createElement('textarea');
-  detail.className = 'node-live-card-detail';
-  detail.placeholder = 'Add detail';
-  detail.setAttribute('aria-label', 'Work item detail');
-
-  const accentControls = document.createElement('div');
-  accentControls.className = 'node-live-segmented';
-  accentControls.setAttribute('role', 'toolbar');
-  accentControls.setAttribute('aria-label', 'Work item type');
-  const accentButtons = CARD_ACCENTS.map((accent) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = cardAccentLabel(accent);
-    button.dataset.accent = accent;
-    button.addEventListener('click', () => {
-      draft = { ...draft, accent };
-      sync();
-      flush();
-      title.focus({ preventScroll: true });
-    });
-    accentControls.append(button);
-    return button;
-  });
-
-  title.addEventListener('input', () => {
-    draft = { ...draft, title: title.value };
-  });
-  detail.addEventListener('input', () => {
-    draft = { ...draft, detail: detail.value };
-  });
-  root.addEventListener('focusout', (event) => {
-    if (!root.contains(event.relatedTarget as Node | null)) flush();
-  });
-  content.append(title, detail, accentControls);
-  sync();
-
-  return {
-    root,
-    update(nextNode) {
-      if (root.contains(document.activeElement)) return;
-      draft = normalizeCardNodeData(nextNode.data);
-      committed = { ...draft };
-      sync();
-    },
-    updateViewport: viewport.updateViewport,
-    setInteractive: viewport.setInteractive,
-    focus: viewport.focus,
-    flush,
-    dispose() {
-      flush();
-      viewport.dispose();
-    },
-  };
-
-  function sync() {
-    title.value = draft.title;
-    detail.value = draft.detail;
-    for (const button of accentButtons) button.setAttribute('aria-pressed', String(button.dataset.accent === draft.accent));
-  }
-
-  function flush() {
-    const next = normalizeCardNodeData(draft);
-    if (sameData(committed, next)) return;
-    committed = { ...next };
-    commit(next);
   }
 }
 

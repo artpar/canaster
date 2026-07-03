@@ -1,5 +1,4 @@
 export const BuiltInNodeTypes = {
-  card: 'card',
   text: 'text',
   table: 'table',
   image: 'image',

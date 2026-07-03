@@ -450,7 +450,7 @@ export const CANASTER_THEMES: Record<CanasterThemeId, CanasterTheme> = {
                 embeddedOpacity: 0.24,
             },
             panelSurfaceTreatment: 'tonal-graphite',
-            nodeSurfaceTreatment: 'tonal-card',
+            nodeSurfaceTreatment: 'tonal-panel',
             gridStep: 36,
         },
         motion,

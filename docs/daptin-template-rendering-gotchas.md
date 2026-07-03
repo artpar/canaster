@@ -149,7 +149,7 @@ The routed action can derive share metadata from the existing `document.document
 Why:
 
 - Canaster already stores the full `CanvasWorkspaceSnapshot` in `document_content`.
-- The snapshot already contains the root canvas title, root work items, and `history.present.appearance.previewImage`.
+- The snapshot already contains the root canvas title, root panels, and `history.present.appearance.previewImage`.
 - Daptin action attributes support `!` JavaScript expressions through Goja, including `JSON.parse`, `atob`, array operations, and defensive IIFEs.
 
 Current shape:
@@ -159,7 +159,7 @@ Current shape:
 - `index_with_og.html` reads `.share_meta.title`, `.share_meta.description`, `.share_meta.author`, `.share_meta.updated_at`, `.share_meta.image_asset_id`, and `.share_meta.tags`.
 - The OG image URL is built as `%VITE_DAPTIN_ENDPOINT%/asset/asset/<image_asset_id>/file`.
 - If the snapshot lacks a preview asset id, the template falls back to `%VITE_CANASTER_OG_IMAGE_URL%`.
-- Repeated `article:tag` tags and JSON-LD `keywords` come from root work item titles. The classic `<meta name="keywords">` tag is intentionally not emitted.
+- Repeated `article:tag` tags and JSON-LD `keywords` come from root panel titles. The classic `<meta name="keywords">` tag is intentionally not emitted.
 - JSON-LD uses `CreativeWork` because a Canaster workspace is a practical saved document, not a blog post or marketing page.
 
 Important Daptin source behavior:
@@ -178,7 +178,7 @@ What not to do:
 - Fresh disposable Daptin `v0.12.26` on `http://localhost:7336`.
 - Route: `http://localhost:7336/d/share-e2e-admin-483921/Metadata-E2E`.
 - Test document: `019f1c81-5720-7049-bcfa-927765fe614b`.
-- The saved `document_content` snapshot had root canvas title `Local OG Metadata Workspace`, root card `Quarterly launch plan`, note text `Share text should come from the saved document JSON.`, and `appearance.previewImage.assetId == 019f1c7e-0000-7000-8000-000000000001`.
+- The saved `document_content` snapshot had root canvas title `Local OG Metadata Workspace`, root panel `Quarterly launch plan`, note text `Share text should come from the saved document JSON.`, and `appearance.previewImage.assetId == 019f1c7e-0000-7000-8000-000000000001`.
 - Browser-rendered title: `Local OG Metadata Workspace | Canaster Local E2E`.
 - Browser-rendered description and `og:description`: `Local OG Metadata Workspace: Quarterly launch plan: Owner checklist, rollout risk, and follow-up timeline - Share text should come from the saved document JSON.`
 - Browser-rendered `og:image` and `twitter:image`: `http://localhost:7336/asset/asset/019f1c7e-0000-7000-8000-000000000001/file`.
