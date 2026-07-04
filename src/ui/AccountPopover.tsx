@@ -1,8 +1,4 @@
 import {
-    useEffect,
-    useRef
-} from "react";
-import {
     AlertCircle,
     CheckCircle2,
     Clock3,
@@ -85,7 +81,6 @@ export function AccountPopover({
         authStep,
         busy,
     });
-    const dialogRef = useRef<HTMLElement | null>(null);
     const modeLabel = accountModeLabel(authMode, authResetStep, authStep, signedIn);
     const syncLabel = syncStatusLabel(syncStatus, signedIn);
     const syncDescription = syncStatusDescription(syncStatus, signedIn);
@@ -93,57 +88,12 @@ export function AccountPopover({
     const saveScopeLabel = signedIn ? 'Account workspaces' : 'This browser';
     const verificationLabel = accountVerificationLabel(authMode, authResetStep, authStep, signedIn);
 
-    useEffect(() => {
-        if (docked) return;
-        const dialog = dialogRef.current;
-        const previouslyFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        const focusTarget = initialDialogFocusTarget(dialog);
-        const focusFrame = window.requestAnimationFrame(() => {
-            focusTarget?.focus();
-        });
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') {
-                onClose();
-                return;
-            }
-            if (event.key !== 'Tab' || !dialog) return;
-            const focusableElements = dialogFocusableElements(dialog);
-            if (!focusableElements.length) {
-                event.preventDefault();
-                dialog.focus();
-                return;
-            }
-            const firstElement = focusableElements[0];
-            const lastElement = focusableElements[focusableElements.length - 1];
-            const activeElement = document.activeElement;
-            if (event.shiftKey) {
-                if (activeElement === firstElement || !dialog.contains(activeElement)) {
-                    event.preventDefault();
-                    lastElement.focus();
-                }
-                return;
-            }
-            if (activeElement === lastElement || !dialog.contains(activeElement)) {
-                event.preventDefault();
-                firstElement.focus();
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => {
-            window.cancelAnimationFrame(focusFrame);
-            window.removeEventListener('keydown', handleKeyDown);
-            if (previouslyFocusedElement?.isConnected) previouslyFocusedElement.focus();
-        };
-    }, [docked, onClose]);
-
     const content = (
         <aside
-            ref={dialogRef}
             className={`account-popover${docked ? ' account-popover-docked' : ''}`}
             aria-label="Account"
             aria-modal={docked ? undefined : true}
             role={docked ? undefined : 'dialog'}
-            tabIndex={docked ? undefined : -1}
         >
             <div className="account-popover-header">
                 <div>
@@ -154,7 +104,6 @@ export function AccountPopover({
                     className="utility-close"
                     type="button"
                     aria-label="Close account"
-                    data-account-initial-focus={signedIn ? 'true' : undefined}
                     onClick={onClose}
                 >
                     <X size={15}/>
@@ -249,8 +198,6 @@ export function AccountPopover({
                                 {emailFieldBadge(authMode, authResetStep, authStep)}
                             </span>
                             <input name="email" type="email" autoComplete="email" value={authEmail}
-                                   autoFocus={authMode === 'code' && authStep === 'email'}
-                                   data-account-initial-focus={authMode === 'code' && authStep === 'email' ? 'true' : undefined}
                                    disabled={busy && (authStep === 'otp' || authResetStep === 'verify')}
                                    onChange={(event) => onEmailChange(event.target.value)}/>
                         </label>
@@ -261,8 +208,6 @@ export function AccountPopover({
                                 type="password"
                                 autoComplete="current-password"
                                 value={authPassword}
-                                autoFocus
-                                data-account-initial-focus="true"
                                 onChange={(event) => onAuthPasswordChange(event.target.value)}
                             />
                         </label>) : null}
@@ -275,8 +220,6 @@ export function AccountPopover({
                                     inputMode="numeric"
                                     autoComplete="one-time-code"
                                     value={authResetOtp}
-                                    autoFocus
-                                    data-account-initial-focus="true"
                                     onChange={(event) => onAuthResetOtpChange(event.target.value.replace(/\D/g, '').slice(0, 8))}
                                 />
                             </label>
@@ -304,8 +247,6 @@ export function AccountPopover({
                                 aria-label="Email sign-in code"
                                 pattern="[0-9]*"
                                 maxLength={4}
-                                autoFocus
-                                data-account-initial-focus="true"
                                 value={authOtp}
                                 onChange={(event) => onOtpChange(event.target.value.replace(/\D/g, '').slice(0, 4))}
                             />
@@ -499,20 +440,4 @@ function syncStatusDescription(syncStatus: SyncStatus, signedIn: boolean): strin
     if (syncStatus === 'saving') return 'Canaster is saving the current workspace now.';
     if (syncStatus === 'loading') return 'Canaster is checking account workspaces.';
     return 'Canaster is watching this workspace for account saves.';
-}
-
-function initialDialogFocusTarget(dialog: HTMLElement | null): HTMLElement | null {
-    if (!dialog) return null;
-    const preferredTarget = dialog.querySelector<HTMLElement>('[data-account-initial-focus]');
-    return preferredTarget ?? dialogFocusableElements(dialog)[0] ?? dialog;
-}
-
-function dialogFocusableElements(dialog: HTMLElement): HTMLElement[] {
-    return Array.from(dialog.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), ' +
-        '[tabindex]:not([tabindex="-1"])'
-    )).filter((element) => {
-        if (element.hasAttribute('disabled') || element.getAttribute('aria-hidden') === 'true') return false;
-        return element.getClientRects().length > 0 || element === document.activeElement;
-    });
 }
