@@ -21,7 +21,7 @@ Actions:
         Reference: own_mail_account
         SkipInResponse: true
         Attributes:
-          query: '!JSON.stringify([{"column": "user_account_id", "operator": "is", "value": user.reference_id.toString()}])'
+          query: '!JSON.stringify([{"column": "user_account_id", "operator": "is", "value": String(user.reference_id)}])'
       - Type: mail_account
         Method: GET
         Reference: requested_mail_account
@@ -43,7 +43,7 @@ Actions:
           message: Use at least 5 letters, numbers, dots, dashes, or underscores.
       - Type: client.notify
         Method: ACTIONRESPONSE
-        Condition: '!username != null && username.match(/^[a-z0-9._-]{5,}$/) && requested_mail_account != null && requested_mail_account.some(function(account) { return account.user_account_id.toString() != user.reference_id.toString(); })'
+        Condition: '!username != null && username.match(/^[a-z0-9._-]{5,}$/) && requested_mail_account != null && requested_mail_account.some(function(account) { return String(account.user_account_id) != String(user.reference_id); })'
         SkipInResponse: false
         Attributes:
           type: error
@@ -51,7 +51,7 @@ Actions:
       - Type: mail_account
         Method: PATCH
         Reference: updated_mail_account
-        Condition: '!username != null && username.match(/^[a-z0-9._-]{5,}$/) && (requested_mail_account == null || !requested_mail_account.some(function(account) { return account.user_account_id.toString() != user.reference_id.toString(); })) && own_mail_account != null && own_mail_account.length > 0'
+        Condition: '!username != null && username.match(/^[a-z0-9._-]{5,}$/) && (requested_mail_account == null || !requested_mail_account.some(function(account) { return String(account.user_account_id) != String(user.reference_id); })) && own_mail_account != null && own_mail_account.length > 0'
         SkipInResponse: true
         Attributes:
           reference_id: '$own_mail_account[0].reference_id'
@@ -59,7 +59,7 @@ Actions:
       - Type: mail_account
         Method: POST
         Reference: created_mail_account
-        Condition: '!username != null && username.match(/^[a-z0-9._-]{5,}$/) && (requested_mail_account == null || !requested_mail_account.some(function(account) { return account.user_account_id.toString() != user.reference_id.toString(); })) && (own_mail_account == null || own_mail_account.length == 0)'
+        Condition: '!username != null && username.match(/^[a-z0-9._-]{5,}$/) && (requested_mail_account == null || !requested_mail_account.some(function(account) { return String(account.user_account_id) != String(user.reference_id); })) && (own_mail_account == null || own_mail_account.length == 0)'
         SkipInResponse: true
         Attributes:
           username: '!username + "@canaster.in"'
@@ -70,14 +70,14 @@ Actions:
       - Type: mail_box
         Method: GET
         Reference: existing_mail_boxes
-        Condition: '!username != null && username.match(/^[a-z0-9._-]{5,}$/) && (requested_mail_account == null || !requested_mail_account.some(function(account) { return account.user_account_id.toString() != user.reference_id.toString(); }))'
+        Condition: '!username != null && username.match(/^[a-z0-9._-]{5,}$/) && (requested_mail_account == null || !requested_mail_account.some(function(account) { return String(account.user_account_id) != String(user.reference_id); }))'
         SkipInResponse: true
         Attributes:
-          query: '!JSON.stringify([{"column": "mail_account_id", "operator": "is", "value": own_mail_account != null && own_mail_account.length > 0 ? own_mail_account[0].reference_id.toString() : created_mail_account.reference_id.toString()}])'
+          query: '!JSON.stringify([{"column": "mail_account_id", "operator": "is", "value": own_mail_account != null && own_mail_account.length > 0 ? String(own_mail_account[0].reference_id) : String(created_mail_account.reference_id)}])'
       - Type: mail_box
         Method: POST
         Reference: inbox_mail_box
-        Condition: '!username != null && username.match(/^[a-z0-9._-]{5,}$/) && (requested_mail_account == null || !requested_mail_account.some(function(account) { return account.user_account_id.toString() != user.reference_id.toString(); })) && (existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "INBOX"; }))'
+        Condition: '!username != null && username.match(/^[a-z0-9._-]{5,}$/) && (requested_mail_account == null || !requested_mail_account.some(function(account) { return String(account.user_account_id) != String(user.reference_id); })) && (existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "INBOX"; }))'
         SkipInResponse: true
         Attributes:
           name: INBOX
@@ -87,12 +87,12 @@ Actions:
           attributes: ''
           flags: '\*'
           permanent_flags: '\*'
-          mail_account_id: '!(own_mail_account != null && own_mail_account.length > 0 ? own_mail_account[0].reference_id.toString() : created_mail_account.reference_id.toString())'
+          mail_account_id: '!(own_mail_account != null && own_mail_account.length > 0 ? String(own_mail_account[0].reference_id) : String(created_mail_account.reference_id))'
           user_account_id: '$user.reference_id'
       - Type: mail_box
         Method: POST
         Reference: draft_mail_box
-        Condition: '!username != null && username.match(/^[a-z0-9._-]{5,}$/) && (requested_mail_account == null || !requested_mail_account.some(function(account) { return account.user_account_id.toString() != user.reference_id.toString(); })) && (existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "Draft"; }))'
+        Condition: '!username != null && username.match(/^[a-z0-9._-]{5,}$/) && (requested_mail_account == null || !requested_mail_account.some(function(account) { return String(account.user_account_id) != String(user.reference_id); })) && (existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "Draft"; }))'
         SkipInResponse: true
         Attributes:
           name: Draft
@@ -102,12 +102,12 @@ Actions:
           attributes: ''
           flags: '\*'
           permanent_flags: '\*'
-          mail_account_id: '!(own_mail_account != null && own_mail_account.length > 0 ? own_mail_account[0].reference_id.toString() : created_mail_account.reference_id.toString())'
+          mail_account_id: '!(own_mail_account != null && own_mail_account.length > 0 ? String(own_mail_account[0].reference_id) : String(created_mail_account.reference_id))'
           user_account_id: '$user.reference_id'
       - Type: mail_box
         Method: POST
         Reference: sent_mail_box
-        Condition: '!username != null && username.match(/^[a-z0-9._-]{5,}$/) && (requested_mail_account == null || !requested_mail_account.some(function(account) { return account.user_account_id.toString() != user.reference_id.toString(); })) && (existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "Sent"; }))'
+        Condition: '!username != null && username.match(/^[a-z0-9._-]{5,}$/) && (requested_mail_account == null || !requested_mail_account.some(function(account) { return String(account.user_account_id) != String(user.reference_id); })) && (existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "Sent"; }))'
         SkipInResponse: true
         Attributes:
           name: Sent
@@ -117,12 +117,12 @@ Actions:
           attributes: ''
           flags: '\*'
           permanent_flags: '\*'
-          mail_account_id: '!(own_mail_account != null && own_mail_account.length > 0 ? own_mail_account[0].reference_id.toString() : created_mail_account.reference_id.toString())'
+          mail_account_id: '!(own_mail_account != null && own_mail_account.length > 0 ? String(own_mail_account[0].reference_id) : String(created_mail_account.reference_id))'
           user_account_id: '$user.reference_id'
       - Type: mail_box
         Method: POST
         Reference: archive_mail_box
-        Condition: '!username != null && username.match(/^[a-z0-9._-]{5,}$/) && (requested_mail_account == null || !requested_mail_account.some(function(account) { return account.user_account_id.toString() != user.reference_id.toString(); })) && (existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "Archive"; }))'
+        Condition: '!username != null && username.match(/^[a-z0-9._-]{5,}$/) && (requested_mail_account == null || !requested_mail_account.some(function(account) { return String(account.user_account_id) != String(user.reference_id); })) && (existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "Archive"; }))'
         SkipInResponse: true
         Attributes:
           name: Archive
@@ -132,12 +132,12 @@ Actions:
           attributes: ''
           flags: '\*'
           permanent_flags: '\*'
-          mail_account_id: '!(own_mail_account != null && own_mail_account.length > 0 ? own_mail_account[0].reference_id.toString() : created_mail_account.reference_id.toString())'
+          mail_account_id: '!(own_mail_account != null && own_mail_account.length > 0 ? String(own_mail_account[0].reference_id) : String(created_mail_account.reference_id))'
           user_account_id: '$user.reference_id'
       - Type: mail_box
         Method: POST
         Reference: trash_mail_box
-        Condition: '!username != null && username.match(/^[a-z0-9._-]{5,}$/) && (requested_mail_account == null || !requested_mail_account.some(function(account) { return account.user_account_id.toString() != user.reference_id.toString(); })) && (existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "Trash"; }))'
+        Condition: '!username != null && username.match(/^[a-z0-9._-]{5,}$/) && (requested_mail_account == null || !requested_mail_account.some(function(account) { return String(account.user_account_id) != String(user.reference_id); })) && (existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "Trash"; }))'
         SkipInResponse: true
         Attributes:
           name: Trash
@@ -147,12 +147,12 @@ Actions:
           attributes: ''
           flags: '\*'
           permanent_flags: '\*'
-          mail_account_id: '!(own_mail_account != null && own_mail_account.length > 0 ? own_mail_account[0].reference_id.toString() : created_mail_account.reference_id.toString())'
+          mail_account_id: '!(own_mail_account != null && own_mail_account.length > 0 ? String(own_mail_account[0].reference_id) : String(created_mail_account.reference_id))'
           user_account_id: '$user.reference_id'
       - Type: mail_box
         Method: POST
         Reference: spam_mail_box
-        Condition: '!username != null && username.match(/^[a-z0-9._-]{5,}$/) && (requested_mail_account == null || !requested_mail_account.some(function(account) { return account.user_account_id.toString() != user.reference_id.toString(); })) && (existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "Spam"; }))'
+        Condition: '!username != null && username.match(/^[a-z0-9._-]{5,}$/) && (requested_mail_account == null || !requested_mail_account.some(function(account) { return String(account.user_account_id) != String(user.reference_id); })) && (existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "Spam"; }))'
         SkipInResponse: true
         Attributes:
           name: Spam
@@ -162,11 +162,11 @@ Actions:
           attributes: ''
           flags: '\*'
           permanent_flags: '\*'
-          mail_account_id: '!(own_mail_account != null && own_mail_account.length > 0 ? own_mail_account[0].reference_id.toString() : created_mail_account.reference_id.toString())'
+          mail_account_id: '!(own_mail_account != null && own_mail_account.length > 0 ? String(own_mail_account[0].reference_id) : String(created_mail_account.reference_id))'
           user_account_id: '$user.reference_id'
       - Type: client.notify
         Method: ACTIONRESPONSE
-        Condition: '!username != null && username.match(/^[a-z0-9._-]{5,}$/) && (requested_mail_account == null || !requested_mail_account.some(function(account) { return account.user_account_id.toString() != user.reference_id.toString(); }))'
+        Condition: '!username != null && username.match(/^[a-z0-9._-]{5,}$/) && (requested_mail_account == null || !requested_mail_account.some(function(account) { return String(account.user_account_id) != String(user.reference_id); }))'
         SkipInResponse: false
         Attributes:
           type: success
@@ -203,23 +203,8 @@ Actions:
         IsNullable: false
         Name: body
     OutFields:
-      - Type: client.notify
-        Method: ACTIONRESPONSE
-        Condition: '!subject.user_account_id.toString() != user.reference_id.toString()'
-        SkipInResponse: false
-        Attributes:
-          type: error
-          message: Only the account owner can send mail from this mailbox.
-      - Type: client.notify
-        Method: ACTIONRESPONSE
-        Condition: '!subject.user_account_id.toString() == user.reference_id.toString() && !subject.username.match(/^[a-z0-9._-]{5,}@canaster\.(in|local)$/)'
-        SkipInResponse: false
-        Attributes:
-          type: error
-          message: Use your Canaster mail address to send mail.
       - Type: mail.send
         Method: EXECUTE
-        Condition: '!subject.user_account_id.toString() == user.reference_id.toString() && subject.username.match(/^[a-z0-9._-]{5,}@canaster\.(in|local)$/)'
         SkipInResponse: true
         Attributes:
           body: ~body
@@ -232,7 +217,6 @@ Actions:
           send_immediately: true
       - Type: client.notify
         Method: ACTIONRESPONSE
-        Condition: '!subject.user_account_id.toString() == user.reference_id.toString() && subject.username.match(/^[a-z0-9._-]{5,}@canaster\.(in|local)$/)'
         SkipInResponse: false
         Attributes:
           type: success

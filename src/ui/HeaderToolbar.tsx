@@ -9,6 +9,7 @@ import {
     Globe2,
     Link2,
     LockKeyhole,
+    MailPlus,
     PanelLeftClose,
     PanelLeftOpen,
     PanelsTopLeft,
@@ -50,6 +51,10 @@ export type HeaderToolbarProps = {
         buttonRef: MutableRefObject<HTMLButtonElement | null>,
         open: boolean,
         onToggle: () => void
+    },
+    mail: {
+        open: boolean,
+        onOpen: () => void
     },
     visibility: {
         active: DocumentVisibility | null,
@@ -153,6 +158,13 @@ export function HeaderToolbar(props: HeaderToolbarProps) {
                     onClick={props.view.onToggleParentContext}
                 >
                     <PanelsTopLeft size={17}/>
+                </IconButton>
+                <IconButton
+                    label="Send mail"
+                    pressed={props.mail.open}
+                    onClick={props.mail.onOpen}
+                >
+                    <MailPlus size={17}/>
                 </IconButton>
                 <button
                     ref={props.exportMenu.buttonRef}

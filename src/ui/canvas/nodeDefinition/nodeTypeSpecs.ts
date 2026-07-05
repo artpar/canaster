@@ -117,7 +117,7 @@ export const nodeTypeSpecs = {
     typeBadge: 'MAIL',
     addMenu: {
       label: 'Mail',
-      detail: 'Inbox, messages, and compose',
+      detail: 'Inbox and messages',
       badge: 'MAIL',
     },
     defaultSize: { w: 420, h: 280 },

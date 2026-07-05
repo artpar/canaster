@@ -1,5 +1,5 @@
 import { daptinAction, daptinFind, daptinFindAll, daptinLoadModel, getDaptinEndpoint, getToken, normalizeDaptinError, requireUsableStoredToken } from './daptinClient';
-import { daptinActionFailureMessage } from './daptinActionFailureMessage';
+import { daptinActionFailureMessage, daptinActionSuccessMessage } from './daptinActionFailureMessage';
 
 export type DaptinMailAccount = {
   id: string;
@@ -204,6 +204,8 @@ export async function sendMailMessage(accountId: string, draft: DaptinMailDraft)
     });
     const failureMessage = daptinActionFailureMessage(response);
     if (failureMessage) throw new Error(failureMessage);
+    const successMessage = daptinActionSuccessMessage(response);
+    if (!successMessage) throw new Error('Daptin did not confirm that the message was sent.');
   });
 }
 

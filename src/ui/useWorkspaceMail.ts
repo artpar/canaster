@@ -10,14 +10,14 @@ import {
   setCanasterMailUsername,
 } from '../infra/daptin/mail';
 import { hasUsableStoredToken, normalizeDaptinError } from '../infra/daptin/daptinClient';
-import type { CanvasNodeMailService } from './canvas/nodeMailService';
+import type { WorkspaceMailService } from './workspaceMailService';
 
 export function useWorkspaceMail(input: {
   signedIn: boolean;
-}): CanvasNodeMailService {
+}): WorkspaceMailService {
   const signedInRef = useRef(input.signedIn);
   signedInRef.current = input.signedIn;
-  return useMemo<CanvasNodeMailService>(() => {
+  return useMemo<WorkspaceMailService>(() => {
     const canUseMail = () => signedInRef.current && hasUsableStoredToken();
     return {
       canUseMail,

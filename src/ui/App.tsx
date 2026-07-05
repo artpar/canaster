@@ -104,6 +104,7 @@ import {
 } from "./WorkspaceToastView";
 import {DeleteConfirmationPrompt} from "./DeleteConfirmationPrompt";
 import {HeaderToolbar} from "./HeaderToolbar";
+import {MailComposerPanel} from "./MailComposerPanel";
 import {hasMetaOrCtrlShortcutModifier, KeyboardShortcutsProvider, useKeyboardShortcut} from "./KeyboardShortcuts";
 import "./theme/CanasterFonts";
 import {CanasterThemeProvider} from "./theme/CanasterThemeProvider";
@@ -411,6 +412,7 @@ export function App() {
     const [canvasThemeMenuPosition, setCanvasThemeMenuPosition] = useState<ArrangeMenuPosition | null>(null);
     const [canvasThemeMenuTarget, setCanvasThemeMenuTarget] = useState<ToolbarMenuTarget | null>(null);
     const [exportMenuOpen, setExportMenuOpen] = useState(false);
+    const [mailComposerOpen, setMailComposerOpen] = useState(false);
     const [exportMenuPosition, setExportMenuPosition] = useState<ArrangeMenuPosition | null>(null);
     const [addPanelMenuOpen, setAddPanelMenuOpen] = useState(false);
     const [addPanelMenuPosition, setAddPanelMenuPosition] = useState<ArrangeMenuPosition | null>(null);
@@ -1491,6 +1493,10 @@ export function App() {
                     open     : addPanelMenuOpen && !addPanelMenuTarget,
                     onToggle : handleToggleAddPanelMenu
                 }}
+                mail={{
+                    open  : mailComposerOpen,
+                    onOpen: () => setMailComposerOpen(true)
+                }}
                 visibility={{
                     active     : activeDocumentVisibility,
                     editable   : activeDocumentEditable,
@@ -1668,6 +1674,12 @@ export function App() {
                 onVerifyEmailOtp={() => void handleVerifyEmailOtp()}
                 onVerifyPasswordReset={() => void handleVerifyPasswordReset()}
             />) : null}
+            {mailComposerOpen ? (
+                <MailComposerPanel
+                    mailService={nodeMailService}
+                    onClose={() => setMailComposerOpen(false)}
+                />
+            ) : null}
         </section>
     </main>
     </KeyboardShortcutsProvider>

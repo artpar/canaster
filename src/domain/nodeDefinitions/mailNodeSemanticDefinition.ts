@@ -3,7 +3,7 @@ import { BuiltInNodeTypes } from '../BuiltInNodeTypes';
 import type { JsonObject } from '../types';
 import type { NodeSemanticDefinition } from './NodeSemanticDefinition';
 
-export type MailNodeMode = 'inbox' | 'message' | 'compose';
+export type MailNodeMode = 'inbox' | 'message';
 
 export type MailNodeData = {
   title: string;
@@ -12,14 +12,9 @@ export type MailNodeData = {
   folderName: string;
   messageId: string | null;
   mode: MailNodeMode;
-  draftTo: string;
-  draftCc: string;
-  draftBcc: string;
-  draftSubject: string;
-  draftBody: string;
 } & JsonObject;
 
-const MAIL_NODE_MODES: readonly MailNodeMode[] = ['inbox', 'message', 'compose'];
+const MAIL_NODE_MODES: readonly MailNodeMode[] = ['inbox', 'message'];
 
 export const mailNodeSemanticDefinition: NodeSemanticDefinition<MailNodeData> = {
   type: BuiltInNodeTypes.mail,
@@ -36,22 +31,13 @@ export const mailNodeSemanticDefinition: NodeSemanticDefinition<MailNodeData> = 
       folderName,
       messageId: asNullableString(raw.messageId),
       mode: asEnum(raw.mode, MAIL_NODE_MODES, 'inbox'),
-      draftTo: asString(raw.draftTo, ''),
-      draftCc: asString(raw.draftCc, ''),
-      draftBcc: asString(raw.draftBcc, ''),
-      draftSubject: asString(raw.draftSubject, ''),
-      draftBody: asString(raw.draftBody, ''),
     };
   },
   describe({ data }) {
-    const details = data.mode === 'compose'
-      ? [data.draftSubject.trim() || 'Draft message']
-      : [data.folderName || 'INBOX'];
+    const details = [data.folderName || 'INBOX'];
     const state = data.messageId && data.mode === 'message'
       ? ['Message open']
-      : data.draftTo.trim() || data.draftSubject.trim() || data.draftBody.trim()
-        ? ['Draft in progress']
-        : [];
+      : [];
     return {
       label: data.title || folderTitle(data.folderName),
       roleDescription: 'Mail',
@@ -70,11 +56,6 @@ export function createDefaultMailNodeData(): MailNodeData {
     folderName: 'INBOX',
     messageId: null,
     mode: 'inbox',
-    draftTo: '',
-    draftCc: '',
-    draftBcc: '',
-    draftSubject: '',
-    draftBody: '',
   };
 }
 
