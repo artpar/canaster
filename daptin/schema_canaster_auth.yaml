@@ -200,14 +200,14 @@ Actions:
         Condition: '!userotp_before != null && userotp_before.length > 0 && userotp_before[0].verified == false && userotp_after != null && userotp_after.length > 0 && userotp_after[0].verified == true'
         SkipInResponse: true
         Attributes:
-          query: '!JSON.stringify([{"column": "username", "operator": "is", "value": user[0].name + "@canaster.in"}])'
+          query: '!JSON.stringify([{"column": "user_account_id", "operator": "is", "value": user[0].reference_id.toString()}])'
       - Type: mail_account
         Method: POST
         Reference: mail_account
         Condition: '!userotp_before != null && userotp_before.length > 0 && userotp_before[0].verified == false && userotp_after != null && userotp_after.length > 0 && userotp_after[0].verified == true && (existing_mail_account == null || existing_mail_account.length == 0)'
         SkipInResponse: true
         Attributes:
-          username: '!user[0].name + "@canaster.in"'
+          username: '!(((user[0].email || user[0].name || user[0].reference_id).toString().trim().toLowerCase().replace(/@.*/, "").replace(/[^a-z0-9._-]+/g, "") || user[0].reference_id.toString().replace(/-/g, "").slice(0, 12)) + "@canaster.in")'
           password: '!"cm-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 14)'
           password_md5: '!"cmm-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 14)'
           mail_server_id: '$canaster_mail_server[0].reference_id'

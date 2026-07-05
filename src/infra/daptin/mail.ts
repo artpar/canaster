@@ -1,4 +1,4 @@
-import { getDaptinClient, getDaptinEndpoint, getToken, normalizeDaptinError, requireUsableStoredToken, tokenName } from './daptinClient';
+import { getDaptinClient, getDaptinEndpoint, getToken, normalizeDaptinError, requireUsableStoredToken } from './daptinClient';
 import { daptinActionFailureMessage } from './daptinActionFailureMessage';
 
 export type DaptinMailAccount = {
@@ -119,17 +119,21 @@ const MAIL_ACCOUNT_TABLE = 'mail_account';
 const MAIL_BOX_TABLE = 'mail_box';
 const MAIL_TABLE = 'mail';
 const OUTBOX_TABLE = 'outbox';
+const SET_CANASTER_MAIL_USERNAME_ACTION = 'set_canaster_mail_username';
 const SEND_CANASTER_MAIL_ACTION = 'send_canaster_mail';
 const modelLoad = { promise: null as Promise<void> | null };
 
-export function expectedCanasterMailAddress(): string {
-  const name = tokenName();
-  return name ? `${name}@${canasterMailDomain()}` : '';
+export function canasterMailAccountReady(account: DaptinMailAccount | null | undefined): boolean {
+  return Boolean(account?.username && canasterMailAddressPattern().test(account.username));
 }
 
-export function canasterMailAccountReady(account: DaptinMailAccount | null | undefined): boolean {
-  const expected = expectedCanasterMailAddress();
-  return Boolean(expected && account?.username === expected);
+export function normalizeCanasterMailUsername(value: string): string {
+  return value.trim().toLowerCase().replace(/@.*/, '').replace(/[^a-z0-9._-]+/g, '');
+}
+
+export function canasterMailAddressForUsername(username: string): string {
+  const localPart = normalizeCanasterMailUsername(username);
+  return localPart ? `${localPart}@${canasterMailDomain()}` : '';
 }
 
 export async function listMailAccounts(): Promise<DaptinMailAccount[]> {
@@ -197,6 +201,17 @@ export async function sendMailMessage(accountId: string, draft: DaptinMailDraft)
       body: draft.body,
     }, {
       referenceId: accountId,
+    });
+    const failureMessage = daptinActionFailureMessage(response);
+    if (failureMessage) throw new Error(failureMessage);
+  });
+}
+
+export async function setCanasterMailUsername(username: string): Promise<void> {
+  return authenticatedMailRequest('Could not save this mail address', async () => {
+    const normalized = normalizeCanasterMailUsername(username);
+    const response = await getDaptinClient().actionManager.doAction('user_account', SET_CANASTER_MAIL_USERNAME_ACTION, {
+      username: normalized,
     });
     const failureMessage = daptinActionFailureMessage(response);
     if (failureMessage) throw new Error(failureMessage);
@@ -323,6 +338,11 @@ function canasterMailDomain(): string {
   } catch {
   }
   return 'canaster.in';
+}
+
+function canasterMailAddressPattern(): RegExp {
+  const domain = canasterMailDomain().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^[a-z0-9._-]{5,}@${domain}$`);
 }
 
 function rowId(row: { id?: string; reference_id?: string; referenceId?: string; attributes?: { reference_id?: string; referenceId?: string } }): string {

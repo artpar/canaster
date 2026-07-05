@@ -21,6 +21,7 @@ type MailClientState = {
   busy: boolean;
   messageBusy: boolean;
   sending: boolean;
+  settingUsername: boolean;
   status: string;
   readiness: CanasterMailReadiness;
 };
@@ -116,6 +117,7 @@ export function createMailNodePanel(
   let busy = false;
   let messageBusy = false;
   let sending = false;
+  let settingUsername = false;
   let status = '';
   let mailAccountId = committedData.mailAccountId;
   let folderId = committedData.folderId;
@@ -127,6 +129,8 @@ export function createMailNodePanel(
   let draftBcc = committedData.draftBcc;
   let draftSubject = committedData.draftSubject;
   let draftBody = committedData.draftBody;
+  let choosingUsername = false;
+  let setupUsername = '';
   let messageLoadRequestId = 0;
 
   void loadInitial();
@@ -165,11 +169,16 @@ export function createMailNodePanel(
     render();
     try {
       accounts = await mailService.listAccounts();
-      const selectedAccount = accounts.find((account) => account.id === mailAccountId && mailService.mailReadiness(account).canSend) ??
+      const readyAccount = accounts.find((account) => account.id === mailAccountId && mailService.mailReadiness(account).canSend) ??
         accounts.find((account) => mailService.mailReadiness(account).canSend) ??
         null;
+      const selectedAccount = readyAccount ??
+        accounts.find((account) => account.id === mailAccountId) ??
+        accounts[0] ??
+        null;
       mailAccountId = selectedAccount?.id ?? null;
-      if (!mailAccountId) {
+      if (selectedAccount && !setupUsername) setupUsername = usernameFromAddress(selectedAccount.username);
+      if (!mailAccountId || !readyAccount) {
         status = mailService.mailReadiness(null).message;
         busy = false;
         render();
@@ -263,6 +272,44 @@ export function createMailNodePanel(
     }
   }
 
+  async function saveUsername() {
+    if (settingUsername) return;
+    settingUsername = true;
+    status = 'Saving mail address';
+    render();
+    try {
+      await mailService.setUsername(setupUsername);
+      accounts = await mailService.listAccounts();
+      const selectedAccount = accounts.find((account) => usernameFromAddress(account.username) === normalizedUsername(setupUsername)) ??
+        accounts.find((account) => mailService.mailReadiness(account).canSend) ??
+        null;
+      mailAccountId = selectedAccount?.id ?? null;
+      choosingUsername = false;
+      if (!mailAccountId) {
+        folders = [];
+        messages = [];
+        status = 'Choose a Canaster mail address.';
+        return;
+      }
+      folders = await mailService.listFolders(mailAccountId);
+      const inbox = folders.find((folder) => folder.name.toUpperCase() === 'INBOX') ?? folders[0] ?? null;
+      folderId = inbox?.id ?? null;
+      folderName = inbox?.name ?? 'INBOX';
+      messageId = null;
+      message = null;
+      messageLoadRequestId += 1;
+      mode = 'inbox';
+      await loadMessages();
+      status = messages.length ? '' : 'No messages in this folder.';
+      commitDraft();
+    } catch (error) {
+      status = mailService.mailErrorMessage(error, 'Could not save this mail address.');
+    } finally {
+      settingUsername = false;
+      render();
+    }
+  }
+
   function commitDraft() {
     const nextData = mailNodeSemanticDefinition.parseData({
       title: folderName.toUpperCase() === 'INBOX' ? 'Inbox' : folderName,
@@ -303,7 +350,7 @@ export function createMailNodePanel(
     heading.textContent = folderName.toUpperCase() === 'INBOX' ? 'Inbox' : folderName;
     composeButton.disabled = busy || !mailAccountId || !readiness.canSend || mode === 'compose';
     body.replaceChildren();
-    const state: MailClientState = { accounts, folders, messages, message, busy, messageBusy, sending, status, readiness };
+    const state: MailClientState = { accounts, folders, messages, message, busy, messageBusy, sending, settingUsername, status, readiness };
     if (!mailService.canUseMail()) {
       body.append(statusView('Sign in to use mail.'));
       return;
@@ -315,6 +362,16 @@ export function createMailNodePanel(
     const rail = document.createElement('div');
     rail.className = 'mail-node-folders';
     rail.append(identityView(state.readiness));
+    if (!state.busy && mailService.canUseMail()) {
+      const choose = button(state.readiness.canReceive ? 'Change address' : 'Choose address', () => {
+        choosingUsername = true;
+        setupUsername = setupUsername || usernameFromAddress(currentAccount()?.username ?? '');
+        status = '';
+        render();
+      });
+      choose.className = 'mail-node-folder';
+      rail.append(choose);
+    }
     if (state.busy && !state.folders.length) {
       rail.append(statusView('Loading folders'));
       return rail;
@@ -350,7 +407,10 @@ export function createMailNodePanel(
     main.className = 'mail-node-main';
     if (state.status) main.append(statusView(state.status));
     if (state.busy) return main;
-    if (!mailAccountId || !state.readiness.canReceive) return main;
+    if (choosingUsername || !mailAccountId || !state.readiness.canReceive) {
+      main.append(renderUsernameSetup(state));
+      return main;
+    }
     if (mode === 'compose') {
       main.append(renderComposer());
       return main;
@@ -463,6 +523,51 @@ export function createMailNodePanel(
     return form;
   }
 
+  function renderUsernameSetup(state: MailClientState): HTMLElement {
+    const form = document.createElement('form');
+    form.className = 'mail-node-setup';
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      void saveUsername();
+    });
+    if (!setupUsername) setupUsername = usernameFromAddress(currentAccount()?.username ?? '');
+    const label = document.createElement('label');
+    label.className = 'mail-node-field mail-node-username-field';
+    const span = document.createElement('span');
+    span.textContent = 'Mail username';
+    const row = document.createElement('div');
+    row.className = 'mail-node-username-row';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = setupUsername;
+    input.minLength = 5;
+    input.pattern = '[a-z0-9._-]{5,}';
+    input.autocomplete = 'username';
+    input.addEventListener('input', () => {
+      setupUsername = normalizedUsername(input.value);
+      input.value = setupUsername;
+    });
+    const suffix = document.createElement('span');
+    suffix.textContent = '@canaster.in';
+    row.append(input, suffix);
+    label.append(span, row);
+    const actions = document.createElement('div');
+    actions.className = 'mail-node-compose-actions';
+    const cancel = button('Cancel', () => {
+      choosingUsername = false;
+      status = '';
+      render();
+    });
+    cancel.disabled = !state.readiness.canReceive || state.settingUsername;
+    const save = document.createElement('button');
+    save.type = 'submit';
+    save.textContent = state.settingUsername ? 'Saving' : 'Save';
+    save.disabled = state.settingUsername || normalizedUsername(setupUsername).length < 5;
+    actions.append(cancel, save);
+    form.append(label, actions);
+    return form;
+  }
+
   function currentAccount(): CanasterMailAccount | null {
     return accounts.find((account) => account.id === mailAccountId) ?? null;
   }
@@ -510,6 +615,14 @@ function statusView(message: string): HTMLElement {
 
 function folderLabel(name: string): string {
   return name.toUpperCase() === 'INBOX' ? 'Inbox' : name;
+}
+
+function normalizedUsername(value: string): string {
+  return value.trim().toLowerCase().replace(/@.*/, '').replace(/[^a-z0-9._-]+/g, '');
+}
+
+function usernameFromAddress(value: string): string {
+  return normalizedUsername(value.split('@')[0] ?? '');
 }
 
 function formatDate(value: string | null): string {

@@ -1,12 +1,13 @@
 import { useMemo, useRef } from 'react';
 import {
+  canasterMailAddressForUsername,
   canasterMailAccountReady,
-  expectedCanasterMailAddress,
   listMailAccounts,
   listMailFolders,
   listMailMessages,
   loadMailMessage,
   sendMailMessage,
+  setCanasterMailUsername,
 } from '../infra/daptin/mail';
 import { hasUsableStoredToken, normalizeDaptinError } from '../infra/daptin/daptinClient';
 import type { CanvasNodeMailService } from './canvas/nodeMailService';
@@ -21,7 +22,7 @@ export function useWorkspaceMail(input: {
     return {
       canUseMail,
       mailReadiness(account) {
-        const mailAddress = expectedCanasterMailAddress();
+        const mailAddress = account?.username ?? '';
         if (!canUseMail()) {
           return {
             mailAddress,
@@ -30,12 +31,12 @@ export function useWorkspaceMail(input: {
             message: 'Sign in to use mail.',
           };
         }
-        if (!mailAddress) {
+        if (!account) {
           return {
             mailAddress,
             canSend: false,
             canReceive: false,
-            message: 'Mail account unavailable.',
+            message: 'Choose a Canaster mail address.',
           };
         }
         if (!canasterMailAccountReady(account)) {
@@ -43,7 +44,7 @@ export function useWorkspaceMail(input: {
             mailAddress,
             canSend: false,
             canReceive: false,
-            message: `Canaster mail is not available for ${mailAddress}.`,
+            message: 'Choose a valid Canaster mail address.',
           };
         }
         return {
@@ -72,6 +73,12 @@ export function useWorkspaceMail(input: {
       async sendMessage(accountId, draft) {
         if (!canUseMail()) throw new Error('Sign in to send mail.');
         await sendMailMessage(accountId, draft);
+      },
+      async setUsername(username) {
+        if (!canUseMail()) throw new Error('Sign in to choose a mail address.');
+        const mailAddress = canasterMailAddressForUsername(username);
+        if (!mailAddress) throw new Error('Choose a mail username.');
+        await setCanasterMailUsername(username);
       },
       mailErrorMessage(error, fallback) {
         const apiError = normalizeDaptinError(error, fallback);

@@ -1289,6 +1289,14 @@ button {
   overflow: auto;
 }
 
+.mail-node-setup {
+  display: grid;
+  align-content: start;
+  gap: var(--canaster-space-xs);
+  max-width: 360px;
+  padding: var(--canaster-space-sm);
+}
+
 .mail-node-field {
   display: grid;
   gap: var(--canaster-space-xxs);
@@ -1310,6 +1318,31 @@ button {
 .mail-node-field input {
   height: var(--canaster-input-height);
   padding: 0 var(--canaster-input-padding-inline);
+}
+
+.mail-node-username-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: var(--canaster-input-height);
+  border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
+  border-radius: var(--canaster-radius-control);
+  background: var(--canaster-color-panel-muted);
+  overflow: hidden;
+}
+
+.mail-node-username-row input {
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.mail-node-username-row span {
+  padding: 0 var(--canaster-space-xs);
+  color: var(--canaster-color-text-muted);
+  font-size: var(--canaster-font-micro-size);
+  white-space: nowrap;
 }
 
 .mail-node-field textarea {

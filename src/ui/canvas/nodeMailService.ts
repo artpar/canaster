@@ -50,6 +50,7 @@ export type CanvasNodeMailService = {
   listMessages(folderId: string): Promise<CanasterMailMessageSummary[]>;
   loadMessage(messageId: string): Promise<CanasterMailMessage>;
   sendMessage(accountId: string, draft: CanasterMailDraft): Promise<void>;
+  setUsername(username: string): Promise<void>;
   mailErrorMessage(error: unknown, fallback: string): string;
 };
 
@@ -66,6 +67,7 @@ export const unavailableCanvasNodeMailService: CanvasNodeMailService = {
   listMessages: () => Promise.resolve([]),
   loadMessage: () => Promise.reject(new Error('Sign in to use mail.')),
   sendMessage: () => Promise.reject(new Error('Sign in to send mail.')),
+  setUsername: () => Promise.reject(new Error('Sign in to choose a mail address.')),
   mailErrorMessage(error, fallback) {
     return error instanceof Error ? error.message : fallback;
   },
