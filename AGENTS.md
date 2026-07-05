@@ -85,12 +85,73 @@ src/
 
 Do not be vague in responses. Responding with a "what" of the problem isnt useful, your responses should always include "why", "where", "when", "what not", "why not" with the full context.
 
+Read `TRUTH_BOUNDARY_DISCIPLINE.md` before investigating, documenting, or explaining failures. Its rules are mandatory. In particular: do not avoid the uncomfortable correct answer. If the real answer is "I do not know yet," say that instead of inventing intent, architecture, or explanation.
+
 ## Current Development Context
 
 - The Canaster dev server is usually already running in hot-reload mode. Only use localhost:5173. never kill or restart or start another process.
 - Do not start another dev server unless you have verified one is needed.
 - Never execute npm run build
 - This is the user's local machine. It is acceptable to show credentials in local terminal output.
+
+## SDLC Failure Modes
+
+These are ways to sabotage the project while looking busy. Do not do them.
+
+### Layer Separation Is Mandatory
+
+Do not collapse lifecycle layers into one vague claim. In this project, these are different things:
+
+- Source schema under `daptin/`.
+- Generated local schema under `.tmp/daptin/local-schema/`.
+- The running local Daptin process and database.
+- The production Daptin process and database.
+- Frontend static checks.
+- Browser UI behavior.
+- Human end-to-end acceptance.
+
+Say exactly which layer is proven. Say exactly which layer is not proven. Never say "verified" when the evidence only covers a lower layer.
+
+### Evidence Must Match The Claim
+
+Do not claim backend availability because source files exist. Do not claim user-path success because an admin or privileged CLI smoke passed. Do not claim Daptin integration because TypeScript passed. Do not claim UI behavior because a backend action exists.
+
+Specific traps:
+
+- A source schema action existing does not prove generated local schema was regenerated.
+- A generated schema action existing does not prove the running Daptin process imported it.
+- A running backend action existing does not prove the normal signed-in browser flow can use it.
+- A privileged `daptin-cli` success does not prove normal account permissions are correct.
+- Unauthenticated `daptin-cli` reads returning no rows do not prove rows are absent.
+- Stale `.tmp` files, historical docs, screenshots, and old test credentials are not current runtime truth.
+- `npm run verify:fast` and `npm run verify:static` do not prove Daptin integration, live transport, SMTP/IMAP, asset upload/download, production auth, or browser journeys.
+
+### Generated Artifacts Are Not Runtime State
+
+When source schema changes, local generated schema must be regenerated before making any claim about local schema contents. Regenerating `.tmp/daptin/local-schema` still does not update an already-running Daptin process. Daptin loads `schema_*.yaml` from its schema folder at startup; runtime import state must be verified separately through the app UI or an authenticated `daptin-cli` context.
+
+Do not restart Daptin, regenerate schema, create accounts, reset credentials, or mutate backend state just to rescue a previous answer. Do those only when the task explicitly calls for it, and state the lifecycle layer being changed.
+
+### Authentication Context Is Part Of The Test
+
+For Daptin checks, the authenticated context is not incidental. It is part of the evidence. Before interpreting a `daptin-cli` result, state which endpoint and auth context were used.
+
+If `daptin-cli` has no valid authenticated context, stop and report that exact limitation. Do not bypass it with SQL, `curl`, inline Node.js, browser `fetch`, direct JSON API calls, or custom probes. Do not treat guest-visible results as proof about authenticated rows, actions, permissions, or normal-user behavior.
+
+### Human Testing Means UI And End Behavior
+
+Do not hand backend-contract verification to "human testing" when it can be checked by source inspection, generated artifact inspection, or authenticated `daptin-cli`. Human testing is for visible browser behavior, workflow acceptance, and final end-to-end judgment.
+
+Correct wording is concrete:
+
+- "Source schema contains X."
+- "Generated local schema contains X."
+- "Running local Daptin has imported X."
+- "Production Daptin has X."
+- "Static frontend checks pass."
+- "Browser UI behavior was not tested."
+
+Anything broader is probably a lie.
 
 ## Daptin Backend Interaction Rules
 
@@ -117,4 +178,3 @@ Read these before changing product behavior or UI:
 - `docs/architecture-software-kt.md` for architecture contracts and runtime boundaries.
 
 Use practical product language: workspace, document, view, panel, work item, save, open, account. Do not make Canaster feel like a developer diagramming tool, BI dashboard, generic whiteboard, landing page, or novelty mind-map app.
-
