@@ -25,9 +25,10 @@ Tables:
 
   - TableName: mail
     Permission: 561408
+    DefaultPermission: 12672
     AccessGroups:
       - Name: users
-        Permission: 573440
+        Permission: 638976
 
   # Runtime mail queues and operational tables stay closed to guest CRUD.
   - TableName: outbox
@@ -44,14 +45,14 @@ Tables:
 
   - TableName: mail_account
     Permission: 577792
-    DefaultPermission: 569633
+    DefaultPermission: 12672
     AccessGroups:
       - Name: users
         Permission: 573440
 
   - TableName: mail_box
     Permission: 577792
-    DefaultPermission: 569633
+    DefaultPermission: 12672
     AccessGroups:
       - Name: users
         Permission: 573440

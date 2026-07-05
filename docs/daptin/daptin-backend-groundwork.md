@@ -695,12 +695,28 @@ Current production admin/auth state as of 2026-07-01:
 - Sensitive Daptin tables such as `outbox`, `cloud_store`, `credential`, `certificate`, `user_otp_account`, `mail_account`, `mail_box`, `mail_server`, and `site` are locked at `world.permission=561408`, so guest list/create/update/delete requests return `403`.
 - Public browser auth uses `request_canaster_email_otp` and `verify_canaster_email_otp`, both schema-managed on `user_account` with action permission `32` (`GuestExecute`). The request action creates the user account before OTP generation when the email is new, makes that new account row self-owned with owner `Refer` permission for Daptin's `user_otp_account.otp_of_account` foreign key, then switches the action context to that user before executing Daptin's built-in `otp.generate`.
 - `verify_canaster_email_otp` is the signup completion point. After `otp.login.verify` succeeds, it creates the user's missing `mail_account` row and default mailbox folders (`INBOX`, `Draft`, `Sent`, `Archive`, `Trash`, `Spam`) using normal `mail_account.user_account_id`, `mail_account.mail_server_id`, `mail_box.user_account_id`, and `mail_box.mail_account_id` foreign-key columns. Do not create or patch generated join-table rows for this flow.
-- `mail_account` and `mail_box` use `DefaultPermission: 569633` (`Owner: Read, Execute, Refer`) so rows created by OTP verification can later be used as foreign-key targets for the same user. Do not put row permissions in the mail-table action POST payloads; Daptin create uses the table model default permission.
+- `mail`, `mail_account`, and `mail_box` use `DefaultPermission: 12672` (`Owner: Peek, Read, Execute, Refer`; no Guest or Group row access). The `users` access-group relation opens the table/action gate for signed-in users, while row reads stay owner-scoped. Do not put row permissions in the mail-table action POST payloads; Daptin create uses the table model default permission.
 - The generated mailbox password stays server-side, stays under Daptin's bcrypt input limit, and is not returned by the verify action. If users need direct IMAP/SMTP client credentials, add a separate authenticated mailbox-password reset action instead of exposing the generated value during signup.
 - Inbound SMTP saves `mail` rows as the recipient user. Production must therefore keep `world.permission(mail)=561408` and grant the built-in `users` usergroup table-level `mail` access through a `usergroup(users).world_id -> mail` relation with permission `638976` (`Group: Peek, Read, Create, Execute`). The generated `world_world_id_has_usergroup_usergroup_id` relation table uses `DefaultPermission: 638976`; repair existing relation rows that predate the default. Do not use `GuestCreate` on `mail`.
 - Updating Daptin action permissions does not require a Daptin restart.
 - `artpar@gmail.com` exists in production as a normal user account; the retained bootstrap administrator account is still `admin@canaster.in`.
 - `admin@canaster.in` remains related to both `users` and `administrators`.
+
+Local mail authorization verification on 2026-07-05:
+
+- Runtime: `http://localhost:7537`, restarted with the same Daptin image digest used by production deploy, `sha256:485b47ca0328d5dfc1757c441a1bead287cbc58c3fabed9c9fc038eb229d1f16`.
+- Schema import evidence: logs showed `schema_canaster_auth.yaml`, `schema_canaster_mail.yaml`, and `schema_canaster_permissions.yaml` loaded at startup.
+- Runtime world metadata showed `mail.DefaultPermission=12672`, `mail_account.DefaultPermission=12672`, and `mail_box.DefaultPermission=12672`.
+- Runtime access-group relation rows showed `mail -> users.permission=638976`, `mail_account -> users.permission=573440`, and `mail_box -> users.permission=573440`.
+- Existing local `mail`, `mail_account`, and `mail_box` rows were repaired through `daptin-cli update <table> <ref> permission=12672` before testing, because schema import changes defaults for future rows but does not rewrite old row permissions.
+- Guest `daptin-cli --endpoint http://localhost:7537 list mail_account`, `mail_box`, and `mail` returned `403`.
+- Two fresh normal accounts were verified through `verify_canaster_email_otp`. Each account saw exactly one `mail_account` row and six `mail_box` rows, all with `permission=12672`.
+- Cross-user filtered mailbox reads returned no rows, and cross-user `get mail_account <ref>` returned `403`.
+- Normal users could not create `mail_account` or `mail_box`, and could not update their own `mail_box`.
+- Cross-user `send_canaster_mail` failed before sending because the caller could not load the other user's `mail_account`.
+- Owner `send_canaster_mail` delivered a message into the owner's inbox; owner listing showed the delivered `mail` row with `permission=12672`; the other normal user could not see that delivered subject.
+- Direct cross-user `mail` creation failed at the referenced `mail_box` permission check with `refer object not allowed`. Direct own `mail` creation was not a useful authz signal because it failed the required blob column constraint before permission could be interpreted.
+- After this deploys, production still needs an existing-row repair pass for `mail`, `mail_account`, and `mail_box` rows. Deploying the schema alone fixes future row defaults but leaves old row permissions unchanged.
 
 Verified with:
 

@@ -67,10 +67,10 @@ Actions:
 
 Tables:
   - TableName: mail_account
-    DefaultPermission: 569633
+    DefaultPermission: 12672
 
   - TableName: mail_box
-    DefaultPermission: 569633
+    DefaultPermission: 12672
 
   - TableName: world_world_id_has_usergroup_usergroup_id
     DefaultPermission: 638976

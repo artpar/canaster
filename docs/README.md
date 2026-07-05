@@ -25,6 +25,7 @@ These documents describe current decisions or recently verified behavior. They a
 - `current/canvas-interaction.md` - nested embedded-canvas interaction notes. Treat as a plan unless a current architecture document confirms a behavior is shipped.
 - `daptin/daptin-backend-groundwork.md` - current backend setup, production notes, deployment notes, and Daptin operational evidence. Some retained sections are marked as archaeology.
 - `daptin/local-otp-login.md` - local-only SQL-backed OTP generation and Daptin action verification flow for development accounts.
+- `daptin/mail-permissions-row-privacy-wiki-article.md` - generic Daptin wiki article draft for private mail row permissions and authz verification.
 - `daptin/daptin-template-rendering-gotchas.md` - routed-template behavior, share metadata, and Daptin CLI pitfalls found while implementing Canaster share metadata.
 
 ## Daptin History
