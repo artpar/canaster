@@ -1,4 +1,4 @@
-import { getDaptinClient, getDaptinEndpoint, getToken, normalizeDaptinError, requireUsableStoredToken } from './daptinClient';
+import { daptinAction, daptinFind, daptinFindAll, daptinLoadModel, getDaptinEndpoint, getToken, normalizeDaptinError, requireUsableStoredToken } from './daptinClient';
 import { daptinActionFailureMessage } from './daptinActionFailureMessage';
 
 export type DaptinMailAccount = {
@@ -139,7 +139,7 @@ export function canasterMailAddressForUsername(username: string): string {
 export async function listMailAccounts(): Promise<DaptinMailAccount[]> {
   return authenticatedMailRequest('Could not list mail accounts', async () => {
     await ensureMailModelsLoaded();
-    const response = await getDaptinClient().jsonApi.findAll<DaptinMailAccountAttributes>(MAIL_ACCOUNT_TABLE, {
+    const response = await daptinFindAll<DaptinMailAccountAttributes>(MAIL_ACCOUNT_TABLE, {
       page: { size: 20 },
       sort: 'username',
     });
@@ -153,7 +153,7 @@ export async function listMailAccounts(): Promise<DaptinMailAccount[]> {
 export async function listMailFolders(accountId: string): Promise<DaptinMailFolder[]> {
   return authenticatedMailRequest('Could not list mail folders', async () => {
     await ensureMailModelsLoaded();
-    const response = await getDaptinClient().jsonApi.findAll<DaptinMailFolderAttributes>(MAIL_BOX_TABLE, {
+    const response = await daptinFindAll<DaptinMailFolderAttributes>(MAIL_BOX_TABLE, {
       page: { size: 100 },
       query: [{ column: 'mail_account_id', operator: 'is', value: accountId }],
       sort: 'name',
@@ -168,7 +168,7 @@ export async function listMailFolders(accountId: string): Promise<DaptinMailFold
 export async function listMailMessages(folderId: string): Promise<DaptinMailMessageSummary[]> {
   return authenticatedMailRequest('Could not list mail messages', async () => {
     await ensureMailModelsLoaded();
-    const response = await getDaptinClient().jsonApi.findAll<DaptinMailAttributes>(MAIL_TABLE, {
+    const response = await daptinFindAll<DaptinMailAttributes>(MAIL_TABLE, {
       page: { size: 100 },
       query: [{ column: 'mail_box_id', operator: 'is', value: folderId }],
       sort: '-created_at',
@@ -182,7 +182,7 @@ export async function listMailMessages(folderId: string): Promise<DaptinMailMess
 export async function loadMailMessage(messageId: string): Promise<DaptinMailMessage> {
   return authenticatedMailRequest('Could not load this message', async () => {
     await ensureMailModelsLoaded();
-    const response = await getDaptinClient().jsonApi.find<DaptinMailAttributes>(MAIL_TABLE, messageId);
+    const response = await daptinFind<DaptinMailAttributes>(MAIL_TABLE, messageId);
     if (!response.data) throw new Error(`Daptin mail not found: ${messageId}`);
     const row = response.data as DaptinMailRow;
     const raw = await rawMessageFromRow(row);
@@ -193,7 +193,7 @@ export async function loadMailMessage(messageId: string): Promise<DaptinMailMess
 export async function sendMailMessage(accountId: string, draft: DaptinMailDraft): Promise<void> {
   return authenticatedMailRequest('Could not send this message', async () => {
     await ensureMailModelsLoaded();
-    const response = await getDaptinClient().actionManager.doAction(MAIL_ACCOUNT_TABLE, SEND_CANASTER_MAIL_ACTION, {
+    const response = await daptinAction(MAIL_ACCOUNT_TABLE, SEND_CANASTER_MAIL_ACTION, {
       to: draft.to,
       cc: draft.cc,
       bcc: draft.bcc,
@@ -210,7 +210,7 @@ export async function sendMailMessage(accountId: string, draft: DaptinMailDraft)
 export async function setCanasterMailUsername(username: string): Promise<void> {
   return authenticatedMailRequest('Could not save this mail address', async () => {
     const normalized = normalizeCanasterMailUsername(username);
-    const response = await getDaptinClient().actionManager.doAction('user_account', SET_CANASTER_MAIL_USERNAME_ACTION, {
+    const response = await daptinAction('user_account', SET_CANASTER_MAIL_USERNAME_ACTION, {
       username: normalized,
     });
     const failureMessage = daptinActionFailureMessage(response);
@@ -230,10 +230,10 @@ async function authenticatedMailRequest<T>(fallbackMessage: string, run: () => P
 async function ensureMailModelsLoaded(): Promise<void> {
   if (!modelLoad.promise) {
     modelLoad.promise = Promise.all([
-      getDaptinClient().worldManager.loadModel(MAIL_ACCOUNT_TABLE, false),
-      getDaptinClient().worldManager.loadModel(MAIL_BOX_TABLE, false),
-      getDaptinClient().worldManager.loadModel(MAIL_TABLE, false),
-      getDaptinClient().worldManager.loadModel(OUTBOX_TABLE, false),
+      daptinLoadModel(MAIL_ACCOUNT_TABLE, false),
+      daptinLoadModel(MAIL_BOX_TABLE, false),
+      daptinLoadModel(MAIL_TABLE, false),
+      daptinLoadModel(OUTBOX_TABLE, false),
     ])
       .then(() => undefined)
       .catch((error) => {

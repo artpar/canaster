@@ -2,7 +2,20 @@ import type { DaptinJsonApiSingleResponse } from 'daptin-client';
 import { safeDocumentSlug } from '../../core/documentSlug';
 import type { CanvasWorkspaceSnapshot } from '../../domain/documentTypes';
 import { hydrateWorkspaceSnapshot } from '../../domain/workspaceHistory';
-import { clearToken, ensureDaptinModelsLoaded, getDaptinClient, normalizeDaptinError, requireUsableStoredToken, setToken } from './daptinClient';
+import {
+  clearToken,
+  daptinAction,
+  daptinCreate,
+  daptinExtractToken,
+  daptinFind,
+  daptinFindAll,
+  daptinSignOut,
+  daptinUpdate,
+  ensureDaptinModelsLoaded,
+  normalizeDaptinError,
+  requireUsableStoredToken,
+  setToken,
+} from './daptinClient';
 import { daptinActionFailureMessage } from './daptinActionFailureMessage';
 import type { DocumentVisibility } from './documentPermissions';
 
@@ -64,8 +77,7 @@ const SET_DOCUMENT_PUBLIC_ACTION = 'set_canaster_document_public';
 
 export async function requestEmailOtp(input: { email: string }): Promise<void> {
   return daptinRequest('Could not send a sign-in code', async () => {
-    const client = getDaptinClient();
-    const response = await client.actionManager.doAction('user_account', REQUEST_EMAIL_OTP_ACTION, {
+    const response = await daptinAction('user_account', REQUEST_EMAIL_OTP_ACTION, {
       email: input.email,
     });
     const failureMessage = daptinActionFailureMessage(response);
@@ -75,8 +87,7 @@ export async function requestEmailOtp(input: { email: string }): Promise<void> {
 
 export async function verifyEmailOtp(input: { email: string; otp: string }): Promise<void> {
   return daptinRequest('Could not verify the sign-in code', async () => {
-    const client = getDaptinClient();
-    const response = await client.actionManager.doAction('user_account', VERIFY_EMAIL_OTP_ACTION, {
+    const response = await daptinAction('user_account', VERIFY_EMAIL_OTP_ACTION, {
       email: input.email,
       otp: input.otp,
     });
@@ -88,8 +99,7 @@ export async function verifyEmailOtp(input: { email: string; otp: string }): Pro
 
 export async function signInWithPassword(input: { email: string; password: string }): Promise<void> {
   return daptinRequest('Could not sign in with that password', async () => {
-    const client = getDaptinClient();
-    const response = await client.actionManager.doAction('user_account', SIGNIN_ACTION, {
+    const response = await daptinAction('user_account', SIGNIN_ACTION, {
       email: input.email,
       password: input.password,
     });
@@ -101,7 +111,7 @@ export async function signInWithPassword(input: { email: string; password: strin
 
 export async function requestPasswordReset(input: { email: string }): Promise<void> {
   return daptinRequest('Could not send a password reset code', async () => {
-    const response = await getDaptinClient().actionManager.doAction('user_account', REQUEST_PASSWORD_RESET_ACTION, {
+    const response = await daptinAction('user_account', REQUEST_PASSWORD_RESET_ACTION, {
       email: input.email,
     });
     const failureMessage = daptinActionFailureMessage(response);
@@ -111,7 +121,7 @@ export async function requestPasswordReset(input: { email: string }): Promise<vo
 
 export async function verifyPasswordReset(input: { email: string; otp: string }): Promise<void> {
   return daptinRequest('Could not reset the password', async () => {
-    const response = await getDaptinClient().actionManager.doAction('user_account', VERIFY_PASSWORD_RESET_ACTION, {
+    const response = await daptinAction('user_account', VERIFY_PASSWORD_RESET_ACTION, {
       email: input.email,
       otp: input.otp,
     });
@@ -122,12 +132,12 @@ export async function verifyPasswordReset(input: { email: string; otp: string })
 
 export async function signOut(): Promise<void> {
   clearToken();
-  await getDaptinClient().authManager.signout();
+  await daptinSignOut();
 }
 
 export async function listDocuments(): Promise<CanasterDocumentSummary[]> {
   return authenticatedDaptinRequest('Could not list saved workspaces', async () => {
-    const response = await getDaptinClient().jsonApi.findAll<DaptinDocumentAttributes>('document', {
+    const response = await daptinFindAll<DaptinDocumentAttributes>('document', {
       page: { size: 100 },
       sort: '-updated_at',
     });
@@ -140,10 +150,9 @@ export async function listDocuments(): Promise<CanasterDocumentSummary[]> {
 
 export async function createDocument(title: string, snapshot: CanvasWorkspaceSnapshot, publicOwner: string): Promise<string> {
   return authenticatedDaptinRequest('Could not create a saved workspace', async () => {
-    const client = getDaptinClient();
     const documentKey = crypto.randomUUID();
     const placeholder = JSON.stringify([{ name: 'pending.canaster.json', file: encodeJsonDataUri({ schemaVersion: 1, pending: true }), type: 'application/json' }]);
-    const created = await client.jsonApi.create?.<DaptinDocumentAttributes>('document', {
+    const created = await daptinCreate<DaptinDocumentAttributes>('document', {
       document_name: 'pending.canaster.json',
       document_path: `/canaster/pending/${documentKey}.canaster.json`,
       document_extension: 'json',
@@ -168,7 +177,7 @@ export async function createDocument(title: string, snapshot: CanvasWorkspaceSna
 
 export async function loadDocumentDetails(documentRef: string): Promise<CanasterLoadedDocument> {
   return authenticatedDaptinRequest('Could not load this saved workspace', async () => {
-    const response = await getDaptinClient().jsonApi.find<DaptinDocumentAttributes>('document', documentRef);
+    const response = await daptinFind<DaptinDocumentAttributes>('document', documentRef);
     if (!response.data) throw new Error(`Daptin document not found: ${documentRef}`);
     const row = response.data as DaptinDocumentRow;
     const content = rowAttr(row, 'document_content');
@@ -200,7 +209,7 @@ export async function saveDocument(documentRef: string, snapshot: CanvasWorkspac
 
 export async function findDocumentByPublicPath(publicOwner: string, slug: string): Promise<CanasterDocumentSummary | null> {
   return authenticatedDaptinRequest('Could not open this shared workspace', async () => {
-    const response = await getDaptinClient().jsonApi.findAll<DaptinDocumentAttributes>('document', {
+    const response = await daptinFindAll<DaptinDocumentAttributes>('document', {
       page: { size: 1 },
       query: [
         { column: 'document_name', operator: 'is', value: `${publicOwner}/${slug}.canaster.json` },
@@ -220,24 +229,19 @@ export async function setDocumentVisibility(documentRef: string, visibility: Doc
 
 async function getDocumentRow(documentRef: string): Promise<DaptinDocumentRow> {
   await ensureDaptinModelsLoaded();
-  const response = await getDaptinClient().jsonApi.find<DaptinDocumentAttributes>('document', documentRef);
+  const response = await daptinFind<DaptinDocumentAttributes>('document', documentRef);
   if (!response.data) throw new Error(`Daptin document not found: ${documentRef}`);
   return response.data as DaptinDocumentRow;
 }
 
 async function updateDocument(documentRef: string, attributes: DaptinDocumentWritableAttributes): Promise<DaptinJsonApiSingleResponse<DaptinDocumentAttributes>> {
   await ensureDaptinModelsLoaded();
-  const update = getDaptinClient().jsonApi.update as unknown as (
-    typeName: string,
-    payload: DaptinDocumentWritableAttributes & { id: string },
-  ) => Promise<DaptinJsonApiSingleResponse<DaptinDocumentAttributes>>;
-  if (!update) throw new Error('daptin-client jsonApi.update is unavailable');
-  return update.call(getDaptinClient().jsonApi, 'document', { id: documentRef, ...attributes });
+  return daptinUpdate<DaptinDocumentAttributes>('document', documentRef, attributes);
 }
 
 async function executeDocumentVisibilityAction(documentRef: string, visibility: DocumentVisibility): Promise<void> {
   await ensureDaptinModelsLoaded();
-  const response = await getDaptinClient().actionManager.doAction('document', documentVisibilityActionName(visibility), {}, {
+  const response = await daptinAction('document', documentVisibilityActionName(visibility), {}, {
     referenceId: documentRef,
   });
   const failureMessage = daptinActionFailureMessage(response);
@@ -261,7 +265,7 @@ async function daptinRequest<T>(fallbackMessage: string, run: () => Promise<T>):
 }
 
 async function storeDaptinAuthToken(response: any[], missingTokenMessage: string): Promise<void> {
-  const token = getDaptinClient().authManager.extractToken(response as any[]);
+  const token = daptinExtractToken(response);
   if (!token) throw new Error(missingTokenMessage);
   setToken(token);
   await ensureDaptinModelsLoaded();

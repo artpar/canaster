@@ -1,6 +1,6 @@
 import { isImageAssetMime, isSupportedWorkspaceAssetFile } from '../../core/workspaceAssetTypes';
 import { isWorkspacePreviewAssetFileName } from '../../core/workspacePreviewAssetFileName';
-import { getDaptinClient, getDaptinEndpoint, getToken, normalizeDaptinError, requireUsableStoredToken } from './daptinClient';
+import { daptinAction, daptinCreate, daptinFind, daptinFindAll, daptinLoadModel, getDaptinEndpoint, getToken, normalizeDaptinError, requireUsableStoredToken } from './daptinClient';
 import { daptinActionFailureMessage } from './daptinActionFailureMessage';
 
 export type CanasterAssetSummary = {
@@ -129,7 +129,7 @@ export async function uploadWorkspaceAsset(file: File): Promise<CanasterAssetSum
   return authenticatedAssetRequest('Could not upload this file', async () => {
     await ensureAssetModelLoaded();
     const encoded = await encodeAssetFile(file);
-    const created = await getDaptinClient().jsonApi.create?.<DaptinAssetAttributes>(ASSET_TABLE, {
+    const created = await daptinCreate<DaptinAssetAttributes>(ASSET_TABLE, {
       name: file.name || 'file',
       mime: file.type || 'application/octet-stream',
       file: [encoded],
@@ -150,7 +150,7 @@ export async function uploadImageAsset(file: File): Promise<CanasterAssetSummary
 export async function listImageAssets(): Promise<CanasterAssetSummary[]> {
   return authenticatedAssetRequest('Could not list image assets', async () => {
     await ensureAssetModelLoaded();
-    const response = await getDaptinClient().jsonApi.findAll<DaptinAssetAttributes>(ASSET_TABLE, {
+    const response = await daptinFindAll<DaptinAssetAttributes>(ASSET_TABLE, {
       page: { size: 100 },
       sort: '-updated_at',
     });
@@ -165,7 +165,7 @@ export async function listImageAssets(): Promise<CanasterAssetSummary[]> {
 export async function loadAssetObject(assetRef: string): Promise<CanasterAssetObject> {
   return authenticatedAssetRequest('Could not load this file asset', async () => {
     await ensureAssetModelLoaded();
-    const response = await getDaptinClient().jsonApi.find<DaptinAssetAttributes>(ASSET_TABLE, assetRef);
+    const response = await daptinFind<DaptinAssetAttributes>(ASSET_TABLE, assetRef);
     if (!response.data) throw new Error(`Daptin asset not found: ${assetRef}`);
     const row = response.data as DaptinAssetRow;
     const id = assetId(row);
@@ -178,7 +178,7 @@ export async function loadAssetObject(assetRef: string): Promise<CanasterAssetOb
 export async function loadAssetFile(assetRef: string): Promise<File> {
   return authenticatedAssetRequest('Could not load this file asset', async () => {
     await ensureAssetModelLoaded();
-    const response = await getDaptinClient().jsonApi.find<DaptinAssetAttributes>(ASSET_TABLE, assetRef);
+    const response = await daptinFind<DaptinAssetAttributes>(ASSET_TABLE, assetRef);
     if (!response.data) throw new Error(`Daptin asset not found: ${assetRef}`);
     const row = response.data as DaptinAssetRow;
     const id = assetId(row);
@@ -206,7 +206,7 @@ export function releaseAssetObjectUrl(assetRef: string): void {
 export async function setAssetVisibility(assetRef: string, visibility: AssetVisibility): Promise<void> {
   return authenticatedAssetRequest('Could not update file visibility', async () => {
     await ensureAssetModelLoaded();
-    const response = await getDaptinClient().actionManager.doAction(ASSET_TABLE, assetVisibilityActionName(visibility), {}, {
+    const response = await daptinAction(ASSET_TABLE, assetVisibilityActionName(visibility), {}, {
       referenceId: assetRef,
     });
     const failureMessage = daptinActionFailureMessage(response);
@@ -225,7 +225,7 @@ async function authenticatedAssetRequest<T>(fallbackMessage: string, run: () => 
 
 async function ensureAssetModelLoaded(): Promise<void> {
   if (!modelLoad.promise) {
-    modelLoad.promise = getDaptinClient().worldManager.loadModel(ASSET_TABLE, false)
+    modelLoad.promise = daptinLoadModel(ASSET_TABLE, false)
       .then(() => undefined)
       .catch((error) => {
         modelLoad.promise = null;

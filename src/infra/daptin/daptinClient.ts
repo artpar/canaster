@@ -1,4 +1,12 @@
-import { DaptinClient } from 'daptin-client';
+import {
+  DaptinClient,
+  type DaptinActionResponse,
+  type DaptinJsonApiListResponse,
+  type DaptinJsonApiQueryParams,
+  type DaptinJsonApiSingleResponse,
+  type DaptinQueryFilter,
+  type DaptinReferenceId,
+} from 'daptin-client';
 
 export const DAPTIN_TOKEN_STORAGE_KEY = 'canaster:daptin:token';
 export const DAPTIN_ACTIVE_DOCUMENT_STORAGE_KEY = 'canaster:daptin:active-document';
@@ -183,6 +191,79 @@ export function getDaptinClient(): DaptinClient {
   return client;
 }
 
+export type CanasterDaptinQueryFilter<TColumn extends string = string> = DaptinQueryFilter<TColumn>;
+
+export type CanasterDaptinQueryParams<TColumn extends string = string> =
+  Omit<DaptinJsonApiQueryParams<TColumn>, 'query'> & {
+    query?: CanasterDaptinQueryFilter<TColumn>[] | string;
+  };
+
+export type CanasterDaptinActionOptions = {
+  query?: Record<string, unknown>;
+  referenceId?: string;
+};
+
+export function daptinFindAll<TAttributes extends object = Record<string, unknown>, TColumn extends string = string>(
+  typeName: string,
+  params: CanasterDaptinQueryParams<TColumn> = {},
+): Promise<DaptinJsonApiListResponse<TAttributes>> {
+  return getDaptinClient().jsonApi.findAll<TAttributes>(typeName, daptinQueryParams(params));
+}
+
+export function daptinFind<TAttributes extends object = Record<string, unknown>, TColumn extends string = string>(
+  typeName: string,
+  id: DaptinReferenceId,
+  params: CanasterDaptinQueryParams<TColumn> = {},
+): Promise<DaptinJsonApiSingleResponse<TAttributes>> {
+  return getDaptinClient().jsonApi.find<TAttributes>(typeName, id, daptinQueryParams(params));
+}
+
+export function daptinCreate<TAttributes extends object = Record<string, unknown>>(
+  typeName: string,
+  payload: TAttributes,
+): Promise<DaptinJsonApiSingleResponse<TAttributes>> {
+  const create = getDaptinClient().jsonApi.create as unknown as (
+    createTypeName: string,
+    createPayload: TAttributes,
+  ) => Promise<DaptinJsonApiSingleResponse<TAttributes>>;
+  if (!create) throw new Error('daptin-client jsonApi.create is unavailable');
+  return create.call(getDaptinClient().jsonApi, typeName, payload);
+}
+
+export function daptinUpdate<TAttributes extends object = Record<string, unknown>>(
+  typeName: string,
+  id: DaptinReferenceId,
+  attributes: Partial<TAttributes>,
+): Promise<DaptinJsonApiSingleResponse<TAttributes>> {
+  const update = getDaptinClient().jsonApi.update as unknown as (
+    updateTypeName: string,
+    payload: Partial<TAttributes> & { id: string },
+  ) => Promise<DaptinJsonApiSingleResponse<TAttributes>>;
+  if (!update) throw new Error('daptin-client jsonApi.update is unavailable');
+  return update.call(getDaptinClient().jsonApi, typeName, { id, ...attributes });
+}
+
+export function daptinAction<TAttributes = Record<string, unknown>>(
+  typeName: string,
+  actionName: string,
+  data: Record<string, unknown>,
+  options?: CanasterDaptinActionOptions,
+): Promise<DaptinActionResponse<TAttributes>> {
+  return getDaptinClient().actionManager.doAction<TAttributes>(typeName, actionName, data, options);
+}
+
+export function daptinLoadModel(typeName: string, force = false): Promise<unknown[]> {
+  return getDaptinClient().worldManager.loadModel(typeName, force);
+}
+
+export function daptinSignOut(): Promise<unknown> {
+  return getDaptinClient().authManager.signout();
+}
+
+export function daptinExtractToken(response: unknown[]): string | null {
+  return getDaptinClient().authManager.extractToken(response);
+}
+
 function resetDaptinClient(): void {
   client = null;
   clientEndpoint = '';
@@ -256,7 +337,7 @@ function endpointHostnameOrNull(): string {
 
 export async function ensureDaptinModelsLoaded(): Promise<void> {
   if (!modelsLoadPromise) {
-    modelsLoadPromise = getDaptinClient().worldManager.loadModel('document', false)
+    modelsLoadPromise = daptinLoadModel('document', false)
       .then(() => undefined)
       .catch((error) => {
         modelsLoadPromise = null;
@@ -264,6 +345,15 @@ export async function ensureDaptinModelsLoaded(): Promise<void> {
       });
   }
   return modelsLoadPromise;
+}
+
+function daptinQueryParams<TColumn extends string>(params: CanasterDaptinQueryParams<TColumn>): DaptinJsonApiQueryParams<TColumn> {
+  const { query, ...rest } = params;
+  if (query === undefined) return rest;
+  return {
+    ...rest,
+    query: Array.isArray(query) ? JSON.stringify(query) : query,
+  };
 }
 
 function errorStatus(error: unknown, depth = 0): number | null {
