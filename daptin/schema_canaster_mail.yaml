@@ -212,14 +212,14 @@ Actions:
           message: Only the account owner can send mail from this mailbox.
       - Type: client.notify
         Method: ACTIONRESPONSE
-        Condition: '!subject.user_account_id.toString() == user.reference_id.toString() && !subject.username.match(/^[a-z0-9._-]{5,}@canaster\.in$/)'
+        Condition: '!subject.user_account_id.toString() == user.reference_id.toString() && !subject.username.match(/^[a-z0-9._-]{5,}@canaster\.(in|local)$/)'
         SkipInResponse: false
         Attributes:
           type: error
           message: Use your Canaster mail address to send mail.
       - Type: mail.send
         Method: EXECUTE
-        Condition: '!subject.user_account_id.toString() == user.reference_id.toString() && subject.username.match(/^[a-z0-9._-]{5,}@canaster\.in$/)'
+        Condition: '!subject.user_account_id.toString() == user.reference_id.toString() && subject.username.match(/^[a-z0-9._-]{5,}@canaster\.(in|local)$/)'
         SkipInResponse: true
         Attributes:
           body: ~body
@@ -232,7 +232,7 @@ Actions:
           send_immediately: true
       - Type: client.notify
         Method: ACTIONRESPONSE
-        Condition: '!subject.user_account_id.toString() == user.reference_id.toString() && subject.username.match(/^[a-z0-9._-]{5,}@canaster\.in$/)'
+        Condition: '!subject.user_account_id.toString() == user.reference_id.toString() && subject.username.match(/^[a-z0-9._-]{5,}@canaster\.(in|local)$/)'
         SkipInResponse: false
         Attributes:
           type: success

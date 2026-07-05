@@ -342,7 +342,7 @@ function canasterMailDomain(): string {
 
 function canasterMailAddressPattern(): RegExp {
   const domain = canasterMailDomain().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`^[a-z0-9._-]{5,}@${domain}$`);
+  return new RegExp(`^[a-z0-9._-]{5,}@(?:canaster\\.in|${domain})$`);
 }
 
 function rowId(row: { id?: string; reference_id?: string; referenceId?: string; attributes?: { reference_id?: string; referenceId?: string } }): string {
