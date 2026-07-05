@@ -1045,21 +1045,16 @@ button {
   line-height: var(--canaster-line-body);
 }
 
-.node-inline-mail-client {
-  width: min(760px, calc(100vw - 32px));
-  height: min(520px, calc(100vh - 32px));
-}
-
 .mail-node-panel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   width: 100%;
   height: 100%;
-  border: var(--canaster-border-width) solid var(--canaster-color-panel-border);
-  border-radius: var(--canaster-radius-panel);
+  border: 0;
+  border-radius: 0;
   color: var(--canaster-color-text-body);
   background: var(--canaster-color-panel-surface);
-  box-shadow: var(--canaster-shadow-menu);
+  box-shadow: none;
   overflow: hidden;
 }
 
@@ -1093,6 +1088,7 @@ button {
 .mail-node-folder,
 .mail-node-message-row,
 .mail-node-compose-actions button {
+  height: auto;
   border: 0;
   border-radius: var(--canaster-radius-control);
   color: var(--canaster-color-text-body);
@@ -1126,7 +1122,6 @@ button {
 .mail-node-folder:focus-visible,
 .mail-node-message-row:focus-visible,
 .mail-node-compose-actions button:focus-visible,
-.mail-node-setup button:focus-visible,
 .mail-node-field input:focus-visible,
 .mail-node-field textarea:focus-visible {
   outline: 2px solid var(--canaster-color-text-high);
@@ -1294,38 +1289,6 @@ button {
   overflow: auto;
 }
 
-.mail-node-setup {
-  display: grid;
-  gap: var(--canaster-space-sm);
-  align-content: start;
-  padding: var(--canaster-space-sm);
-}
-
-.mail-node-setup p {
-  margin: 0;
-  color: var(--canaster-color-text-body);
-  font-size: var(--canaster-font-label-size);
-  line-height: 1.4;
-}
-
-.mail-node-setup button {
-  justify-self: start;
-  min-height: var(--canaster-input-height);
-  border: 0;
-  border-radius: var(--canaster-radius-control);
-  padding: 0 var(--canaster-input-padding-inline);
-  color: var(--canaster-color-text-high);
-  background: var(--canaster-color-active);
-  font: inherit;
-  font-size: var(--canaster-font-label-size);
-  cursor: pointer;
-}
-
-.mail-node-setup button:disabled {
-  opacity: 0.48;
-  cursor: not-allowed;
-}
-
 .mail-node-field {
   display: grid;
   gap: var(--canaster-space-xxs);
@@ -1357,11 +1320,6 @@ button {
 }
 
 @media (max-width: 700px) {
-  .node-inline-mail-client {
-    width: calc(100vw - 20px);
-    height: calc(100vh - 20px);
-  }
-
   .mail-node-body,
   .mail-node-split {
     grid-template-columns: 1fr;

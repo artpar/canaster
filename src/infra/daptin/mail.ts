@@ -1,4 +1,4 @@
-import { getDaptinClient, getDaptinEndpoint, getToken, normalizeDaptinError, requireUsableStoredToken, tokenName, tokenSubject } from './daptinClient';
+import { getDaptinClient, getDaptinEndpoint, getToken, normalizeDaptinError, requireUsableStoredToken, tokenName } from './daptinClient';
 import { daptinActionFailureMessage } from './daptinActionFailureMessage';
 
 export type DaptinMailAccount = {
@@ -119,7 +119,6 @@ const MAIL_ACCOUNT_TABLE = 'mail_account';
 const MAIL_BOX_TABLE = 'mail_box';
 const MAIL_TABLE = 'mail';
 const OUTBOX_TABLE = 'outbox';
-const ENSURE_CANASTER_MAIL_ACCOUNT_ACTION = 'ensure_canaster_mail_account';
 const SEND_CANASTER_MAIL_ACTION = 'send_canaster_mail';
 const modelLoad = { promise: null as Promise<void> | null };
 
@@ -131,22 +130,6 @@ export function expectedCanasterMailAddress(): string {
 export function canasterMailAccountReady(account: DaptinMailAccount | null | undefined): boolean {
   const expected = expectedCanasterMailAddress();
   return Boolean(expected && account?.username === expected);
-}
-
-export async function ensureCanasterMailAccount(): Promise<DaptinMailAccount> {
-  return authenticatedMailRequest('Could not set up mail', async () => {
-    const userRef = tokenSubject();
-    if (!userRef) throw new Error('Sign in again to set up mail.');
-    const response = await getDaptinClient().actionManager.doAction('user_account', ENSURE_CANASTER_MAIL_ACCOUNT_ACTION, {}, {
-      referenceId: userRef,
-    });
-    const failureMessage = daptinActionFailureMessage(response);
-    if (failureMessage) throw new Error(failureMessage);
-    const expected = expectedCanasterMailAddress();
-    const account = (await listMailAccounts()).find((item) => item.username === expected) ?? null;
-    if (!account) throw new Error('Mail setup finished, but the mailbox was not found.');
-    return account;
-  });
 }
 
 export async function listMailAccounts(): Promise<DaptinMailAccount[]> {

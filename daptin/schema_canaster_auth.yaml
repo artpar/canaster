@@ -164,12 +164,24 @@ Actions:
         SkipInResponse: true
         Attributes:
           query: '[{"column": "email", "operator": "is", "value": "$email"}]'
+      - Type: user_otp_account
+        Method: GET
+        Reference: userotp_before
+        SkipInResponse: true
+        Attributes:
+          user_account_id: '$user[0].reference_id'
       - Type: otp.login.verify
         Method: EXECUTE
         Reference: otp_session
         Attributes:
           email: ~email
           otp: ~otp
+      - Type: user_otp_account
+        Method: GET
+        Reference: userotp_after
+        SkipInResponse: true
+        Attributes:
+          user_account_id: '$user[0].reference_id'
       - Type: __as_user
         Method: SWITCH_USER
         SkipInResponse: true
@@ -178,19 +190,21 @@ Actions:
       - Type: mail_server
         Method: GET
         Reference: canaster_mail_server
+        Condition: '!userotp_before != null && userotp_before.length > 0 && userotp_before[0].verified == false && userotp_after != null && userotp_after.length > 0 && userotp_after[0].verified == true'
         SkipInResponse: true
         Attributes:
-          query: '[{"column": "hostname", "operator": "is", "value": "mail.canaster.in"}, {"column": "listen_interface", "operator": "is", "value": "0.0.0.0:465"}]'
+          query: '[{"column": "hostname", "operator": "is", "value": "mail.canaster.in"}]'
       - Type: mail_account
         Method: GET
         Reference: existing_mail_account
+        Condition: '!userotp_before != null && userotp_before.length > 0 && userotp_before[0].verified == false && userotp_after != null && userotp_after.length > 0 && userotp_after[0].verified == true'
         SkipInResponse: true
         Attributes:
           query: '!JSON.stringify([{"column": "username", "operator": "is", "value": user[0].name + "@canaster.in"}])'
       - Type: mail_account
         Method: POST
         Reference: mail_account
-        Condition: '!existing_mail_account == null || existing_mail_account.length == 0'
+        Condition: '!userotp_before != null && userotp_before.length > 0 && userotp_before[0].verified == false && userotp_after != null && userotp_after.length > 0 && userotp_after[0].verified == true && (existing_mail_account == null || existing_mail_account.length == 0)'
         SkipInResponse: true
         Attributes:
           username: '!user[0].name + "@canaster.in"'
@@ -201,13 +215,14 @@ Actions:
       - Type: mail_box
         Method: GET
         Reference: existing_mail_boxes
+        Condition: '!userotp_before != null && userotp_before.length > 0 && userotp_before[0].verified == false && userotp_after != null && userotp_after.length > 0 && userotp_after[0].verified == true'
         SkipInResponse: true
         Attributes:
-          query: '!JSON.stringify([{"column": "mail_account_id", "operator": "is", "value": existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id : mail_account.reference_id}])'
+          query: '!JSON.stringify([{"column": "mail_account_id", "operator": "is", "value": existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id.toString() : mail_account.reference_id.toString()}])'
       - Type: mail_box
         Method: POST
         Reference: inbox_mail_box
-        Condition: '!existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "INBOX"; })'
+        Condition: '!userotp_before != null && userotp_before.length > 0 && userotp_before[0].verified == false && userotp_after != null && userotp_after.length > 0 && userotp_after[0].verified == true && (existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "INBOX"; }))'
         SkipInResponse: true
         Attributes:
           name: INBOX
@@ -217,12 +232,12 @@ Actions:
           attributes: ''
           flags: '\*'
           permanent_flags: '\*'
-          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id : mail_account.reference_id)'
+          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id.toString() : mail_account.reference_id.toString())'
           user_account_id: '$user[0].reference_id'
       - Type: mail_box
         Method: POST
         Reference: draft_mail_box
-        Condition: '!existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "Draft"; })'
+        Condition: '!userotp_before != null && userotp_before.length > 0 && userotp_before[0].verified == false && userotp_after != null && userotp_after.length > 0 && userotp_after[0].verified == true && (existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "Draft"; }))'
         SkipInResponse: true
         Attributes:
           name: Draft
@@ -232,12 +247,12 @@ Actions:
           attributes: ''
           flags: '\*'
           permanent_flags: '\*'
-          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id : mail_account.reference_id)'
+          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id.toString() : mail_account.reference_id.toString())'
           user_account_id: '$user[0].reference_id'
       - Type: mail_box
         Method: POST
         Reference: sent_mail_box
-        Condition: '!existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "Sent"; })'
+        Condition: '!userotp_before != null && userotp_before.length > 0 && userotp_before[0].verified == false && userotp_after != null && userotp_after.length > 0 && userotp_after[0].verified == true && (existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "Sent"; }))'
         SkipInResponse: true
         Attributes:
           name: Sent
@@ -247,12 +262,12 @@ Actions:
           attributes: ''
           flags: '\*'
           permanent_flags: '\*'
-          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id : mail_account.reference_id)'
+          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id.toString() : mail_account.reference_id.toString())'
           user_account_id: '$user[0].reference_id'
       - Type: mail_box
         Method: POST
         Reference: archive_mail_box
-        Condition: '!existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "Archive"; })'
+        Condition: '!userotp_before != null && userotp_before.length > 0 && userotp_before[0].verified == false && userotp_after != null && userotp_after.length > 0 && userotp_after[0].verified == true && (existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "Archive"; }))'
         SkipInResponse: true
         Attributes:
           name: Archive
@@ -262,12 +277,12 @@ Actions:
           attributes: ''
           flags: '\*'
           permanent_flags: '\*'
-          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id : mail_account.reference_id)'
+          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id.toString() : mail_account.reference_id.toString())'
           user_account_id: '$user[0].reference_id'
       - Type: mail_box
         Method: POST
         Reference: trash_mail_box
-        Condition: '!existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "Trash"; })'
+        Condition: '!userotp_before != null && userotp_before.length > 0 && userotp_before[0].verified == false && userotp_after != null && userotp_after.length > 0 && userotp_after[0].verified == true && (existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "Trash"; }))'
         SkipInResponse: true
         Attributes:
           name: Trash
@@ -277,12 +292,12 @@ Actions:
           attributes: ''
           flags: '\*'
           permanent_flags: '\*'
-          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id : mail_account.reference_id)'
+          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id.toString() : mail_account.reference_id.toString())'
           user_account_id: '$user[0].reference_id'
       - Type: mail_box
         Method: POST
         Reference: spam_mail_box
-        Condition: '!existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "Spam"; })'
+        Condition: '!userotp_before != null && userotp_before.length > 0 && userotp_before[0].verified == false && userotp_after != null && userotp_after.length > 0 && userotp_after[0].verified == true && (existing_mail_boxes == null || !existing_mail_boxes.some(function(box) { return box.name == "Spam"; }))'
         SkipInResponse: true
         Attributes:
           name: Spam
@@ -292,7 +307,7 @@ Actions:
           attributes: ''
           flags: '\*'
           permanent_flags: '\*'
-          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id : mail_account.reference_id)'
+          mail_account_id: '!(existing_mail_account != null && existing_mail_account.length > 0 ? existing_mail_account[0].reference_id.toString() : mail_account.reference_id.toString())'
           user_account_id: '$user[0].reference_id'
     Validations:
       - ColumnName: email

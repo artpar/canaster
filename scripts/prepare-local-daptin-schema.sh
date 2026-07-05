@@ -4,7 +4,7 @@ set -euo pipefail
 source_dir="${CANASTER_DAPTIN_SCHEMA_SOURCE:-daptin}"
 target_dir="${CANASTER_DAPTIN_LOCAL_SCHEMA_DIR:-.tmp/daptin/local-schema}"
 local_domain="${CANASTER_LOCAL_DOMAIN:-canaster.local}"
-local_mail_host="${CANASTER_LOCAL_MAIL_HOST:-mail.${local_domain}}"
+local_mail_host="${CANASTER_LOCAL_MAIL_HOST:-${local_domain}}"
 local_login_email="${CANASTER_LOCAL_LOGIN_EMAIL:-login@${local_domain}}"
 local_mail_domain="${CANASTER_LOCAL_MAIL_DOMAIN:-${local_domain}}"
 

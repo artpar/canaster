@@ -25,8 +25,11 @@ Tables:
 
   - TableName: mail
     Permission: 561408
+    AccessGroups:
+      - Name: users
+        Permission: 573440
 
-  # Sensitive system and operations tables must not be guest-listable.
+  # Runtime mail queues and operational tables stay closed to guest CRUD.
   - TableName: outbox
     Permission: 561408
 
@@ -40,12 +43,18 @@ Tables:
     Permission: 561408
 
   - TableName: mail_account
-    Permission: 561408
+    Permission: 577792
     DefaultPermission: 569633
+    AccessGroups:
+      - Name: users
+        Permission: 573440
 
   - TableName: mail_box
-    Permission: 561408
+    Permission: 577792
     DefaultPermission: 569633
+    AccessGroups:
+      - Name: users
+        Permission: 573440
 
   - TableName: mail_server
     Permission: 561408

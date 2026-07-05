@@ -2016,6 +2016,7 @@ export class CanvasEngine {
       const overlay = createLiveNodeContentOverlay({
         node,
         theme,
+        nodeMailService: this.nodeMailService,
         commit: (nextData) => this.commitLiveNodeContentOverlay(node.id, nextData),
         select: () => this.selectLiveNodeContentOverlayNode(node.id),
         close: () => this.closeLiveNodeContentOverlayInteraction(),

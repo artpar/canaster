@@ -1,7 +1,6 @@
 import { useMemo, useRef } from 'react';
 import {
   canasterMailAccountReady,
-  ensureCanasterMailAccount,
   expectedCanasterMailAddress,
   listMailAccounts,
   listMailFolders,
@@ -28,7 +27,6 @@ export function useWorkspaceMail(input: {
             mailAddress,
             canSend: false,
             canReceive: false,
-            setupRequired: false,
             message: 'Sign in to use mail.',
           };
         }
@@ -37,8 +35,7 @@ export function useWorkspaceMail(input: {
             mailAddress,
             canSend: false,
             canReceive: false,
-            setupRequired: true,
-            message: 'Mail needs an account username before it can be set up.',
+            message: 'Mail account unavailable.',
           };
         }
         if (!canasterMailAccountReady(account)) {
@@ -46,21 +43,15 @@ export function useWorkspaceMail(input: {
             mailAddress,
             canSend: false,
             canReceive: false,
-            setupRequired: true,
-            message: `Set up mail to receive at ${mailAddress}.`,
+            message: `Canaster mail is not available for ${mailAddress}.`,
           };
         }
         return {
           mailAddress,
           canSend: true,
           canReceive: true,
-          setupRequired: false,
           message: `Receive and send mail as ${mailAddress}.`,
         };
-      },
-      async setupMailAccount() {
-        if (!canUseMail()) throw new Error('Sign in to set up mail.');
-        return ensureCanasterMailAccount();
       },
       async listAccounts() {
         if (!canUseMail()) return [];

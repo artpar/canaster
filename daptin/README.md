@@ -64,7 +64,7 @@ That command creates or updates a `template` row equivalent to:
 
 Create the template row before starting the production Daptin process when possible. If the row is created or changed after Daptin is already running, restart Daptin so `CreateTemplateHooks` registers `/d/:username/:slug`.
 
-Mailbox provisioning is deliberately attached to OTP verification, not OTP request, and can also be repaired by the signed-in `ensure_canaster_mail_account` action. A successful setup creates one `mail_account` row for the Canaster address `user_account.name + "@canaster.in"` and creates the default `mail_box` rows (`INBOX`, `Draft`, `Sent`, `Archive`, `Trash`, `Spam`) through normal entity foreign-key columns. The login email is only for authentication and must not become the send/receive identity. The flow does not write generated join tables. The `mail_account` and `mail_box` table defaults are `DefaultPermission: 569633`, which grants the owner `Refer` so Daptin can use those rows as foreign keys when storing mail. The mailbox password is generated server-side, stays under Daptin's bcrypt input limit, and is not returned to the browser; expose an authenticated mailbox-password reset action later if direct IMAP/SMTP client login is needed.
+Mailbox provisioning is attached to the first successful OTP verification, not OTP request or a later signed-in setup action. That first verification creates one `mail_account` row for the Canaster address `user_account.name + "@canaster.in"` and creates the default `mail_box` rows (`INBOX`, `Draft`, `Sent`, `Archive`, `Trash`, `Spam`) through normal entity foreign-key columns. The login email is only for authentication and must not become the send/receive identity. The flow does not write generated join tables. The `mail_account` and `mail_box` table defaults are `DefaultPermission: 569633`, which grants the owner `Refer` so Daptin can use those rows as foreign keys when storing mail. The mailbox password is generated server-side, stays under Daptin's bcrypt input limit, and is not returned to the browser; expose an authenticated mailbox-password reset action later if direct IMAP/SMTP client login is needed.
 
 Inbound SMTP stores messages as the recipient user, so production must grant the built-in `users` usergroup table-level create on the `mail` world row. The intended state is `world.permission(mail)=561408` and a `usergroup(users).world_id -> mail` relation permission of `638976` (`Group: Peek, Read, Create, Execute`). The generated `world_world_id_has_usergroup_usergroup_id` relation table default is `DefaultPermission: 638976`; existing relation rows that predate the default must be repaired to the same permission. Do not grant `GuestCreate` on `mail`.
 
@@ -98,7 +98,8 @@ Local Daptin uses Postgres, not SQLite, to stay close to production. The Compose
 Before Compose starts Daptin, `npm run daptin:up` runs `scripts/prepare-local-daptin-schema.sh`. That script copies production `daptin/schema_*.yaml` files into `.tmp/daptin/local-schema` and substitutes only the local mail identity:
 
 - `login@canaster.in` becomes `login@canaster.local`.
-- `mail.canaster.in` becomes `mail.canaster.local`.
+- `mail.canaster.in` becomes `canaster.local` by default so Daptin's SMTP
+  `AllowedHosts` accepts local `user.name@canaster.local` mailboxes.
 
 Why this exists: the checked-in `daptin/` schema directory is production backend material and must keep the production sender and SMTP host. Local mail identity belongs in generated `.tmp` schema, not in production schema files.
 
@@ -107,10 +108,10 @@ The local hostnames are:
 - app: `http://canaster.local:5173`
 - Daptin HTTP/API: `http://canaster.local:6336`
 - Daptin HTTPS: `https://canaster.local:6443` after local HTTPS is configured in Daptin
-- SMTP: `mail.canaster.local` on ports `25`, `465`, and `587`
+- SMTP: `canaster.local` on port `25` for local self-delivery
 - IMAPS: `imap.canaster.local` on port `993`
 
-For local mail testing, `canaster.local`, `mail.canaster.local`, and `imap.canaster.local` must resolve to `127.0.0.1`. The Compose service also resolves those names inside the Daptin container so Daptin can deliver local-domain OTP mail back to the local SMTP listener.
+For local mail testing, `canaster.local`, `mail.canaster.local`, and `imap.canaster.local` must resolve to `127.0.0.1`. The Compose DNS sidecar also publishes an MX record for `canaster.local` pointing at `canaster.local`, because Daptin's outbox processor performs MX lookup before SMTP delivery.
 
 Run the frontend against the persistent local backend with:
 

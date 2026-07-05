@@ -1,0 +1,9 @@
+canaster.local:53 {
+    errors
+    file /zones/canaster.local.db
+}
+
+.:53 {
+    errors
+    forward . 127.0.0.11
+}

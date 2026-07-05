@@ -13,6 +13,7 @@ import {
 } from '../../../domain/checklistNodeData';
 import { normalizeTableNodeData, type TableNodeData } from '../../../domain/tableNodeData';
 import { normalizeTextNodeData, type TextNodeData } from '../../../domain/textNodeData';
+import { mailNodeSemanticDefinition } from '../../../domain/nodeDefinitions/mailNodeSemanticDefinition';
 import {
   DEFAULT_TEXT_STYLE,
   TEXT_STYLE_ALIGNMENTS,
@@ -23,7 +24,9 @@ import {
   type TextStylePreset,
 } from '../../../domain/textStyle';
 import { textStylePresetsForTheme } from '../../textStyle/textStyleTheme';
+import type { CanvasNodeMailService } from '../nodeMailService';
 import type { CanvasTheme } from '../theme';
+import { createMailNodePanel } from './mailNode';
 
 export type LiveNodeContentOverlay = {
   root: HTMLDivElement;
@@ -38,6 +41,7 @@ export type LiveNodeContentOverlay = {
 type LiveNodeContentOverlayConfig = {
   node: CanvasNode;
   theme: CanvasTheme;
+  nodeMailService: CanvasNodeMailService;
   commit: (nextData: NodeData) => void;
   select: () => void;
   close: () => void;
@@ -55,10 +59,11 @@ type LiveOverlayViewport = {
 export function hasLiveNodeContentOverlay(node: CanvasNode) {
   return node.type === BuiltInNodeTypes.text ||
     node.type === BuiltInNodeTypes.table ||
-    node.type === BuiltInNodeTypes.check;
+    node.type === BuiltInNodeTypes.check ||
+    node.type === BuiltInNodeTypes.mail;
 }
 
-export function createLiveNodeContentOverlay({ node, theme, commit, select, close }: LiveNodeContentOverlayConfig): LiveNodeContentOverlay | null {
+export function createLiveNodeContentOverlay({ node, theme, nodeMailService, commit, select, close }: LiveNodeContentOverlayConfig): LiveNodeContentOverlay | null {
   switch (node.type) {
     case BuiltInNodeTypes.text:
       return createTextOverlay(node, theme, commit, select, close);
@@ -66,6 +71,8 @@ export function createLiveNodeContentOverlay({ node, theme, commit, select, clos
       return createTableOverlay(node, commit, select, close);
     case BuiltInNodeTypes.check:
       return createChecklistOverlay(node, commit, select, close);
+    case BuiltInNodeTypes.mail:
+      return createMailOverlay(node, nodeMailService, commit, select, close);
     default:
       return null;
   }
@@ -618,6 +625,38 @@ function createChecklistOverlay(node: CanvasNode, commit: (nextData: NodeData) =
     committed = cloneChecklistData(next);
     commit(next);
   }
+}
+
+function createMailOverlay(
+  node: CanvasNode,
+  nodeMailService: CanvasNodeMailService,
+  commit: (nextData: NodeData) => void,
+  select: () => void,
+  close: () => void,
+): LiveNodeContentOverlay {
+  const viewport = createLiveOverlayViewport('node-live-mail', select, close);
+  const panel = createMailNodePanel(
+    viewport.content,
+    mailNodeSemanticDefinition.parseData(node.data),
+    nodeMailService,
+    (nextData) => commit(nextData),
+    close,
+  );
+
+  return {
+    root: viewport.root,
+    update(nextNode) {
+      panel.update(mailNodeSemanticDefinition.parseData(nextNode.data));
+    },
+    updateViewport: viewport.updateViewport,
+    setInteractive: viewport.setInteractive,
+    focus: panel.focus,
+    flush: panel.flush,
+    dispose() {
+      panel.dispose();
+      viewport.dispose();
+    },
+  };
 }
 
 function createLiveOverlayViewport(className: string, select: () => void, close: () => void): LiveOverlayViewport {

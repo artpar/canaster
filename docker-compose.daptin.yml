@@ -29,6 +29,8 @@ services:
       - "6336:8080"
       - "6443:6443"
       - "993:993"
+    dns:
+      - 127.0.0.1
     extra_hosts:
       - "canaster.local:127.0.0.1"
       - "mail.canaster.local:127.0.0.1"
@@ -39,6 +41,18 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
+  local-dns:
+    image: coredns/coredns:1.11.3
+    command:
+      - -conf
+      - /etc/coredns/Corefile
+    network_mode: "service:daptin"
+    volumes:
+      - ./daptin/local-dns/Corefile:/etc/coredns/Corefile:ro
+      - ./daptin/local-dns/canaster.local.db:/zones/canaster.local.db:ro
+    depends_on:
+      - daptin
 
   postgres:
     image: postgres:16

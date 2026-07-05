@@ -7,7 +7,6 @@ export type CanasterMailReadiness = {
   mailAddress: string;
   canSend: boolean;
   canReceive: boolean;
-  setupRequired: boolean;
   message: string;
 };
 
@@ -46,7 +45,6 @@ export type CanasterMailDraft = {
 export type CanvasNodeMailService = {
   canUseMail(): boolean;
   mailReadiness(account?: CanasterMailAccount | null): CanasterMailReadiness;
-  setupMailAccount(): Promise<CanasterMailAccount>;
   listAccounts(): Promise<CanasterMailAccount[]>;
   listFolders(accountId: string): Promise<CanasterMailFolder[]>;
   listMessages(folderId: string): Promise<CanasterMailMessageSummary[]>;
@@ -61,10 +59,8 @@ export const unavailableCanvasNodeMailService: CanvasNodeMailService = {
     mailAddress: '',
     canSend: false,
     canReceive: false,
-    setupRequired: false,
     message: 'Sign in to use mail.',
   }),
-  setupMailAccount: () => Promise.reject(new Error('Sign in to set up mail.')),
   listAccounts: () => Promise.resolve([]),
   listFolders: () => Promise.resolve([]),
   listMessages: () => Promise.resolve([]),

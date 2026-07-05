@@ -1,0 +1,9 @@
+$ORIGIN canaster.local.
+$TTL 60
+@    IN SOA ns.canaster.local. hostmaster.canaster.local. 2026070501 7200 3600 1209600 60
+@    IN NS  ns.canaster.local.
+@    IN MX  10 canaster.local.
+@    IN A   127.0.0.1
+mail IN A   127.0.0.1
+imap IN A   127.0.0.1
+ns   IN A   127.0.0.1

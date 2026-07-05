@@ -9,8 +9,6 @@ import type {
 } from '../nodeMailService';
 import { defineNodeType } from '../nodeDefinition/defineNodeType';
 import { drawNodeBodyLines, drawNodeMeta, drawNodeTitle } from '../nodeRendering';
-import { prepareInlineEditorMount, stopEvent } from '../inlineEditorDom';
-import { nodeEditInteractionRegion } from './nodeContentInteractionRegion';
 import { nodeTypeSpecs } from '../nodeDefinition/nodeTypeSpecs';
 import type { NodeContentRect, NodeDefinition } from '../nodeDefinition/nodeDefinitionTypes';
 import type { CanvasTheme } from '../theme';
@@ -27,6 +25,13 @@ type MailClientState = {
   readiness: CanasterMailReadiness;
 };
 
+export type MailNodePanelController = {
+  focus(): void;
+  update(nextData: MailNodeData): void;
+  flush(): void;
+  dispose(): void;
+};
+
 export const mailNodeDefinition: NodeDefinition<MailNodeData> = defineNodeType({
   ...nodeTypeSpecs.mail,
   createDefaultData: mailNodeSemanticDefinition.createDefaultData,
@@ -36,19 +41,6 @@ export const mailNodeDefinition: NodeDefinition<MailNodeData> = defineNodeType({
     drawMailPreview(ctx, contentRect, data, theme, nodeMailService);
   },
   describe: mailNodeSemanticDefinition.describe,
-  getInteractionRegions({ contentRect }) {
-    return nodeEditInteractionRegion(contentRect, 'pointer', 'open mail');
-  },
-  createInteraction(ctx) {
-    if (ctx.region.id !== 'edit') return null;
-    return createMailClient(
-      ctx.mount,
-      ctx.data,
-      ctx.nodeMailService,
-      (nextData) => ctx.requestCommit(nextData),
-      ctx.requestClose,
-    );
-  },
 });
 
 function drawMailPreview(
@@ -73,17 +65,16 @@ function drawMailPreview(
   drawNodeBodyLines(ctx, rect, lines, theme, { y: rect.y + 72 });
 }
 
-function createMailClient(
+export function createMailNodePanel(
   mount: HTMLElement,
   initialData: MailNodeData,
   mailService: CanvasNodeMailService,
   commit: (nextData: MailNodeData) => void,
   close: () => void,
-) {
-  prepareInlineEditorMount(mount, 'node-inline-mail-client');
+): MailNodePanelController {
+  let committedData = mailNodeSemanticDefinition.parseData(initialData);
   const panel = document.createElement('div');
   panel.className = 'mail-node-panel';
-  panel.addEventListener('pointerdown', stopEvent);
   panel.addEventListener('keydown', (event) => {
     event.stopPropagation();
     if (event.key === 'Escape') {
@@ -115,7 +106,7 @@ function createMailClient(
   const body = document.createElement('div');
   body.className = 'mail-node-body';
   panel.append(header, body);
-  mount.append(panel);
+  mount.replaceChildren(panel);
 
   let disposed = false;
   let accounts: CanasterMailAccount[] = [];
@@ -126,16 +117,16 @@ function createMailClient(
   let messageBusy = false;
   let sending = false;
   let status = '';
-  let mailAccountId = initialData.mailAccountId;
-  let folderId = initialData.folderId;
-  let folderName = initialData.folderName || 'INBOX';
-  let messageId = initialData.messageId;
-  let mode: MailNodeMode = initialData.mode;
-  let draftTo = initialData.draftTo;
-  let draftCc = initialData.draftCc;
-  let draftBcc = initialData.draftBcc;
-  let draftSubject = initialData.draftSubject;
-  let draftBody = initialData.draftBody;
+  let mailAccountId = committedData.mailAccountId;
+  let folderId = committedData.folderId;
+  let folderName = committedData.folderName || 'INBOX';
+  let messageId = committedData.messageId;
+  let mode: MailNodeMode = committedData.mode;
+  let draftTo = committedData.draftTo;
+  let draftCc = committedData.draftCc;
+  let draftBcc = committedData.draftBcc;
+  let draftSubject = committedData.draftSubject;
+  let draftBody = committedData.draftBody;
   let messageLoadRequestId = 0;
 
   void loadInitial();
@@ -145,9 +136,21 @@ function createMailClient(
     focus() {
       panel.querySelector<HTMLElement>('button, input, textarea')?.focus({ preventScroll: true });
     },
+    update(nextData) {
+      const parsed = mailNodeSemanticDefinition.parseData(nextData);
+      if (sameMailNodeData(committedData, parsed) || panel.contains(document.activeElement)) return;
+      committedData = parsed;
+      syncDraftFromData(parsed);
+      void loadInitial();
+      render();
+    },
+    flush() {
+      commitDraft();
+    },
     dispose() {
       disposed = true;
       commitDraft();
+      mount.replaceChildren();
     },
   };
 
@@ -261,8 +264,7 @@ function createMailClient(
   }
 
   function commitDraft() {
-    commit({
-      ...initialData,
+    const nextData = mailNodeSemanticDefinition.parseData({
       title: folderName.toUpperCase() === 'INBOX' ? 'Inbox' : folderName,
       mailAccountId,
       folderId,
@@ -275,6 +277,24 @@ function createMailClient(
       draftSubject,
       draftBody,
     });
+    if (sameMailNodeData(committedData, nextData)) return;
+    committedData = nextData;
+    commit(nextData);
+  }
+
+  function syncDraftFromData(nextData: MailNodeData) {
+    mailAccountId = nextData.mailAccountId;
+    folderId = nextData.folderId;
+    folderName = nextData.folderName || 'INBOX';
+    messageId = nextData.messageId;
+    mode = nextData.mode;
+    draftTo = nextData.draftTo;
+    draftCc = nextData.draftCc;
+    draftBcc = nextData.draftBcc;
+    draftSubject = nextData.draftSubject;
+    draftBody = nextData.draftBody;
+    message = null;
+    messageLoadRequestId += 1;
   }
 
   function render() {
@@ -329,11 +349,8 @@ function createMailClient(
     const main = document.createElement('div');
     main.className = 'mail-node-main';
     if (state.status) main.append(statusView(state.status));
-    if (state.readiness.setupRequired) {
-      main.append(renderSetupPanel(state));
-      return main;
-    }
     if (state.busy) return main;
+    if (!mailAccountId || !state.readiness.canReceive) return main;
     if (mode === 'compose') {
       main.append(renderComposer());
       return main;
@@ -446,36 +463,6 @@ function createMailClient(
     return form;
   }
 
-  function renderSetupPanel(state: MailClientState): HTMLElement {
-    const panel = document.createElement('div');
-    panel.className = 'mail-node-setup';
-    const message = document.createElement('p');
-    message.textContent = state.readiness.message;
-    const action = button(state.busy ? 'Setting up mail' : 'Set up mail', () => {
-      if (busy) return;
-      busy = true;
-      status = `Setting up ${state.readiness.mailAddress}`;
-      render();
-      void mailService.setupMailAccount()
-        .then((account) => {
-          accounts = [account, ...accounts.filter((item) => item.id !== account.id)];
-          mailAccountId = account.id;
-          status = 'Mail ready.';
-          return loadInitial();
-        })
-        .catch((error) => {
-          status = mailService.mailErrorMessage(error, 'Could not set up mail.');
-        })
-        .finally(() => {
-          busy = false;
-          render();
-        });
-    });
-    action.disabled = state.busy || !state.readiness.mailAddress;
-    panel.append(message, action);
-    return panel;
-  }
-
   function currentAccount(): CanasterMailAccount | null {
     return accounts.find((account) => account.id === mailAccountId) ?? null;
   }
@@ -530,4 +517,8 @@ function formatDate(value: string | null): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function sameMailNodeData(left: MailNodeData, right: MailNodeData) {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
