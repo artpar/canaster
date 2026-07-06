@@ -151,7 +151,7 @@ DNS cutover records for Namecheap:
 
 `deploy/daptin/Dockerfile` builds a thin Canaster Daptin image:
 
-- Base image: `daptin/daptin@sha256:485b47ca0328d5dfc1757c441a1bead287cbc58c3fabed9c9fc038eb229d1f16`, the `v0.12.28` release containing the access-groups schema provisioning from `daptin/daptin#237`, the action-permission bootstrap fix from `daptin/daptin#239`, plus the earlier `daptin/daptin#232`, `daptin/daptin#233`, and `daptin/daptin#234` fixes.
+- Base image: `daptin/daptin@sha256:f67665f01d3467f9040ae26716e2e6ef4ca7b1ebf6d4e9ff5e2370a536db40a0`, the `v0.12.29` release containing the sent-mail copy fix from `daptin/daptin#242`, the action-permission bootstrap fix from `daptin/daptin#239`, the access-groups schema provisioning from `daptin/daptin#237`, plus the earlier `daptin/daptin#232`, `daptin/daptin#233`, and `daptin/daptin#234` fixes.
 - Copies `daptin/schema_*.yaml` into `/opt/canaster/schema` for schema-managed email OTP auth actions
 - Uses `/opt/canaster/entrypoint.sh`
 - Reads `PORT` and `HTTPS_PORT`
@@ -786,6 +786,7 @@ Current production Daptin SMTP/IMAP state as of 2026-06-19:
 - Daptin `v0.12.26` includes `daptin/daptin#233`, so `mail.send` creates its internal outbox row with a server-side admin context and no longer requires the switched end user to have `Refer` permission on the configured `mail_server` row. It also includes `daptin/daptin#234`, preserving built-in certificate columns when Canaster declares certificate table permissions.
 - Daptin `v0.12.27` includes `daptin/daptin#237`, so Canaster can declare table/action `AccessGroups` in schema instead of running post-deploy usergroup relation repairs for document, asset, and visibility action access. This does not replace the separate routed-template action permission check for `get_canaster_document_by_public_path.permission=2085152`.
 - Daptin `v0.12.28` includes `daptin/daptin#239`, so `become_an_administrator` preserves explicit schema-managed action permissions instead of downgrading `get_canaster_document_by_public_path.permission=2085152` during first-admin bootstrap.
+- Daptin `v0.12.29` includes `daptin/daptin#242`, so `mail.send` and authenticated SMTP relay append one copy to the sender's `Sent` mailbox at queue time while keeping `outbox` as delivery/retry state. Outbox retries do not duplicate the Sent copy.
 - The ignored local file `.tmp/daptin/prod-mail-login.env` stores the current `login@mail.canaster.in` mailbox credential for operational SMTP AUTH and IMAP smoke tests. OTP mail now uses the visible sender `login@canaster.in`; the mailbox credential can remain a server-auth operational account unless direct mailbox login for `login@canaster.in` is needed. Do not commit it.
 - `sync_mail_servers` and `process_outbox` both execute successfully as the production admin.
 
